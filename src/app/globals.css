@@ -1,0 +1,86 @@
+@import "tailwindcss";
+
+/*
+ * IdaraWorks design tokens (BUILD_BIBLE §9.2 — tokens over ad-hoc values).
+ * Semantic tokens only; components never use raw hex.
+ * Light theme ships in MVP; the token structure is dark-ready
+ * (accepted debt per S0 checklist self-review #1, issue UI-1).
+ */
+:root {
+  /* surfaces */
+  --surface-page: #f7f7f5;
+  --surface-card: #ffffff;
+  --surface-sunken: #efefec;
+  --surface-inverse: #1c1c1a;
+
+  /* text */
+  --text-primary: #1c1c1a;
+  --text-secondary: #5c5c57;
+  --text-muted: #8a8a84;
+  --text-inverse: #ffffff;
+
+  /* brand & status */
+  --brand: #0f6b5c; /* deep teal — workshop-serious, not flashy */
+  --brand-strong: #0b5348;
+  --brand-soft: #e3f0ed;
+  --danger: #b3362b;
+  --danger-soft: #f9e8e6;
+  --warning: #9a6b0f;
+  --warning-soft: #f8efdb;
+  --success: #2e6b34;
+  --success-soft: #e6f1e7;
+  --info: #2f5d8a;
+  --info-soft: #e7eef5;
+
+  /* lines & focus */
+  --border: #dddcd7;
+  --border-strong: #c2c1bb;
+  --focus-ring: #0f6b5c;
+
+  /* shape & touch */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --touch-target: 44px; /* BUILD_BIBLE §9.2 — minimum tap target on field flows */
+}
+
+@theme inline {
+  --color-page: var(--surface-page);
+  --color-card: var(--surface-card);
+  --color-sunken: var(--surface-sunken);
+  --color-inverse: var(--surface-inverse);
+  --color-ink: var(--text-primary);
+  --color-ink-secondary: var(--text-secondary);
+  --color-ink-muted: var(--text-muted);
+  --color-ink-inverse: var(--text-inverse);
+  --color-brand: var(--brand);
+  --color-brand-strong: var(--brand-strong);
+  --color-brand-soft: var(--brand-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+  --color-line: var(--border);
+  --color-line-strong: var(--border-strong);
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-lg);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--surface-page);
+  color: var(--text-primary);
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+}
+
+/* Visible focus everywhere (BUILD_BIBLE §9.10) */
+:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}

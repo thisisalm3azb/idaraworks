@@ -1,0 +1,44 @@
+import type { NextConfig } from "next";
+
+/**
+ * Security headers per BUILD_BIBLE §6.8 / S0 checklist §14.
+ * CSP note: script-src currently allows 'unsafe-inline' for the Next.js runtime;
+ * nonce-based CSP is tracked as accepted debt (BUILD_BIBLE §16) — issue SEC-1.
+ * Supabase storage/API hosts are appended via env when Phase B/E wire them.
+ */
+const supabaseHost = process.env.NEXT_PUBLIC_SUPABASE_URL
+  ? new URL(process.env.NEXT_PUBLIC_SUPABASE_URL).origin
+  : "";
+
+const csp = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-inline'",
+  "style-src 'self' 'unsafe-inline'",
+  `img-src 'self' blob: data: ${supabaseHost}`.trim(),
+  "font-src 'self'",
+  `connect-src 'self' ${supabaseHost}`.trim(),
+  "frame-ancestors 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  "object-src 'none'",
+].join("; ");
+
+const securityHeaders = [
+  { key: "Content-Security-Policy", value: csp },
+  { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains; preload" },
+  { key: "X-Content-Type-Options", value: "nosniff" },
+  { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+  {
+    key: "Permissions-Policy",
+    value: "camera=(self), geolocation=(), microphone=(), payment=()",
+  },
+];
+
+const nextConfig: NextConfig = {
+  poweredByHeader: false,
+  async headers() {
+    return [{ source: "/(.*)", headers: securityHeaders }];
+  },
+};
+
+export default nextConfig;
