@@ -10,15 +10,32 @@
  */
 import "./load-env";
 import { readdirSync, readFileSync } from "node:fs";
-import { createHash, createHmac, pbkdf2Sync, randomBytes } from "node:crypto";
+import { createHash, createHmac, pbkdf2Sync } from "node:crypto";
 import path from "node:path";
 import postgres from "postgres";
 
-/** RFC 5802/7677 SCRAM-SHA-256 verifier — Postgres accepts it in ALTER ROLE PASSWORD. */
+/**
+ * RFC 5802/7677 SCRAM-SHA-256 verifier — Postgres accepts it in ALTER ROLE PASSWORD.
+ *
+ * The salt is DETERMINISTIC in the password (HMAC of the password under a fixed
+ * label), not random. Reason: the migration runner re-issues ALTER ROLE on every
+ * invocation, and CI runs it 3× per pipeline; a random salt would produce a
+ * different verifier each time, thrashing Supavisor's credential cache and
+ * causing intermittent `28P01 password authentication failed` on pooled
+ * connections. With a deterministic salt the verifier bytes are identical across
+ * runs of the SAME password (no effective rotation → stable pooler auth), while
+ * a genuine APP_DB_PASSWORD change still yields a new verifier (rotation works).
+ * Trade-off: two verifier dumps reveal only whether the password changed — a
+ * non-issue for a single operator-set internal role credential.
+ */
 function scramSha256Verifier(password: string): string {
   const iterations = 4096;
-  const salt = randomBytes(16);
-  const salted = pbkdf2Sync(password.normalize("NFKC"), salt, iterations, 32, "sha256");
+  const normalized = password.normalize("NFKC");
+  const salt = createHmac("sha256", "idaraworks/app_user/scram-salt/v1")
+    .update(normalized)
+    .digest()
+    .subarray(0, 16);
+  const salted = pbkdf2Sync(normalized, salt, iterations, 32, "sha256");
   const clientKey = createHmac("sha256", salted).update("Client Key").digest();
   const storedKey = createHash("sha256").update(clientKey).digest();
   const serverKey = createHmac("sha256", salted).update("Server Key").digest();
