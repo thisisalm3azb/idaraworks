@@ -14,7 +14,20 @@ async function main() {
   console.log(
     `pre-step: migrations up to 0000 (${migrated.applied.length ? `applied ${migrated.applied}` : "already applied"})`,
   );
-  const report = await runVc1();
+  // Watchdog: the whole spike must conclude in 5 minutes — a hang IS a failure
+  // with a diagnosis, never a silent CI-timeout (Phase B incident).
+  const watchdog = new Promise<never>((_, reject) =>
+    setTimeout(
+      () =>
+        reject(
+          new Error(
+            "VC-1 watchdog: spike exceeded 5 minutes — treat as FAIL and read the last 'vc1:' log line for the hung check",
+          ),
+        ),
+      300_000,
+    ).unref(),
+  );
+  const report = await Promise.race([runVc1(), watchdog]);
   console.log("\nVC-1 — Supavisor GUC/RLS mechanism:");
   for (const r of report.results) {
     console.log(`  ${r.passed ? "PASS" : "FAIL"}  ${r.check} — ${r.detail}`);

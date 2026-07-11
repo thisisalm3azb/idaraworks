@@ -20,6 +20,7 @@ export function createAppDb(options: { max?: number; url?: string } = {}): {
   const client = postgres(options.url ?? appDatabaseUrl(), {
     max: options.max ?? Number(process.env.APP_DB_POOL_MAX ?? 10),
     prepare: false, // transaction-mode pooling law — do not change
+    connect_timeout: 15, // fail fast, never hang a CI job (Phase B incident)
     onnotice: () => {},
   });
   return { db: drizzle(client), end: () => client.end({ timeout: 5 }) };

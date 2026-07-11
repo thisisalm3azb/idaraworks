@@ -40,8 +40,10 @@ export async function runVc1(): Promise<Vc1Report> {
   const ctxA: Ctx = { orgId: orgA, userId: user, costPrivileged: false, requestId: "vc1-a" };
   const ctxB: Ctx = { orgId: orgB, userId: user, costPrivileged: false, requestId: "vc1-b" };
   const results: CheckResult[] = [];
-  const record = (check: string, passed: boolean, detail: string) =>
+  const record = (check: string, passed: boolean, detail: string) => {
     results.push({ check, passed, detail });
+    console.log(`vc1: ${passed ? "PASS" : "FAIL"} ${check}`);
+  };
 
   // Setup: probe table + policy + seed (owner side). Requires 0000 (app schema, role).
   await owner.unsafe(`
@@ -62,6 +64,96 @@ export async function runVc1(): Promise<Vc1Report> {
 
   // Small pool through the POOLER as app_user — pool size 2 forces connection reuse.
   const pooled = createAppDb({ max: 2 });
+
+  const withTimeout = async <T>(label: string, ms: number, p: Promise<T>): Promise<T> => {
+    let timer: NodeJS.Timeout | undefined;
+    try {
+      return await Promise.race([
+        p,
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
+        }),
+      ]);
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+
+  // Check 0 — pooled authentication as app_user, with layered diagnostics.
+  // (Phase B CI incident: the first pooled app_user query hung — this check
+  // isolates verifier-vs-pooler-auth failures in one run instead of guessing.)
+  {
+    console.log("vc1: check 0 (pooled auth as app_user) ...");
+    let detail = "";
+    let ok = false;
+    try {
+      const r = (await withTimeout(
+        "pooled app_user auth",
+        20_000,
+        pooled.db.execute(sql`select current_user as u`),
+      )) as unknown as Array<{ u: string }>;
+      ok = r[0]?.u === "app_user";
+      detail = `pooled connection authenticated as ${r[0]?.u}`;
+    } catch (poolErr) {
+      detail = `pooled auth failed: ${(poolErr as Error).message.slice(0, 120)}`;
+      // Diagnostic 1: is the stored credential a SCRAM verifier?
+      try {
+        const [row] = await owner`
+          select left(rolpassword, 14) as prefix from pg_authid where rolname = 'app_user'`;
+        detail += ` | stored credential prefix: ${row?.prefix ?? "NULL"}`;
+      } catch {
+        detail += " | pg_authid unreadable (not superuser)";
+      }
+      // Diagnostic 2: can app_user authenticate DIRECTLY (bypassing the pooler)?
+      try {
+        const directUrl = new URL(direct);
+        directUrl.username = "app_user";
+        directUrl.password = encodeURIComponent(process.env.APP_DB_PASSWORD ?? "");
+        const directClient = postgres(directUrl.toString(), {
+          max: 1,
+          connect_timeout: 10,
+          prepare: false,
+          onnotice: () => {},
+        });
+        const [du] = await withTimeout(
+          "direct app_user auth",
+          15_000,
+          directClient`select current_user as u`,
+        );
+        detail += ` | DIRECT as app_user: ok (${du?.u}) => pooler-side auth issue`;
+        await directClient.end({ timeout: 3 });
+      } catch (dErr) {
+        detail += ` | DIRECT as app_user also failed (${(dErr as Error).message.slice(0, 80)}) => credential issue`;
+      }
+      // Diagnostic 3: plaintext ALTER via owner, then one pooled retry — isolates
+      // verifier-generation bugs. Loud, diagnostic-only; migrate.ts stays verifier-only.
+      try {
+        const plain = (process.env.APP_DB_PASSWORD ?? "").replace(/'/g, "''");
+        await owner.unsafe(`alter role app_user with login password '${plain}'`);
+        const r2 = (await withTimeout(
+          "pooled retry after plaintext ALTER",
+          20_000,
+          pooled.db.execute(sql`select current_user as u`),
+        )) as unknown as Array<{ u: string }>;
+        if (r2[0]?.u === "app_user") {
+          ok = true;
+          detail += " | PLAINTEXT FALLBACK WORKED => scramSha256Verifier output rejected; fix it";
+        } else {
+          detail += " | plaintext retry returned unexpected user";
+        }
+      } catch (rErr) {
+        detail += ` | plaintext retry failed too (${(rErr as Error).message.slice(0, 80)})`;
+      }
+    }
+    record("0 pooled auth", ok, detail);
+    console.log(`vc1: check 0 => ${ok ? "PASS" : "FAIL"} — ${detail}`);
+    if (!ok) {
+      await pooled.end();
+      await owner.unsafe(`drop table if exists public.${PROBE}`);
+      await owner.end({ timeout: 5 });
+      return { passed: false, results };
+    }
+  }
 
   const countRows = async (ctx: Ctx): Promise<{ n: number; orgs: string[] }> =>
     withCtxOn(pooled.db, ctx, async (tx) => {
