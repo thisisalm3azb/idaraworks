@@ -6,3 +6,5 @@ test-results
 coverage
 *.md
 supabase/migrations
+# gitleaks-action writes its SARIF report into the workspace during CI
+*.sarif
