@@ -207,3 +207,12 @@ Checked section-by-section: §2 P3 (tenancy: items §3/§4/§9 of this checklist
 | AR-10 | Multi-currency in S0 | S0 builds the **formatter/exponent layer and org base-currency + default-rate table only**; document-level FX lands with quotes/invoices (S6) per OP-8 — nothing more is pulled forward |
 
 **Approval request:** this checklist awaits owner approval. On approval, implementation begins with Phase A — S0 only, stopping automatically at S0 completion with a full implementation audit against the Freeze, the Build Bible, and doc 11 before S1.
+
+---
+
+## Phase B amendment log (spec-divergence filings per BUILD_BIBLE §19)
+
+- **A-B1 — Single migration authority (review M1/M3):** `tooling/scripts/migrate.ts` (ledger `app.migrations`, over `DIRECT_URL`) is the ONLY migration applier — in CI, locally, and hosted. The Supabase CLI's auto-apply is disabled (`[db.migrations] enabled = false`, `[db.seed] enabled = false` in `supabase/config.toml`); **`supabase db push` is NOT this project's deploy path** — §8's earlier mention of it is superseded.
+- **A-B2 — Ramadan working-hours profile location:** lives in `app_settings` under key `ramadan_hours_profile` (Zod schema owned by the calendar service, Phase F), NOT as rows/columns on `org_holiday_calendar`. §3's 0001 row is amended accordingly.
+- **A-B3 — DATABASE_URL contract (§10):** the runtime env stores the dashboard Transaction-pooler URI **without needing its password** — `src/platform/tenancy/env.ts` swaps in `app_user` + `APP_DB_PASSWORD`. Operators should redact the dashboard password when pasting. `DIRECT_URL` note: hosted `db.<ref>.supabase.co` is IPv6-only; on IPv4-only networks use the Session-pooler URI.
+- **A-B4 — app_user credential hygiene:** the migration runner sets the role password as a **SCRAM-SHA-256 verifier**, never plaintext, so `pg_stat_statements`/DDL logs contain no recoverable secret.

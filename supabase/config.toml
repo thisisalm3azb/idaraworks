@@ -1,0 +1,50 @@
+# Supabase local-stack config (CI integration stage + local dev when Docker is available).
+# The pooler MUST run in transaction mode — CI proves the same Supavisor GUC mechanism
+# the hosted project uses (S0 checklist §4 / VC-1).
+project_id = "idaraworks"
+
+[db]
+port = 54322
+shadow_port = 54320
+major_version = 17
+
+[db.pooler]
+enabled = true
+port = 54329
+pool_mode = "transaction"
+default_pool_size = 5
+max_client_conn = 50
+
+# Review M1/M3: the project's own runner (tooling/scripts/migrate.ts, ledger
+# app.migrations) is the SINGLE migration authority — in CI, locally, and hosted.
+# The CLI must not auto-apply supabase/migrations/ (it would create real tables
+# before the VC-1 gate and double-apply non-idempotent files afterwards).
+# `supabase db push` is NOT this project's deploy path.
+[db.migrations]
+enabled = false
+
+[db.seed]
+enabled = false
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public"]
+
+[studio]
+enabled = false
+
+[local_smtp]
+enabled = false
+
+[storage]
+enabled = false
+
+[auth]
+enabled = false
+
+[realtime]
+enabled = false
+
+[analytics]
+enabled = false

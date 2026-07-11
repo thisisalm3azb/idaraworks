@@ -74,3 +74,60 @@ jobs:
           name: playwright-report
           path: playwright-report/
           retention-days: 7
+
+  # Phase B integration stage (S0 checklist §8 step 5): local Supabase stack with the
+  # Supavisor pooler in TRANSACTION mode — the same mechanism as hosted. Sequence
+  # mirrors the hosted procedure exactly: VC-1 spike (0000 only) BEFORE real tables.
+  integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      APP_DB_PASSWORD: ci-app-password
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.34.5
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - uses: supabase/setup-cli@v1
+        with:
+          # Pinned to the repo's `supabase` devDependency version — bump deliberately.
+          version: 2.109.1
+
+      - name: Start local Supabase (db + transaction pooler; CLI auto-migrate disabled)
+        run: supabase start
+
+      - name: Export connection env from the local stack
+        run: |
+          set -a
+          source <(supabase status -o env)
+          set +a
+          : "${DB_URL:?supabase status did not emit DB_URL}"
+          echo "DIRECT_URL=$DB_URL" >> "$GITHUB_ENV"
+          # Review M2: `supabase status` emits NO pooler URL. Construct it from
+          # config.toml's [db.pooler] port; the local Supavisor tenant id is
+          # `pooler-dev` (username postgres.pooler-dev — env.ts preserves the
+          # tenant suffix when swapping in app_user). The probe step below fails
+          # loudly if this ever changes.
+          echo "DATABASE_URL=postgresql://postgres.pooler-dev:postgres@127.0.0.1:54329/postgres" >> "$GITHUB_ENV"
+
+      - name: Probe direct + pooler connectivity (fail fast, before VC-1)
+        run: pnpm tsx tooling/scripts/probe-db.ts
+
+      - name: VC-1 mechanism spike (0000 only — before any real table)
+        run: pnpm vc1
+
+      - name: Apply all migrations
+        run: pnpm db:migrate
+
+      - name: Integration tests (VC-1 regression + tenancy harness + wrong-ctx block)
+        run: pnpm test:integration

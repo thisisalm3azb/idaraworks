@@ -66,7 +66,7 @@
 ## 4. Database Standards
 
 1. **Tables:** `snake_case`, plural avoided (match phase2/01 names); every tenant table has `org_id uuid not null` + RLS policy in the same migration.
-2. **Primary keys:** UUIDv7 (`id`). Human references (`reference`, `serial_no`) are separate, per-org, pattern-generated (phase2/07).
+2. **Primary keys:** UUIDv7 (`id`). Human references (`reference`, `serial_no`) are separate, per-org, pattern-generated (phase2/07). *Recorded exception (Phase B review):* pure per-org key-value/rate tables (`app_settings`, `currency_rate_default`) use composite natural primary keys `(org_id, key)` — they are configuration cells, never attachment targets or audit subjects; any table that can be referenced by files/comments/activity MUST have the uuid `id`.
 3. **Foreign keys:** always declared, `on delete restrict` by default (we archive/void, we don't cascade-delete history). Snapshot columns (`*_name`) accompany FKs where history must outlive masters (D-1.6).
 4. **Indexes:** every FK indexed; composite indexes lead with `org_id`; partial indexes for hot filtered queries (pending approvals, open exceptions); every slice's PR includes its index plan + reviewed EXPLAIN (phase2/11 DoD).
 5. **Audit & activity:** written by the platform command path decorator, never by feature code directly; append-only (no UPDATE/DELETE grants).
