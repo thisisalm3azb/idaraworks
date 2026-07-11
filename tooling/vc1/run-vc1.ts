@@ -90,7 +90,8 @@ export async function runVc1(): Promise<Vc1Report> {
       const r = (await withTimeout(
         "pooled app_user auth",
         20_000,
-        pooled.db.execute(sql`select current_user as u`),
+        // A transaction, per the A-B5 pool law (transactions are the pool's only path).
+        pooled.db.transaction(async (tx) => tx.execute(sql`select current_user as u`)),
       )) as unknown as Array<{ u: string }>;
       ok = r[0]?.u === "app_user";
       detail = `pooled connection authenticated as ${r[0]?.u}`;
@@ -163,12 +164,30 @@ export async function runVc1(): Promise<Vc1Report> {
       return { n: rows.length, orgs: [...new Set(rows.map((r) => r.org_id))] };
     });
 
+  // No-ctx probes run on dedicated short-lived clients, NOT the shared pool.
+  // Two reasons: (a) LAW (checklist A-B5, CI run ae21a6b finding) — the shared
+  // pool is for withCtx transactions only; postgres.js can stall its queue for
+  // bare executes after an aborted transaction under transaction-mode pooling;
+  // (b) the leak property lives on the SERVER connections behind Supavisor,
+  // which fresh clients sample just as faithfully.
+  const bareProbe = async (label: string): Promise<number> => {
+    const fresh = createAppDb({ max: 1 });
+    try {
+      const r = (await withTimeout(
+        `no-ctx probe ${label}`,
+        15_000,
+        fresh.db.execute(sql`select count(*)::int as n from public.vc1_probe`),
+      )) as unknown as Array<{ n: number }>;
+      return r[0]?.n ?? -1;
+    } finally {
+      await fresh.end();
+    }
+  };
+
   try {
-    // 1. default-deny: no ctx (plain query on the pool, outside withCtx)
-    const bare = (await pooled.db.execute(
-      sql`select count(*)::int as n from public.vc1_probe`,
-    )) as unknown as Array<{ n: number }>;
-    record("1 default-deny", bare[0]?.n === 0, `no-ctx read returned ${bare[0]?.n} rows (want 0)`);
+    // 1. default-deny: no ctx
+    const bare = await bareProbe("check1");
+    record("1 default-deny", bare === 0, `no-ctx read returned ${bare} rows (want 0)`);
 
     // 2. ctx isolation
     const a = await countRows(ctxA);
@@ -243,58 +262,18 @@ export async function runVc1(): Promise<Vc1Report> {
     // sample the pool repeatedly (sequential > 2x pool size + concurrent burst
     // + an explicit no-GUC transaction) so EVERY pooled connection is observed;
     // a stale-GUC leak on either of the 2 connections cannot hide.
-    // Diagnostics for the check-6 hang seen in CI run e927f12: each sample is
-    // individually time-boxed; on timeout we dump server-side connection state
-    // (pg_stat_activity via owner) and retry on a FRESH client to distinguish
-    // a zombie pooled connection from a pooler-wide stall.
-    const serverState = async (): Promise<string> => {
-      try {
-        const rows = await owner`
-          select state, wait_event_type, left(query, 40) as q
-          from pg_stat_activity where usename = 'app_user'`;
-        return JSON.stringify(rows);
-      } catch {
-        return "pg_stat_activity unavailable";
-      }
-    };
-    const bareCount = async (label: string): Promise<number> => {
-      console.log(`vc1: check 6 sample ${label} ...`);
-      try {
-        const r = (await withTimeout(
-          `check6 ${label}`,
-          15_000,
-          pooled.db.execute(sql`select count(*)::int as n from public.vc1_probe`),
-        )) as unknown as Array<{ n: number }>;
-        return r[0]?.n ?? -1;
-      } catch (err) {
-        console.log(`vc1: check 6 sample ${label} FAILED: ${(err as Error).message}`);
-        console.log(`vc1: server-side app_user connections: ${await serverState()}`);
-        console.log("vc1: retrying on a FRESH single-connection client ...");
-        const fresh = createAppDb({ max: 1 });
-        try {
-          const r2 = (await withTimeout(
-            `check6 ${label} fresh-client retry`,
-            15_000,
-            fresh.db.execute(sql`select count(*)::int as n from public.vc1_probe`),
-          )) as unknown as Array<{ n: number }>;
-          console.log(
-            `vc1: fresh-client retry ok => the ORIGINAL pool has a zombie connection (aborted-tx interplay)`,
-          );
-          return r2[0]?.n ?? -1;
-        } finally {
-          await fresh.end();
-        }
-      }
-    };
+    // Check 6: every no-ctx probe on a dedicated client (A-B5 law); the one
+    // plain TRANSACTION probe runs on the shared pool — transactions are the
+    // supported pool path and must stay healthy after check 5's aborted tx.
     const sequential: number[] = [];
     for (let k = 0; k < 6; k++) {
-      sequential.push(await bareCount(`seq-${k}`));
+      sequential.push(await bareProbe(`seq-${k}`));
     }
     const burst = await Promise.all(
-      ["burst-0", "burst-1", "burst-2", "burst-3"].map((l) => bareCount(l)),
+      ["burst-0", "burst-1", "burst-2", "burst-3"].map((l) => bareProbe(l)),
     );
     const inPlainTx = await withTimeout(
-      "check6 plain-tx",
+      "check6 plain-tx on the shared pool",
       20_000,
       pooled.db.transaction(async (tx) => {
         const r = (await tx.execute(
@@ -307,7 +286,7 @@ export async function runVc1(): Promise<Vc1Report> {
     record(
       "6 GUC reset",
       samples.every((n) => n === 0),
-      `11 no-ctx samples (6 sequential + 4 concurrent + 1 plain tx) returned [${samples.join(",")}] (want all 0)`,
+      `11 no-ctx samples (6 sequential + 4 concurrent + 1 pool tx) returned [${samples.join(",")}] (want all 0)`,
     );
   } finally {
     await pooled.end();

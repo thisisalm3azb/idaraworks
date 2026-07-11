@@ -28,7 +28,15 @@ export function createAppDb(options: { max?: number; url?: string } = {}): {
 
 let shared: { db: AppDb; end: () => Promise<void> } | undefined;
 
-/** Shared app pool (lazy). Request code uses this via withCtx — never directly. */
+/**
+ * Shared app pool (lazy). LAW (checklist A-B5, proven in CI run ae21a6b):
+ * this pool is for withCtx TRANSACTIONS only. Bare `.execute()` on the pool is
+ * banned — postgres.js can stall its dispatch queue for non-transaction queries
+ * queued beyond pool size after an aborted transaction under transaction-mode
+ * pooling (server connections idle, client queue dead). One-off unscoped needs
+ * (health checks, probes) use a dedicated `createAppDb({ max: 1 })` client.
+ * A lint guard lands with Phase C's health endpoint.
+ */
 export function appDb(): AppDb {
   shared ??= createAppDb();
   return shared.db;

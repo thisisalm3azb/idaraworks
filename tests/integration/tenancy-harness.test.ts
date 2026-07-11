@@ -6,7 +6,7 @@
 import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { appDb, closeAppDb, withCtx, type Ctx } from "@/platform/tenancy";
+import { closeAppDb, createAppDb, withCtx, type Ctx } from "@/platform/tenancy";
 import { ownerSql } from "./helpers";
 
 const owner = ownerSql();
@@ -185,10 +185,16 @@ describe("wrong-context blocks happen in the DATABASE (doc 10 #1)", () => {
     });
     expect(inside).toBe(orgA);
 
-    const outside = (await appDb().execute(
-      sql`select app.current_org_id()::text as org`,
-    )) as unknown as Array<{ org: string | null }>;
-    expect(outside[0]!.org).toBeNull();
+    // Dedicated client for the no-ctx probe — the shared pool is transactions-only (A-B5).
+    const fresh = createAppDb({ max: 1 });
+    try {
+      const outside = (await fresh.db.execute(
+        sql`select app.current_org_id()::text as org`,
+      )) as unknown as Array<{ org: string | null }>;
+      expect(outside[0]!.org).toBeNull();
+    } finally {
+      await fresh.end();
+    }
   });
 
   it("malformed ctx never reaches set_config", async () => {
