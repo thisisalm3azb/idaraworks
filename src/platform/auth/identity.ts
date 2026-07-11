@@ -24,9 +24,16 @@ export class DomainError extends Error {
   }
 }
 function rethrowDbMessage(err: unknown): never {
-  const cause = (err as { cause?: { message?: string } }).cause;
-  if (cause?.message) throw new DomainError(cause.message);
-  throw err;
+  // Only surface plpgsql RAISE text (SQLSTATE P0001). Any other DB error
+  // (constraint names, syntax, etc.) is logged server-side and returned as a
+  // generic message — never leak internal schema detail to the caller
+  // (independent review, database).
+  const cause = (err as { cause?: { message?: string; code?: string } }).cause;
+  if (cause?.code === "P0001" && cause.message) {
+    throw new DomainError(cause.message);
+  }
+  logger.warn({ code: cause?.code, err: (err as Error).message }, "unexpected db error");
+  throw new DomainError("The operation could not be completed.");
 }
 
 // ── sign-in log ───────────────────────────────────────────────────────────────
@@ -71,6 +78,16 @@ export async function logAuthEvent(entry: {
       );
     } else if (entry.userId) {
       await withUserCtx(entry.userId, write);
+    } else if (entry.orgId) {
+      // Org-only, no user: not produced by any current caller, but the sign_in_log
+      // with_check would reject it (org_id <> current_org_id() with no GUC). Drop
+      // the org tag rather than swallow the event silently (independent review).
+      await appDb().transaction((tx) =>
+        tx.execute(sql`
+          insert into public.sign_in_log (event, detail) values (${entry.event},
+            ${JSON.stringify({ ...(entry.detail ?? {}), dropped_org_tag: entry.orgId })}::jsonb)
+        `),
+      );
     } else {
       // Anonymous events (failed logins): a plain transaction — allowed on the
       // pool per A-B5 (transactions are the pool's supported path).

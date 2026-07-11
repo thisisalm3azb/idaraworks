@@ -20,7 +20,7 @@ export default async function OrgLayout({
   const resolved = await resolveCtx(orgId);
   if (resolved === "no_session") redirect(`/login?next=/o/${orgId}`);
   if (resolved === "no_membership") redirect("/");
-  if (!resolved.mfaSatisfied) redirect("/mfa");
+  if (resolved === "mfa_required" || !resolved.mfaSatisfied) redirect("/mfa");
 
   const user = await getSessionUser();
   const orgs = user ? await listMyOrgs(user.id) : [];

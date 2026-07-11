@@ -119,14 +119,24 @@ const eslintConfig = defineConfig([
           ],
         },
       ],
-      // Review finding #3: static-import bans are bypassable via dynamic import().
       "no-restricted-syntax": [
         "error",
         {
+          // Static-import bans are bypassable via dynamic import().
           selector:
             "ImportExpression > Literal[value=/^(postgres$|pg$|drizzle-orm|@supabase\\u002F)/]",
           message:
             "Dynamic import of data clients is banned outside src/platform/tenancy (phase2/10 #3).",
+        },
+        {
+          // A-B5 pool law: the shared appDb() pool is for withCtx TRANSACTIONS
+          // only; bare .execute()/.query() on it can stall the postgres.js queue
+          // after an aborted transaction. One-off unscoped needs use a dedicated
+          // createAppDb({max:1}) client. (appDb().transaction(...) is fine.)
+          selector:
+            "CallExpression[callee.object.callee.name='appDb'][callee.property.name=/^(execute|query)$/]",
+          message:
+            "A-B5: never call .execute()/.query() directly on appDb(); use withCtx (transaction) or a dedicated createAppDb({max:1}) client.",
         },
       ],
     },

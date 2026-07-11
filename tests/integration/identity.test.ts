@@ -6,7 +6,7 @@
 import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { closeAppDb, withCtx, type Ctx } from "@/platform/tenancy";
+import { closeAppDb, withCtx, withUserCtx, type Ctx } from "@/platform/tenancy";
 import {
   acceptInvite,
   createOrgForUser,
@@ -180,6 +180,53 @@ describe("member management", () => {
   it("a deactivated member no longer resolves the org (listMyOrgs excludes it)", async () => {
     const orgs = await listMyOrgs(userC);
     expect(orgs).toEqual([]);
+  });
+
+  it("a deactivated member STILL appears in the roster (0004 fix; D-1.7 — not a delete)", async () => {
+    const members = await listMembers(ctxOf(orgA, userA), "owner");
+    const c = members.find((m) => m.userId === userC);
+    expect(c, "deactivated member vanished from the roster").toBeDefined();
+    expect(c!.deactivatedAt).not.toBeNull(); // visible AND correctly flagged
+  });
+});
+
+// DB errors surface through drizzle as DrizzleQueryError with the Postgres
+// detail on .cause (SQLSTATE code + message). Raw tx.execute in tests sees them.
+async function dbCause(p: Promise<unknown>): Promise<{ code?: string; message?: string }> {
+  const err = await p.then(
+    () => undefined,
+    (e: unknown) => e,
+  );
+  expect(err, "expected a database error, got none").toBeInstanceOf(Error);
+  return (err as { cause?: { code?: string; message?: string } }).cause ?? {};
+}
+
+describe("privilege-escalation backstops (0004 hardening)", () => {
+  it("app_user cannot UPDATE role_key on a membership even in-org (column grant)", async () => {
+    // The RLS with_check only validates org_id; the DB backstop against role
+    // escalation is the column-level grant — Postgres rejects with 42501.
+    const cause = await dbCause(
+      withCtx(ctxOf(orgA, userA), async (tx) => {
+        await tx.execute(
+          sql`update public.membership set role_key = 'owner' where user_id = ${userC} and org_id = ${orgA}`,
+        );
+      }),
+    );
+    expect(cause.code).toBe("42501"); // insufficient_privilege (column-level)
+  });
+
+  it("create_org_with_owner rejects a user_id that is not the session user (impersonation)", async () => {
+    // withUserCtx sets app.user_id = userA, but we ask the definer fn to create
+    // an org owned by userB → the GUC guard must RAISE (P0001).
+    const cause = await dbCause(
+      withUserCtx(userA, async (tx) => {
+        await tx.execute(sql`
+          select app.create_org_with_owner(${userB}, 'Impersonated', 'AE', 'AED',
+            'Asia/Dubai', string_to_array('en', ','), false)`);
+      }),
+    );
+    expect(cause.code).toBe("P0001");
+    expect(cause.message).toMatch(/user mismatch/i);
   });
 });
 

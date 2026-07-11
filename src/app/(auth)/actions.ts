@@ -9,10 +9,15 @@ import { rateLimit } from "@/platform/http/rateLimit";
 
 async function requestMeta() {
   const h = await headers();
-  return {
-    ip: h.get("x-forwarded-for")?.split(",")[0]?.trim() ?? undefined,
-    userAgent: h.get("user-agent") ?? undefined,
-  };
+  // Prefer a platform-set trusted client IP (Vercel) over the client-spoofable
+  // leftmost x-forwarded-for entry (independent review). Rate-limiting durability
+  // still requires Upstash before pilots — tracked in OA-4.
+  const ip =
+    h.get("x-vercel-forwarded-for") ??
+    h.get("true-client-ip") ??
+    h.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+    undefined;
+  return { ip, userAgent: h.get("user-agent") ?? undefined };
 }
 
 export async function loginAction(formData: FormData): Promise<void> {
@@ -75,6 +80,21 @@ export async function signOutOtherDevicesAction(): Promise<void> {
   const supabase = supabaseServer(await cookies());
   await supabase.auth.signOut({ scope: "others" });
   redirect("/account?notice=others_signed_out");
+}
+
+/**
+ * Audit an MFA lifecycle event (independent review: the mfa_* sign_in_log event
+ * types were dead — MFA ran entirely client-side with no audit seam). The client
+ * calls this after Supabase confirms the transition; we re-derive the user
+ * server-side so the event cannot be forged for someone else.
+ */
+export async function logMfaEventAction(
+  event: "mfa_enrolled" | "mfa_challenge_success" | "mfa_challenge_failure",
+): Promise<void> {
+  const user = await getSessionUser();
+  if (!user) return;
+  const meta = await requestMeta();
+  await logAuthEvent({ userId: user.id, event, ...meta });
 }
 
 export async function createOrgAction(formData: FormData): Promise<void> {

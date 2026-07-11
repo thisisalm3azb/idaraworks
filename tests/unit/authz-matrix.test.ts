@@ -40,16 +40,19 @@ describe("authz matrix", () => {
     }
   });
 
-  it("owner-only actions exclude non-privileged archetypes", () => {
-    for (const action of [
-      "org.settings.update",
-      "members.invite",
-      "members.deactivate",
-    ] as Action[]) {
+  it("owner/admin-only actions exclude non-privileged archetypes", () => {
+    for (const action of ["members.invite", "members.deactivate"] as Action[]) {
       expect(can("foreman", action)).toBe(false);
       expect(can("viewer", action)).toBe(false);
+      expect(can("manager", action)).toBe(false);
       expect(can("owner", action)).toBe(true);
       expect(can("admin", action)).toBe(true);
     }
+  });
+
+  it("members.view is broadly readable but not by field roles", () => {
+    expect(can("viewer", "members.view")).toBe(true);
+    expect(can("accounts", "members.view")).toBe(true);
+    expect(can("foreman", "members.view")).toBe(false);
   });
 });

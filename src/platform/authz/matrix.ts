@@ -6,21 +6,15 @@
  */
 import type { RoleArchetype } from "@/platform/registries";
 
-export type Action =
-  | "org.settings.view"
-  | "org.settings.update"
-  | "members.view"
-  | "members.invite"
-  | "members.deactivate"
-  | "roles.view";
+// Only actions with a live server-side enforcement point ship in the matrix
+// (doc 10 #15: "each action enforced in exactly one server check"). Org-settings
+// and role-management actions land with their surfaces in later slices.
+export type Action = "members.view" | "members.invite" | "members.deactivate";
 
 type Grantable = Exclude<RoleArchetype, "worker_reserved_p3">;
 
 export const MATRIX: Record<Action, readonly Grantable[]> = {
-  "org.settings.view": ["owner", "admin", "manager", "procurement", "accounts", "viewer"],
-  "org.settings.update": ["owner", "admin"],
   "members.view": ["owner", "admin", "manager", "procurement", "accounts", "viewer"],
   "members.invite": ["owner", "admin"],
   "members.deactivate": ["owner", "admin"],
-  "roles.view": ["owner", "admin", "manager", "procurement", "accounts", "viewer"],
 };

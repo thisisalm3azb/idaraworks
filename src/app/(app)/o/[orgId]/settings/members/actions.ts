@@ -3,12 +3,13 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { resolveCtx } from "@/platform/auth/resolve";
+import { resolveCtxForAction } from "@/platform/auth/resolve";
 import { deactivateMember, inviteMember } from "@/platform/auth/identity";
 import { rateLimit } from "@/platform/http/rateLimit";
 
 export async function inviteMemberAction(orgId: string, formData: FormData): Promise<void> {
-  const resolved = await resolveCtx(orgId);
+  const resolved = await resolveCtxForAction(orgId);
+  if (resolved === "mfa_required") redirect("/mfa");
   if (typeof resolved === "string") redirect("/");
   const h = await headers();
   const rl = await rateLimit(
@@ -33,7 +34,8 @@ export async function inviteMemberAction(orgId: string, formData: FormData): Pro
 }
 
 export async function deactivateMemberAction(orgId: string, formData: FormData): Promise<void> {
-  const resolved = await resolveCtx(orgId);
+  const resolved = await resolveCtxForAction(orgId);
+  if (resolved === "mfa_required") redirect("/mfa");
   if (typeof resolved === "string") redirect("/");
   const base = `/o/${orgId}/settings/members`;
   try {

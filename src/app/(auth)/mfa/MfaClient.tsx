@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/platform/tenancy/supabase";
 import { Button, Card, Field, Spinner } from "@/platform/ui";
 import { t } from "@/platform/i18n/t";
+import { logMfaEventAction } from "../actions";
 
 type Mode = "loading" | "enroll" | "challenge" | "done";
 
@@ -48,6 +49,7 @@ export function MfaClient() {
       setError(chErr?.message ?? "challenge failed");
       return;
     }
+    const wasEnrolling = mode === "enroll";
     const { error: vErr } = await supabase.auth.mfa.verify({
       factorId,
       challengeId: challenge.id,
@@ -55,8 +57,10 @@ export function MfaClient() {
     });
     if (vErr) {
       setError(vErr.message);
+      void logMfaEventAction("mfa_challenge_failure");
       return;
     }
+    void logMfaEventAction(wasEnrolling ? "mfa_enrolled" : "mfa_challenge_success");
     setMode("done");
     router.push("/");
     router.refresh();

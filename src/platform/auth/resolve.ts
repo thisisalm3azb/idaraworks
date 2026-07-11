@@ -51,11 +51,16 @@ export async function listMyOrgs(userId: string): Promise<MyOrg[]> {
   });
 }
 
-export type ResolveFailure = "no_session" | "no_membership";
+export type ResolveFailure = "no_session" | "no_membership" | "mfa_required";
+
+const ORG_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export async function resolveCtx(orgId: string): Promise<ResolvedCtx | ResolveFailure> {
   const user = await getSessionUser();
   if (!user) return "no_session";
+  // A malformed /o/<garbage> selector must redirect cleanly, never 500 inside
+  // a uuid comparison (independent review, minor).
+  if (!ORG_ID_RE.test(orgId)) return "no_membership";
 
   // Membership check runs user-side (no org GUC yet) — deactivation enforced here.
   const membership = await withUserCtx(user.id, async (tx) => {
@@ -99,4 +104,17 @@ export async function resolveCtx(orgId: string): Promise<ResolvedCtx | ResolveFa
     mfaRequired: details.mfaRequired,
     mfaSatisfied: !details.mfaRequired || user.aal === "aal2",
   };
+}
+
+/**
+ * Resolve for a MUTATING org action — fails closed on unmet org-enforced MFA
+ * (material security finding: the layout redirect does NOT protect Server
+ * Actions; every privileged mutation must re-check aal2 on the server path).
+ * Returns the resolved ctx or a failure reason the caller redirects on.
+ */
+export async function resolveCtxForAction(orgId: string): Promise<ResolvedCtx | ResolveFailure> {
+  const resolved = await resolveCtx(orgId);
+  if (typeof resolved === "string") return resolved;
+  if (!resolved.mfaSatisfied) return "mfa_required";
+  return resolved;
 }
