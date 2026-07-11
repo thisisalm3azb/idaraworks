@@ -22,9 +22,16 @@ export type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   size?: Size;
 };
 
-export function Button({ variant = "primary", size = "md", className, ...props }: ButtonProps) {
+export function Button({
+  variant = "primary",
+  size = "md",
+  type = "button", // never an implicit form submit (review finding #11)
+  className,
+  ...props
+}: ButtonProps) {
   return (
     <button
+      type={type}
       className={cn(
         "inline-flex items-center justify-center gap-2 rounded-md font-medium",
         "transition-colors disabled:cursor-not-allowed disabled:opacity-50",

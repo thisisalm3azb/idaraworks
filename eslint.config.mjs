@@ -50,7 +50,10 @@ const eslintConfig = defineConfig([
           message:
             "Boundary violation (BUILD_BIBLE §3.3): this layer may not import that target. Modules talk to other modules only via their service.ts or domain events; platform never imports modules; lib imports nothing but lib.",
           policies: [
-            { from: ["app"], allow: ["platform", "lib", "module", "module-service"] },
+            // Review finding #4: app must not reach module internals (repositories) —
+            // service.ts is each module's only public surface (BUILD_BIBLE §3.2).
+            // A `module-components` element joins this list when module UI arrives (S2).
+            { from: ["app"], allow: ["platform", "lib", "module-service"] },
             { from: ["platform"], allow: ["platform", "lib"] },
             { from: ["lib"], allow: ["lib"] },
             {
@@ -108,7 +111,22 @@ const eslintConfig = defineConfig([
               group: ["drizzle-orm/*"],
               message: "Data access only via src/platform/tenancy (phase2/10 #3).",
             },
+            {
+              group: ["@supabase/*"],
+              message:
+                "Supabase clients (incl. ssr/postgrest) are constructed only in src/platform/tenancy (phase2/10 #1, #3).",
+            },
           ],
+        },
+      ],
+      // Review finding #3: static-import bans are bypassable via dynamic import().
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector:
+            "ImportExpression > Literal[value=/^(postgres$|pg$|drizzle-orm|@supabase\\u002F)/]",
+          message:
+            "Dynamic import of data clients is banned outside src/platform/tenancy (phase2/10 #3).",
         },
       ],
     },

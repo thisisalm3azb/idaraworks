@@ -12,9 +12,13 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   quality:
     runs-on: ubuntu-latest
+    timeout-minutes: 15 # VC-5 target is ≤12 min; hard stop at 15
     steps:
       - uses: actions/checkout@v4
         with:

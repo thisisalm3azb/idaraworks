@@ -5,7 +5,7 @@ export function Spinner({ label }: { label?: string }) {
         aria-hidden
         className="size-4 animate-spin rounded-full border-2 border-line-strong border-t-brand"
       />
-      {label ? <span className="text-sm">{label}</span> : null}
+      {label ? <span className="text-sm">{label}</span> : <span className="sr-only">Loading</span>}
     </span>
   );
 }

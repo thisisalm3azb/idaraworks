@@ -43,3 +43,36 @@ describe("fetchWithPolicy (BUILD_BIBLE §8.10)", () => {
     expect(mock).toHaveBeenCalledTimes(2);
   });
 });
+
+describe("circuit breaker (review finding #5)", () => {
+  it("opens after repeated terminal 5xx on POST and rejects fast", async () => {
+    const mock = vi.fn().mockResolvedValue(new Response("down", { status: 503 }));
+    vi.stubGlobal("fetch", mock);
+    // 5 terminal 5xx responses on a dedicated host reach the threshold…
+    for (let i = 0; i < 5; i++) {
+      const res = await fetchWithPolicy(
+        "https://breaker.test/x",
+        { method: "POST" },
+        { backoffMs: 1 },
+      );
+      expect(res.status).toBe(503);
+    }
+    // …then the breaker is open: the next call throws without hitting fetch.
+    const callsBefore = mock.mock.calls.length;
+    await expect(fetchWithPolicy("https://breaker.test/x", { method: "POST" })).rejects.toThrow(
+      /Circuit open/,
+    );
+    expect(mock.mock.calls.length).toBe(callsBefore);
+  });
+
+  it("a success resets the failure count", async () => {
+    const mock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response("down", { status: 503 }))
+      .mockResolvedValueOnce(okResponse());
+    vi.stubGlobal("fetch", mock);
+    await fetchWithPolicy("https://reset.test/x", { method: "POST" }, { backoffMs: 1 });
+    const res = await fetchWithPolicy("https://reset.test/x", { method: "POST" });
+    expect(res.status).toBe(200);
+  });
+});

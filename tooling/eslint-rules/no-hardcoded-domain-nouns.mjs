@@ -41,6 +41,18 @@ const rule = {
           check(node.value, node.value.value);
         }
       },
+      // Review finding #6: string/template literals rendered as JSX children
+      // ({"All jobs"} / {`...`}) previously escaped the tripwire.
+      JSXExpressionContainer(node) {
+        const expr = node.expression;
+        if (expr?.type === "Literal" && typeof expr.value === "string") {
+          check(expr, expr.value);
+        } else if (expr?.type === "TemplateLiteral") {
+          for (const quasi of expr.quasis) {
+            check(quasi, quasi.value?.raw);
+          }
+        }
+      },
     };
   },
 };

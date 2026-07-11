@@ -10,9 +10,12 @@ const supabaseHost = process.env.NEXT_PUBLIC_SUPABASE_URL
   ? new URL(process.env.NEXT_PUBLIC_SUPABASE_URL).origin
   : "";
 
+const isDev = process.env.NODE_ENV === "development";
+
 const csp = [
   "default-src 'self'",
-  "script-src 'self' 'unsafe-inline'",
+  // 'unsafe-eval' is dev-only (Next dev tooling); never shipped (review finding #13).
+  `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""}`,
   "style-src 'self' 'unsafe-inline'",
   `img-src 'self' blob: data: ${supabaseHost}`.trim(),
   "font-src 'self'",
@@ -36,6 +39,8 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  // pino + transport must not be bundled by Next (review finding #8a).
+  serverExternalPackages: ["pino", "pino-pretty"],
   async headers() {
     return [{ source: "/(.*)", headers: securityHeaders }];
   },

@@ -12,8 +12,26 @@ export const logger = pino({
   level: process.env.LOG_LEVEL ?? (isDev ? "debug" : "info"),
   base: { app: "idaraworks", env: process.env.APP_ENV ?? "dev" },
   redact: {
-    // Defence-in-depth: known-sensitive keys never serialize.
-    paths: ["*.password", "*.token", "*.secret", "*.authorization", "req.headers.cookie"],
+    // Defence-in-depth: known-sensitive keys never serialize (review finding #8b —
+    // pino wildcards match one level; cover two levels for the common shapes).
+    paths: [
+      "password",
+      "token",
+      "secret",
+      "apiKey",
+      "authorization",
+      "phone",
+      "email",
+      "*.password",
+      "*.token",
+      "*.secret",
+      "*.apiKey",
+      "*.authorization",
+      "*.phone",
+      "*.email",
+      "req.headers.cookie",
+      "req.headers.authorization",
+    ],
     censor: "[REDACTED]",
   },
   ...(isDev ? { transport: { target: "pino-pretty", options: { colorize: true } } } : {}),

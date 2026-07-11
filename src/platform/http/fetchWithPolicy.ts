@@ -57,14 +57,31 @@ export async function fetchWithPolicy(
     throw new ExternalCallError(`Circuit open for ${host}`, host);
   }
 
+  const recordFailure = () => {
+    state.failures += 1;
+    if (state.failures >= BREAKER_THRESHOLD) {
+      state.openUntil = Date.now() + BREAKER_COOLDOWN_MS;
+      state.failures = 0;
+      logger.warn({ host }, "circuit breaker opened");
+    }
+  };
+
   let lastError: unknown;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
       const res = await fetch(url, { ...init, signal: controller.signal });
-      if (res.status >= 500 && attempt < maxRetries) {
-        lastError = new ExternalCallError(`Upstream ${res.status}`, host, res.status);
+      if (res.status >= 500) {
+        if (attempt < maxRetries) {
+          lastError = new ExternalCallError(`Upstream ${res.status}`, host, res.status);
+        } else {
+          // Terminal 5xx: the caller decides what to do with the response,
+          // but the breaker must count it (review finding #5 — a persistent
+          // 5xx on POSTs previously RESET the breaker instead of tripping it).
+          recordFailure();
+          return res;
+        }
       } else {
         state.failures = 0;
         return res;
@@ -79,11 +96,6 @@ export async function fetchWithPolicy(
     }
   }
 
-  state.failures += 1;
-  if (state.failures >= BREAKER_THRESHOLD) {
-    state.openUntil = Date.now() + BREAKER_COOLDOWN_MS;
-    state.failures = 0;
-    logger.warn({ host }, "circuit breaker opened");
-  }
+  recordFailure();
   throw new ExternalCallError(`External call to ${host} failed`, host, undefined, lastError);
 }
