@@ -71,9 +71,12 @@ describe("migration harness (every tenant table is defended)", () => {
     // bootstrap tables user_profile/membership/sign_in_log — current_user_id).
     const TENANCY_GUC = /current_org_id|current_user_id/;
     // Classify by the POLICY, not the column: a tenant policy references a
-    // tenancy GUC in USING (org keys on `id`, not `org_id`, so a column check
-    // would misclassify it). A `using (true)` policy is global platform-reference
-    // data (entitlement catalogue, plans) — legitimate, but must be read-only.
+    // tenancy GUC in its predicate (org keys on `id`, not `org_id`, so a column
+    // check would misclassify it). Crucially the predicate may live in USING
+    // (SELECT/UPDATE/DELETE) OR in WITH CHECK (INSERT-only policies have a null
+    // qual — their tenancy scoping is entirely in with_check). A policy whose
+    // NEITHER clause references a GUC is global platform-reference data
+    // (entitlement catalogue, plans) — legitimate, but must be read-only.
     const policies = await owner`
       select tablename, policyname, roles, cmd, qual, with_check
       from pg_policies
@@ -82,24 +85,29 @@ describe("migration harness (every tenant table is defended)", () => {
     for (const p of policies) {
       const roles = (p.roles as string[]) ?? [];
       expect(roles, `policy ${p.tablename}.${p.policyname} roles = ${roles}`).toEqual(["app_user"]);
-      if (TENANCY_GUC.test(String(p.qual))) {
-        // Tenant-scoped. with_check exists only on write-capable policies; when
-        // present it must pin the tenant. Read-only org tables have none.
-        const writeCapable = p.cmd === "ALL" || p.cmd === "INSERT" || p.cmd === "UPDATE";
-        if (writeCapable) {
-          expect(
-            p.with_check,
-            `policy ${p.tablename}.${p.policyname} WITH CHECK not tenancy-scoped`,
-          ).toMatch(TENANCY_GUC);
-        }
+      const where = `${p.tablename}.${p.policyname}`;
+      const qualHasGuc = TENANCY_GUC.test(String(p.qual ?? ""));
+      const checkHasGuc = TENANCY_GUC.test(String(p.with_check ?? ""));
+      if (p.cmd === "INSERT") {
+        // No USING clause (qual is null); tenancy scoping lives entirely in
+        // WITH CHECK, which must pin the tenant so no cross-org row can be written.
+        expect(checkHasGuc, `${where} INSERT WITH CHECK not tenancy-scoped`).toBe(true);
+      } else if (p.cmd === "ALL" || p.cmd === "UPDATE") {
+        // Read AND write: USING must scope the read to the tenant AND WITH CHECK
+        // must pin the write — a `using (true)` here would be a cross-tenant hole.
+        expect(qualHasGuc, `${where} USING not tenancy-scoped (read escape)`).toBe(true);
+        expect(checkHasGuc, `${where} WITH CHECK not tenancy-scoped (write escape)`).toBe(true);
       } else {
-        // Global-reference: read-only policy, no write privileges to app_user.
-        expect(p.cmd, `reference table ${p.tablename} policy must be SELECT-only`).toBe("SELECT");
-        const [priv] = await owner`
-          select has_table_privilege('app_user', ('public.' || ${p.tablename})::regclass, 'INSERT') as w`;
-        expect(priv!.w, `reference table ${p.tablename} must not be writable by app_user`).toBe(
-          false,
-        );
+        // SELECT: either a tenant-scoped read (USING references a GUC) or global
+        // platform-reference data — which must be SELECT-only + no write grant.
+        if (!qualHasGuc) {
+          expect(p.cmd, `reference table ${p.tablename} policy must be SELECT-only`).toBe("SELECT");
+          const [priv] = await owner`
+            select has_table_privilege('app_user', ('public.' || ${p.tablename})::regclass, 'INSERT') as w`;
+          expect(priv!.w, `reference table ${p.tablename} must not be writable by app_user`).toBe(
+            false,
+          );
+        }
       }
     }
   });

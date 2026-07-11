@@ -67,6 +67,20 @@ export const ATTACHABLE_TYPES = [
 ] as const;
 export type AttachableType = (typeof ATTACHABLE_TYPES)[number];
 
+/**
+ * Entity types that may appear on an audit_log row (doc 01 D-1.8). A superset of
+ * ATTACHABLE_TYPES with the platform-audit-only entities that carry no file
+ * attachments but are still security/config-audited (org lifecycle, membership).
+ * The audit_log.entity_type column is registry-typed in app against THIS list.
+ */
+export const AUDIT_ENTITY_TYPES = [
+  ...ATTACHABLE_TYPES,
+  "org",
+  "membership",
+  "membership_invite",
+] as const;
+export type AuditEntityType = (typeof AUDIT_ENTITY_TYPES)[number];
+
 // ── File access classes (doc 01 Appendix A, audit F-23) ─────────────────────
 export const FILE_ACCESS_CLASSES = [
   "job_media", // job-visibility roles; thumbnails on list surfaces

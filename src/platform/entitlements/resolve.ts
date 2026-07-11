@@ -1,10 +1,14 @@
 /**
  * Entitlement resolution (v1 §13; S0 checklist §15 AC).
  * Resolved entitlements = plan values, with per-org overrides layered on top.
- * Cached per org with explicit invalidation on any override/plan write
- * (BUILD_BIBLE §5.8; §8.9 — invalidation story shipped with the cache). The
- * in-memory TTL cache is the correct MVP-scale implementation; the cross-instance
- * push-invalidation form is a documented scaling step (BUILD_BIBLE §12), not debt.
+ *
+ * Freshness (MVP): a per-instance TTL cache (60s). This is the actual freshness
+ * mechanism at MVP scale — plan/override writes land in S9 from OUT-OF-PROCESS
+ * actors (billing webhook, platform admin, direct SQL) with no app_user write
+ * grant, so they cannot reach this in-memory Map; a stale read self-heals within
+ * one TTL. invalidateEntitlements() is provided for SAME-PROCESS callers (and to
+ * keep tests deterministic). Cross-instance push-invalidation is the documented
+ * scaling step (BUILD_BIBLE §12), out of scope for Phase D.
  *
  * LAW (freeze FR-9): reads/exports are NEVER blocked by entitlements. checkLimit
  * governs the ability to ADD, not to see.
@@ -33,9 +37,13 @@ class UnknownEntitlementKeyError extends Error {
 }
 
 const CACHE_TTL_MS = 60_000;
+// Bounded so a long-lived instance serving many orgs cannot grow the cache
+// without limit (entries also expire by TTL). On overflow, evict the oldest
+// insertion — Map preserves insertion order, so the first key is the oldest.
+const CACHE_MAX_ENTRIES = 5_000;
 const cache = new Map<string, { at: number; value: ResolvedEntitlements }>();
 
-/** Explicit invalidation — call on any plan/override write for the org. */
+/** Same-process invalidation (see header). Call after a same-process plan/override write. */
 export function invalidateEntitlements(orgId: string): void {
   cache.delete(orgId);
 }
@@ -102,6 +110,10 @@ export async function resolveEntitlements(ctx: Ctx): Promise<ResolvedEntitlement
   if (hit && Date.now() - hit.at < CACHE_TTL_MS) return hit.value;
   const value = await loadResolved(ctx);
   cache.set(ctx.orgId, { at: Date.now(), value });
+  if (cache.size > CACHE_MAX_ENTRIES) {
+    const oldest = cache.keys().next().value;
+    if (oldest !== undefined) cache.delete(oldest);
+  }
   return value;
 }
 

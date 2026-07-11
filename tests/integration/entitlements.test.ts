@@ -68,6 +68,20 @@ describe("catalogue ⇔ DB parity", () => {
     expect(dbFeatures).toEqual([...FEATURE_KEYS].sort());
     expect(dbLimits).toEqual([...LIMIT_KEYS].sort());
   });
+
+  it("every plan seeds a row for EVERY catalogue key (no silent fail-closed)", async () => {
+    // A missing plan_entitlement row makes getLimit() fall through to 0 =
+    // 'block every add' for a valid key (database review). Assert completeness:
+    // each plan carries exactly one row per feature + limit key.
+    const total = FEATURE_KEYS.length + LIMIT_KEYS.length;
+    const rows = await owner`
+      select p.key as plan_key, count(pe.entitlement_key)::int as n
+      from public.plan p
+      left join public.plan_entitlement pe on pe.plan_key = p.key
+      group by p.key`;
+    expect(rows.length).toBeGreaterThan(0);
+    for (const r of rows) expect(r.n).toBe(total);
+  });
 });
 
 describe("default plan on org creation", () => {

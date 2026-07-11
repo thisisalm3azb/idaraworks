@@ -14,23 +14,6 @@ import { sendEmail } from "@/platform/notifications/email";
 import { logger } from "@/platform/logger";
 
 /**
- * Best-effort audit for BOOTSTRAP paths (org creation, invite acceptance) where
- * the mutation happens inside a SECURITY DEFINER function and the audit row is a
- * follow-up in the new org's context. Must not break the flow, must not fail
- * silently (mirrors logAuthEvent's discipline).
- */
-async function bootstrapAudit(
-  ctx: Ctx,
-  audit: { action: string; entityType: "org" | "membership"; entityId?: string; summary: string },
-): Promise<void> {
-  try {
-    await command(ctx, { audit }, async () => undefined);
-  } catch (err) {
-    logger.warn({ action: audit.action, err: (err as Error).message }, "bootstrap audit failed");
-  }
-}
-
-/**
  * Surface a plpgsql RAISE message cleanly (BUILD_BIBLE §8.1 — services throw
  * typed domain errors, not driver-wrapped ones). drizzle wraps DB errors in
  * DrizzleQueryError; the RAISE text lives on `.cause.message`.
@@ -55,6 +38,8 @@ function rethrowDbMessage(err: unknown): never {
 }
 
 // ── sign-in log ───────────────────────────────────────────────────────────────
+// sign_in_log is the AUTH-SESSION stream only (doc 01 D-1.8). Membership events
+// (invite/accept/deactivate) are compliance events → audit_log via command().
 export type AuthEvent =
   | "login_success"
   | "login_failure"
@@ -65,10 +50,7 @@ export type AuthEvent =
   | "mfa_challenge_failure"
   | "mfa_reset"
   | "otp_sent"
-  | "otp_verified"
-  | "invite_sent"
-  | "invite_accepted"
-  | "membership_deactivated";
+  | "otp_verified";
 
 export async function logAuthEvent(entry: {
   userId?: string;
@@ -150,15 +132,8 @@ export async function createOrgForUser(userId: string, raw: unknown): Promise<st
   } catch (err) {
     rethrowDbMessage(err);
   }
-  await bootstrapAudit(
-    { orgId, userId, costPrivileged: false, requestId: "audit" },
-    {
-      action: "org.create",
-      entityType: "org",
-      entityId: orgId,
-      summary: `Created workspace ${input.name}`,
-    },
-  );
+  // The 'org.create' audit row is written INSIDE app.create_org_with_owner
+  // (0007), atomic with the bootstrap mutation — no follow-up needed here.
   return orgId;
 }
 
@@ -233,14 +208,8 @@ export async function acceptInvite(userId: string, token: string): Promise<strin
   } catch (err) {
     rethrowDbMessage(err);
   }
-  await bootstrapAudit(
-    { orgId, userId, costPrivileged: false, requestId: "audit" },
-    {
-      action: "membership.join",
-      entityType: "membership",
-      summary: "Joined the workspace via invitation",
-    },
-  );
+  // The 'membership.join' audit row is written INSIDE app.accept_invite (0007),
+  // atomic with the membership insert — no follow-up needed here.
   return orgId;
 }
 

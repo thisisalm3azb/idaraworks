@@ -3,6 +3,7 @@ import nextVitals from "eslint-config-next/core-web-vitals";
 import nextTs from "eslint-config-next/typescript";
 import boundaries from "eslint-plugin-boundaries";
 import noHardcodedDomainNouns from "./tooling/eslint-rules/no-hardcoded-domain-nouns.mjs";
+import noInlineAuditWrites from "./tooling/eslint-rules/no-inline-audit-writes.mjs";
 
 /**
  * IdaraWorks lint law (BUILD_BIBLE §3, §5, §19).
@@ -21,6 +22,19 @@ const eslintConfig = defineConfig([
     "test-results/**",
     "coverage/**",
   ]),
+
+  // Register the local plugin namespace ONCE — flat config forbids redefining a
+  // plugin key across config blocks. The rule blocks below reference these.
+  {
+    plugins: {
+      idaraworks: {
+        rules: {
+          "no-hardcoded-domain-nouns": noHardcodedDomainNouns,
+          "no-inline-audit-writes": noInlineAuditWrites,
+        },
+      },
+    },
+  },
 
   // ── Module boundaries (BUILD_BIBLE §3.3–§3.4) ─────────────────────────────
   {
@@ -142,13 +156,25 @@ const eslintConfig = defineConfig([
     },
   },
 
+  // ── Audit-writer tripwire (BUILD_BIBLE §4 item 5, §19 "the unlogged mutation") ──
+  // The audit_log / activity tables are written ONLY through the command path in
+  // src/platform/audit (and the two SECURITY DEFINER bootstrap functions in SQL
+  // migrations, which lint does not cover). A feature that inlines the insert
+  // bypasses the atomic single-writer guarantee — fail the build. A dedicated
+  // rule key (not no-restricted-syntax) so it composes with the tenancy tripwires
+  // above instead of overriding them.
+  {
+    files: ["src/**/*.{ts,tsx}"],
+    ignores: ["src/platform/audit/**"],
+    rules: {
+      "idaraworks/no-inline-audit-writes": "error",
+    },
+  },
+
   // ── UI rules ──────────────────────────────────────────────────────────────
   {
     files: ["src/**/*.tsx"],
     ignores: ["**/*.test.tsx", "**/*.spec.tsx"],
-    plugins: {
-      idaraworks: { rules: { "no-hardcoded-domain-nouns": noHardcodedDomainNouns } },
-    },
     rules: {
       "idaraworks/no-hardcoded-domain-nouns": "error",
       "react/no-danger": "error",

@@ -270,7 +270,8 @@ describe("cross-tenant isolation of identity tables", () => {
   });
 
   it("sign_in_log is org-scoped", async () => {
-    // The invite/accept above wrote invite_sent/accepted rows for org A.
+    // sign_in_log now carries auth-session events only (membership events moved to
+    // audit_log in Phase D). Whatever rows exist here must be org-A-scoped.
     const rows = await withCtx(ctxOf(orgA, userA), async (tx) => {
       return (await tx.execute(
         sql`select distinct org_id::text as org_id from public.sign_in_log where org_id is not null`,

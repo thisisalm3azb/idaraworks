@@ -19,7 +19,8 @@ import { ownerSql } from "./helpers";
 const owner = ownerSql();
 const userA = randomUUID(); // org A owner
 const userB = randomUUID(); // org B owner (isolation)
-const userC = randomUUID(); // invitee into A
+const userC = randomUUID(); // invitee into A (deactivated)
+const userD = randomUUID(); // active manager in A (read-gate)
 let orgA = "";
 let orgB = "";
 
@@ -32,11 +33,13 @@ async function seedAuthUser(id: string, email: string) {
 }
 
 const emailC = `audit-c-${userC.slice(0, 8)}@example.com`;
+const emailD = `audit-d-${userD.slice(0, 8)}@example.com`;
 
 beforeAll(async () => {
   await seedAuthUser(userA, `audit-a-${userA.slice(0, 8)}@example.com`);
   await seedAuthUser(userB, `audit-b-${userB.slice(0, 8)}@example.com`);
   await seedAuthUser(userC, emailC);
+  await seedAuthUser(userD, emailD);
   orgA = await createOrgForUser(userA, { name: "Audit A", country: "AE", baseCurrency: "AED" });
   orgB = await createOrgForUser(userB, { name: "Audit B", country: "SA", baseCurrency: "SAR" });
 }, 60_000);
@@ -51,8 +54,8 @@ afterAll(async () => {
     await owner`delete from public.company where org_id = ${org}`;
     await owner`delete from public.org where id = ${org}`;
   }
-  await owner`delete from public.user_profile where id in (${userA}, ${userB}, ${userC})`;
-  await owner`delete from auth.users where id in (${userA}, ${userB}, ${userC})`;
+  await owner`delete from public.user_profile where id in (${userA}, ${userB}, ${userC}, ${userD})`;
+  await owner`delete from auth.users where id in (${userA}, ${userB}, ${userC}, ${userD})`;
   await owner.end({ timeout: 5 });
   await closeAppDb();
 });
@@ -146,6 +149,29 @@ describe("append-only enforcement (doc 10 #34)", () => {
       ),
     );
     expect(del).toBe("42501");
+  });
+});
+
+describe("audit reads are role-gated (compliance stream, 0007)", () => {
+  it("an active non-privileged member cannot read audit_log; the owner can", async () => {
+    // Make userD an ACTIVE manager in org A (archetype not in owner/admin/accounts).
+    const { token } = await inviteMember(ctxOf(orgA, userA), "owner", {
+      email: emailD,
+      roleKey: "manager",
+    });
+    await acceptInvite(userD, token);
+
+    const ownerSeen = (await withCtx(
+      ctxOf(orgA, userA),
+      (tx) => tx.execute(sql`select count(*)::int as n from public.audit_log`),
+    )) as unknown as Array<{ n: number }>;
+    expect(ownerSeen[0]!.n).toBeGreaterThan(0); // owner reads the compliance log
+
+    const managerSeen = (await withCtx(
+      ctxOf(orgA, userD),
+      (tx) => tx.execute(sql`select count(*)::int as n from public.audit_log`),
+    )) as unknown as Array<{ n: number }>;
+    expect(managerSeen[0]!.n).toBe(0); // RLS select gates to privileged archetypes
   });
 });
 

@@ -7,15 +7,19 @@
  *
  * audit_log = security/config/financial mutations (compliance stream).
  * activity   = operational narrative on L2/L4 entities (tenant-visible).
- * Feature code never writes these tables directly (lint: only this module and
- * the tenancy layer construct the inserts).
+ * Feature code never writes these tables directly: an ESLint no-restricted-syntax
+ * rule (eslint.config.mjs) forbids `insert into public.audit_log|activity` string
+ * literals outside src/platform/audit/**. Two SECURITY DEFINER bootstrap paths
+ * (app.create_org_with_owner, app.accept_invite) write their own audit row inside
+ * the function body — that is still ONE atomic transaction with the mutation, and
+ * is the only SQL-side writer (migrations are not app code).
  */
 import { sql, withCtx, type Ctx, type TenantTx } from "@/platform/tenancy";
-import type { AttachableType } from "@/platform/registries";
+import type { AttachableType, AuditEntityType } from "@/platform/registries";
 
 export type AuditSpec = {
   action: string; // e.g. 'membership.deactivate'
-  entityType: AttachableType | "org" | "membership" | "membership_invite";
+  entityType: AuditEntityType;
   entityId?: string;
   summary: string;
   before?: unknown;
