@@ -19,6 +19,12 @@ jobs:
   quality:
     runs-on: ubuntu-latest
     timeout-minutes: 15 # VC-5 target is ≤12 min; hard stop at 15
+    env:
+      # Placeholder auth env so build + e2e smoke boot. The URL is unreachable,
+      # so getUser() returns null (unauthenticated) — exactly what the smoke
+      # exercises. No DB env here: /api/health returns 503, which the test accepts.
+      NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:1
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-placeholder-anon-key
     steps:
       - uses: actions/checkout@v4
         with:
