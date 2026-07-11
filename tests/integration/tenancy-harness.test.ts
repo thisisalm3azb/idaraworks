@@ -65,7 +65,11 @@ describe("migration harness (every tenant table is defended)", () => {
 
   it("every policy has the correct SHAPE, not just existence (review minor #6)", async () => {
     // A wide-open `using (true)` or `TO public` policy would pass an
-    // existence-only gate. Assert the doc 10 #1 template on every policy.
+    // existence-only gate. Assert the doc 10 #1 template on every policy:
+    // scoped TO app_user, covering ALL, with USING and WITH CHECK predicates
+    // that reference a tenancy GUC (current_org_id OR — for the resolver's
+    // bootstrap tables user_profile/membership/sign_in_log — current_user_id).
+    const TENANCY_GUC = /current_org_id|current_user_id/;
     const policies = await owner`
       select tablename, policyname, roles, cmd, qual, with_check
       from pg_policies
@@ -74,14 +78,38 @@ describe("migration harness (every tenant table is defended)", () => {
     for (const p of policies) {
       const roles = (p.roles as string[]) ?? [];
       expect(roles, `policy ${p.tablename}.${p.policyname} roles = ${roles}`).toEqual(["app_user"]);
-      expect(p.qual, `policy ${p.tablename}.${p.policyname} has no USING predicate`).toMatch(
-        /current_org_id/,
+      expect(p.qual, `policy ${p.tablename}.${p.policyname} USING not tenancy-scoped`).toMatch(
+        TENANCY_GUC,
       );
       expect(
         p.with_check,
-        `policy ${p.tablename}.${p.policyname} has no WITH CHECK predicate`,
-      ).toMatch(/current_org_id/);
+        `policy ${p.tablename}.${p.policyname} WITH CHECK not tenancy-scoped`,
+      ).toMatch(TENANCY_GUC);
       expect(p.cmd, `policy ${p.tablename}.${p.policyname} does not cover ALL`).toBe("ALL");
+    }
+  });
+
+  it("every WRITABLE tenant table's WITH CHECK pins the org (no write escape)", async () => {
+    // Reads may widen to co-members (user_profile) or own-membership (org), but
+    // every INSERT/UPDATE path must confine rows to the active org — except the
+    // append-only sign_in_log, whose pre-org login events legitimately allow a
+    // null org (asserted separately by its own insert behaviour).
+    const ORG_WRITE_TABLES = [
+      "org",
+      "company",
+      "app_settings",
+      "org_holiday_calendar",
+      "currency_rate_default",
+      "role_definition",
+      "membership",
+      "membership_invite",
+    ];
+    const policies = await owner`
+      select tablename, with_check from pg_policies where schemaname = 'public'`;
+    for (const name of ORG_WRITE_TABLES) {
+      const p = policies.find((x) => x.tablename === name);
+      expect(p, `no policy for ${name}`).toBeDefined();
+      expect(p!.with_check, `${name} WITH CHECK must pin current_org_id`).toMatch(/current_org_id/);
     }
   });
 

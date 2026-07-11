@@ -40,3 +40,20 @@ export async function withCtxOn<T>(
 export async function withCtx<T>(ctx: Ctx, fn: (tx: TenantTx) => Promise<T>): Promise<T> {
   return withCtxOn(appDb(), ctx, fn);
 }
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * User-only context — the ctx resolver's BOOTSTRAP read (Phase C): before an
+ * active org exists, a user may read their own memberships/orgs (policies key
+ * on app.current_user_id()). No org GUC is set; org-scoped rows stay invisible.
+ */
+export async function withUserCtx<T>(userId: string, fn: (tx: TenantTx) => Promise<T>): Promise<T> {
+  if (!UUID_RE.test(userId)) {
+    throw new Error("withUserCtx: userId is not a UUID");
+  }
+  return appDb().transaction(async (tx) => {
+    await tx.execute(sql`select set_config('app.user_id', ${userId}, true)`);
+    return fn(tx);
+  });
+}
