@@ -161,15 +161,13 @@ describe("audit reads are role-gated (compliance stream, 0007)", () => {
     });
     await acceptInvite(userD, token);
 
-    const ownerSeen = (await withCtx(
-      ctxOf(orgA, userA),
-      (tx) => tx.execute(sql`select count(*)::int as n from public.audit_log`),
+    const ownerSeen = (await withCtx(ctxOf(orgA, userA), (tx) =>
+      tx.execute(sql`select count(*)::int as n from public.audit_log`),
     )) as unknown as Array<{ n: number }>;
     expect(ownerSeen[0]!.n).toBeGreaterThan(0); // owner reads the compliance log
 
-    const managerSeen = (await withCtx(
-      ctxOf(orgA, userD),
-      (tx) => tx.execute(sql`select count(*)::int as n from public.audit_log`),
+    const managerSeen = (await withCtx(ctxOf(orgA, userD), (tx) =>
+      tx.execute(sql`select count(*)::int as n from public.audit_log`),
     )) as unknown as Array<{ n: number }>;
     expect(managerSeen[0]!.n).toBe(0); // RLS select gates to privileged archetypes
   });
