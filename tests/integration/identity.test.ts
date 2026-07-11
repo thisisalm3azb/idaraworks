@@ -25,6 +25,11 @@ const owner = ownerSql();
 const userA = randomUUID(); // owner of org A
 const userB = randomUUID(); // owner of org B
 const userC = randomUUID(); // invitee
+// Run-unique emails (derived from the random ids) so a partial-cleanup from one
+// run can never collide with the next via the auth.users email unique index.
+const emailA = `owner-a-${userA.slice(0, 8)}@test.local`;
+const emailB = `owner-b-${userB.slice(0, 8)}@test.local`;
+const emailC = `invitee-c-${userC.slice(0, 8)}@test.local`;
 let orgA = "";
 let orgB = "";
 
@@ -37,9 +42,9 @@ async function seedAuthUser(id: string, email: string) {
 }
 
 beforeAll(async () => {
-  await seedAuthUser(userA, "owner-a@test.local");
-  await seedAuthUser(userB, "owner-b@test.local");
-  await seedAuthUser(userC, "invitee-c@test.local");
+  await seedAuthUser(userA, emailA);
+  await seedAuthUser(userB, emailB);
+  await seedAuthUser(userC, emailC);
 
   orgA = await createOrgForUser(userA, {
     name: "Alpha Marine",
@@ -55,6 +60,8 @@ beforeAll(async () => {
 
 afterAll(async () => {
   for (const org of [orgA, orgB].filter(Boolean)) {
+    await owner`delete from public.audit_log where org_id = ${org}`;
+    await owner`delete from public.org_plan_state where org_id = ${org}`;
     await owner`delete from public.sign_in_log where org_id = ${org}`;
     await owner`delete from public.membership_invite where org_id = ${org}`;
     await owner`delete from public.membership where org_id = ${org}`;
@@ -120,12 +127,12 @@ describe("bootstrap reads (withUserCtx)", () => {
 describe("invite own-token flow (no service-role)", () => {
   it("invites, accepts, and creates a membership with the invited role", async () => {
     const { token } = await inviteMember(ctxOf(orgA, userA), "owner", {
-      email: "invitee-c@test.local",
+      email: emailC,
       roleKey: "manager",
     });
     // raw token never stored — only its hash
     const [stored] = await owner`
-      select token_hash from public.membership_invite where org_id = ${orgA} and email = 'invitee-c@test.local'`;
+      select token_hash from public.membership_invite where org_id = ${orgA} and email = ${emailC.toLowerCase()}`;
     expect(stored!.token_hash).toBe(hashInviteToken(token));
     expect(stored!.token_hash).not.toContain(token);
 

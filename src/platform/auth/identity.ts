@@ -9,8 +9,26 @@ import { appDb } from "@/platform/tenancy/db";
 import { sql, withCtx, withUserCtx, type Ctx, type TenantTx } from "@/platform/tenancy";
 import { assertCan } from "@/platform/authz";
 import { CURRENCY_CODES, type RoleArchetype } from "@/platform/registries";
+import { command } from "@/platform/audit";
 import { sendEmail } from "@/platform/notifications/email";
 import { logger } from "@/platform/logger";
+
+/**
+ * Best-effort audit for BOOTSTRAP paths (org creation, invite acceptance) where
+ * the mutation happens inside a SECURITY DEFINER function and the audit row is a
+ * follow-up in the new org's context. Must not break the flow, must not fail
+ * silently (mirrors logAuthEvent's discipline).
+ */
+async function bootstrapAudit(
+  ctx: Ctx,
+  audit: { action: string; entityType: "org" | "membership"; entityId?: string; summary: string },
+): Promise<void> {
+  try {
+    await command(ctx, { audit }, async () => undefined);
+  } catch (err) {
+    logger.warn({ action: audit.action, err: (err as Error).message }, "bootstrap audit failed");
+  }
+}
 
 /**
  * Surface a plpgsql RAISE message cleanly (BUILD_BIBLE §8.1 — services throw
@@ -115,8 +133,9 @@ export type CreateOrgInput = z.infer<typeof CreateOrgInput>;
 
 export async function createOrgForUser(userId: string, raw: unknown): Promise<string> {
   const input = CreateOrgInput.parse(raw);
+  let orgId: string;
   try {
-    return await withUserCtx(userId, async (tx) => {
+    orgId = await withUserCtx(userId, async (tx) => {
       const rows = (await tx.execute(sql`
         select app.create_org_with_owner(
           ${userId}, ${input.name}, ${input.country}, ${input.baseCurrency},
@@ -124,13 +143,23 @@ export async function createOrgForUser(userId: string, raw: unknown): Promise<st
           ${input.sixDayWeek}
         ) as org_id
       `)) as unknown as Array<{ org_id: string }>;
-      const orgId = rows[0]?.org_id;
-      if (!orgId) throw new Error("org creation returned nothing");
-      return orgId;
+      const id = rows[0]?.org_id;
+      if (!id) throw new Error("org creation returned nothing");
+      return id;
     });
   } catch (err) {
     rethrowDbMessage(err);
   }
+  await bootstrapAudit(
+    { orgId, userId, costPrivileged: false, requestId: "audit" },
+    {
+      action: "org.create",
+      entityType: "org",
+      entityId: orgId,
+      summary: `Created workspace ${input.name}`,
+    },
+  );
+  return orgId;
 }
 
 // ── invites ───────────────────────────────────────────────────────────────────
@@ -155,32 +184,38 @@ export async function inviteMember(
   const token = randomBytes(32).toString("base64url");
   const tokenHash = hashInviteToken(token);
 
-  const inviteId = await withCtx(ctx, async (tx) => {
-    const role = (await tx.execute(sql`
-      select key from public.role_definition
-      where org_id = ${ctx.orgId} and key = ${input.roleKey} and key <> 'owner'
-    `)) as unknown as Array<{ key: string }>;
-    if (!role[0]) throw new Error("unknown role for invite");
-    const rows = (await tx.execute(sql`
-      insert into public.membership_invite (org_id, email, role_key, token_hash, invited_by, expires_at)
-      values (${ctx.orgId}, ${input.email.toLowerCase()}, ${input.roleKey}, ${tokenHash},
-              ${ctx.userId}, now() + make_interval(days => ${INVITE_TTL_DAYS}))
-      returning id::text as id
-    `)) as unknown as Array<{ id: string }>;
-    return rows[0]!.id;
-  });
+  // Insert + audit atomically through the command path (audit_log).
+  const inviteId = await command(
+    ctx,
+    {
+      audit: (id: string) => ({
+        action: "membership_invite.create",
+        entityType: "membership_invite",
+        entityId: id,
+        summary: `Invited ${input.email} as ${input.roleKey}`,
+      }),
+    },
+    async (tx) => {
+      const role = (await tx.execute(sql`
+        select key from public.role_definition
+        where org_id = ${ctx.orgId} and key = ${input.roleKey} and key <> 'owner'
+      `)) as unknown as Array<{ key: string }>;
+      if (!role[0]) throw new Error("unknown role for invite");
+      const rows = (await tx.execute(sql`
+        insert into public.membership_invite (org_id, email, role_key, token_hash, invited_by, expires_at)
+        values (${ctx.orgId}, ${input.email.toLowerCase()}, ${input.roleKey}, ${tokenHash},
+                ${ctx.userId}, now() + make_interval(days => ${INVITE_TTL_DAYS}))
+        returning id::text as id
+      `)) as unknown as Array<{ id: string }>;
+      return rows[0]!.id;
+    },
+  );
 
   const appUrl = process.env.APP_URL ?? "http://localhost:3000";
   const { delivered } = await sendEmail({
     to: input.email,
     subject: "You have been invited to IdaraWorks",
     text: `You have been invited to join a workspace on IdaraWorks.\n\nAccept: ${appUrl}/invite/${token}\n\nThis link expires in ${INVITE_TTL_DAYS} days.`,
-  });
-  await logAuthEvent({
-    userId: ctx.userId,
-    orgId: ctx.orgId,
-    event: "invite_sent",
-    detail: { inviteId, roleKey: input.roleKey },
   });
   return { inviteId, token, delivered };
 }
@@ -198,7 +233,14 @@ export async function acceptInvite(userId: string, token: string): Promise<strin
   } catch (err) {
     rethrowDbMessage(err);
   }
-  await logAuthEvent({ userId, orgId, event: "invite_accepted" });
+  await bootstrapAudit(
+    { orgId, userId, costPrivileged: false, requestId: "audit" },
+    {
+      action: "membership.join",
+      entityType: "membership",
+      summary: "Joined the workspace via invitation",
+    },
+  );
   return orgId;
 }
 
@@ -260,29 +302,37 @@ export async function deactivateMember(
   membershipId: string,
 ): Promise<void> {
   assertCan(archetype, "members.deactivate");
-  await withCtx(ctx, async (tx) => {
-    const target = (await tx.execute(sql`
-      select user_id::text as user_id, role_key from public.membership
-      where id = ${membershipId} and org_id = ${ctx.orgId}
-    `)) as unknown as Array<{ user_id: string; role_key: string }>;
-    if (!target[0]) throw new Error("membership not found");
-    if (target[0].role_key === "owner") {
-      throw new Error("the owner cannot be deactivated (doc 06)");
-    }
-    if (target[0].user_id === ctx.userId) {
-      throw new Error("you cannot deactivate yourself");
-    }
-    await tx.execute(sql`
-      update public.membership set deactivated_at = now()
-      where id = ${membershipId} and org_id = ${ctx.orgId} and deactivated_at is null
-    `);
-    // S4 hook (doc 10 #22): open approvals reassignment — the approvals engine
-    // registers a listener here when it lands. Stub is intentional, not missing.
-  });
-  await logAuthEvent({
-    userId: ctx.userId,
-    orgId: ctx.orgId,
-    event: "membership_deactivated",
-    detail: { membershipId },
-  });
+  // Guards + update + audit run atomically through the command path.
+  await command(
+    ctx,
+    {
+      audit: (target: { userId: string; fullName: string }) => ({
+        action: "membership.deactivate",
+        entityType: "membership",
+        entityId: membershipId,
+        summary: `Deactivated member ${target.fullName || target.userId}`,
+        before: { active: true },
+        after: { active: false },
+      }),
+    },
+    async (tx) => {
+      const rows = (await tx.execute(sql`
+        select m.user_id::text as user_id, m.role_key, p.full_name
+        from public.membership m
+        join public.user_profile p on p.id = m.user_id
+        where m.id = ${membershipId} and m.org_id = ${ctx.orgId}
+      `)) as unknown as Array<{ user_id: string; role_key: string; full_name: string }>;
+      const target = rows[0];
+      if (!target) throw new Error("membership not found");
+      if (target.role_key === "owner") throw new Error("the owner cannot be deactivated (doc 06)");
+      if (target.user_id === ctx.userId) throw new Error("you cannot deactivate yourself");
+      await tx.execute(sql`
+        update public.membership set deactivated_at = now()
+        where id = ${membershipId} and org_id = ${ctx.orgId} and deactivated_at is null
+      `);
+      // S4 hook (doc 10 #22): open approvals reassignment — the approvals engine
+      // registers a listener here when it lands. Stub is intentional, not missing.
+      return { userId: target.user_id, fullName: target.full_name };
+    },
+  );
 }

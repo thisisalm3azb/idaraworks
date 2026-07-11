@@ -70,6 +70,10 @@ describe("migration harness (every tenant table is defended)", () => {
     // that reference a tenancy GUC (current_org_id OR — for the resolver's
     // bootstrap tables user_profile/membership/sign_in_log — current_user_id).
     const TENANCY_GUC = /current_org_id|current_user_id/;
+    // Classify by the POLICY, not the column: a tenant policy references a
+    // tenancy GUC in USING (org keys on `id`, not `org_id`, so a column check
+    // would misclassify it). A `using (true)` policy is global platform-reference
+    // data (entitlement catalogue, plans) — legitimate, but must be read-only.
     const policies = await owner`
       select tablename, policyname, roles, cmd, qual, with_check
       from pg_policies
@@ -78,14 +82,25 @@ describe("migration harness (every tenant table is defended)", () => {
     for (const p of policies) {
       const roles = (p.roles as string[]) ?? [];
       expect(roles, `policy ${p.tablename}.${p.policyname} roles = ${roles}`).toEqual(["app_user"]);
-      expect(p.qual, `policy ${p.tablename}.${p.policyname} USING not tenancy-scoped`).toMatch(
-        TENANCY_GUC,
-      );
-      expect(
-        p.with_check,
-        `policy ${p.tablename}.${p.policyname} WITH CHECK not tenancy-scoped`,
-      ).toMatch(TENANCY_GUC);
-      expect(p.cmd, `policy ${p.tablename}.${p.policyname} does not cover ALL`).toBe("ALL");
+      if (TENANCY_GUC.test(String(p.qual))) {
+        // Tenant-scoped. with_check exists only on write-capable policies; when
+        // present it must pin the tenant. Read-only org tables have none.
+        const writeCapable = p.cmd === "ALL" || p.cmd === "INSERT" || p.cmd === "UPDATE";
+        if (writeCapable) {
+          expect(
+            p.with_check,
+            `policy ${p.tablename}.${p.policyname} WITH CHECK not tenancy-scoped`,
+          ).toMatch(TENANCY_GUC);
+        }
+      } else {
+        // Global-reference: read-only policy, no write privileges to app_user.
+        expect(p.cmd, `reference table ${p.tablename} policy must be SELECT-only`).toBe("SELECT");
+        const [priv] = await owner`
+          select has_table_privilege('app_user', ('public.' || ${p.tablename})::regclass, 'INSERT') as w`;
+        expect(priv!.w, `reference table ${p.tablename} must not be writable by app_user`).toBe(
+          false,
+        );
+      }
     }
   });
 
