@@ -218,11 +218,15 @@ export async function runVc1(): Promise<Vc1Report> {
     let writeBlocked = false;
     let writeDetail = "insert unexpectedly succeeded";
     try {
-      await withCtxOn(pooled.db, ctxA, async (tx) => {
-        await tx.execute(
-          sql`insert into public.vc1_probe (org_id, note) values (${orgB}, 'smuggled')`,
-        );
-      });
+      await withTimeout(
+        "check5 cross-org insert",
+        20_000,
+        withCtxOn(pooled.db, ctxA, async (tx) => {
+          await tx.execute(
+            sql`insert into public.vc1_probe (org_id, note) values (${orgB}, 'smuggled')`,
+          );
+        }),
+      );
     } catch (err) {
       writeBlocked = true;
       writeDetail = `database rejected: ${(err as Error).message.slice(0, 80)}`;
@@ -239,23 +243,66 @@ export async function runVc1(): Promise<Vc1Report> {
     // sample the pool repeatedly (sequential > 2x pool size + concurrent burst
     // + an explicit no-GUC transaction) so EVERY pooled connection is observed;
     // a stale-GUC leak on either of the 2 connections cannot hide.
-    const bareCount = async (): Promise<number> => {
-      const r = (await pooled.db.execute(
-        sql`select count(*)::int as n from public.vc1_probe`,
-      )) as unknown as Array<{ n: number }>;
-      return r[0]?.n ?? -1;
+    // Diagnostics for the check-6 hang seen in CI run e927f12: each sample is
+    // individually time-boxed; on timeout we dump server-side connection state
+    // (pg_stat_activity via owner) and retry on a FRESH client to distinguish
+    // a zombie pooled connection from a pooler-wide stall.
+    const serverState = async (): Promise<string> => {
+      try {
+        const rows = await owner`
+          select state, wait_event_type, left(query, 40) as q
+          from pg_stat_activity where usename = 'app_user'`;
+        return JSON.stringify(rows);
+      } catch {
+        return "pg_stat_activity unavailable";
+      }
+    };
+    const bareCount = async (label: string): Promise<number> => {
+      console.log(`vc1: check 6 sample ${label} ...`);
+      try {
+        const r = (await withTimeout(
+          `check6 ${label}`,
+          15_000,
+          pooled.db.execute(sql`select count(*)::int as n from public.vc1_probe`),
+        )) as unknown as Array<{ n: number }>;
+        return r[0]?.n ?? -1;
+      } catch (err) {
+        console.log(`vc1: check 6 sample ${label} FAILED: ${(err as Error).message}`);
+        console.log(`vc1: server-side app_user connections: ${await serverState()}`);
+        console.log("vc1: retrying on a FRESH single-connection client ...");
+        const fresh = createAppDb({ max: 1 });
+        try {
+          const r2 = (await withTimeout(
+            `check6 ${label} fresh-client retry`,
+            15_000,
+            fresh.db.execute(sql`select count(*)::int as n from public.vc1_probe`),
+          )) as unknown as Array<{ n: number }>;
+          console.log(
+            `vc1: fresh-client retry ok => the ORIGINAL pool has a zombie connection (aborted-tx interplay)`,
+          );
+          return r2[0]?.n ?? -1;
+        } finally {
+          await fresh.end();
+        }
+      }
     };
     const sequential: number[] = [];
     for (let k = 0; k < 6; k++) {
-      sequential.push(await bareCount());
+      sequential.push(await bareCount(`seq-${k}`));
     }
-    const burst = await Promise.all([bareCount(), bareCount(), bareCount(), bareCount()]);
-    const inPlainTx = await pooled.db.transaction(async (tx) => {
-      const r = (await tx.execute(
-        sql`select count(*)::int as n from public.vc1_probe`,
-      )) as unknown as Array<{ n: number }>;
-      return r[0]?.n ?? -1;
-    });
+    const burst = await Promise.all(
+      ["burst-0", "burst-1", "burst-2", "burst-3"].map((l) => bareCount(l)),
+    );
+    const inPlainTx = await withTimeout(
+      "check6 plain-tx",
+      20_000,
+      pooled.db.transaction(async (tx) => {
+        const r = (await tx.execute(
+          sql`select count(*)::int as n from public.vc1_probe`,
+        )) as unknown as Array<{ n: number }>;
+        return r[0]?.n ?? -1;
+      }),
+    );
     const samples = [...sequential, ...burst, inPlainTx];
     record(
       "6 GUC reset",
