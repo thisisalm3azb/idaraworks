@@ -16,6 +16,7 @@
  */
 import { sql, withCtx, type Ctx, type TenantTx } from "@/platform/tenancy";
 import type { AttachableType, AuditEntityType } from "@/platform/registries";
+import { emitEvent, type EventSpec } from "@/platform/events/outbox";
 
 export type AuditSpec = {
   action: string; // e.g. 'membership.deactivate'
@@ -62,6 +63,9 @@ export async function command<T>(
   spec: {
     audit: AuditSpec | ((result: T) => AuditSpec);
     activity?: ActivitySpec | ((result: T) => ActivitySpec);
+    /** Domain events emitted in the SAME transaction (transactional outbox) —
+     * atomic with the mutation; the relay publishes them post-commit (§8.6). */
+    events?: EventSpec[] | ((result: T) => EventSpec[]);
   },
   fn: (tx: TenantTx) => Promise<T>,
 ): Promise<T> {
@@ -72,6 +76,10 @@ export async function command<T>(
     if (spec.activity) {
       const activity = typeof spec.activity === "function" ? spec.activity(result) : spec.activity;
       await writeActivity(tx, ctx, activity);
+    }
+    if (spec.events) {
+      const events = typeof spec.events === "function" ? spec.events(result) : spec.events;
+      for (const event of events) await emitEvent(tx, ctx, event);
     }
     return result;
   });
