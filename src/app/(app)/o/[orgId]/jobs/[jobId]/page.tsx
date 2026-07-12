@@ -4,7 +4,7 @@ import { getT, getServerLocale } from "@/platform/i18n/server";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { loadOrgTerminology, term } from "@/platform/terminology";
 import { can } from "@/platform/authz";
-import { getJob } from "@/modules/jobs/service";
+import { getJob, getJobStatusLabels } from "@/modules/jobs/service";
 import { listJobReports } from "@/modules/reports/service";
 import { formatDate } from "@/platform/format";
 import { submitReportAction } from "../actions";
@@ -28,10 +28,13 @@ export default async function JobPage({
 
   const job = await getJob(resolved.ctx, resolved.archetype, jobId);
   if (!job) notFound();
+  const statusLabels = await getJobStatusLabels(resolved.ctx, locale);
   const reports = await listJobReports(resolved.ctx, resolved.archetype, jobId);
   const canReport = can(resolved.archetype, "reports.create");
   const submitWithOrg = submitReportAction.bind(null, orgId);
-  const today = new Date().toISOString().slice(0, 10);
+  // The Gulf workday, not the UTC day (review minor): between midnight and
+  // ~4am UAE the UTC date is still "yesterday". en-CA gives YYYY-MM-DD.
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Dubai" }).format(new Date());
 
   return (
     <div className="flex flex-col gap-4">
@@ -40,7 +43,7 @@ export default async function JobPage({
           title={`${job.reference} — ${job.name}`}
           meta={
             <Badge tone={job.statusCategory === "active" ? "info" : "neutral"}>
-              {job.statusKey}
+              {statusLabels[job.statusKey] ?? job.statusKey}
             </Badge>
           }
         />
@@ -53,7 +56,9 @@ export default async function JobPage({
         <Card>
           <CardHeader title={t("reports.form.title", { daily_report: reportTerm })} />
           {notice === "submitted" ? (
-            <p className="mb-3 rounded-md bg-success-soft p-3 text-sm text-success">✓</p>
+            <p className="mb-3 rounded-md bg-success-soft p-3 text-sm text-success">
+              {t("reports.notice.submitted")}
+            </p>
           ) : null}
           {error === "duplicate" ? (
             <p className="mb-3 rounded-md bg-warning-soft p-3 text-sm text-warning">

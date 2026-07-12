@@ -4,10 +4,14 @@ import { getT, getServerLocale } from "@/platform/i18n/server";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { can } from "@/platform/authz";
 import { TERM_KEYS } from "@/platform/registries";
-import { TEMPLATE_BOATBUILDING, diffConfig } from "@/platform/config";
+import {
+  TEMPLATE_BOATBUILDING,
+  diffConfig,
+  getInstalledTemplate,
+  listConfigRevisions,
+} from "@/platform/config";
 import { loadOrgTerminology, resolveTerm } from "@/platform/terminology";
 import { formatDateTime } from "@/platform/format";
-import { sql, withCtx } from "@/platform/tenancy";
 import { installTemplateAction, saveTermAction, undoRevisionAction } from "./actions";
 
 export default async function ConfigurationPage({
@@ -26,30 +30,8 @@ export default async function ConfigurationPage({
   const locale = await getServerLocale();
   const terms = await loadOrgTerminology(resolved.ctx, locale);
 
-  const settings = (await withCtx(resolved.ctx, (tx) =>
-    tx.execute(sql`
-      select key, value from public.app_settings
-      where org_id = ${resolved.ctx.orgId} and key = 'config.template'
-    `),
-  )) as unknown as Array<{ key: string; value: { key: string; version: number } }>;
-  const installedTemplate = settings[0]?.value ?? null;
-
-  const revisions = (await withCtx(resolved.ctx, (tx) =>
-    tx.execute(sql`
-      select id::text as id, artifact_key, summary, before_data, after_data, created_at::text as created_at
-      from public.config_revision
-      where org_id = ${resolved.ctx.orgId}
-      order by created_at desc
-      limit 20
-    `),
-  )) as unknown as Array<{
-    id: string;
-    artifact_key: string;
-    summary: string | null;
-    before_data: unknown;
-    after_data: unknown;
-    created_at: string;
-  }>;
+  const installedTemplate = await getInstalledTemplate(resolved.ctx);
+  const revisions = await listConfigRevisions(resolved.ctx, 20);
 
   const install = installTemplateAction.bind(null, orgId);
   const saveTerm = saveTermAction.bind(null, orgId);
@@ -60,7 +42,9 @@ export default async function ConfigurationPage({
       <Card>
         <CardHeader title={t("config.title")} />
         {notice === "installed" ? (
-          <p className="mb-3 rounded-md bg-success-soft p-3 text-sm text-success">✓</p>
+          <p className="mb-3 rounded-md bg-success-soft p-3 text-sm text-success">
+            {t("config.notice.installed")}
+          </p>
         ) : null}
         {error === "guard" ? (
           <p className="mb-3 rounded-md bg-warning-soft p-3 text-sm text-warning">
@@ -166,15 +150,15 @@ export default async function ConfigurationPage({
         ) : (
           <ul className="divide-y divide-line">
             {revisions.map((r) => {
-              const entries = diffConfig(r.before_data, r.after_data).slice(0, 6);
+              const entries = diffConfig(r.before, r.after).slice(0, 6);
               return (
                 <li key={r.id} className="py-3">
                   <div className="flex items-center justify-between gap-3">
                     <div>
-                      <p className="text-sm font-medium text-ink">{r.summary ?? r.artifact_key}</p>
+                      <p className="text-sm font-medium text-ink">{r.summary ?? r.artifactKey}</p>
                       <p className="text-xs text-ink-muted">
-                        <span className="font-mono">{r.artifact_key}</span> ·{" "}
-                        {formatDateTime(r.created_at, { locale })}
+                        <span className="font-mono">{r.artifactKey}</span> ·{" "}
+                        {formatDateTime(r.createdAt, { locale })}
                       </p>
                     </div>
                     <form action={undo}>

@@ -11,6 +11,7 @@ import { assertCan } from "@/platform/authz";
 import { JOB_CREATED } from "@/platform/events";
 import { getLimit } from "@/platform/entitlements";
 import { renderReference } from "@/platform/config/reference";
+import { lockOrgConfigShared } from "@/platform/config/pipeline";
 import { sql, withCtx, type Ctx, type TenantTx } from "@/platform/tenancy";
 import type { RoleArchetype } from "@/platform/registries";
 
@@ -25,6 +26,9 @@ export const CreateJobInput = z.object({
   presetId: z.string().uuid(),
   name: z.string().trim().min(1).max(160),
   customerId: z.string().uuid().optional(),
+  // Review fix (the DoD persona): the foreman is assigned AT CREATION so the
+  // walking-skeleton demo has a real assigned-foreman path (job_crew is S2).
+  foremanUserId: z.string().uuid().optional(),
 });
 
 type PresetRow = { code: string; retired_at: string | null };
@@ -63,18 +67,7 @@ export async function createJobFromPreset(
   assertCan(archetype, "jobs.create");
   const data = CreateJobInput.parse(input);
 
-  // Entitlement gate (limit.active_jobs) — checked before the write tx; the
-  // unique reference makes double-submit safe regardless.
   const limit = await getLimit(ctx, "limit.active_jobs");
-  if (limit !== null) {
-    const rows = (await withCtx(ctx, (tx) =>
-      tx.execute(sql`
-        select count(*)::int as n from public.job
-        where org_id = ${ctx.orgId} and archived = false and status_category in ('draft', 'active', 'on_hold')
-      `),
-    )) as unknown as Array<{ n: number }>;
-    if ((rows[0]?.n ?? 0) >= limit) throw new JobLimitError(limit);
-  }
 
   const id = randomUUID();
   const result = await command(
@@ -100,6 +93,26 @@ export async function createJobFromPreset(
       ],
     },
     async (tx) => {
+      // Shared org-config lock: a concurrent config apply (exclusive) cannot
+      // interleave with this create — the status/pattern config read here and
+      // the D-9.2 guards' view of live jobs stay mutually consistent (review).
+      await lockOrgConfigShared(tx, ctx);
+      // Per-org job-create mutex: the entitlement count is re-checked IN THIS
+      // transaction under an exclusive advisory lock, so N concurrent creates
+      // serialize and the plan limit cannot be raced (review fix — the old
+      // pre-tx check was a TOCTOU; distinct references never collide, so the
+      // unique index was no mitigation).
+      await tx.execute(
+        sql`select pg_advisory_xact_lock(hashtextextended(${ctx.orgId + ":jobs.create"}, 0))`,
+      );
+      if (limit !== null) {
+        const counted = (await tx.execute(sql`
+          select count(*)::int as n from public.job
+          where org_id = ${ctx.orgId} and archived = false
+            and status_category in ('draft', 'active', 'on_hold')
+        `)) as unknown as Array<{ n: number }>;
+        if ((counted[0]?.n ?? 0) >= limit) throw new JobLimitError(limit);
+      }
       // Preset (live), pattern config, and initial status resolve in-tx.
       const presets = (await tx.execute(sql`
         select code, retired_at from public.job_preset
@@ -130,10 +143,11 @@ export async function createJobFromPreset(
 
       await tx.execute(sql`
         insert into public.job
-          (id, org_id, reference, name, preset_id, customer_id, status_key, status_category, created_by)
+          (id, org_id, reference, name, preset_id, customer_id, status_key, status_category,
+           foreman_user_id, created_by)
         values (${id}, ${ctx.orgId}, ${reference}, ${data.name}, ${data.presetId},
                 ${data.customerId ?? null}, ${initial.status_key}, ${initial.semantic_category},
-                ${ctx.userId})
+                ${data.foremanUserId ?? null}, ${ctx.userId})
       `);
       return { reference };
     },
@@ -226,4 +240,55 @@ async function listJobsById(ctx: Ctx, jobId: string): Promise<JobRow[]> {
     customerName: r.customer_name,
     createdAt: r.created_at,
   }));
+}
+
+/** Live presets for the create form (page-facing read — Bible 3.2 service surface). */
+export async function listActivePresets(
+  ctx: Ctx,
+  archetype: RoleArchetype,
+): Promise<Array<{ id: string; code: string; names: { en: string; ar: string } }>> {
+  assertCan(archetype, "jobs.view");
+  const rows = (await withCtx(ctx, (tx) =>
+    tx.execute(sql`
+      select id::text as id, code, names from public.job_preset
+      where org_id = ${ctx.orgId} and retired_at is null order by code
+    `),
+  )) as unknown as Array<{ id: string; code: string; names: { en: string; ar: string } }>;
+  return rows;
+}
+
+/** Active members assignable as foreman (user references — doc 01/F-6). */
+export async function listAssignableMembers(
+  ctx: Ctx,
+  archetype: RoleArchetype,
+): Promise<Array<{ userId: string; fullName: string; roleKey: string }>> {
+  assertCan(archetype, "jobs.create");
+  const rows = (await withCtx(ctx, (tx) =>
+    tx.execute(sql`
+      select m.user_id::text as user_id, u.full_name, m.role_key
+      from public.membership m
+      join public.user_profile u on u.id = m.user_id
+      where m.org_id = ${ctx.orgId} and m.deactivated_at is null
+      order by u.full_name
+    `),
+  )) as unknown as Array<{ user_id: string; full_name: string; role_key: string }>;
+  return rows.map((r) => ({ userId: r.user_id, fullName: r.full_name, roleKey: r.role_key }));
+}
+
+/** Job status labels (status_key to localized label) for display (review fix —
+ * the UI showed raw snake_case keys instead of the configured bilingual labels). */
+export async function getJobStatusLabels(
+  ctx: Ctx,
+  locale: "en" | "ar",
+): Promise<Record<string, string>> {
+  const rows = (await withCtx(ctx, (tx) =>
+    tx.execute(sql`
+      select value from public.app_settings
+      where org_id = ${ctx.orgId} and key = 'config.status_set.job'
+    `),
+  )) as unknown as Array<{
+    value: { statuses: Array<{ status_key: string; labels: { en: string; ar: string } }> } | null;
+  }>;
+  const statuses = rows[0]?.value?.statuses ?? [];
+  return Object.fromEntries(statuses.map((s) => [s.status_key, s.labels[locale]]));
 }

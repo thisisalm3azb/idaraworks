@@ -314,6 +314,59 @@ describe("masters through the command path + privileged walls", () => {
   });
 });
 
+describe("review fixes (0023 + pipeline hardening)", () => {
+  it("a manager session CANNOT flip role privilege flags at the DB (CM fix)", async () => {
+    // Direct UPDATE as the manager-archetype session: the 0023 policy pins
+    // role_definition writes to owner/admin AT THE DATABASE.
+    await withCtx(ctxOf(managerUser, false), (tx) =>
+      tx.execute(sql`
+        update public.role_definition set cost_privileged = true
+        where org_id = ${orgId} and key = 'manager'
+      `),
+    );
+    const flags = (await owner`
+      select cost_privileged from public.role_definition
+      where org_id = ${orgId} and key = 'manager'
+    `) as unknown as Array<{ cost_privileged: boolean }>;
+    expect(flags[0]!.cost_privileged).toBe(false); // untouched — 0 rows matched
+  });
+
+  it("a non-author CANNOT rewrite a colleague's daily report (0023)", async () => {
+    const jobs = (await owner`
+      select id::text as id from public.job where org_id = ${orgId} limit 1
+    `) as unknown as Array<{ id: string }>;
+    const reportId = randomUUID();
+    await owner`
+      insert into public.daily_report (id, org_id, job_id, report_date, summary, submitted_by)
+      values (${reportId}, ${orgId}, ${jobs[0]!.id}, '2026-07-01', 'owner wrote this', ${ownerUser})
+    `;
+    await withCtx(ctxOf(managerUser, false), (tx) =>
+      tx.execute(sql`
+        update public.daily_report set summary = 'tampered' where id = ${reportId}
+      `),
+    );
+    const after = (await owner`
+      select summary from public.daily_report where id = ${reportId}
+    `) as unknown as Array<{ summary: string }>;
+    expect(after[0]!.summary).toBe("owner wrote this");
+  });
+
+  it("re-install after undoing the marker CONVERGES (preset ids reused, no code collision)", async () => {
+    const ctx = ctxOf(ownerUser, true);
+    const before = (await owner`
+      select count(*)::int as n from public.job_preset where org_id = ${orgId}
+    `) as unknown as Array<{ n: number }>;
+    // Undo the install marker (jsonb-null) — the state the UI's Undo produces.
+    await applyConfigChange(ctx, "config.template", null, { summary: "test: unset marker" });
+    const again = await installTemplate(ctx, TEMPLATE_BOATBUILDING.key);
+    expect(Object.keys(again.presetIds)).toHaveLength(9);
+    const after = (await owner`
+      select count(*)::int as n from public.job_preset where org_id = ${orgId}
+    `) as unknown as Array<{ n: number }>;
+    expect(after[0]!.n).toBe(before[0]!.n); // reused rows, no duplicates
+  }, 180_000);
+});
+
 describe("walking skeleton (DoD: job from preset + daily report, end-to-end)", () => {
   it("creates 24C hull numbers sequentially and emits job.created to the outbox", async () => {
     const ctx = ctxOf(ownerUser, true);

@@ -121,5 +121,8 @@
   "reports.form.next_steps": "Next steps",
   "reports.form.cta": "Submit",
   "reports.empty": "No {daily_reports} yet.",
-  "reports.duplicate": "A {daily_report} for this date already exists."
+  "reports.duplicate": "A {daily_report} for this date already exists.",
+  "jobs.new.foreman": "Assigned foreman",
+  "config.notice.installed": "Template installed.",
+  "reports.notice.submitted": "Report submitted."
 }

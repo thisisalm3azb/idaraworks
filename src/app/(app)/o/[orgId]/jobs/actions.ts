@@ -17,6 +17,7 @@ export async function createJobAction(orgId: string, formData: FormData): Promis
       presetId: String(formData.get("preset_id") ?? ""),
       name: String(formData.get("name") ?? ""),
       customerId: (formData.get("customer_id") as string) || undefined,
+      foremanUserId: (formData.get("foreman_user_id") as string) || undefined,
     });
     jobId = id;
   } catch (err) {

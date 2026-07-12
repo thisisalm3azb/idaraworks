@@ -3,8 +3,7 @@ import { Badge, Button, Card, CardHeader, EmptyState, Field } from "@/platform/u
 import { getT, getServerLocale } from "@/platform/i18n/server";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { can } from "@/platform/authz";
-import { listItems } from "@/modules/masters/service";
-import { sql, withCtx } from "@/platform/tenancy";
+import { listItemCategories, listItems } from "@/modules/masters/service";
 import { createItemAction } from "./actions";
 
 export default async function ItemsPage({
@@ -24,17 +23,7 @@ export default async function ItemsPage({
   const canManage = can(resolved.archetype, "catalog.manage");
   const addWithOrg = createItemAction.bind(null, orgId);
 
-  const categoryRows = (await withCtx(resolved.ctx, (tx) =>
-    tx.execute(sql`
-      select value from public.app_settings
-      where org_id = ${resolved.ctx.orgId} and key = 'config.categories.item'
-    `),
-  )) as unknown as Array<{
-    value: {
-      categories: Array<{ key: string; labels: { en: string; ar: string }; retired: boolean }>;
-    };
-  }>;
-  const categories = (categoryRows[0]?.value?.categories ?? []).filter((c) => !c.retired);
+  const categories = await listItemCategories(resolved.ctx, resolved.archetype);
   const labelOf = (key: string) => {
     const c = categories.find((x) => x.key === key);
     return c ? (locale === "ar" ? c.labels.ar : c.labels.en) : key;

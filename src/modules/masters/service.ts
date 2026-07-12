@@ -60,6 +60,11 @@ export async function createEmployee(
   return { id };
 }
 
+// Update input deliberately EXCLUDES userId: S1 ships no link-management UI,
+// and a form that never posts user_id must not sever an existing member link
+// (review fix). Linking arrives with its own surface.
+export const EmployeeUpdateInput = EmployeeInput.omit({ userId: true });
+
 export async function updateEmployee(
   ctx: Ctx,
   archetype: RoleArchetype,
@@ -67,7 +72,7 @@ export async function updateEmployee(
   input: unknown,
 ): Promise<void> {
   assertCan(archetype, "employees.manage");
-  const data = EmployeeInput.parse(input);
+  const data = EmployeeUpdateInput.parse(input);
   await command(
     ctx,
     {
@@ -82,7 +87,7 @@ export async function updateEmployee(
       tx.execute(sql`
         update public.employee
         set name = ${data.name}, team_id = ${data.teamId ?? null},
-            user_id = ${data.userId ?? null}, phone = ${data.phone ?? null},
+            phone = ${data.phone ?? null},
             active = ${data.active}, updated_at = now()
         where org_id = ${ctx.orgId} and id = ${id}
       `),
@@ -599,4 +604,23 @@ export async function getEmployeeHr(
         notes: r.notes,
       }
     : null;
+}
+
+/** The org's item categories (page-facing read — Bible 3.2 service surface). */
+export async function listItemCategories(
+  ctx: Ctx,
+  archetype: RoleArchetype,
+): Promise<Array<{ key: string; labels: { en: string; ar: string } }>> {
+  assertCan(archetype, "catalog.view");
+  const rows = (await withCtx(ctx, (tx) =>
+    tx.execute(sql`
+      select value from public.app_settings
+      where org_id = ${ctx.orgId} and key = 'config.categories.item'
+    `),
+  )) as unknown as Array<{
+    value: {
+      categories: Array<{ key: string; labels: { en: string; ar: string }; retired: boolean }>;
+    } | null;
+  }>;
+  return (rows[0]?.value?.categories ?? []).filter((c) => !c.retired);
 }

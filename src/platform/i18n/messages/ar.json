@@ -47,7 +47,7 @@
   "nav.customers": "العملاء",
   "nav.suppliers": "الموردون",
   "nav.items": "الأصناف",
-  "nav.configuration": "الإعدادات والتهيئة",
+  "nav.configuration": "التهيئة",
   "common.add": "إضافة",
   "common.name": "الاسم",
   "common.active": "نشط",
@@ -121,5 +121,8 @@
   "reports.form.next_steps": "الخطوات التالية",
   "reports.form.cta": "إرسال",
   "reports.empty": "لا توجد {daily_reports} بعد.",
-  "reports.duplicate": "يوجد {daily_report} لهذا التاريخ بالفعل."
+  "reports.duplicate": "يوجد {daily_report} لهذا التاريخ بالفعل.",
+  "jobs.new.foreman": "المشرف المكلف",
+  "config.notice.installed": "تم تثبيت القالب.",
+  "reports.notice.submitted": "تم إرسال التقرير."
 }

@@ -41,3 +41,11 @@ export {
   type HolidayCalendar,
 } from "./schemas/artifacts";
 export { insertConfigRevisionIn } from "./revision";
+export {
+  getInstalledTemplate,
+  listConfigRevisions,
+  getTerminologyOverrides,
+  type InstalledTemplate,
+  type ConfigRevisionRow,
+} from "./queries";
+export { lockOrgConfig, lockOrgConfigShared } from "./pipeline";

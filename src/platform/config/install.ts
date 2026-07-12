@@ -90,9 +90,19 @@ export async function installTemplate(ctx: Ctx, templateKey: string): Promise<In
   if (calendar) await apply("config.holiday_calendar", calendar, "holiday calendar");
   await apply("terminology.template", manifest.key, "terminology");
 
+  // Retry/reinstall safety (review fix): reuse the EXISTING row's id per preset
+  // code, so a repeated install (after a mid-sequence failure, or after undoing
+  // the install marker) upserts the same rows instead of colliding on
+  // job_preset_org_code_uq with freshly minted ids. Install is a SEQUENCE of
+  // independent revisions by design (each undoable); with id-reuse the sequence
+  // is idempotent — re-running it converges, never wedges.
+  const existing = (await withCtx(ctx, (tx) =>
+    tx.execute(sql`select id::text as id, code from public.job_preset where org_id = ${ctx.orgId}`),
+  )) as unknown as Array<{ id: string; code: string }>;
+  const idByCode = new Map(existing.map((r) => [r.code, r.id]));
   const presetIds: Record<string, string> = {};
   for (const preset of manifest.presets) {
-    const id = randomUUID();
+    const id = idByCode.get(preset.code) ?? randomUUID();
     presetIds[preset.code] = id;
     await apply(`preset.${id}`, preset, `preset ${preset.code}`);
   }

@@ -17,6 +17,7 @@
 import { randomUUID } from "node:crypto";
 import type { z } from "zod";
 import { command } from "@/platform/audit";
+import { getLimit } from "@/platform/entitlements";
 import { sql, withCtx, type Ctx, type TenantTx } from "@/platform/tenancy";
 import { diffConfig, type DiffEntry } from "./diff";
 import { insertConfigRevisionIn } from "./revision";
@@ -66,6 +67,27 @@ type Handler = {
   /** Whether `null` is a legal value (preset retire). */
   nullable?: boolean;
 };
+
+/**
+ * Per-org config lock (review fix — the one-write-path had no concurrency
+ * control): every applyConfigChange takes the EXCLUSIVE per-org advisory xact
+ * lock, so concurrent applies serialize — revision N's before_data always
+ * equals revision N-1's after_data, and D-9.2 guards cannot race each other.
+ * Business writers that READ config inside their own transactions (job create)
+ * take the SHARED form, so a guard can never race a concurrent business write
+ * it should have seen.
+ */
+export async function lockOrgConfig(tx: TenantTx, ctx: Ctx): Promise<void> {
+  await tx.execute(
+    sql`select pg_advisory_xact_lock(hashtextextended(${ctx.orgId + ":config"}, 0))`,
+  );
+}
+
+export async function lockOrgConfigShared(tx: TenantTx, ctx: Ctx): Promise<void> {
+  await tx.execute(
+    sql`select pg_advisory_xact_lock_shared(hashtextextended(${ctx.orgId + ":config"}, 0))`,
+  );
+}
 
 // ── blob helpers (app_settings) ───────────────────────────────────────────────
 async function readBlob(tx: TenantTx, ctx: Ctx, key: string): Promise<unknown> {
@@ -277,6 +299,20 @@ const presetHandler: Handler = {
   },
   guard: async (tx, ctx, key, next, current) => {
     if (next === null) return; // retire is always safe — jobs keep their FK
+    if (current === null) {
+      // NEW preset: the limit.presets entitlement applies on EVERY path, not
+      // just installTemplate (review minor).
+      const limit = await getLimit(ctx, "limit.presets");
+      if (limit !== null) {
+        const rows = (await tx.execute(sql`
+          select count(*)::int as n from public.job_preset
+          where org_id = ${ctx.orgId} and retired_at is null
+        `)) as unknown as Array<{ n: number }>;
+        if ((rows[0]?.n ?? 0) >= limit) {
+          throw new ConfigGuardError(key, `preset limit reached (${limit})`);
+        }
+      }
+    }
     const cur = current as JobPreset | null;
     const nxt = next as JobPreset;
     if (cur && cur.code !== nxt.code) {
@@ -375,6 +411,14 @@ function validate(artifactKey: string, value: unknown): unknown {
       parsed.error.issues.slice(0, 10).map((i) => `${i.path.join(".")}: ${i.message}`),
     );
   }
+  // Category artifacts: the payload kind must match the key suffix (review
+  // minor — 'config.categories.item' must never hold an expense set).
+  const catMatch = artifactKey.match(/^config.categories.(item|expense|quote_section)$/);
+  if (catMatch && (parsed.data as { kind?: string }).kind !== catMatch[1]) {
+    throw new ConfigValidationError(artifactKey, [
+      `category set kind must be "${catMatch[1]}" for this artifact`,
+    ]);
+  }
   return parsed.data;
 }
 
@@ -397,15 +441,22 @@ export async function previewConfigChange(
   return { artifactKey, before, after: value, entries: diffConfig(before, value) };
 }
 
-/** Step 3: apply as ONE atomic revision (artifact write + config_revision + audit). */
+/**
+ * Step 3: apply as ONE atomic revision (artifact write + config_revision +
+ * audit), under the per-org config lock. `next` may be a VALUE or a MERGER
+ * function of the current value — the merger runs INSIDE the locked
+ * transaction, so read-modify-write edits (the terminology editor) can never
+ * lose a concurrent editor's change (review fix).
+ */
 export async function applyConfigChange(
   ctx: Ctx,
   artifactKey: string,
-  next: unknown,
+  next: unknown | ((before: unknown) => unknown),
   opts?: { summary?: string; aiFlag?: boolean },
 ): Promise<{ revisionId: string }> {
-  const value = validate(artifactKey, next);
   const handler = handlerFor(artifactKey);
+  // Value-form inputs are validated eagerly (fail before opening a tx).
+  if (typeof next !== "function") validate(artifactKey, next);
   const revisionId = randomUUID();
   await command(
     ctx,
@@ -418,7 +469,12 @@ export async function applyConfigChange(
       },
     },
     async (tx) => {
+      await lockOrgConfig(tx, ctx);
       const before = await handler.read(tx, ctx, artifactKey);
+      const value = validate(
+        artifactKey,
+        typeof next === "function" ? (next as (b: unknown) => unknown)(before) : next,
+      );
       if (handler.guard) await handler.guard(tx, ctx, artifactKey, value, before);
       await handler.write(tx, ctx, artifactKey, value);
       await insertConfigRevisionIn(tx, ctx, revisionId, {

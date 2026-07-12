@@ -5,9 +5,13 @@ import { getT, getServerLocale } from "@/platform/i18n/server";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { loadOrgTerminology, term } from "@/platform/terminology";
 import { can } from "@/platform/authz";
-import { listJobs } from "@/modules/jobs/service";
+import {
+  getJobStatusLabels,
+  listActivePresets,
+  listAssignableMembers,
+  listJobs,
+} from "@/modules/jobs/service";
 import { listCustomers } from "@/modules/masters/service";
-import { sql, withCtx } from "@/platform/tenancy";
 import { createJobAction } from "./actions";
 
 const STATUS_TONE = {
@@ -36,15 +40,10 @@ export default async function JobsPage({
   const jobsTerm = term("job", terms, "plural");
 
   const jobs = await listJobs(resolved.ctx, resolved.archetype);
+  const statusLabels = await getJobStatusLabels(resolved.ctx, locale);
   const canCreate = can(resolved.archetype, "jobs.create");
-  const presets = canCreate
-    ? ((await withCtx(resolved.ctx, (tx) =>
-        tx.execute(sql`
-          select id::text as id, code, names from public.job_preset
-          where org_id = ${resolved.ctx.orgId} and retired_at is null order by code
-        `),
-      )) as unknown as Array<{ id: string; code: string; names: { en: string; ar: string } }>)
-    : [];
+  const presets = canCreate ? await listActivePresets(resolved.ctx, resolved.archetype) : [];
+  const members = canCreate ? await listAssignableMembers(resolved.ctx, resolved.archetype) : [];
   const customers = can(resolved.archetype, "customers.view")
     ? await listCustomers(resolved.ctx, resolved.archetype)
     : [];
@@ -84,7 +83,7 @@ export default async function JobsPage({
                   <Badge
                     tone={STATUS_TONE[j.statusCategory as keyof typeof STATUS_TONE] ?? "neutral"}
                   >
-                    {j.statusKey}
+                    {statusLabels[j.statusKey] ?? j.statusKey}
                   </Badge>
                 </Link>
               </li>
@@ -115,6 +114,25 @@ export default async function JobsPage({
               </select>
             </div>
             <Field label={t("common.name")} name="name" required />
+            {members.length > 0 ? (
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="foreman_user_id" className="text-sm font-medium text-ink">
+                  {t("jobs.new.foreman")}
+                </label>
+                <select
+                  id="foreman_user_id"
+                  name="foreman_user_id"
+                  className="min-h-11 rounded-md border border-line-strong bg-card px-3 text-base text-ink"
+                >
+                  <option value="">{t("common.none")}</option>
+                  {members.map((m) => (
+                    <option key={m.userId} value={m.userId}>
+                      {m.fullName || m.userId.slice(0, 8)} ({m.roleKey})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
             {customers.length > 0 ? (
               <div className="flex flex-col gap-1.5">
                 <label htmlFor="customer_id" className="text-sm font-medium text-ink">

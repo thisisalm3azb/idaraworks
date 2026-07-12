@@ -12,7 +12,6 @@ import {
   ConfigGuardError,
   ConfigValidationError,
 } from "@/platform/config";
-import { sql, withCtx } from "@/platform/tenancy";
 
 async function resolveOr(orgId: string) {
   const resolved = await resolveCtxForAction(orgId);
@@ -38,6 +37,7 @@ export async function installTemplateAction(orgId: string, formData: FormData): 
     redirect(`${base}?error=${errCode(err)}`);
   }
   revalidatePath(base);
+  revalidatePath(`/o/${orgId}`, "layout"); // install changes nav terms/labels
   redirect(`${base}?notice=installed`);
 }
 
@@ -47,31 +47,26 @@ export async function saveTermAction(orgId: string, formData: FormData): Promise
   const key = String(formData.get("term_key") ?? "");
   if (!isTermKey(key)) redirect(`${base}?error=invalid`);
   try {
-    // Merge this key into the CURRENT override blob — one revision per save.
-    const rows = (await withCtx(resolved.ctx, (tx) =>
-      tx.execute(sql`
-        select value from public.app_settings
-        where org_id = ${resolved.ctx.orgId} and key = 'terminology.overrides'
-      `),
-    )) as unknown as Array<{ value: Record<string, unknown> }>;
-    const current = rows[0]?.value ?? {};
-    const next = {
-      ...current,
-      [key]: {
-        en: {
-          singular: String(formData.get("en_singular") ?? ""),
-          plural: String(formData.get("en_plural") ?? ""),
-        },
-        ar: {
-          singular: String(formData.get("ar_singular") ?? ""),
-          plural: String(formData.get("ar_plural") ?? ""),
-          gender: (formData.get("ar_gender") as "m" | "f") || "m",
-        },
+    const entry = {
+      en: {
+        singular: String(formData.get("en_singular") ?? ""),
+        plural: String(formData.get("en_plural") ?? ""),
+      },
+      ar: {
+        singular: String(formData.get("ar_singular") ?? ""),
+        plural: String(formData.get("ar_plural") ?? ""),
+        gender: (formData.get("ar_gender") as "m" | "f") || "m",
       },
     };
-    await applyConfigChange(resolved.ctx, "terminology.overrides", next, {
-      summary: `Renamed "${key}"`,
-    });
+    // MERGER form: the read-modify-write happens INSIDE the locked pipeline
+    // transaction, so two concurrent editors can never lose each other's keys
+    // (review fix).
+    await applyConfigChange(
+      resolved.ctx,
+      "terminology.overrides",
+      (before: unknown) => ({ ...((before as Record<string, unknown>) ?? {}), [key]: entry }),
+      { summary: `Renamed "${key}"` },
+    );
   } catch (err) {
     if ((err as { digest?: string }).digest?.startsWith("NEXT_REDIRECT")) throw err;
     redirect(`${base}?error=${errCode(err)}`);
