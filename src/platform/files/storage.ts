@@ -189,6 +189,7 @@ export type SignUploadInput = z.infer<typeof SignUploadInput>;
 
 export type SignedUpload = {
   fileId: string;
+  bucket: string;
   objectPath: string;
   /** PUT target — client uploads the (compressed) bytes here. */
   signedUrl: string;
@@ -269,7 +270,14 @@ export async function signUpload(
     // released by the next self-sweep / nightly reconcile.
     throw new FilesError("storage_api", `could not sign upload: ${error?.message ?? "no data"}`);
   }
-  return { fileId, objectPath, signedUrl: data.signedUrl, token: data.token, quota };
+  return {
+    fileId,
+    bucket: spec.bucket,
+    objectPath,
+    signedUrl: data.signedUrl,
+    token: data.token,
+    quota,
+  };
 }
 
 // ── confirmUpload → queue the ingest worker ──────────────────────────────────

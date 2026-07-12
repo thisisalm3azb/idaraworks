@@ -15,6 +15,12 @@ import { MAX_UPLOAD_ATTEMPTS, retryDelayMs, shouldRetry } from "./backoff";
 export type SignResult = {
   fileId: string;
   signedUrl: string;
+  /**
+   * Headers the PUT must carry (e.g. the public `apikey` for the storage
+   * gateway). Supplied by the server action that mints the URL so this hook
+   * stays transport-generic and knows nothing about the storage provider.
+   */
+  headers?: Record<string, string>;
   quotaWarn?: boolean;
 };
 
@@ -51,12 +57,14 @@ function putWithProgress(
   url: string,
   body: Blob,
   mime: string,
+  headers: Record<string, string>,
   onProgress: (ratio: number) => void,
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open("PUT", url);
     xhr.setRequestHeader("Content-Type", mime);
+    for (const [k, v] of Object.entries(headers)) xhr.setRequestHeader(k, v);
     xhr.upload.onprogress = (e) => {
       if (e.lengthComputable && e.total > 0) onProgress(e.loaded / e.total);
     };
@@ -102,7 +110,7 @@ export function useFileUpload({ sign, confirm, onDone }: UseFileUploadArgs) {
         for (let attempt = 1; attempt <= MAX_UPLOAD_ATTEMPTS; attempt++) {
           setState((s) => ({ ...s, phase: "uploading", attempt, progress: 0 }));
           try {
-            await putWithProgress(signed.signedUrl, blob, mime, (ratio) =>
+            await putWithProgress(signed.signedUrl, blob, mime, signed.headers ?? {}, (ratio) =>
               setState((s) => ({ ...s, progress: ratio })),
             );
             break;

@@ -144,12 +144,19 @@ afterAll(async () => {
   await closeAppDb();
 }, 120_000);
 
-async function uploadVia(signedUrl: string, bytes: Buffer, mime: string): Promise<Response> {
-  return fetch(signedUrl, {
-    method: "PUT",
-    headers: { "Content-Type": mime },
-    body: new Uint8Array(bytes),
-  });
+/** Upload the bytes through the signed upload URL using the SDK (canonical path). */
+async function uploadVia(
+  signed: { bucket: string; objectPath: string; token: string },
+  token: string,
+  bytes: Buffer,
+  mime: string,
+): Promise<void> {
+  const { error } = await userStorage(token)
+    .from(signed.bucket)
+    .uploadToSignedUrl(signed.objectPath, signed.token, new Uint8Array(bytes), {
+      contentType: mime,
+    });
+  if (error) throw new Error(`uploadToSignedUrl failed: ${error.message}`);
 }
 
 let jobMediaFileId = "";
@@ -170,8 +177,7 @@ describe("upload → pipeline → read (the full loop, VC-4's hosted half)", () 
     jobMediaFileId = signed.fileId;
     expect(signed.quota.warn).toBe(false);
 
-    const put = await uploadVia(signed.signedUrl, fixture, "image/jpeg");
-    expect(put.status, await put.text().catch(() => "")).toBeLessThan(300);
+    await uploadVia(signed, u.foreman.token, fixture, "image/jpeg");
 
     // confirm (event transport injected — the real send needs an Inngest server)
     let published = 0;
@@ -228,7 +234,7 @@ describe("upload → pipeline → read (the full loop, VC-4's hosted half)", () 
       sizeBytes: fixture.length,
     });
     financialFileId = signed.fileId;
-    expect((await uploadVia(signed.signedUrl, fixture, "image/jpeg")).status).toBeLessThan(300);
+    await uploadVia(signed, u.ownerA.token, fixture, "image/jpeg");
     const result = await deriveImageVariants(
       { orgId: orgA, fileId: signed.fileId, actorUserId: u.ownerA.id },
       "itest-fin",
