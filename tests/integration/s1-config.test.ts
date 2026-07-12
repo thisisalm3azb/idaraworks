@@ -315,6 +315,20 @@ describe("masters through the command path + privileged walls", () => {
 });
 
 describe("review fixes (0023 + pipeline hardening)", () => {
+  it("an IN-USE status key's semantic category is frozen (anchor rule)", async () => {
+    const ctx = ctxOf(ownerUser, true);
+    // Jobs exist holding 'draft' — remapping draft's category must be rejected.
+    const remapped = {
+      entity: "job",
+      statuses: TEMPLATE_BOATBUILDING.status_sets.job.statuses.map((s) =>
+        s.status_key === "draft" ? { ...s, semantic_category: "cancelled" as const } : s,
+      ),
+    };
+    await expect(applyConfigChange(ctx, "config.status_set.job", remapped)).rejects.toThrow(
+      /semantic category/,
+    );
+  });
+
   it("a manager session CANNOT flip role privilege flags at the DB (CM fix)", async () => {
     // Direct UPDATE as the manager-archetype session: the 0023 policy pins
     // role_definition writes to owner/admin AT THE DATABASE.

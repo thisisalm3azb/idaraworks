@@ -152,20 +152,37 @@ const stageTemplateGuard: Handler["guard"] = async (tx, ctx, _key, next) => {
   }
 };
 
+type StatusSetValue = {
+  statuses: Array<{ status_key: string; semantic_category: string }>;
+} | null;
+
 const statusSetGuard: Handler["guard"] = async (tx, ctx, _key, next) => {
-  const nextKeys = new Set(
-    ((next as { statuses: Array<{ status_key: string }> } | null)?.statuses ?? []).map(
-      (s) => s.status_key,
-    ),
-  );
+  const nextStatuses = (next as StatusSetValue)?.statuses ?? [];
+  const nextByKey = new Map(nextStatuses.map((s) => [s.status_key, s.semantic_category]));
   const inUse = (await tx.execute(sql`
     select distinct status_key from public.job where org_id = ${ctx.orgId}
   `)) as unknown as Array<{ status_key: string }>;
+  const current = (await readBlob(tx, ctx, "config.status_set.job")) as StatusSetValue;
+  const currentByKey = new Map(
+    (current?.statuses ?? []).map((s) => [s.status_key, s.semantic_category]),
+  );
   for (const row of inUse) {
-    if (!nextKeys.has(row.status_key)) {
+    if (!nextByKey.has(row.status_key)) {
       throw new ConfigGuardError(
         "config.status_set.job",
         `status "${row.status_key}" is held by existing jobs — statuses in use are renamed or retired via mapping, never removed (D-9.2)`,
+      );
+    }
+    // Semantic-anchor freeze (review fix): jobs denormalize status_category at
+    // creation; re-mapping an IN-USE key's category would silently desynchronize
+    // the engine's anchor (e.g. the active-jobs entitlement count). Category
+    // changes for in-use keys require a mapping migration, not a label edit.
+    const was = currentByKey.get(row.status_key);
+    const now = nextByKey.get(row.status_key);
+    if (was !== undefined && now !== undefined && was !== now) {
+      throw new ConfigGuardError(
+        "config.status_set.job",
+        `status "${row.status_key}" is held by existing jobs — its semantic category ("${was}") is frozen while in use (D-9.2 mapping rule)`,
       );
     }
   }
