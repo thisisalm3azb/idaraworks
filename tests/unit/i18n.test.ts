@@ -16,14 +16,18 @@ describe("catalog parity", () => {
     // Domain nouns must arrive via term() variables, never be baked into a
     // catalog string (else every template × language needs its own catalog).
     const BANNED = /\b(jobs?|boats?|work\s?orders?|hulls?|projects?)\b/i;
+    // S1: ICU placeholders are STRIPPED first — {job}/{jobs} argument names are
+    // exactly the doc-07 mechanism; only LITERAL noun text is banned.
+    const stripPlaceholders = (v: string) => v.replace(/\{[a-z_]+\}/gi, " ");
     for (const [locale, cat] of [
       ["en", en],
       ["ar", ar],
     ] as const) {
       for (const [key, value] of Object.entries(cat)) {
-        expect(BANNED.test(value), `${locale}.${key} = "${value}" hardcodes a domain noun`).toBe(
-          false,
-        );
+        expect(
+          BANNED.test(stripPlaceholders(value)),
+          `${locale}.${key} = "${value}" hardcodes a domain noun`,
+        ).toBe(false);
       }
     }
   });

@@ -11,9 +11,10 @@
  *  - Coverage is enumerated from tables that HAVE an org_id column (review m3). A
  *    future child table scoped only via a parent FK (no own org_id) would not be
  *    enumerated here and must register its own bleed coverage when introduced.
- *  - afterAll cleanup deletes in alphabetical table order (review m6); safe today
- *    because no org-scoped table FKs another org-scoped table. A future inter-table
- *    FK would need topological-order teardown.
+ *  - afterAll cleanup deletes in FK-TOPOLOGICAL order (children before parents),
+ *    derived from pg_constraint — S1 introduced inter-tenant-table FKs
+ *    (daily_report→job→job_preset, employee_terms/hr→employee→team), which made
+ *    the earlier alphabetical teardown (review m6 note) come due.
  */
 import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
@@ -62,8 +63,40 @@ beforeAll(async () => {
   await seedOrg(owner, orgB, userB, userA);
 }, 120_000);
 
+/** Order org-scoped tables children-first from the FK graph (pg_constraint). */
+async function fkTopologicalOrder(tables: string[]): Promise<string[]> {
+  const fks = (await owner`
+    select c.relname as child, p.relname as parent
+    from pg_constraint k
+    join pg_class c on c.oid = k.conrelid
+    join pg_class p on p.oid = k.confrelid
+    join pg_namespace n on n.oid = c.relnamespace
+    where k.contype = 'f' and n.nspname = 'public'`) as unknown as Array<{
+    child: string;
+    parent: string;
+  }>;
+  const inScope = new Set(tables);
+  const childrenOf = new Map<string, string[]>();
+  for (const { child, parent } of fks) {
+    if (child !== parent && inScope.has(child) && inScope.has(parent)) {
+      childrenOf.set(parent, [...(childrenOf.get(parent) ?? []), child]);
+    }
+  }
+  const ordered: string[] = [];
+  const visiting = new Set<string>();
+  const visit = (t: string) => {
+    if (ordered.includes(t) || visiting.has(t)) return;
+    visiting.add(t);
+    for (const child of childrenOf.get(t) ?? []) visit(child); // children first
+    visiting.delete(t);
+    ordered.push(t);
+  };
+  for (const t of tables) visit(t);
+  return ordered;
+}
+
 afterAll(async () => {
-  const tables = await orgScopedTables();
+  const tables = await fkTopologicalOrder(await orgScopedTables());
   for (const org of [orgA, orgB].filter(Boolean)) {
     for (const t of tables) {
       await owner.unsafe(`delete from public.${t} where org_id = $1`, [org]);

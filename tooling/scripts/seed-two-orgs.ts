@@ -121,6 +121,55 @@ export const SEEDERS: Record<string, Seeder> = {
     await o`insert into public.org_storage_usage (org_id, bytes_used) values (${org}, 123)
             on conflict (org_id) do nothing`;
   },
+  // ── S1 masters + config + walking skeleton ──
+  team: async (o, org) => {
+    await o`insert into public.team (org_id, name, kind) values (${org}, 'Bleed Team', 'trade')`;
+  },
+  employee: async (o, org) => {
+    await o`insert into public.employee (org_id, name) values (${org}, 'Bleed Worker')`;
+  },
+  employee_terms: async (o, org) => {
+    const emp = randomUUID();
+    await o`insert into public.employee (id, org_id, name) values (${emp}, ${org}, 'Bleed Paid Worker')`;
+    await o`insert into public.employee_terms (employee_id, org_id, salary_minor, hourly_cost_minor)
+            values (${emp}, ${org}, 500000, 2404)`;
+  },
+  employee_hr: async (o, org) => {
+    const emp = randomUUID();
+    await o`insert into public.employee (id, org_id, name) values (${emp}, ${org}, 'Bleed HR Worker')`;
+    await o`insert into public.employee_hr (employee_id, org_id, visa_expiry) values (${emp}, ${org}, '2027-01-01')`;
+  },
+  customer: async (o, org) => {
+    await o`insert into public.customer (org_id, name) values (${org}, 'Bleed Customer')`;
+  },
+  supplier: async (o, org) => {
+    await o`insert into public.supplier (org_id, name) values (${org}, 'Bleed Supplier')`;
+  },
+  item: async (o, org) => {
+    await o`insert into public.item (org_id, sku, name, category_key, unit)
+            values (${org}, ${"BLD-" + randomUUID().slice(0, 8)}, 'Bleed Item', 'fiberglass', 'pcs')`;
+  },
+  job_preset: async (o, org) => {
+    await o`insert into public.job_preset (org_id, code, names, billing_points)
+            values (${org}, 'BLD', '{"en":"Bleed","ar":"Bleed"}'::jsonb,
+                    '[{"trigger":"on_acceptance","pct":100}]'::jsonb)`;
+  },
+  reference_sequence: async (o, org) => {
+    await o`insert into public.reference_sequence (org_id, scope_key, next_value)
+            values (${org}, 'job.BLD', 1) on conflict (org_id, scope_key) do nothing`;
+  },
+  job: async (o, org, u) => {
+    await o`insert into public.job (org_id, reference, name, status_key, status_category, created_by)
+            values (${org}, ${"BLD-" + randomUUID().slice(0, 8)}, 'Bleed Job', 'draft', 'draft', ${u})`;
+  },
+  daily_report: async (o, org, u) => {
+    const job = randomUUID();
+    await o`insert into public.job (id, org_id, reference, name, status_key, status_category, created_by)
+            values (${job}, ${org}, ${"BLR-" + randomUUID().slice(0, 8)}, 'Bleed Report Job', 'draft', 'draft', ${u})`;
+    await o`insert into public.daily_report (org_id, job_id, report_date, summary, submitted_by)
+            values (${org}, ${job}, '2026-01-15', 'bleed', ${u})`;
+  },
+
   // Seeded under the org's OWN user (not the shared recipient): sign_in_log's
   // policy is user-OR-org, so a shared user would be visible cross-org by design
   // (the user's own events). Using a disjoint user tests the cross-USER isolation.

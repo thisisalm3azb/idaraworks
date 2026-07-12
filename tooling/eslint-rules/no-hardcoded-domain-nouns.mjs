@@ -43,7 +43,16 @@ const rule = {
       },
       // Review finding #6: string/template literals rendered as JSX children
       // ({"All jobs"} / {`...`}) previously escaped the tripwire.
+      // S1: attribute VALUES only count for UI attrs — href/className route
+      // paths legitimately contain segment names like /jobs (URLs are chrome,
+      // doc 07); user-visible children remain fully checked.
       JSXExpressionContainer(node) {
+        if (
+          node.parent?.type === "JSXAttribute" &&
+          !UI_ATTRS.has(String(node.parent.name?.name ?? ""))
+        ) {
+          return;
+        }
         const expr = node.expression;
         if (expr?.type === "Literal" && typeof expr.value === "string") {
           check(expr, expr.value);

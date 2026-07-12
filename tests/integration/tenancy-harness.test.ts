@@ -64,7 +64,14 @@ describe("migration harness (every tenant table is defended)", () => {
       from pg_class c
       join pg_namespace n on n.oid = c.relnamespace
       where n.nspname = 'public' and c.relkind = 'r'`;
+    // org_holiday_calendar is the ONE exception (S1/0021): it is a derived
+    // MATERIALIZATION of the config.holiday_calendar blob — replace-on-apply
+    // through the pipeline; full history lives in config_revision, so row
+    // deletion is not data loss. D-1.7 governs business records; every other
+    // table stays delete-free.
+    const DELETE_ALLOWED = new Set(["org_holiday_calendar"]);
     for (const r of rows) {
+      if (DELETE_ALLOWED.has(r.name as string)) continue;
       expect(r.can_delete, `app_user can DELETE from public.${r.name}`).toBe(false);
     }
   });
@@ -134,11 +141,18 @@ describe("migration harness (every tenant table is defended)", () => {
       "membership_invite",
     ];
     const policies = await owner`
-      select tablename, with_check from pg_policies where schemaname = 'public'`;
+      select tablename, policyname, with_check from pg_policies where schemaname = 'public'`;
     for (const name of ORG_WRITE_TABLES) {
-      const p = policies.find((x) => x.tablename === name);
-      expect(p, `no policy for ${name}`).toBeDefined();
-      expect(p!.with_check, `${name} WITH CHECK must pin current_org_id`).toMatch(/current_org_id/);
+      // S1: tables may carry several policies (select/insert/update/delete) —
+      // EVERY policy that has a WITH CHECK (i.e. every write path) must pin the
+      // org, not just the first-listed one.
+      const writePolicies = policies.filter((x) => x.tablename === name && x.with_check != null);
+      expect(writePolicies.length, `no write policy for ${name}`).toBeGreaterThan(0);
+      for (const p of writePolicies) {
+        expect(p.with_check, `${name}.${p.policyname} WITH CHECK must pin current_org_id`).toMatch(
+          /current_org_id/,
+        );
+      }
     }
   });
 
