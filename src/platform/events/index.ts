@@ -5,6 +5,8 @@ export {
   EVENT_TRIGGERS,
   FILE_UPLOADED,
   DEMO_HEARTBEAT,
+  JOB_CREATED,
+  DAILY_REPORT_SUBMITTED,
   FileUploadedData,
   DemoHeartbeatData,
 } from "./inngest";
