@@ -37,13 +37,35 @@ test("login → signup navigation works", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Create your account" })).toBeVisible();
 });
 
-test("health endpoint responds", async ({ request }) => {
+test("health endpoint responds with per-dependency checks (Phase I)", async ({ request }) => {
   const res = await request.get("/api/health");
-  // 200 when the DB is reachable, 503 otherwise — both are valid JSON here;
-  // the e2e env has no DB, so accept either and assert the shape.
+  // 200 when db+storage are reachable, 503 otherwise — both are valid JSON
+  // here; the e2e env has no DB/storage, so accept either and assert the shape.
   const body = await res.json();
   expect(body).toHaveProperty("ok");
-  expect(body).toHaveProperty("db");
+  expect(body).toHaveProperty("request_id");
+  expect(body.checks).toHaveProperty("db");
+  expect(body.checks).toHaveProperty("storage");
+  expect(body.checks).toHaveProperty("queue");
+  // Inngest state is always EXPLICIT — configured or unconfigured, never absent.
+  expect(["configured", "unconfigured"]).toContain(body.checks.inngest.status);
+  expect(res.headers()["x-request-id"]).toBeTruthy();
+});
+
+test("readiness endpoint is dependency-free (Phase I)", async ({ request }) => {
+  const res = await request.get("/api/ready");
+  expect(res.status()).toBe(200);
+  const body = await res.json();
+  expect(body.ready).toBe(true);
+  expect(body).toHaveProperty("request_id");
+});
+
+test("responses echo a server-minted x-request-id (Phase I)", async ({ request }) => {
+  const res = await request.get("/login", { headers: { "x-request-id": "client-spoofed" } });
+  const rid = res.headers()["x-request-id"];
+  expect(rid).toBeTruthy();
+  // Inbound ids are never trusted — the echoed id is server-minted.
+  expect(rid).not.toBe("client-spoofed");
 });
 
 test("Arabic locale renders RTL with translated copy and no horizontal scroll (Phase F)", async ({
