@@ -52,6 +52,10 @@ const eslintConfig = defineConfig([
         { type: "platform", pattern: "src/platform" },
         { type: "lib", pattern: "src/lib" },
         { type: "workers", pattern: "src/workers" },
+        // The worker fleet's HTTP host — the ONLY app file allowed to import
+        // workers (review m2). Declared before the general `app` element so the
+        // most-specific match wins.
+        { type: "app-worker-host", pattern: "src/app/api/inngest/route.ts", mode: "file" },
         { type: "app", pattern: "src/app" },
       ],
       "boundaries/include": ["src/**/*"],
@@ -68,6 +72,11 @@ const eslintConfig = defineConfig([
             // service.ts is each module's only public surface (BUILD_BIBLE §3.2).
             // A `module-components` element joins this list when module UI arrives (S2).
             { from: ["app"], allow: ["platform", "lib", "module-service"] },
+            // Only the inngest serve route may import the worker fleet (review m2).
+            {
+              from: ["app-worker-host"],
+              allow: ["platform", "lib", "module-service", "workers"],
+            },
             { from: ["platform"], allow: ["platform", "lib"] },
             { from: ["lib"], allow: ["lib"] },
             {
@@ -119,6 +128,11 @@ const eslintConfig = defineConfig([
               message:
                 "Supabase clients are constructed only in src/platform/tenancy (phase2/10 #1, #3).",
             },
+            {
+              name: "aws4fetch",
+              message:
+                "The S3 storage credential client is constructed only in src/platform/tenancy (Phase E; BUILD_BIBLE §5.2).",
+            },
           ],
           patterns: [
             {
@@ -151,6 +165,13 @@ const eslintConfig = defineConfig([
             "CallExpression[callee.object.callee.name='appDb'][callee.property.name=/^(execute|query)$/]",
           message:
             "A-B5: never call .execute()/.query() directly on appDb(); use withCtx (transaction) or a dedicated createAppDb({max:1}) client.",
+        },
+        {
+          // Checklist §10/§12: the service-role key exists ONLY in tooling/tests/CI —
+          // app code must never even read the env var (Phase E lint guard).
+          selector: "MemberExpression[property.name='SUPABASE_SERVICE_ROLE_KEY']",
+          message:
+            "SUPABASE_SERVICE_ROLE_KEY is banned in app runtime code (S0 checklist §10) — tooling scripts and tests only.",
         },
       ],
     },

@@ -9,6 +9,14 @@ export type Ctx = Readonly<{
   userId: string;
   /** finance.viewCosts — drives the app.cost_priv GUC for privileged side-tables. */
   costPrivileged: boolean;
+  /**
+   * finance.viewPrices — the NORMATIVE gate for financial_doc reads (doc 06
+   * D-6.2: individually togglable, not baked into role rank). Resolved from
+   * role_definition.price_privileged; the DB wall reads the same column, so the
+   * two walls track the FLAG, never an archetype list. App-layer only (no GUC —
+   * the file class-map function joins role_definition directly).
+   */
+  pricePrivileged: boolean;
   requestId: string;
 }>;
 

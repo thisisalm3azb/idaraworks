@@ -125,6 +125,21 @@ jobs:
           # tenant suffix when swapping in app_user). The probe step below fails
           # loudly if this ever changes.
           echo "DATABASE_URL=postgresql://postgres.pooler-dev:postgres@127.0.0.1:54329/postgres" >> "$GITHUB_ENV"
+          # Phase E (storage): the files suite needs the API + auth-admin + the
+          # local stack's S3-protocol credentials (the worker's storage client).
+          : "${API_URL:?supabase status did not emit API_URL}"
+          : "${ANON_KEY:?supabase status did not emit ANON_KEY}"
+          : "${SERVICE_ROLE_KEY:?supabase status did not emit SERVICE_ROLE_KEY}"
+          echo "NEXT_PUBLIC_SUPABASE_URL=$API_URL" >> "$GITHUB_ENV"
+          echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$ANON_KEY" >> "$GITHUB_ENV"
+          echo "SUPABASE_SERVICE_ROLE_KEY=$SERVICE_ROLE_KEY" >> "$GITHUB_ENV"
+          # S3 creds: newer CLIs export them from `status`; fall back to the
+          # CLI's documented fixed local-dev values. A drift fails loudly in the
+          # files suite (S3 auth error), never silently.
+          echo "STORAGE_S3_ACCESS_KEY_ID=${S3_PROTOCOL_ACCESS_KEY_ID:-625729a08b95bf1b7ff351a663f3a23c}" >> "$GITHUB_ENV"
+          echo "STORAGE_S3_SECRET_ACCESS_KEY=${S3_PROTOCOL_ACCESS_KEY_SECRET:-850181e4652dd023b7a98c58ae0d2d34bd487ee0cc3254aed6eda37307425907}" >> "$GITHUB_ENV"
+          echo "STORAGE_S3_ENDPOINT=$API_URL/storage/v1/s3" >> "$GITHUB_ENV"
+          echo "STORAGE_S3_REGION=${S3_PROTOCOL_REGION:-local}" >> "$GITHUB_ENV"
 
       - name: Probe direct + pooler connectivity (fail fast, before VC-1)
         run: pnpm tsx tooling/scripts/probe-db.ts
@@ -135,5 +150,5 @@ jobs:
       - name: Apply all migrations
         run: pnpm db:migrate
 
-      - name: Integration tests (VC-1 regression + tenancy harness + wrong-ctx block)
+      - name: Integration tests (tenancy + identity + entitlements + audit + files/storage)
         run: pnpm test:integration

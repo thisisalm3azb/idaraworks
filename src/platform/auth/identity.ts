@@ -73,7 +73,13 @@ export async function logAuthEvent(entry: {
       // Org-tagged events must write in ORG context so the policy's
       // org_id = current_org_id() with-check passes (the user is a member).
       await withCtx(
-        { orgId: entry.orgId, userId: entry.userId, costPrivileged: false, requestId: "audit" },
+        {
+          orgId: entry.orgId,
+          userId: entry.userId,
+          costPrivileged: false,
+          pricePrivileged: false,
+          requestId: "audit",
+        },
         write,
       );
     } else if (entry.userId) {

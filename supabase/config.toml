@@ -38,7 +38,21 @@ enabled = false
 enabled = false
 
 [storage]
-enabled = false
+# Phase E: files & storage foundation. Local/CI buckets are declared HERE
+# (checklist §3: buckets via config, not SQL); hosted buckets are created by
+# tooling/scripts/setup-storage.ts with the same names/caps/mimes.
+enabled = true
+file_size_limit = "25MiB"
+
+[storage.buckets.tenant-media]
+public = false
+file_size_limit = "15MiB"
+allowed_mime_types = ["image/jpeg", "image/png", "image/webp"]
+
+[storage.buckets.tenant-docs]
+public = false
+file_size_limit = "25MiB"
+allowed_mime_types = ["image/jpeg", "image/png", "image/webp"]
 
 [auth]
 # Phase C: identity. Local/CI: email signup without confirmations so integration

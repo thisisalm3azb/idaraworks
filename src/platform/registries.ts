@@ -78,6 +78,7 @@ export const AUDIT_ENTITY_TYPES = [
   "org",
   "membership",
   "membership_invite",
+  "file", // Phase E: void / legal-hold are audited file mutations (D-1.7)
 ] as const;
 export type AuditEntityType = (typeof AUDIT_ENTITY_TYPES)[number];
 

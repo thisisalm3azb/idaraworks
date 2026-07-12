@@ -37,8 +37,20 @@ export async function runVc1(): Promise<Vc1Report> {
   const orgA = randomUUID();
   const orgB = randomUUID();
   const user = randomUUID();
-  const ctxA: Ctx = { orgId: orgA, userId: user, costPrivileged: false, requestId: "vc1-a" };
-  const ctxB: Ctx = { orgId: orgB, userId: user, costPrivileged: false, requestId: "vc1-b" };
+  const ctxA: Ctx = {
+    orgId: orgA,
+    userId: user,
+    costPrivileged: false,
+    pricePrivileged: false,
+    requestId: "vc1-a",
+  };
+  const ctxB: Ctx = {
+    orgId: orgB,
+    userId: user,
+    costPrivileged: false,
+    pricePrivileged: false,
+    requestId: "vc1-b",
+  };
   const results: CheckResult[] = [];
   const record = (check: string, passed: boolean, detail: string) => {
     results.push({ check, passed, detail });

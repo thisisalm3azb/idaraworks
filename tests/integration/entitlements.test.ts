@@ -52,7 +52,13 @@ afterAll(async () => {
   await closeAppDb();
 });
 
-const ctx: () => Ctx = () => ({ orgId: orgA, userId: userA, costPrivileged: true, requestId: "t" });
+const ctx: () => Ctx = () => ({
+  orgId: orgA,
+  userId: userA,
+  costPrivileged: true,
+  pricePrivileged: true,
+  requestId: "t",
+});
 
 describe("catalogue ⇔ DB parity", () => {
   it("every code key has an entitlement_def row and vice versa", async () => {

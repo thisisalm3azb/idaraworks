@@ -13,7 +13,13 @@ const owner = ownerSql();
 const orgA = randomUUID();
 const orgB = randomUUID();
 const user = randomUUID();
-const ctxA: Ctx = { orgId: orgA, userId: user, costPrivileged: false, requestId: "t-a" };
+const ctxA: Ctx = {
+  orgId: orgA,
+  userId: user,
+  costPrivileged: false,
+  pricePrivileged: false,
+  requestId: "t-a",
+};
 
 beforeAll(async () => {
   await owner`insert into public.org (id, name, country, base_currency)
@@ -215,7 +221,13 @@ describe("wrong-context blocks happen in the DATABASE (doc 10 #1)", () => {
     expect(mine.map((r) => r.key)).toContain("greeting");
 
     const theirs = await withCtx(
-      { orgId: orgB, userId: user, costPrivileged: false, requestId: "t-b" },
+      {
+        orgId: orgB,
+        userId: user,
+        costPrivileged: false,
+        pricePrivileged: false,
+        requestId: "t-b",
+      },
       async (tx) => {
         return (await tx.execute(sql`select key from public.app_settings`)) as unknown as Array<{
           key: string;
@@ -251,7 +263,13 @@ describe("wrong-context blocks happen in the DATABASE (doc 10 #1)", () => {
   it("malformed ctx never reaches set_config", async () => {
     await expect(
       withCtx(
-        { orgId: "not-a-uuid", userId: user, costPrivileged: false, requestId: "x" },
+        {
+          orgId: "not-a-uuid",
+          userId: user,
+          costPrivileged: false,
+          pricePrivileged: false,
+          requestId: "x",
+        },
         async () => {
           /* unreachable */
         },

@@ -79,6 +79,7 @@ const ctxOf = (orgId: string, userId: string): Ctx => ({
   orgId,
   userId,
   costPrivileged: true,
+  pricePrivileged: true,
   requestId: "test",
 });
 

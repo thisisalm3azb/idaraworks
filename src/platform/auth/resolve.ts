@@ -78,16 +78,21 @@ export async function resolveCtx(orgId: string): Promise<ResolvedCtx | ResolveFa
     orgId,
     userId: user.id,
     costPrivileged: false,
+    pricePrivileged: false,
     requestId: randomUUID(),
   };
 
   // Role flags + org MFA policy live inside the org ctx.
   const details = await withCtx(ctxBase, async (tx) => {
     const roles = (await tx.execute(sql`
-      select archetype, cost_privileged
+      select archetype, cost_privileged, price_privileged
       from public.role_definition
       where org_id = ${orgId} and key = ${membership.role_key}
-    `)) as unknown as Array<{ archetype: RoleArchetype; cost_privileged: boolean }>;
+    `)) as unknown as Array<{
+      archetype: RoleArchetype;
+      cost_privileged: boolean;
+      price_privileged: boolean;
+    }>;
     const settings = (await tx.execute(sql`
       select value from public.app_settings
       where org_id = ${orgId} and key = 'auth.mfa_required'
@@ -97,7 +102,11 @@ export async function resolveCtx(orgId: string): Promise<ResolvedCtx | ResolveFa
   if (!details.role) return "no_membership";
 
   return {
-    ctx: { ...ctxBase, costPrivileged: details.role.cost_privileged },
+    ctx: {
+      ...ctxBase,
+      costPrivileged: details.role.cost_privileged,
+      pricePrivileged: details.role.price_privileged,
+    },
     archetype: details.role.archetype,
     roleKey: membership.role_key,
     orgName: membership.org_name,

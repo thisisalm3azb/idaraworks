@@ -39,8 +39,9 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
-  // pino + transport must not be bundled by Next (review finding #8a).
-  serverExternalPackages: ["pino", "pino-pretty"],
+  // pino + transport must not be bundled by Next (review finding #8a);
+  // sharp's native binding must stay external for the serverless runtime (Phase E).
+  serverExternalPackages: ["pino", "pino-pretty", "sharp"],
   async headers() {
     return [{ source: "/(.*)", headers: securityHeaders }];
   },
