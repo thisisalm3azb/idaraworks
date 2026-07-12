@@ -477,8 +477,33 @@ describe("reconcile (doc 10 #39; audit F-36)", () => {
     expect(Number(counter!.bytes_used)).toBe(result.fileBytes);
     expect(counter!.reconciled_at).not.toBeNull();
 
-    // A second run reports no drift.
+    // A second run reports no drift — voided-but-unpurged objects (from the
+    // void test above) are EXPECTED residue, not orphans (0010).
     const clean = await reconcileOrg(orgA, "itest-reconcile-2");
     expect(clean.drift).toBe(false);
+    expect(clean.orphanKeys).toBe(0);
+  }, 120_000);
+
+  it("detects a TRUE orphan — an object with no owning file row (CM4 leak detector)", async () => {
+    // Plant an object directly via the worker S3 credential (bypasses RLS) at a
+    // conforming path with NO file row — exactly what a bypassed upload would
+    // leave. The detector must flag it.
+    const store = objectStore();
+    const orphanPath = buildObjectPath({
+      orgId: orgA,
+      accessClass: "job_media",
+      attachedToType: "daily_report",
+      attachedToId: randomUUID(),
+      fileId: randomUUID(),
+      ext: "jpg",
+    });
+    await store.put("tenant-media", orphanPath, await buildGpsJpeg(200, 200), "image/jpeg");
+    try {
+      const r = await reconcileOrg(orgA, "itest-orphan");
+      expect(r.orphanKeys).toBeGreaterThanOrEqual(1);
+      expect(r.drift).toBe(true);
+    } finally {
+      await store.del("tenant-media", orphanPath);
+    }
   }, 120_000);
 });
