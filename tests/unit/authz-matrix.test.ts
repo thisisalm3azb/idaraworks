@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { can } from "@/platform/authz";
+import { can, EXPECTED_MATRIX } from "@/platform/authz";
 import { MATRIX, type Action } from "@/platform/authz/matrix";
 import { MVP_GRANTABLE_ARCHETYPES } from "@/platform/registries";
 
@@ -25,6 +25,25 @@ describe("authz matrix", () => {
         expect(can(arch, action)).toBe(allowed.has(arch));
       }
     }
+  });
+
+  it("can() agrees with the INDEPENDENT doc-06 transcription (drift guard)", () => {
+    // EXPECTED_MATRIX is transcribed from doc 06 by archetype, separately from
+    // MATRIX (by action). The two must agree for every cell — a typo in either
+    // encoding fails here (doc 10 #15).
+    for (const arch of MVP_GRANTABLE_ARCHETYPES) {
+      const expected = new Set<string>(EXPECTED_MATRIX[arch]);
+      for (const action of actions) {
+        expect(
+          can(arch, action),
+          `${arch} × ${action}: can()=${can(arch, action)} vs doc-06=${expected.has(action)}`,
+        ).toBe(expected.has(action));
+      }
+    }
+  });
+
+  it("the independent grid covers exactly the grantable archetypes", () => {
+    expect(Object.keys(EXPECTED_MATRIX).sort()).toEqual([...MVP_GRANTABLE_ARCHETYPES].sort());
   });
 
   it("deny-by-default: unknown actions are denied for everyone", () => {
