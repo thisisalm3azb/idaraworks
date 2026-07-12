@@ -79,6 +79,7 @@ export const AUDIT_ENTITY_TYPES = [
   "membership",
   "membership_invite",
   "file", // Phase E: void / legal-hold are audited file mutations (D-1.7)
+  "config", // Phase F: config-artifact revisions are audited (D-1.8)
 ] as const;
 export type AuditEntityType = (typeof AUDIT_ENTITY_TYPES)[number];
 
@@ -160,7 +161,17 @@ export const TERM_KEYS = [
   "invoice",
 ] as const;
 export type TermKey = (typeof TERM_KEYS)[number];
+const TERM_KEY_SET: ReadonlySet<string> = new Set(TERM_KEYS);
+export function isTermKey(key: string): key is TermKey {
+  return TERM_KEY_SET.has(key);
+}
 
 // ── Languages ────────────────────────────────────────────────────────────────
 export const SUPPORTED_LOCALES = ["en", "ar"] as const;
 export type Locale = (typeof SUPPORTED_LOCALES)[number];
+
+// ── Notification kinds (doc 01 F-12; Phase F substrate) ─────────────────────
+// Closed registry; later slices add their kinds (e.g. 'approval.requested',
+// 'report.returned') with the surfaces that emit them — one file, one owner.
+export const NOTIFICATION_KINDS = ["system"] as const;
+export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];
