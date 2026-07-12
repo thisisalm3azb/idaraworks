@@ -1,26 +1,20 @@
 import { NextResponse } from "next/server";
-import { createAppDb, sql } from "@/platform/tenancy";
+import { healthReport } from "@/platform/observability/health";
+import { newRequestId, REQUEST_ID_HEADER } from "@/platform/observability/requestId";
 
 export const dynamic = "force-dynamic";
 
-/** Health check (BUILD_BIBLE §15.5). Dedicated client per the A-B5 pool law. */
+/**
+ * Health check (BUILD_BIBLE §15.5; Phase I): per-dependency status for
+ * db / storage / queue (outbox gauges) / inngest (configured|unconfigured).
+ * 503 when a hard dependency (db, storage) is down. Outside the middleware
+ * matcher, so it mints its own correlation id (§8.4: 5xx carries request_id).
+ */
 export async function GET() {
-  let db = false;
-  try {
-    const client = createAppDb({ max: 1 });
-    try {
-      const rows = (await client.db.execute(sql`select 1 as ok`)) as unknown as Array<{
-        ok: number;
-      }>;
-      db = rows[0]?.ok === 1;
-    } finally {
-      await client.end();
-    }
-  } catch {
-    db = false;
-  }
-  return NextResponse.json(
-    { ok: db, db, uptime_s: Math.round(process.uptime()) },
-    { status: db ? 200 : 503 },
-  );
+  const requestId = newRequestId();
+  const report = await healthReport(requestId);
+  return NextResponse.json(report, {
+    status: report.ok ? 200 : 503,
+    headers: { [REQUEST_ID_HEADER]: requestId },
+  });
 }
