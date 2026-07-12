@@ -42,6 +42,19 @@ const nextConfig: NextConfig = {
   // pino + transport must not be bundled by Next (review finding #8a);
   // sharp's native binding must stay external for the serverless runtime (Phase E).
   serverExternalPackages: ["pino", "pino-pretty", "sharp"],
+  // Deploy fix: Turbopack + pnpm misses sharp's linux-x64 native libs in the
+  // /api/inngest function trace (libvips-cpp.so → ERR_DLOPEN_FAILED on Vercel;
+  // vercel/vercel#14001, next.js discussion #83230). Force-include the platform
+  // packages for the one route that loads sharp (image-derivatives worker).
+  // Globs that match nothing (e.g. linux dirs on a Windows dev machine) are inert.
+  outputFileTracingIncludes: {
+    "/api/inngest": [
+      "./node_modules/@img/sharp-linux-x64/**/*",
+      "./node_modules/@img/sharp-libvips-linux-x64/**/*",
+      "./node_modules/.pnpm/@img+sharp-linux-x64@*/**/*",
+      "./node_modules/.pnpm/@img+sharp-libvips-linux-x64@*/**/*",
+    ],
+  },
   async headers() {
     return [{ source: "/(.*)", headers: securityHeaders }];
   },
