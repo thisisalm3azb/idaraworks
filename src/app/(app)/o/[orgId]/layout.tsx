@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AppShell, Badge } from "@/platform/ui";
-import { getT } from "@/platform/i18n/server";
+import { getT, getServerLocale } from "@/platform/i18n/server";
 import { getSessionUser, listMyOrgs, resolveCtx } from "@/platform/auth/resolve";
+import { loadOrgTerminology, term } from "@/platform/terminology";
+import { can } from "@/platform/authz";
 
 /**
  * The org-scoped guard (S0 checklist §5): every /o/[orgId] route resolves the
@@ -25,6 +27,28 @@ export default async function OrgLayout({
 
   const user = await getSessionUser();
   const orgs = user ? await listMyOrgs(user.id) : [];
+  const locale = await getServerLocale();
+  const terms = await loadOrgTerminology(resolved.ctx, locale);
+  const a = resolved.archetype;
+  // S1 section nav (mobile-first: wraps; the full S5 IA replaces this).
+  const links: Array<{ href: string; label: string }> = [
+    ...(can(a, "jobs.view")
+      ? [{ href: `/o/${orgId}/jobs`, label: term("job", terms, "plural") }]
+      : []),
+    ...(can(a, "employees.view") ? [{ href: `/o/${orgId}/people`, label: t("nav.people") }] : []),
+    ...(can(a, "customers.view")
+      ? [{ href: `/o/${orgId}/customers`, label: t("nav.customers") }]
+      : []),
+    ...(can(a, "catalog.view")
+      ? [
+          { href: `/o/${orgId}/suppliers`, label: t("nav.suppliers") },
+          { href: `/o/${orgId}/items`, label: t("nav.items") },
+        ]
+      : []),
+    ...(can(a, "config.view")
+      ? [{ href: `/o/${orgId}/settings/configuration`, label: t("nav.configuration") }]
+      : []),
+  ];
 
   return (
     <AppShell
@@ -64,6 +88,17 @@ export default async function OrgLayout({
         </nav>
       }
     >
+      <nav className="mb-4 flex flex-wrap gap-2">
+        {links.map((l) => (
+          <Link
+            key={l.href}
+            href={l.href}
+            className="min-h-11 rounded-md border border-line bg-card px-3 py-2.5 text-sm text-ink hover:bg-sunken"
+          >
+            {l.label}
+          </Link>
+        ))}
+      </nav>
       {children}
     </AppShell>
   );
