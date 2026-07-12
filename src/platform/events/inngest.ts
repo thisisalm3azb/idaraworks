@@ -17,6 +17,13 @@ export type { FileUploadedData as FileUploadedPayload } from "./registry";
 export const fileUploadedEvent = eventType(FILE_UPLOADED, { schema: FileUploadedData });
 export const demoHeartbeatEvent = eventType(DEMO_HEARTBEAT, { schema: DemoHeartbeatData });
 
+/** name → its trigger. Paired with EVENT_DEFS[name].schema so defineOrgFunction
+ * binds BOTH from a single event key — a trigger/schema mismatch is impossible. */
+export const EVENT_TRIGGERS = {
+  [FILE_UPLOADED]: fileUploadedEvent,
+  [DEMO_HEARTBEAT]: demoHeartbeatEvent,
+} as const;
+
 export const inngest = new Inngest({
   id: "idaraworks",
   eventKey: process.env.INNGEST_EVENT_KEY, // undefined → dev mode

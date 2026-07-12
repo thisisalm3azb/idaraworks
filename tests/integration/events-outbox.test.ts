@@ -12,6 +12,8 @@ import {
   relayOutbox,
   checkDeadLetters,
   purgeProcessedEvents,
+  redriveDeadLetters,
+  MAX_ATTEMPTS,
   type SendFn,
 } from "@/platform/events";
 import { createOrgForUser } from "@/platform/auth/identity";
@@ -179,14 +181,14 @@ describe("dead-letter + retention", () => {
       async () => undefined,
     );
     // Force it past the max-attempts threshold.
-    await owner`update public.domain_event set attempts = 5 where org_id = ${orgA} and payload->>'nonce' = ${n}`;
+    await owner`update public.domain_event set attempts = ${MAX_ATTEMPTS} where org_id = ${orgA} and payload->>'nonce' = ${n}`;
     const dead = await checkDeadLetters("test");
     expect(dead).toBeGreaterThanOrEqual(1);
     // the relay skips it (attempts >= max) — not re-claimed
     const claimed = await relayOutbox(async () => undefined, "test");
     const [row] = await owner`
       select attempts from public.domain_event where org_id = ${orgA} and payload->>'nonce' = ${n}`;
-    expect(Number(row!.attempts)).toBe(5); // untouched
+    expect(Number(row!.attempts)).toBe(MAX_ATTEMPTS); // untouched by the relay
     void claimed;
     await owner`update public.domain_event set processed_at = now() where org_id = ${orgA} and payload->>'nonce' = ${n}`;
   });
@@ -205,10 +207,32 @@ describe("dead-letter + retention", () => {
       update public.domain_event set processed_at = now() - interval '100 days'
       where org_id = ${orgA} and payload->>'nonce' = ${n}`;
     const purged = await purgeProcessedEvents("90 days", "test");
-    expect(purged).toBeGreaterThanOrEqual(1);
+    expect(purged.processed).toBeGreaterThanOrEqual(1);
     const [row] = await owner`
       select 1 as x from public.domain_event where org_id = ${orgA} and payload->>'nonce' = ${n}`;
     expect(row).toBeUndefined();
+  });
+
+  it("redrive resets a dead-lettered event so it retries (ops recovery, 0015)", async () => {
+    const n = nonce();
+    await command(
+      ctxOf(orgA, userA),
+      {
+        audit: { action: "test.emit", entityType: "org", summary: "redrive" },
+        events: [{ name: "demo/heartbeat", payload: { nonce: n } }],
+      },
+      async () => undefined,
+    );
+    await owner`update public.domain_event set attempts = 20, last_error = 'boom'
+      where org_id = ${orgA} and payload->>'nonce' = ${n}`;
+    const redriven = await redriveDeadLetters("test");
+    expect(redriven).toBeGreaterThanOrEqual(1);
+    const [row] = await owner`
+      select attempts, last_error from public.domain_event
+      where org_id = ${orgA} and payload->>'nonce' = ${n}`;
+    expect(Number(row!.attempts)).toBe(0);
+    expect(row!.last_error).toBeNull();
+    await owner`update public.domain_event set processed_at = now() where org_id = ${orgA} and payload->>'nonce' = ${n}`;
   });
 });
 
@@ -228,11 +252,18 @@ describe("security boundary", () => {
     expect(`${(err as Error).message} ${cause?.message ?? ""}`).toMatch(/platform task only/i);
   });
 
-  it("a tenant cannot SELECT the domain_event bus (plumbing, not a record)", async () => {
-    const rows = await withCtx(ctxOf(orgA, userA), (tx) =>
-      tx.execute(sql`select count(*)::int as n from public.domain_event`),
+  it("a tenant cannot SELECT the domain_event bus (no grant + RLS default-deny)", async () => {
+    // 0015 revoked the SELECT grant → app_user gets a hard privilege error, not
+    // just an empty result. Belt (grant) AND braces (RLS).
+    const err = await withCtx(ctxOf(orgA, userA), (tx) =>
+      tx.execute(sql`select count(*) from public.domain_event`),
+    ).then(
+      () => undefined,
+      (e: unknown) => e,
     );
-    expect((rows as unknown as Array<{ n: number }>)[0]!.n).toBe(0);
+    expect(err).toBeInstanceOf(Error);
+    const code = (err as { code?: string; cause?: { code?: string } }).cause?.code;
+    expect(code).toBe("42501"); // insufficient_privilege
   });
 
   it("org B never sees org A's events (owner-level cross check)", async () => {

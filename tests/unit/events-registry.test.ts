@@ -6,6 +6,7 @@ import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import {
   EVENT_DEFS,
+  EVENT_TRIGGERS,
   FILE_UPLOADED,
   DEMO_HEARTBEAT,
   isEventName,
@@ -39,6 +40,16 @@ describe("event registry", () => {
         nonce: 123,
       }),
     ).toThrow();
+  });
+
+  it("every event has a trigger whose name matches (defineOrgFunction binding, m6)", () => {
+    // EVENT_TRIGGERS and EVENT_DEFS must cover exactly the same names, and each
+    // trigger's event name must equal its key — this is what makes binding
+    // trigger+schema from a single event key mismatch-proof.
+    expect(Object.keys(EVENT_TRIGGERS).sort()).toEqual(Object.keys(EVENT_DEFS).sort());
+    for (const [name, trigger] of Object.entries(EVENT_TRIGGERS)) {
+      expect((trigger as { event: string }).event).toBe(name);
+    }
   });
 
   it("demo/heartbeat requires a non-empty nonce", () => {

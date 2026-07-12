@@ -5,12 +5,12 @@
  * without any feature dependency. Idempotent (a log; no state), org-verified via
  * defineOrgFunction.
  */
-import { demoHeartbeatEvent, DemoHeartbeatData } from "@/platform/events";
+import { DEMO_HEARTBEAT } from "@/platform/events";
 import { logger } from "@/platform/logger";
 import { defineOrgFunction } from "../harness";
 
 export const demoHeartbeat = defineOrgFunction(
-  { id: "demo-heartbeat", trigger: demoHeartbeatEvent, schema: DemoHeartbeatData, retries: 1 },
+  { id: "demo-heartbeat", event: DEMO_HEARTBEAT, retries: 1 },
   ({ payload, ctx, runId }) => {
     logger.info(
       { orgId: ctx.orgId, nonce: payload.nonce, runId },

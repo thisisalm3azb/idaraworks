@@ -13,7 +13,7 @@
  * derivative pipeline's — the earlier "active membership" wording overstated it.)
  */
 import { z } from "zod";
-import { inngest } from "@/platform/events";
+import { inngest, EVENT_DEFS, EVENT_TRIGGERS, type EventName } from "@/platform/events";
 import { sql, withCtx, type Ctx } from "@/platform/tenancy";
 import { logger } from "@/platform/logger";
 
@@ -72,27 +72,31 @@ export async function verifyOrgPayload<S extends z.ZodTypeAny>(
  */
 type CreateFnOptions = Parameters<typeof inngest.createFunction>[0];
 
-export function defineOrgFunction<S extends z.ZodTypeAny>(
+/** The registered payload type for an event name. */
+type PayloadOf<E extends EventName> = z.infer<(typeof EVENT_DEFS)[E]["schema"]>;
+
+export function defineOrgFunction<E extends EventName>(
   opts: {
     id: string;
-    /** An eventType() trigger (registry-typed); payload type comes from `schema`. */
-    trigger: object;
-    schema: S;
+    /** A registered event NAME — the trigger AND payload schema are looked up
+     * from the same registry entry, so they can never be mismatched (review m6). */
+    event: E;
     retries?: number;
   },
-  handler: (args: { payload: z.infer<S>; ctx: Ctx; runId: string }) => Promise<unknown>,
+  handler: (args: { payload: PayloadOf<E>; ctx: Ctx; runId: string }) => Promise<unknown>,
 ) {
+  const schema = EVENT_DEFS[opts.event].schema;
   const options = {
     id: opts.id,
     retries: opts.retries ?? 3,
-    triggers: [opts.trigger],
+    triggers: [EVENT_TRIGGERS[opts.event]],
   } as unknown as CreateFnOptions;
   return inngest.createFunction(options, async ({ event, runId }) => {
     const { payload, ctx } = await verifyOrgPayload(
-      opts.schema,
+      schema,
       (event as { data: unknown }).data,
       `inngest-${runId}`,
     );
-    return handler({ payload, ctx, runId });
+    return handler({ payload: payload as PayloadOf<E>, ctx, runId });
   });
 }

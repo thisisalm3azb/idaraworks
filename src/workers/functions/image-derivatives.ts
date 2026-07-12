@@ -12,7 +12,7 @@
  * transport/infra errors throw and let Inngest retry with backoff.
  */
 import { NonRetriableError } from "inngest";
-import { fileUploadedEvent, FileUploadedData } from "@/platform/events";
+import { FILE_UPLOADED, FileUploadedData } from "@/platform/events";
 import { sql, withCtx, objectStore, type Ctx } from "@/platform/tenancy";
 import { CLASS_MAP, buildObjectPath, type FileVariants } from "@/platform/files";
 import { processImage } from "@/platform/files/image";
@@ -197,6 +197,6 @@ export async function deriveImageVariants(
 }
 
 export const imageDerivatives = defineOrgFunction(
-  { id: "image-derivatives", trigger: fileUploadedEvent, schema: FileUploadedData, retries: 3 },
+  { id: "image-derivatives", event: FILE_UPLOADED, retries: 3 },
   ({ payload, ctx }) => deriveImageVariants(payload, ctx),
 );
