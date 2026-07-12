@@ -87,6 +87,10 @@ jobs:
   integration:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    # contents: write so the failure-surfacing step can post the test tail as a
+    # commit comment (readable via the public API for diagnosis without a token).
+    permissions:
+      contents: write
     env:
       APP_DB_PASSWORD: ci-app-password
     steps:
@@ -150,5 +154,25 @@ jobs:
       - name: Apply all migrations
         run: pnpm db:migrate
 
-      - name: Integration tests (tenancy + identity + entitlements + audit + files/storage)
-        run: pnpm test:integration
+      - name: Integration tests (tenancy + identity + entitlements + audit + files/storage + events + bleed)
+        run: |
+          set -o pipefail
+          pnpm test:integration 2>&1 | tee /tmp/itest.log
+
+      # Temporary diagnostic: on failure, post the failing test tail as a commit
+      # comment so the cause is visible without downloading CI logs.
+      - name: Surface integration failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          node -e "
+            const fs=require('fs');
+            let s=fs.readFileSync('/tmp/itest.log','utf8').replace(/\x1B\[[0-9;]*m/g,'');
+            const lines=s.split('\n').filter(l=>!l.includes('(dev sink)') && !/^\s+(app|env|to|subject|text):/.test(l));
+            const tail=lines.join('\n').slice(-5000);
+            fs.writeFileSync('/tmp/body.json', JSON.stringify({body:'CI integration failure tail:\n\n\`\`\`\n'+tail+'\n\`\`\`'}));
+          "
+          curl -s -X POST -H "Authorization: token $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/commits/${{ github.sha }}/comments" \
+            -d @/tmp/body.json > /dev/null && echo "posted failure tail as commit comment"
