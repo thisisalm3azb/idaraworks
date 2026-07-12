@@ -12,12 +12,12 @@
  * transport/infra errors throw and let Inngest retry with backoff.
  */
 import { NonRetriableError } from "inngest";
-import { inngest, fileUploadedEvent, FileUploadedData } from "@/platform/events";
+import { fileUploadedEvent, FileUploadedData } from "@/platform/events";
 import { sql, withCtx, objectStore, type Ctx } from "@/platform/tenancy";
 import { CLASS_MAP, buildObjectPath, type FileVariants } from "@/platform/files";
 import { processImage } from "@/platform/files/image";
 import { logger } from "@/platform/logger";
-import { verifyOrgPayload } from "../harness";
+import { defineOrgFunction } from "../harness";
 
 type FileRow = {
   id: string;
@@ -70,15 +70,14 @@ export type DeriveResult =
   | { outcome: "failed"; reason: string };
 
 /**
- * The full pipeline as a plain function — invoked by the Inngest wrapper below,
- * by integration tests, and by the VC-4 preview check (identical code path).
+ * The full pipeline as a plain function. Receives an ALREADY-VERIFIED payload +
+ * ctx (defineOrgFunction does the org re-verification, so it happens in exactly
+ * one place). Invoked by the Inngest wrapper below and by integration tests.
  */
 export async function deriveImageVariants(
-  data: FileUploadedData,
-  requestId: string,
+  payload: FileUploadedData,
+  ctx: Ctx,
 ): Promise<DeriveResult> {
-  const { payload, ctx } = await verifyOrgPayload(FileUploadedData, data, requestId);
-
   const row = await loadRow(ctx, payload.fileId);
   if (!row) return { outcome: "skipped", reason: "file row not visible in org context" };
   const store = objectStore();
@@ -104,7 +103,7 @@ export async function deriveImageVariants(
   } catch (err) {
     await markFailed(ctx, payload.fileId);
     logger.warn(
-      { fileId: payload.fileId, requestId, err: (err as Error).message },
+      { fileId: payload.fileId, requestId: ctx.requestId, err: (err as Error).message },
       "image re-encode failed — file marked failed",
     );
     throw new NonRetriableError("undecodable image");
@@ -197,9 +196,7 @@ export async function deriveImageVariants(
     : { outcome: "skipped", reason: "another delivery completed first" };
 }
 
-export const imageDerivatives = inngest.createFunction(
-  { id: "image-derivatives", retries: 3, triggers: [fileUploadedEvent] },
-  async ({ event, runId }) => {
-    return deriveImageVariants(event.data as FileUploadedData, `inngest-${runId}`);
-  },
+export const imageDerivatives = defineOrgFunction(
+  { id: "image-derivatives", trigger: fileUploadedEvent, schema: FileUploadedData, retries: 3 },
+  ({ payload, ctx }) => deriveImageVariants(payload, ctx),
 );

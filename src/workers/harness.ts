@@ -13,6 +13,7 @@
  * derivative pipeline's — the earlier "active membership" wording overstated it.)
  */
 import { z } from "zod";
+import { inngest } from "@/platform/events";
 import { sql, withCtx, type Ctx } from "@/platform/tenancy";
 import { logger } from "@/platform/logger";
 
@@ -61,4 +62,37 @@ export async function verifyOrgPayload<S extends z.ZodTypeAny>(
     throw new OrgVerificationError(base.orgId);
   }
   return { payload, ctx };
+}
+
+/**
+ * defineOrgFunction (S0 checklist §7.3) — the ONLY way to declare an org-scoped
+ * Inngest consumer. It verifies the payload's (org, actor) against the DB and
+ * hands the handler a re-derived, trusted Ctx, so re-verification is impossible
+ * to forget (doc 10 #9). The handler receives verified `payload` + `ctx`.
+ */
+type CreateFnOptions = Parameters<typeof inngest.createFunction>[0];
+
+export function defineOrgFunction<S extends z.ZodTypeAny>(
+  opts: {
+    id: string;
+    /** An eventType() trigger (registry-typed); payload type comes from `schema`. */
+    trigger: object;
+    schema: S;
+    retries?: number;
+  },
+  handler: (args: { payload: z.infer<S>; ctx: Ctx; runId: string }) => Promise<unknown>,
+) {
+  const options = {
+    id: opts.id,
+    retries: opts.retries ?? 3,
+    triggers: [opts.trigger],
+  } as unknown as CreateFnOptions;
+  return inngest.createFunction(options, async ({ event, runId }) => {
+    const { payload, ctx } = await verifyOrgPayload(
+      opts.schema,
+      (event as { data: unknown }).data,
+      `inngest-${runId}`,
+    );
+    return handler({ payload, ctx, runId });
+  });
 }

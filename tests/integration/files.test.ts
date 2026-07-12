@@ -186,10 +186,10 @@ describe("upload → pipeline → read (the full loop, VC-4's hosted half)", () 
     });
     expect(published).toBe(1);
 
-    // Run the worker's exact code path.
+    // Run the worker's exact code path (payload + already-verified ctx).
     const result = await deriveImageVariants(
       { orgId: orgA, fileId: signed.fileId, actorUserId: u.foreman.id },
-      "itest",
+      ctxOf(orgA, u.foreman),
     );
     expect(result.outcome).toBe("ready");
 
@@ -218,7 +218,7 @@ describe("upload → pipeline → read (the full loop, VC-4's hosted half)", () 
     // Idempotency: a duplicate delivery is a no-op (no double count).
     const dup = await deriveImageVariants(
       { orgId: orgA, fileId: signed.fileId, actorUserId: u.foreman.id },
-      "itest-dup",
+      ctxOf(orgA, u.foreman),
     );
     expect(dup.outcome).toBe("skipped");
     expect((await getStorageUsage(ctxOf(orgA, u.ownerA))).bytesUsed).toBe(file!.bytes);
@@ -237,7 +237,7 @@ describe("upload → pipeline → read (the full loop, VC-4's hosted half)", () 
     await uploadVia(signed, u.ownerA.token, fixture, "image/jpeg");
     const result = await deriveImageVariants(
       { orgId: orgA, fileId: signed.fileId, actorUserId: u.ownerA.id },
-      "itest-fin",
+      ctxOf(orgA, u.ownerA),
     );
     expect(result.outcome).toBe("ready");
     const store = objectStore();
