@@ -1,1 +1,7 @@
-export { command, recordActivity, type AuditSpec, type ActivitySpec } from "./command";
+export {
+  command,
+  recordActivity,
+  recordActivityIn,
+  type AuditSpec,
+  type ActivitySpec,
+} from "./command";

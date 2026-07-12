@@ -77,6 +77,15 @@ export async function command<T>(
   });
 }
 
+/**
+ * Write an activity row INSIDE an existing transaction — for callers that must
+ * keep the narrative row atomic with their own mutation (e.g. createComment
+ * inserts the comment and this activity row in one tx). §4.12 one-command-one-tx.
+ */
+export async function recordActivityIn(tx: TenantTx, ctx: Ctx, act: ActivitySpec): Promise<void> {
+  await writeActivity(tx, ctx, act);
+}
+
 /** Record an operational activity entry alone (no audit) — for L2/L4 narrative. */
 export async function recordActivity(ctx: Ctx, act: ActivitySpec): Promise<void> {
   await withCtx(ctx, (tx) => writeActivity(tx, ctx, act));

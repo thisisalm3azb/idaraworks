@@ -6,6 +6,7 @@
  * this) is S1; this is the substrate so the audit path is complete from the
  * first config write.
  */
+import { randomUUID } from "node:crypto";
 import { command } from "@/platform/audit";
 import { sql, type Ctx } from "@/platform/tenancy";
 
@@ -19,29 +20,33 @@ export type ConfigRevisionInput = {
 
 /** Record a config change: config_revision (full diff) + audit_log (summary). */
 export async function recordConfigRevision(ctx: Ctx, input: ConfigRevisionInput): Promise<string> {
-  return command(
+  // Id generated in app (AR-1); NO `returning`. config_revision reads are gated
+  // to owner/admin, but any org member may INSERT — an INSERT ... RETURNING would
+  // re-apply the SELECT policy and 42501 for a non-admin config editor (S1),
+  // rolling back both the revision AND its audit row. Same trap notify.ts avoids.
+  const id = randomUUID();
+  await command(
     ctx,
     {
       // audit_log is the lean compliance SUMMARY pointing at the config_revision
       // row; the full before/after diff lives in config_revision (no duplication).
-      audit: (id: string) => ({
+      audit: {
         action: "config.revise",
         entityType: "config" as const,
         entityId: id,
         summary: input.summary ?? `Updated config ${input.artifactKey}`,
-      }),
+      },
     },
     async (tx) => {
-      const rows = (await tx.execute(sql`
+      await tx.execute(sql`
         insert into public.config_revision
-          (org_id, artifact_key, before_data, after_data, actor_user_id, ai_flag, summary)
-        values (${ctx.orgId}, ${input.artifactKey},
+          (id, org_id, artifact_key, before_data, after_data, actor_user_id, ai_flag, summary)
+        values (${id}, ${ctx.orgId}, ${input.artifactKey},
                 ${input.before === undefined ? null : JSON.stringify(input.before)}::jsonb,
                 ${input.after === undefined ? null : JSON.stringify(input.after)}::jsonb,
                 ${ctx.userId}, ${input.aiFlag ?? false}, ${input.summary ?? null})
-        returning id::text as id
-      `)) as unknown as Array<{ id: string }>;
-      return rows[0]!.id;
+      `);
     },
   );
+  return id;
 }

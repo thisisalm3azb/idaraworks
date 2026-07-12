@@ -39,7 +39,14 @@ export function t(key: string, vars?: TVars, locale: Locale = "en"): string {
     }
     formatCache.set(cacheKey, mf);
   }
-  return String(mf.format(vars ?? {}));
+  try {
+    return String(mf.format(vars ?? {}));
+  } catch (err) {
+    // format() throws if a required ICU arg (e.g. a select/plural variable) is
+    // missing — never crash a render over a message; log and fall back.
+    logger.warn({ key, locale, err: (err as Error).message }, "i18n: message format failed");
+    return template;
+  }
 }
 
 export { SUPPORTED_LOCALES };

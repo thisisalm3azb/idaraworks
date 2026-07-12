@@ -120,6 +120,25 @@ describe("comments", () => {
     const seen = await listComments(ctxOf(orgB, userB), "job", jobId);
     expect(seen).toHaveLength(0);
   });
+
+  it("DB backstop: a non-author cannot edit/soft-delete another's comment (0013)", async () => {
+    const id = await createComment(ctxOf(orgA, userA), {
+      entityType: "job",
+      entityId: jobId,
+      body: "author-only",
+    });
+    // userC (co-member, not the author) attempting a raw UPDATE is blocked by RLS,
+    // not just by the app-layer author check.
+    const code = await pgCode(
+      withCtx(ctxOf(orgA, userC), (tx) =>
+        tx.execute(sql`update public.comment set body = 'tamper' where id = ${id}`),
+      ),
+    );
+    // 42501 (RLS) or 0 rows updated — either way the tamper does not land.
+    const [row] = await owner`select body from public.comment where id = ${id}`;
+    expect(row!.body).toBe("author-only");
+    expect(code === undefined || code === "42501").toBe(true);
+  });
 });
 
 describe("notifications (recipient-scoped)", () => {
@@ -164,6 +183,17 @@ describe("notifications (recipient-scoped)", () => {
     );
     expect((seen as unknown as Array<{ n: number }>)[0]!.n).toBe(0);
   });
+
+  it("a notification cannot be addressed to a non-member (0013 recipient check)", async () => {
+    // userB is org B's owner — not a member of org A → insert must be rejected.
+    await expect(
+      createNotification(ctxOf(orgA, userA), {
+        recipientUserId: userB,
+        kind: "system",
+        title: "stray",
+      }),
+    ).rejects.toThrow();
+  });
 });
 
 describe("config_revision (append-only, owner/admin read)", () => {
@@ -197,6 +227,21 @@ describe("config_revision (append-only, owner/admin read)", () => {
       ),
     );
     expect(del).toBe("42501");
+  });
+
+  it("a non-owner/admin (manager) CAN record a revision — no RETURNING trap (CM2)", async () => {
+    // config_revision reads are owner/admin-gated but any member may INSERT; an
+    // INSERT ... RETURNING would 42501 for the manager. The app-generated id
+    // avoids it, so the S1 config-editor path works for non-admin roles.
+    const id = await recordConfigRevision(ctxOf(orgA, userC), {
+      artifactKey: "preset.demo",
+      before: null,
+      after: { x: 1 },
+      summary: "manager edit",
+    });
+    const [rev] = await owner`
+      select actor_user_id::text as actor from public.config_revision where id = ${id}`;
+    expect(rev!.actor).toBe(userC);
   });
 
   it("read gated to owner/admin — a manager sees none; org B sees none", async () => {

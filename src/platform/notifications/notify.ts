@@ -11,9 +11,6 @@ import { NOTIFICATION_KINDS } from "@/platform/registries";
 
 export type Channel = "in_app" | "email" | "push";
 
-/** Default channels per kind when the user has set no preference. */
-const DEFAULT_CHANNELS: Record<Channel, boolean> = { in_app: true, email: false, push: false };
-
 export const CreateNotificationInput = z.object({
   recipientUserId: z.string().uuid(),
   kind: z.enum(NOTIFICATION_KINDS as unknown as [string, ...string[]]),
@@ -35,14 +32,10 @@ export type Notification = {
   createdAt: string;
 };
 
-/** Persist an in-app notification. The in-app record is always written; channel
- * fan-out (email/push) is S4's job and re-resolves the RECIPIENT's preferences
- * in the recipient's own ctx (their prefs are invisible to the actor by RLS),
- * so this returns only the default channel set as a hint. */
-export async function createNotification(
-  ctx: Ctx,
-  raw: unknown,
-): Promise<{ id: string; channels: Record<Channel, boolean> }> {
+/** Persist an in-app notification. Channel fan-out (email/push) is S4's job and
+ * re-resolves the RECIPIENT's preferences in the recipient's own ctx (their prefs
+ * are invisible to the actor by RLS), so nothing about delivery is returned here. */
+export async function createNotification(ctx: Ctx, raw: unknown): Promise<{ id: string }> {
   const input = CreateNotificationInput.parse(raw);
   // Generate the id in app (AR-1) — NO `returning`: a notification is private to
   // its recipient, so the sender's SELECT policy would hide the row and
@@ -56,7 +49,7 @@ export async function createNotification(
               ${input.body ?? null}, ${input.entityType ?? null}, ${input.entityId ?? null})
     `),
   );
-  return { id, channels: { ...DEFAULT_CHANNELS } };
+  return { id };
 }
 
 /** The caller's own notifications in the active org (RLS enforces recipient). */

@@ -5,9 +5,10 @@
  * The target entity's existence is the owning module's concern (target tables
  * arrive with their features); this service is the storage + access substrate.
  */
+import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { sql, withCtx, type Ctx, type TenantTx } from "@/platform/tenancy";
-import { recordActivity } from "@/platform/audit";
+import { recordActivityIn } from "@/platform/audit";
 import { ATTACHABLE_TYPES, type AttachableType } from "@/platform/registries";
 
 export class CommentError extends Error {
@@ -68,20 +69,22 @@ async function loadComment(tx: TenantTx, id: string): Promise<Comment | null> {
 
 export async function createComment(ctx: Ctx, raw: unknown): Promise<string> {
   const input = CreateCommentInput.parse(raw);
-  const id = await withCtx(ctx, async (tx) => {
-    const rows = (await tx.execute(sql`
-      insert into public.comment (org_id, entity_type, entity_id, author_user_id, body)
-      values (${ctx.orgId}, ${input.entityType}, ${input.entityId}, ${ctx.userId}, ${input.body})
-      returning id::text as id
-    `)) as unknown as Array<{ id: string }>;
-    return rows[0]!.id;
-  });
-  // Operational narrative (not audit) — the tenant-visible "who did what" stream.
-  await recordActivity(ctx, {
-    entityType: input.entityType as AttachableType,
-    entityId: input.entityId,
-    verb: "commented",
-    summary: input.body.slice(0, 140),
+  // The comment row AND its tenant-visible activity row must be atomic (§4.12
+  // one-command-one-transaction) — a comment that the "who did what" feed never
+  // records is a truth-of-the-screen gap. Id generated in app (AR-1); no
+  // RETURNING needed. Both writes happen in ONE withCtx transaction.
+  const id = randomUUID();
+  await withCtx(ctx, async (tx) => {
+    await tx.execute(sql`
+      insert into public.comment (id, org_id, entity_type, entity_id, author_user_id, body)
+      values (${id}, ${ctx.orgId}, ${input.entityType}, ${input.entityId}, ${ctx.userId}, ${input.body})
+    `);
+    await recordActivityIn(tx, ctx, {
+      entityType: input.entityType as AttachableType,
+      entityId: input.entityId,
+      verb: "commented",
+      summary: input.body.slice(0, 140),
+    });
   });
   return id;
 }

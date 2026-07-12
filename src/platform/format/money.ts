@@ -32,7 +32,15 @@ export function formatMoney(
   const { locale = "en", withCurrencySymbol = true } = options;
   const exponent = minorUnitExponent(currency);
   const divisor = 10 ** exponent;
-  const major = Number(minorAmount) / divisor;
+  // Money integrity (§4): minor-unit amounts are integers; beyond 2^53 a JS
+  // double loses integer precision. Real amounts are astronomically below this
+  // (millions of major units), so an out-of-range value is data corruption —
+  // fail loud rather than silently mis-format.
+  const minorNumber = Number(minorAmount);
+  if (!Number.isSafeInteger(minorNumber)) {
+    throw new RangeError(`money amount out of safe integer range: ${minorAmount}`);
+  }
+  const major = minorNumber / divisor;
 
   const fmt = new Intl.NumberFormat(intlLocale(locale), {
     style: withCurrencySymbol ? "currency" : "decimal",
