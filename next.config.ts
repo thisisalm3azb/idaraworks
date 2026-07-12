@@ -46,13 +46,14 @@ const nextConfig: NextConfig = {
   // /api/inngest function trace (libvips-cpp.so → ERR_DLOPEN_FAILED on Vercel;
   // vercel/vercel#14001, next.js discussion #83230). Force-include the platform
   // packages for the one route that loads sharp (image-derivatives worker).
-  // Globs that match nothing (e.g. linux dirs on a Windows dev machine) are inert.
+  // Pairs with vercel.json's hoisted-linker install: the @img dirs must be REAL
+  // top-level directories, because Vercel rejects function bundles containing
+  // pnpm's symlinked store paths ("invalid deployment package"). Globs that
+  // match nothing (e.g. linux dirs on a Windows dev machine) are inert.
   outputFileTracingIncludes: {
     "/api/inngest": [
       "./node_modules/@img/sharp-linux-x64/**/*",
       "./node_modules/@img/sharp-libvips-linux-x64/**/*",
-      "./node_modules/.pnpm/@img+sharp-linux-x64@*/**/*",
-      "./node_modules/.pnpm/@img+sharp-libvips-linux-x64@*/**/*",
     ],
   },
   async headers() {
