@@ -16,9 +16,11 @@
     "db:migrate": "tsx tooling/scripts/migrate.ts",
     "vc1": "tsx tooling/scripts/vc1-spike.ts",
     "test:integration": "vitest run --config vitest.integration.config.ts",
-    "storage:setup": "tsx tooling/scripts/setup-storage.ts"
+    "storage:setup": "tsx tooling/scripts/setup-storage.ts",
+    "smoke:prod": "tsx tooling/scripts/smoke-prod.ts"
   },
   "dependencies": {
+    "@sentry/nextjs": "^10.65.0",
     "@supabase/ssr": "^0.12.0",
     "@supabase/supabase-js": "^2.110.2",
     "aws4fetch": "^1.0.20",

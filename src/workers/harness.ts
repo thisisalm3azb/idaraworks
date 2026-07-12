@@ -16,6 +16,7 @@ import { z } from "zod";
 import { inngest, EVENT_DEFS, EVENT_TRIGGERS, type EventName } from "@/platform/events";
 import { sql, withCtx, type Ctx } from "@/platform/tenancy";
 import { logger } from "@/platform/logger";
+import { captureWorkerError } from "@/platform/observability/sentry";
 
 export class OrgVerificationError extends Error {
   constructor(orgId: string) {
@@ -97,6 +98,24 @@ export function defineOrgFunction<E extends EventName>(
       (event as { data: unknown }).data,
       `inngest-${runId}`,
     );
-    return handler({ payload: payload as PayloadOf<E>, ctx, runId });
+    try {
+      return await handler({ payload: payload as PayloadOf<E>, ctx, runId });
+    } catch (err) {
+      // Observability (Phase I; Bible §8.7/§15.4): every worker failure is
+      // logged + captured with identifiers, then RETHROWN so Inngest's retry /
+      // failure semantics are unchanged.
+      logger.error(
+        {
+          worker: opts.id,
+          org_id: ctx.orgId,
+          request_id: ctx.requestId,
+          run_id: runId,
+          err: err instanceof Error ? { name: err.name, message: err.message } : String(err),
+        },
+        "worker handler failed",
+      );
+      captureWorkerError(err, { functionId: opts.id, orgId: ctx.orgId, requestId: ctx.requestId });
+      throw err;
+    }
   });
 }

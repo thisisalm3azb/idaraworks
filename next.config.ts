@@ -10,6 +10,12 @@ const supabaseHost = process.env.NEXT_PUBLIC_SUPABASE_URL
   ? new URL(process.env.NEXT_PUBLIC_SUPABASE_URL).origin
   : "";
 
+// Phase I: the Sentry BROWSER SDK posts events to the DSN's ingest origin —
+// allow it in connect-src only when client-side Sentry is configured (OA-4).
+const sentryIngest = process.env.NEXT_PUBLIC_SENTRY_DSN
+  ? new URL(process.env.NEXT_PUBLIC_SENTRY_DSN).origin
+  : "";
+
 const isDev = process.env.NODE_ENV === "development";
 
 const csp = [
@@ -19,7 +25,7 @@ const csp = [
   "style-src 'self' 'unsafe-inline'",
   `img-src 'self' blob: data: ${supabaseHost}`.trim(),
   "font-src 'self'",
-  `connect-src 'self' ${supabaseHost}`.trim(),
+  `connect-src 'self' ${supabaseHost} ${sentryIngest}`.replace(/\s+/g, " ").trim(),
   "frame-ancestors 'none'",
   "base-uri 'self'",
   "form-action 'self'",

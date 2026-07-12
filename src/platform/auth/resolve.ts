@@ -4,9 +4,9 @@
  * requested org (path-based) → role flags → immutable Ctx. org_id is NEVER
  * read from client input as data — it selects which membership to validate.
  */
-import { randomUUID } from "node:crypto";
 import { cookies } from "next/headers";
 import { sql, supabaseServer, withCtx, withUserCtx, type Ctx } from "@/platform/tenancy";
+import { currentRequestId } from "@/platform/observability/requestId";
 import type { RoleArchetype } from "@/platform/registries";
 
 export type SessionUser = { id: string; email: string | null; aal: "aal1" | "aal2" };
@@ -79,7 +79,9 @@ export async function resolveCtx(orgId: string): Promise<ResolvedCtx | ResolveFa
     userId: user.id,
     costPrivileged: false,
     pricePrivileged: false,
-    requestId: randomUUID(),
+    // Correlation id minted by middleware and threaded through logs, audit
+    // context, Sentry tags, and worker payloads (Phase I; BUILD_BIBLE §15.3).
+    requestId: await currentRequestId(),
   };
 
   // Role flags + org MFA policy live inside the org ctx.

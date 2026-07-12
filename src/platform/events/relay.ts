@@ -16,6 +16,7 @@
  */
 import { createAppDb, sql, type AppDb } from "@/platform/tenancy";
 import { logger } from "@/platform/logger";
+import { captureDeadLetter } from "@/platform/observability/sentry";
 import { inngest } from "./inngest";
 
 export const RELAY_BATCH = 50;
@@ -86,8 +87,8 @@ export async function relayOutbox(
   });
 }
 
-/** Dead-letter alarm: exhausted-attempts events → ERROR ops log (the alert). The
- * Sentry captureException channel wires in with observability (Phase I). */
+/** Dead-letter alarm: exhausted-attempts events → ERROR ops log + Sentry alert
+ * (Phase I; Bible §15.4 — queue dead-letters are page-worthy). */
 export async function checkDeadLetters(requestId = "relay", sharedDb?: AppDb): Promise<number> {
   return withPlatformDb(sharedDb, async (db) => {
     const dead = (await db.execute(sql`
@@ -108,6 +109,7 @@ export async function checkDeadLetters(requestId = "relay", sharedDb?: AppDb): P
         },
         "domain_event dead-letter — events exceeded max attempts",
       );
+      captureDeadLetter(dead.slice(0, 5).map((d) => ({ id: d.id, name: d.name })));
     }
     return dead.length;
   });
