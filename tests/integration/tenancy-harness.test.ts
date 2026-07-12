@@ -155,6 +155,37 @@ describe("migration harness (every tenant table is defended)", () => {
     }
   });
 
+  it("no public function is executable by PUBLIC/anon/authenticated (0016 sweep)", async () => {
+    // Functions default to PUBLIC EXECUTE; the 0016 sweep revokes it. has_function_
+    // privilege for anon/authenticated also picks up any lingering PUBLIC grant
+    // (PUBLIC applies to every role). App helpers live in schema `app`, not here.
+    const rows = await owner`
+      select p.proname as name, r.rolname as role,
+             has_function_privilege(r.rolname, p.oid, 'EXECUTE') as can_exec
+      from pg_proc p
+      join pg_namespace n on n.oid = p.pronamespace
+      cross join (select rolname from pg_roles where rolname in ('anon','authenticated')) r
+      where n.nspname = 'public'`;
+    for (const r of rows) {
+      expect(r.can_exec, `${r.role} can EXECUTE public.${r.name}()`).toBe(false);
+    }
+  });
+
+  it("PUBLIC holds no privilege on any public table (0016 sweep)", async () => {
+    // A PUBLIC grant would show up as `has_table_privilege('public', ...)`.
+    const rows = await owner`
+      select c.relname as name,
+             has_table_privilege('public', c.oid, 'SELECT') as pub_select,
+             has_table_privilege('public', c.oid, 'INSERT') as pub_insert
+      from pg_class c
+      join pg_namespace n on n.oid = c.relnamespace
+      where n.nspname = 'public' and c.relkind = 'r'`;
+    for (const r of rows) {
+      expect(r.pub_select, `PUBLIC can SELECT public.${r.name}`).toBe(false);
+      expect(r.pub_insert, `PUBLIC can INSERT public.${r.name}`).toBe(false);
+    }
+  });
+
   it("app.migrations tracking table is invisible to app_user", async () => {
     const [priv] = await owner`
       select has_table_privilege('app_user', 'app.migrations', 'SELECT') as can_read`;
