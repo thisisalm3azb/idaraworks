@@ -16,6 +16,9 @@ export const RATE_RULES = {
   otp_send: { limit: 5, windowSeconds: 600 },
   invite_send: { limit: 20, windowSeconds: 3600 },
   invite_accept: { limit: 10, windowSeconds: 600 },
+  // Phase I review fix: /api/health fans out to DB + storage per call and is
+  // unauthenticated — bound it. Generous enough for smoke suites + monitors.
+  health: { limit: 30, windowSeconds: 60 },
 } as const satisfies Record<string, Rule>;
 
 export type RateScope = keyof typeof RATE_RULES;

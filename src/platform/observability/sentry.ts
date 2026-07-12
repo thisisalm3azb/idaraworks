@@ -18,22 +18,33 @@ export function sentryEnabled(): boolean {
 
 type SentryEvent = Sentry.ErrorEvent;
 
+/** Query strings can carry tokens/emails (e.g. ?next=, invite links) — never ship them. */
+export function stripQuery(url: string | undefined): string | undefined {
+  if (!url) return url;
+  const q = url.indexOf("?");
+  return q === -1 ? url : url.slice(0, q);
+}
+
 /** Exported for unit tests: the PII scrub applied to every outgoing event. */
 export function scrubEvent<E extends SentryEvent>(event: E): E {
   if (event.request) {
     delete event.request.cookies;
     delete event.request.data;
+    delete event.request.query_string; // review fix: ?next=/token params are PII-bearing
+    event.request.url = stripQuery(event.request.url);
     const rid = event.request.headers?.["x-request-id"];
     event.request.headers = rid ? { "x-request-id": rid } : {};
   }
   if (event.user) {
     event.user = event.user.id ? { id: event.user.id } : {};
   }
-  // Breadcrumbs may echo console/query fragments — identifiers-only law means
-  // we keep only the category/level skeleton, not free-form data payloads.
+  // Breadcrumbs may echo console/query/DOM fragments — the identifiers-only law
+  // keeps only the category/level/type skeleton: no data AND no free-form
+  // message (review fix: console breadcrumbs put raw console args in message).
   if (event.breadcrumbs) {
     for (const crumb of event.breadcrumbs) {
       delete crumb.data;
+      delete crumb.message;
     }
   }
   return event;

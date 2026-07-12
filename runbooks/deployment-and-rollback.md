@@ -23,10 +23,11 @@ so **app rollback is always safe** and never requires a data rollback.
 3. **Deploy:** `vercel deploy --prod --yes` from the repo root (repo is linked
    via `.vercel/repo.json`). The build runs on Vercel (Linux) — never deploy
    `--prebuilt` from Windows (platform-specific sharp binaries).
-4. **Verify:** `EXPECTED_COMMIT=$(git rev-parse HEAD) pnpm smoke:prod` — all
-   checks must pass, including the deployed-commit assertion (health exposes
-   `VERCEL_GIT_COMMIT_SHA`). Then spot-check `/api/health` shows
-   `db.ok`, `storage.ok`, `queue.ok` true.
+4. **Verify:** run the smoke suite with the deployed-commit assertion (health
+   exposes `VERCEL_GIT_COMMIT_SHA`) — all checks must pass. Then spot-check
+   `/api/health` shows `db.ok`, `storage.ok`, `queue.ok` true.
+   - bash: `EXPECTED_COMMIT=$(git rev-parse HEAD) pnpm smoke:prod`
+   - PowerShell: `$env:EXPECTED_COMMIT = git rev-parse HEAD; pnpm smoke:prod`
 5. **Record the rollback path** in the release notes: the previous Ready
    production deployment URL from `vercel ls idaraworks`.
 

@@ -52,9 +52,26 @@ async function bounded<T>(label: string, fn: () => Promise<T>): Promise<T> {
   ]);
 }
 
-/** Identifiers-only error text: never echo connection strings or hosts. */
-function errText(e: unknown): string {
-  const msg = e instanceof Error ? e.message : String(e);
+/**
+ * Identifiers-only error text (review fix — the endpoint is unauthenticated,
+ * and driver errors embed infrastructure targets: "getaddrinfo ENOTFOUND
+ * <host>", "connect ECONNREFUSED <ip>:<port>", 'auth failed for user "…"').
+ * Strategy: prefer the machine error CODE alone (Node errno / Postgres
+ * SQLSTATE — never contains a target); otherwise redact URL/host/IP/user
+ * shapes from the message. Exported for unit tests.
+ */
+export function safeProbeError(e: unknown): string {
+  const code = (e as { code?: unknown } | null)?.code;
+  if (typeof code === "string" && /^[A-Z0-9_]{2,32}$/i.test(code)) return `error:${code}`;
+  let msg = e instanceof Error ? e.message : String(e);
+  msg = msg
+    .replace(/[a-z][a-z0-9+.-]*:\/\/\S+/gi, "[url]")
+    .replace(/user\s+"[^"]*"/gi, "user [redacted]")
+    .replace(/\b\d{1,3}(?:\.\d{1,3}){3}(?::\d+)?\b/g, "[ip]")
+    .replace(
+      /\b[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+(?::\d+)?\b/gi,
+      "[host]",
+    );
   return msg.slice(0, 200);
 }
 
@@ -104,14 +121,14 @@ export async function healthReport(requestId: string): Promise<HealthReport> {
           queue.alert = s.dead_lettered > 0;
         }
       } catch (e) {
-        queue.error = errText(e);
+        queue.error = safeProbeError(e);
       }
       queue.latency_ms = Date.now() - started;
     } finally {
       await client.end();
     }
   } catch (e) {
-    db.error = errText(e);
+    db.error = safeProbeError(e);
     db.latency_ms = Date.now() - started;
   }
 
@@ -122,7 +139,7 @@ export async function healthReport(requestId: string): Promise<HealthReport> {
     await bounded("storage", () => objectStore().list("tenant-media", "healthcheck-nonexistent/"));
     storage.ok = true;
   } catch (e) {
-    storage.error = errText(e);
+    storage.error = safeProbeError(e);
   }
   storage.latency_ms = Date.now() - started;
 

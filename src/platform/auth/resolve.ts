@@ -79,8 +79,10 @@ export async function resolveCtx(orgId: string): Promise<ResolvedCtx | ResolveFa
     userId: user.id,
     costPrivileged: false,
     pricePrivileged: false,
-    // Correlation id minted by middleware and threaded through logs, audit
-    // context, Sentry tags, and worker payloads (Phase I; BUILD_BIBLE §15.3).
+    // Correlation id minted by middleware, threaded through request-scoped
+    // logs, 5xx responses, and Sentry tags (Phase I; BUILD_BIBLE §15.3).
+    // NOTE: it does NOT cross the outbox — domain events carry no request id
+    // by design (0014 schema); workers correlate by their own Inngest run id.
     requestId: await currentRequestId(),
   };
 

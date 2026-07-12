@@ -40,9 +40,8 @@ Redeploy: `vercel deploy --prod --yes` (env changes need a new deployment).
 
 1. Inngest dashboard → Apps → **Sync app** → URL:
    `https://idaraworks.vercel.app/api/inngest`.
-2. The sync must show the registered functions:
-   `outbox-relay` (+ its dead-letter/retention schedules), `demo-heartbeat`,
-   `image-derivatives`.
+2. The sync must show the four registered functions:
+   `outbox-relay`, `outbox-retention`, `demo-heartbeat`, `image-derivatives`.
 
 ## 4. Verify (in order — all four must pass)
 
@@ -50,8 +49,9 @@ Redeploy: `vercel deploy --prod --yes` (env changes need a new deployment).
    `inngest_unconfigured`; `/api/health` shows
    `checks.inngest.status = "configured"`.
 2. **Signed invocation:** in the Inngest dashboard, invoke `demo-heartbeat`
-   (Functions → Invoke) with a real org/actor pair:
-   `{"data": {"orgId": "<org uuid>", "actorUserId": "<member uuid>"}}`.
+   (Functions → Invoke) with a real org/actor pair (all three fields are
+   required by the registry schema — `nonce` is any short string):
+   `{"data": {"orgId": "<org uuid>", "actorUserId": "<member uuid>", "nonce": "provision-check-1"}}`.
    The run must succeed — this proves signature verification + the
    org re-verification harness end-to-end. A forged pair must FAIL
    (OrgVerificationError) — that failure is the security control working.

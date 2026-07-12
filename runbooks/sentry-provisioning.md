@@ -17,6 +17,7 @@ completes with the verification step below.
 ```
 vercel env add SENTRY_DSN production                 # server + edge capture
 vercel env add NEXT_PUBLIC_SENTRY_DSN production     # browser capture (optional but recommended)
+vercel env add NEXT_PUBLIC_APP_ENV production        # value: prod — client-side environment tag
 ```
 
 Add the same to `.env.local` for local verification. Redeploy

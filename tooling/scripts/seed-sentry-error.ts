@@ -9,6 +9,7 @@
  * (tags + PII scrub included), flushes, and prints the request_id to look up in
  * the Sentry UI. Exit 1 if SENTRY_DSN is missing — the AC cannot be met yet.
  */
+import "./load-env"; // review fix: the runbook points at .env.local — load it
 import { randomUUID } from "node:crypto";
 import * as Sentry from "@sentry/nextjs";
 import { initSentryServer, captureRequestError, sentryEnabled } from "@/platform/observability";

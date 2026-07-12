@@ -25,13 +25,16 @@ export const onRequestError: Instrumentation.onRequestError = async (err, reques
     typeof err === "object" && err !== null && "digest" in err
       ? String((err as { digest?: unknown }).digest)
       : undefined;
+  // Next's request.path includes the query string — strip it (review fix:
+  // ?next=/invite-token params are PII-bearing; identifiers-only law).
+  const path = request.path.split("?")[0];
 
   // LAW (§5.9/§8.5): identifiers only — never request bodies or tenant values.
   logger.error(
     {
       request_id: requestId,
       digest,
-      path: request.path,
+      path,
       method: request.method,
       router_kind: context.routerKind,
       route_path: context.routePath,
@@ -42,5 +45,5 @@ export const onRequestError: Instrumentation.onRequestError = async (err, reques
   );
 
   const { captureRequestError } = await import("@/platform/observability/sentry");
-  captureRequestError(err, { requestId, digest, path: request.path, method: request.method });
+  captureRequestError(err, { requestId, digest, path, method: request.method });
 };

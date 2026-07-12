@@ -31,12 +31,10 @@ Recovery is a deliberate operator action **after the root cause is fixed**.
 ## Redrive (after the fix is deployed)
 
 Preferred — through the platform surface (same guard as the relay:
-platform-task session, no org context):
+platform-task session, no org context), with `.env.local` present:
 
-```ts
-// pnpm tsx -e:
-import { redriveDeadLetters } from "@/platform/events";
-console.log("redriven:", await redriveDeadLetters("manual-redrive"));
+```
+pnpm tsx tooling/scripts/redrive-dead-letters.ts
 ```
 
 This resets `attempts` to 0 via `app.redrive_dead_lettered_domain_events`;

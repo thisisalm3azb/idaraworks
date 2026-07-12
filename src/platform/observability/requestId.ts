@@ -21,7 +21,11 @@ export function newRequestId(): string {
 
 /**
  * The current request's correlation id (server components, actions, route
- * handlers). Falls back to a fresh id when the request bypassed middleware.
+ * handlers). TRUST BOUNDARY (review note): the header value is server-minted
+ * ONLY on middleware-matched routes (middleware overwrites any inbound value).
+ * Routes excluded from the matcher (health/ready/static) must mint their own
+ * via newRequestId() and never call this — on those paths the header would be
+ * whatever the client sent.
  */
 export async function currentRequestId(): Promise<string> {
   const h = await headers();

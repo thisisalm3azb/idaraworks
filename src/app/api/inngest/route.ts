@@ -34,7 +34,10 @@ function unconfigured(): NextResponse {
   );
 }
 
-const guard = deployed && !process.env.INNGEST_SIGNING_KEY;
+// Review fix: keyed to the SAME predicate health reports (both keys present) —
+// a partially-configured deploy (signing key without event key) is still a
+// misconfiguration and must say so rather than half-work.
+const guard = deployed && !inngestStatus().configured;
 
 export const GET = guard ? unconfigured : handlers.GET;
 export const POST = guard ? unconfigured : handlers.POST;
