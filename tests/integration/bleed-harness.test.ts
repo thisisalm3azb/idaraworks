@@ -6,6 +6,14 @@
  * the isolation is real, not vacuous). Tables Org A cannot read at all (no grant)
  * pass by construction. A registry-completeness guard fails if any org-scoped
  * table lacks a seeder — so a new tenant table cannot ship without a bleed check.
+ *
+ * Scope (S0 flat tenancy — every tenant table carries its OWN org_id):
+ *  - Coverage is enumerated from tables that HAVE an org_id column (review m3). A
+ *    future child table scoped only via a parent FK (no own org_id) would not be
+ *    enumerated here and must register its own bleed coverage when introduced.
+ *  - afterAll cleanup deletes in alphabetical table order (review m6); safe today
+ *    because no org-scoped table FKs another org-scoped table. A future inter-table
+ *    FK would need topological-order teardown.
  */
 import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
@@ -46,8 +54,12 @@ beforeAll(async () => {
   await seedAuthUser(userB, `bleed-b-${run}@example.com`);
   orgA = await createOrgForUser(userA, { name: "Bleed A", country: "AE", baseCurrency: "AED" });
   orgB = await createOrgForUser(userB, { name: "Bleed B", country: "SA", baseCurrency: "SAR" });
-  await seedOrg(owner, orgA, userA);
-  await seedOrg(owner, orgB, userB);
+  // CRITICAL (review CM1): seed BOTH orgs' user-keyed rows under the SAME user
+  // (userA — Org A's ctx user). Then a cross-org user-keyed row (orgB, userA) can
+  // ONLY be hidden from Org A's ctx by the org_id predicate, never by user
+  // scoping — so a regression dropping org_id from a user-keyed policy is caught.
+  await seedOrg(owner, orgA, userA, userA);
+  await seedOrg(owner, orgB, userB, userA);
 }, 120_000);
 
 afterAll(async () => {
@@ -83,8 +95,13 @@ describe("registry completeness (a new tenant table must register a seeder)", ()
   });
 });
 
+// Tables a tenant genuinely cannot read (no SELECT grant) — the ONLY tables
+// allowed to take the 42501 branch. Any OTHER unreadable table fails loudly
+// rather than silently skipping its bleed check (review, refuted-material fix).
+const NO_TENANT_READ = new Set<string>(["domain_event"]);
+
 describe("two-org bleed sweep (every org-scoped table is org-pure)", () => {
-  it("Org A never sees Org B's rows, in any org-scoped table", async () => {
+  it("Org A never sees Org B's rows AND does see its own, in every org-scoped table", async () => {
     const tables = await orgScopedTables();
     expect(tables.length).toBeGreaterThanOrEqual(15);
 
@@ -97,40 +114,34 @@ describe("two-org bleed sweep (every org-scoped table is org-pure)", () => {
       )) as unknown as Array<{ n: number }>;
       expect(bTruthRows[0]?.n, `seeder produced no Org B row for ${table}`).toBeGreaterThan(0);
 
-      // As Org A: zero Org B rows must be visible. Tables A cannot read at all
-      // (no SELECT grant, e.g. domain_event) raise 42501 — max isolation, a pass.
+      // As Org A: zero rows that are NOT Org A's (isolation — catches Org B,
+      // null-org, or any-other-org leak, not just a literal orgB match, review
+      // m5) AND >0 own rows (liveness — guards against a broken-closed deny-all
+      // policy passing vacuously). Tables with no SELECT grant raise 42501 —
+      // allowed ONLY if on the allowlist.
       const result = await withCtx(ctxOf(orgA, userA), (tx) =>
         tx.execute(
-          sql`select count(*) filter (where org_id = ${orgB})::int as b
+          sql`select
+                count(*) filter (where org_id = ${orgA})::int as a,
+                count(*) filter (where org_id is distinct from ${orgA})::int as foreign
               from ${sql.raw(`public.${table}`)}`,
         ),
       ).then(
-        (r) => ({ ok: true as const, rows: r as unknown as Array<{ b: number }> }),
+        (r) => ({ ok: true as const, rows: r as unknown as Array<{ a: number; foreign: number }> }),
         (e: unknown) => ({ ok: false as const, err: e }),
       );
 
       if (!result.ok) {
         const code = (result.err as { code?: string; cause?: { code?: string } }).cause?.code;
-        expect(code, `unexpected error reading ${table}`).toBe("42501"); // unreadable → no bleed
+        expect(code, `unexpected error reading ${table}`).toBe("42501");
+        expect(NO_TENANT_READ.has(table), `${table} is unreadable but not allowlisted`).toBe(true);
         continue;
       }
-      expect(result.rows[0]!.b, `Org A saw Org B rows in ${table} (BLEED)`).toBe(0);
+      expect(result.rows[0]!.foreign, `Org A saw non-Org-A rows in ${table} (BLEED)`).toBe(0);
+      expect(
+        result.rows[0]!.a,
+        `Org A cannot see its OWN rows in ${table} — RLS may be broken-closed`,
+      ).toBeGreaterThan(0);
     }
   }, 120_000);
-
-  it("reads are not broken-closed: Org A sees its OWN rows in the base tables", async () => {
-    // Guards the sweep above from passing vacuously (RLS denying everything to
-    // everyone). These tables are unconditionally readable by any org member.
-    const own = await withCtx(ctxOf(orgA, userA), (tx) =>
-      tx.execute(sql`
-        select
-          (select count(*) from public.company where org_id = ${orgA})::int as company,
-          (select count(*) from public.role_definition where org_id = ${orgA})::int as roles,
-          (select count(*) from public.membership where org_id = ${orgA})::int as members`),
-    );
-    const r = (own as unknown as Array<{ company: number; roles: number; members: number }>)[0]!;
-    expect(r.company).toBe(1);
-    expect(r.roles).toBe(7);
-    expect(r.members).toBeGreaterThanOrEqual(1);
-  });
 });
