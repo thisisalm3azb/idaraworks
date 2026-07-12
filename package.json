@@ -25,6 +25,7 @@
     "clsx": "^2.1.1",
     "drizzle-orm": "^0.45.2",
     "inngest": "^4.12.1",
+    "intl-messageformat": "^11.2.11",
     "next": "16.2.10",
     "pino": "^10.3.1",
     "postgres": "^3.4.9",
