@@ -1,5 +1,7 @@
 import type { Metadata, Viewport } from "next";
+import { cookies } from "next/headers";
 import { Geist, Geist_Mono } from "next/font/google";
+import { LOCALE_COOKIE, directionFor, normalizeLocale } from "@/platform/i18n";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -23,19 +25,21 @@ export const viewport: Viewport = {
 };
 
 /**
- * Root layout. lang/dir become locale-driven with i18n in Phase F
- * (Arabic RTL is a first-class requirement — BUILD_BIBLE §9.11);
- * primitives already use logical properties only.
+ * Root layout. lang/dir are locale-driven (Phase F): the `locale` cookie (set
+ * from the user's profile once known) selects the language; Arabic renders RTL
+ * (BUILD_BIBLE §9.11). Primitives use logical properties only, so the whole
+ * tree flips direction with this one attribute.
  */
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const locale = normalizeLocale((await cookies()).get(LOCALE_COOKIE)?.value);
   return (
     <html
-      lang="en"
-      dir="ltr"
+      lang={locale}
+      dir={directionFor(locale)}
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="flex min-h-full flex-col">{children}</body>

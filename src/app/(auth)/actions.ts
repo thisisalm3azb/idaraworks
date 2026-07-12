@@ -2,10 +2,37 @@
 
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { sql, withUserCtx } from "@/platform/tenancy";
 import { supabaseServer } from "@/platform/tenancy/supabase";
 import { getSessionUser, listMyOrgs } from "@/platform/auth/resolve";
 import { acceptInvite, createOrgForUser, logAuthEvent } from "@/platform/auth/identity";
 import { rateLimit } from "@/platform/http/rateLimit";
+import { LOCALE_COOKIE, normalizeLocale } from "@/platform/i18n";
+
+const LOCALE_COOKIE_OPTS = {
+  path: "/",
+  sameSite: "lax" as const,
+  maxAge: 60 * 60 * 24 * 365,
+};
+
+/** Set the active-locale cookie from the user's stored profile locale. */
+async function applyLocaleFromProfile(userId: string): Promise<void> {
+  try {
+    const rows = (await withUserCtx(userId, (tx) =>
+      tx.execute(sql`select locale from public.user_profile where id = ${userId}`),
+    )) as unknown as Array<{ locale: string }>;
+    const locale = normalizeLocale(rows[0]?.locale);
+    (await cookies()).set(LOCALE_COOKIE, locale, LOCALE_COOKIE_OPTS);
+  } catch {
+    // A locale-cookie failure must never block sign-in.
+  }
+}
+
+/** Language switcher: persist the active locale for this browser (durable pref
+ * lives on user_profile.locale, edited from account settings in a later slice). */
+export async function setActiveLocaleAction(locale: string): Promise<void> {
+  (await cookies()).set(LOCALE_COOKIE, normalizeLocale(locale), LOCALE_COOKIE_OPTS);
+}
 
 async function requestMeta() {
   const h = await headers();
@@ -37,6 +64,7 @@ export async function loginAction(formData: FormData): Promise<void> {
     redirect("/login?error=invalid");
   }
   await logAuthEvent({ userId: data.user.id, event: "login_success", ...meta });
+  await applyLocaleFromProfile(data.user.id);
   redirect("/");
 }
 

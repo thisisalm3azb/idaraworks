@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { Badge, Button, Card, CardHeader, Field } from "@/platform/ui";
-import { t } from "@/platform/i18n/t";
+import { getT } from "@/platform/i18n/server";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { listAssignableRoles, listMembers } from "@/platform/auth/identity";
 import { can } from "@/platform/authz";
@@ -13,6 +13,7 @@ export default async function MembersPage({
   params: Promise<{ orgId: string }>;
   searchParams: Promise<{ notice?: string; error?: string; link?: string }>;
 }) {
+  const t = await getT();
   const { orgId } = await params;
   const { notice, error, link } = await searchParams;
   const resolved = await resolveCtx(orgId);

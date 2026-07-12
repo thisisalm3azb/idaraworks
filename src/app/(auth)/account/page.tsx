@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AppShell, Button, Card, CardHeader } from "@/platform/ui";
-import { t } from "@/platform/i18n/t";
+import { getT } from "@/platform/i18n/server";
 import { getSessionUser } from "@/platform/auth/resolve";
 import { logoutAction, signOutOtherDevicesAction } from "../actions";
 
@@ -10,6 +10,7 @@ export default async function AccountPage({
 }: {
   searchParams: Promise<{ notice?: string }>;
 }) {
+  const t = await getT();
   const user = await getSessionUser();
   if (!user) redirect("/login");
   const { notice } = await searchParams;

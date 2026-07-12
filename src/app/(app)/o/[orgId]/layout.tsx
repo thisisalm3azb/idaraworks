@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AppShell, Badge } from "@/platform/ui";
-import { t } from "@/platform/i18n/t";
+import { getT } from "@/platform/i18n/server";
 import { getSessionUser, listMyOrgs, resolveCtx } from "@/platform/auth/resolve";
 
 /**
@@ -16,6 +16,7 @@ export default async function OrgLayout({
   children: React.ReactNode;
   params: Promise<{ orgId: string }>;
 }) {
+  const t = await getT();
   const { orgId } = await params;
   const resolved = await resolveCtx(orgId);
   if (resolved === "no_session") redirect(`/login?next=/o/${orgId}`);

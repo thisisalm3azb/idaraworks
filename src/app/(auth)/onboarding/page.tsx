@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { AppShell, Button, Card, Field } from "@/platform/ui";
-import { t } from "@/platform/i18n/t";
+import { getT } from "@/platform/i18n/server";
 import { getSessionUser } from "@/platform/auth/resolve";
 import { CURRENCY_CODES } from "@/platform/registries";
 import { createOrgAction } from "../actions";
@@ -17,6 +17,7 @@ const COUNTRIES = [
 ] as const;
 
 export default async function OnboardingPage() {
+  const t = await getT();
   const user = await getSessionUser();
   if (!user) redirect("/login");
   return (

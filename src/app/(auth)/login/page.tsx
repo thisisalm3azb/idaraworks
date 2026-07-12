@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { AppShell, Button, Card, Field } from "@/platform/ui";
-import { t } from "@/platform/i18n/t";
+import { getT } from "@/platform/i18n/server";
 import { loginAction } from "../actions";
 
 export default async function LoginPage({
@@ -8,6 +8,7 @@ export default async function LoginPage({
 }: {
   searchParams: Promise<{ error?: string; notice?: string }>;
 }) {
+  const t = await getT();
   const { error, notice } = await searchParams;
   return (
     <AppShell brand={<span>IdaraWorks</span>}>

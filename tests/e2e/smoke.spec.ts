@@ -45,3 +45,25 @@ test("health endpoint responds", async ({ request }) => {
   expect(body).toHaveProperty("ok");
   expect(body).toHaveProperty("db");
 });
+
+test("Arabic locale renders RTL with translated copy and no horizontal scroll (Phase F)", async ({
+  context,
+  page,
+}) => {
+  // The `locale` cookie drives lang/dir + the message catalog end-to-end.
+  await context.addCookies([{ name: "locale", value: "ar", url: "http://localhost:3000" }]);
+  await page.goto("/login");
+
+  const html = page.locator("html");
+  await expect(html).toHaveAttribute("dir", "rtl");
+  await expect(html).toHaveAttribute("lang", "ar");
+  // The login title renders from the ar catalog, not English.
+  await expect(page.getByRole("heading", { name: "تسجيل الدخول" })).toBeVisible();
+
+  // RTL must not introduce horizontal overflow at mobile width.
+  await page.setViewportSize({ width: 375, height: 812 });
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
+  );
+  expect(overflow).toBe(false);
+});

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { AppShell, Button, Card } from "@/platform/ui";
-import { t } from "@/platform/i18n/t";
+import { getT } from "@/platform/i18n/server";
 import { getSessionUser } from "@/platform/auth/resolve";
 import { acceptInviteAction } from "../../actions";
 
@@ -11,6 +11,7 @@ export default async function InvitePage({
   params: Promise<{ token: string }>;
   searchParams: Promise<{ error?: string }>;
 }) {
+  const t = await getT();
   const { token } = await params;
   const { error } = await searchParams;
   const user = await getSessionUser();

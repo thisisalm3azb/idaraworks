@@ -4,12 +4,14 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/platform/tenancy/supabase";
 import { Button, Card, Field, Spinner } from "@/platform/ui";
-import { t } from "@/platform/i18n/t";
+import { t as baseT } from "@/platform/i18n/t";
+import type { Locale } from "@/platform/i18n";
 import { logMfaEventAction } from "../actions";
 
 type Mode = "loading" | "enroll" | "challenge" | "done";
 
-export function MfaClient() {
+export function MfaClient({ locale = "en" }: { locale?: Locale }) {
+  const t = (key: string, vars?: Record<string, string | number>) => baseT(key, vars, locale);
   const router = useRouter();
   const [mode, setMode] = useState<Mode>("loading");
   const [qr, setQr] = useState<string | null>(null);
