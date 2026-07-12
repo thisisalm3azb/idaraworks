@@ -18,7 +18,12 @@ export const TEMPLATE_BOAT_TERMS: TerminologyMap = {
   },
 };
 
-/** Registered templates by key (S1 config pipeline selects one per org). */
+import { TEMPLATE_BOATBUILDING } from "@/platform/config/templates/boatbuilding";
+
+/** Registered templates by key (the S1 config pipeline selects one per org).
+ * The shipped manifest's terminology is the source of truth for its key; the
+ * legacy "boat-building" alias predates S1 and stays for stored settings. */
 export const TEMPLATE_TERMS: Record<string, TerminologyMap> = {
   "boat-building": TEMPLATE_BOAT_TERMS,
+  [TEMPLATE_BOATBUILDING.key]: TEMPLATE_BOATBUILDING.terminology as TerminologyMap,
 };

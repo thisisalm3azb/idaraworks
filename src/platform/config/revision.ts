@@ -8,7 +8,7 @@
  */
 import { randomUUID } from "node:crypto";
 import { command } from "@/platform/audit";
-import { sql, type Ctx } from "@/platform/tenancy";
+import { sql, type Ctx, type TenantTx } from "@/platform/tenancy";
 
 export type ConfigRevisionInput = {
   artifactKey: string; // e.g. 'terminology.overrides', 'preset.<id>'
@@ -49,4 +49,26 @@ export async function recordConfigRevision(ctx: Ctx, input: ConfigRevisionInput)
     },
   );
   return id;
+}
+
+/**
+ * Transaction-scoped variant for the S1 pipeline: writes the config_revision
+ * row inside the CALLER'S command transaction, so the artifact write, the
+ * revision, and the audit row are one atomic unit (the recordActivityIn
+ * pattern from Phase F). Returns nothing — the caller supplies the id.
+ */
+export async function insertConfigRevisionIn(
+  tx: TenantTx,
+  ctx: Ctx,
+  id: string,
+  input: ConfigRevisionInput,
+): Promise<void> {
+  await tx.execute(sql`
+    insert into public.config_revision
+      (id, org_id, artifact_key, before_data, after_data, actor_user_id, ai_flag, summary)
+    values (${id}, ${ctx.orgId}, ${input.artifactKey},
+            ${input.before === undefined || input.before === null ? null : JSON.stringify(input.before)}::jsonb,
+            ${input.after === undefined || input.after === null ? null : JSON.stringify(input.after)}::jsonb,
+            ${ctx.userId}, ${input.aiFlag ?? false}, ${input.summary ?? null})
+  `);
 }

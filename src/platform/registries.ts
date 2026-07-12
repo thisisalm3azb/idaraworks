@@ -80,6 +80,8 @@ export const AUDIT_ENTITY_TYPES = [
   "membership_invite",
   "file", // Phase E: void / legal-hold are audited file mutations (D-1.7)
   "config", // Phase F: config-artifact revisions are audited (D-1.8)
+  "team", // S1 masters — no file attachments in MVP, but audited
+  "item", // S1 catalog — audited (costs are financial config)
 ] as const;
 export type AuditEntityType = (typeof AUDIT_ENTITY_TYPES)[number];
 

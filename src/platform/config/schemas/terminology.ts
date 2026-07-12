@@ -6,12 +6,13 @@
  */
 import { z } from "zod";
 import { TERM_KEYS } from "@/platform/registries";
+import { configString } from "../sanitize";
 
-const NO_MARKUP = /^[^<>]{1,40}$/; // length cap + no angle brackets
-
+// S1: term values pass the full config-string sanitiser (doc 10 #24) — no
+// markup, no ICU metacharacters, no formula leads, no control chars, 40-cap.
 const termForm = z.object({
-  singular: z.string().trim().regex(NO_MARKUP),
-  plural: z.string().trim().regex(NO_MARKUP),
+  singular: configString(40),
+  plural: configString(40),
   gender: z.enum(["m", "f"]).optional(),
 });
 
