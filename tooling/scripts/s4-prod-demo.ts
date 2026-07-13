@@ -60,15 +60,49 @@ async function seedUser(id: string, label: string) {
 }
 
 const TABLES = [
-  "goods_receipt_line", "goods_receipt", "purchase_order_line", "purchase_order",
-  "material_request_line", "material_request", "approval", "approval_rule",
-  "report_labour_cost", "report_labour_line", "report_material_line", "report_work_line",
-  "daily_report", "attendance", "issue", "domain_event", "notification", "notification_preference",
-  "task", "job_crew", "job_stage", "job", "employee_terms", "employee_hr", "employee",
-  "team", "item", "customer", "supplier", "job_preset", "reference_sequence",
-  "org_holiday_calendar", "config_revision", "org_entitlement_override", "comment",
-  "audit_log", "activity", "app_settings", "sign_in_log", "org_plan_state", "membership",
-  "role_definition", "company",
+  "goods_receipt_line",
+  "goods_receipt",
+  "purchase_order_line",
+  "purchase_order",
+  "material_request_line",
+  "material_request",
+  "approval",
+  "approval_rule",
+  "report_labour_cost",
+  "report_labour_line",
+  "report_material_line",
+  "report_work_line",
+  "daily_report",
+  "attendance",
+  "issue",
+  "domain_event",
+  "notification",
+  "notification_preference",
+  "task",
+  "job_crew",
+  "job_stage",
+  "job",
+  "employee_terms",
+  "employee_hr",
+  "employee",
+  "team",
+  "item",
+  "customer",
+  "supplier",
+  "job_preset",
+  "reference_sequence",
+  "org_holiday_calendar",
+  "config_revision",
+  "org_entitlement_override",
+  "comment",
+  "audit_log",
+  "activity",
+  "app_settings",
+  "sign_in_log",
+  "org_plan_state",
+  "membership",
+  "role_definition",
+  "company",
 ];
 
 async function cleanup() {
@@ -85,17 +119,39 @@ async function run() {
   await seedUser(ownerUser, "owner");
   await seedUser(managerUser, "mgr");
   await seedUser(procUser, "proc");
-  orgId = await createOrgForUser(ownerUser, { name: "قوارب التجربة", country: "AE", baseCurrency: "AED" });
+  orgId = await createOrgForUser(ownerUser, {
+    name: "قوارب التجربة",
+    country: "AE",
+    baseCurrency: "AED",
+  });
   await owner`insert into public.membership (user_id, org_id, role_key) values (${managerUser}, ${orgId}, 'manager')`;
   await owner`insert into public.membership (user_id, org_id, role_key) values (${procUser}, ${orgId}, 'procurement')`;
   const installed = await installTemplate(ctx(ownerUser), TEMPLATE_BOATBUILDING.key);
   // Rules: MR ≥ 5000 → owner, else → manager; MR-less PO → owner.
-  await createApprovalRule(ctx(ownerUser), "owner", { subjectType: "material_request", conditionKind: "always", assignedRole: "manager" });
-  await createApprovalRule(ctx(ownerUser), "owner", { subjectType: "material_request", conditionKind: "amount_gte", amountGteMinor: 500_000, assignedRole: "owner" });
-  await createApprovalRule(ctx(ownerUser), "owner", { subjectType: "purchase_order", conditionKind: "always", assignedRole: "owner" });
+  await createApprovalRule(ctx(ownerUser), "owner", {
+    subjectType: "material_request",
+    conditionKind: "always",
+    assignedRole: "manager",
+  });
+  await createApprovalRule(ctx(ownerUser), "owner", {
+    subjectType: "material_request",
+    conditionKind: "amount_gte",
+    amountGteMinor: 500_000,
+    assignedRole: "owner",
+  });
+  await createApprovalRule(ctx(ownerUser), "owner", {
+    subjectType: "purchase_order",
+    conditionKind: "always",
+    assignedRole: "owner",
+  });
   const sup = randomUUID();
   await owner`insert into public.supplier (id, org_id, name) values (${sup}, ${orgId}, 'مورد الخليج')`;
-  const jobId = (await createJobFromPreset(ctx(ownerUser), "owner", { presetId: installed.presetIds["13S"]!, name: "سكيف التجربة" })).id;
+  const jobId = (
+    await createJobFromPreset(ctx(ownerUser), "owner", {
+      presetId: installed.presetIds["13S"]!,
+      name: "سكيف التجربة",
+    })
+  ).id;
   const emp = (await createEmployee(ctx(ownerUser), "owner", { name: "علي" })).id;
   await addCrewMember(ctx(ownerUser), "owner", jobId, emp);
   log(`✓ org قوارب التجربة, rules seeded, supplier مورد الخليج, job 13S-001`);
@@ -111,18 +167,31 @@ async function run() {
   });
   const { approvalId } = await submitMaterialRequest(procCtx(), "procurement", mrId);
   const appr = await getApproval(mgrCtx(), "manager", approvalId);
-  log(`✓ MR ${mrRef} submitted → routed to ${appr!.assignedRole} (under threshold), amount visible=${appr!.amountMinor}`);
+  log(
+    `✓ MR ${mrRef} submitted → routed to ${appr!.assignedRole} (under threshold), amount visible=${appr!.amountMinor}`,
+  );
 
   // 2) Manager decides (advances BOTH records atomically).
   await decideApproval(mgrCtx(), "manager", { approvalId, decision: "approved" });
-  const mrStatus = (await owner`select status from public.material_request where id = ${mrId}`)[0] as { status: string };
-  log(`✓ manager approved → MR status=${mrStatus.status}, approval=${(await getApproval(ctx(ownerUser), "owner", approvalId))!.state}`);
+  const mrStatus = (
+    await owner`select status from public.material_request where id = ${mrId}`
+  )[0] as { status: string };
+  log(
+    `✓ manager approved → MR status=${mrStatus.status}, approval=${(await getApproval(ctx(ownerUser), "owner", approvalId))!.state}`,
+  );
 
   // 3) Procurement converts to PO (auto-approved) → LPO HTML built.
-  const { poId, reference: poRef } = await convertMrToPo(procCtx(), "procurement", mrId, { supplierId: sup, vatMinor: 10_000 });
-  const poStatus = (await owner`select status from public.purchase_order where id = ${poId}`)[0] as { status: string };
+  const { poId, reference: poRef } = await convertMrToPo(procCtx(), "procurement", mrId, {
+    supplierId: sup,
+    vatMinor: 10_000,
+  });
+  const poStatus = (
+    await owner`select status from public.purchase_order where id = ${poId}`
+  )[0] as { status: string };
   const lpo = await buildLpoForPo(ctx(ownerUser), poId);
-  log(`✓ converted → PO ${poRef} status=${poStatus.status} (auto-approved); LPO HTML ${lpo.outcome === "built" ? lpo.htmlChars + " chars" : lpo.outcome}`);
+  log(
+    `✓ converted → PO ${poRef} status=${poStatus.status} (auto-approved); LPO HTML ${lpo.outcome === "built" ? lpo.htmlChars + " chars" : lpo.outcome}`,
+  );
 
   // 4) Partial goods receipt reconciles the PO.
   const po = await getPurchaseOrder(procCtx(), "procurement", poId);
@@ -131,11 +200,15 @@ async function run() {
     receivedDate: today,
     lines: [{ poLineId: po!.lines[0]!.id, receivedQty: 2 }], // partial (ordered 4)
   });
-  const poStatus2 = (await owner`select status from public.purchase_order where id = ${poId}`)[0] as { status: string };
+  const poStatus2 = (
+    await owner`select status from public.purchase_order where id = ${poId}`
+  )[0] as { status: string };
   log(`✓ partial GRN recorded → PO status=${poStatus2.status}`);
 
   // 5) E-03: an aged pending approval raises exception/raised(approval_stuck).
-  const { id: mr2 } = await createMaterialRequest(procCtx(), "procurement", { lines: [{ itemName: "بند", qty: 1, unit: "ea", estUnitCostMinor: 10_000 }] });
+  const { id: mr2 } = await createMaterialRequest(procCtx(), "procurement", {
+    lines: [{ itemName: "بند", qty: 1, unit: "ea", estUnitCostMinor: 10_000 }],
+  });
   const { approvalId: a2 } = await submitMaterialRequest(procCtx(), "procurement", mr2);
   await owner`update public.approval set created_at = now() - interval '10 hours' where id = ${a2}`;
   const e03 = await evaluateStuckApprovals(ctx(ownerUser));
@@ -150,7 +223,9 @@ async function run() {
   log(`✓ outbox: ${events.map((e) => `${e.name}×${e.n}`).join(", ")}`);
 
   await cleanup();
-  const left = (await owner`select count(*)::int as n from public.org where id = ${orgId}`)[0] as { n: number };
+  const left = (await owner`select count(*)::int as n from public.org where id = ${orgId}`)[0] as {
+    n: number;
+  };
   log(`✓ cleanup complete — org rows left: ${left.n} (expect 0)`);
   log("── demo complete ────────────────────────────────────────────────");
 }
