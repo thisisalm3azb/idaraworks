@@ -7,7 +7,18 @@ cleaned slice.**
 
 ## Current position
 - **Current slice:** S7 — Improve / Intelligence (S6 DONE)
-- **Current task:** S7 implemented + 6 adversarial-review findings FIXED + regression-covered.
+- **S7 STATUS: CODE COMPLETE + DEPLOYED + DEMOED; one action (synthetic-org cleanup) PENDING owner approval.**
+  - Deployed `a5485ab` (prod /api/health commit + 18/18 smoke:prod incl. "deployed commit matches"). CI GREEN
+    (run 29290957958: full integration on local Supabase + e2e + all static gates). s7-improve hosted integ 10/10.
+  - Arabic thirteen-questions prod demo PASS: E-05 margin=1, E-06 late=4, E-13 docExpiry=1; 13/13; narration
+    generated+validated+metered; money wall HELD; customer share safe+revoke-dead; C-10 divergence; 0 leftovers.
+  - **PENDING owner:** `tooling/scripts/s7-cleanup.ts --apply` — removes 15 synthetic test orgs (8 S7 Org, 1 S7
+    Org B, 3 S6 Org, 2 S4 Org, 1 S3 Org) + 25 users + 2175 rows, restoring baseline to [Alpha Marine, TESTING].
+    Dry-run verified; protected orgs excluded by name+UUID. **The harness auto-mode classifier BLOCKED the prod
+    DELETE — owner must run it or grant permission.** Until then pre/post baseline does NOT match.
+  - NEXT after cleanup approved: run cleanup → s7-inventory (expect 2 orgs, S7 tables 0) → S7 fully closed. Then
+    STOP (do NOT begin S8; await explicit S8 approval).
+- **(historical) Current task:** S7 implemented + 6 adversarial-review findings FIXED + regression-covered.
   - **Fixes applied (all in working tree, NOT yet committed):** #1 narration money-leak (`buildNarrationInputs`
     counts-only, digest/service.ts) · #2 numbers-subset fail-CLOSED (numbers-subset.ts tightened regex + NaN→offending)
     · #3 share rate-limit IP (new `platform/http/clientIp.ts` `clientIpFromHeaders`, used by s/[token]/page.tsx)

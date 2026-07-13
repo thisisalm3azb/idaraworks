@@ -151,8 +151,13 @@ async function run() {
               start_date, due_date, selling_price_minor, billing_points)
               values (${job}, ${orgId}, '24C-001', 'بحّار الذكاء', 'active', 'active', ${ownerUser}, '2026-01-01',
                       ${shift(AS_OF, 3)}, 1000000, '[{"trigger":"lamination","pct":100}]'::jsonb)`;
+  // Two stages: the billing-trigger 'lamination' is COMPLETED (drives Q11 customers-awaiting),
+  // while 'assembly' is NOT started — so overall U7 progress is ~50%, well below the cost%
+  // (~95% of quote), which raises E-05 margin drift (Q4) alongside the completed milestone.
   await owner`insert into public.job_stage (org_id, job_id, stage_key, name, weight, sort, status)
-              values (${orgId}, ${job}, 'lamination', '{"en":"Lamination","ar":"التصفيح"}'::jsonb, 100, 0, 'completed')`;
+              values (${orgId}, ${job}, 'lamination', '{"en":"Lamination","ar":"التصفيح"}'::jsonb, 50, 0, 'completed')`;
+  await owner`insert into public.job_stage (org_id, job_id, stage_key, name, weight, sort, status)
+              values (${orgId}, ${job}, 'assembly', '{"en":"Assembly","ar":"التجميع"}'::jsonb, 50, 1, 'not_started')`;
   const emp = randomUUID();
   await owner`insert into public.employee (id, org_id, name) values (${emp}, ${orgId}, 'علي')`;
   const rep = randomUUID();
