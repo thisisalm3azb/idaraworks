@@ -6,9 +6,10 @@ interruption, and around deploy/cleanup. **Never redo a completed, green, deploy
 cleaned slice.**
 
 ## Current position
-- **Current slice:** S6 — Bill
-- **Current task:** S6 code + tests complete & green; NEXT = review → full gates → commit → CI → deploy → Arabic demo → cleanup → report
-- **Completed slices:** (none yet in this run; S0–S5 already shipped)
+- **Current slice:** S7 — Improve / Intelligence (S6 DONE)
+- **Current task:** begin S7 scope freeze (read governing docs), then implement automatically
+- **Completed slices (this run):** S6 — Bill ✅ (deployed ee5eb7a; CI green; prod DoD demo passed; baseline restored)
+- **New baseline:** hosted migrations 0000-0044, next 0045 · deployed ee5eb7a · prod orgs [Alpha Marine, TESTING] only
 
 ## Verified baseline (start of run)
 - Deployed S5 commit: `e98a34c` (prod alias serves it)
