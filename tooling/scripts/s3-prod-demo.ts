@@ -19,11 +19,7 @@ import { createOrgForUser } from "@/platform/auth/identity";
 import { installTemplate, TEMPLATE_BOATBUILDING } from "@/platform/config";
 import { createJobFromPreset, addCrewMember } from "@/modules/jobs/service";
 import { createEmployee, setEmployeeTerms } from "@/modules/masters/service";
-import {
-  submitDailyReport,
-  reviewReport,
-  getReportDetail,
-} from "@/modules/reports/service";
+import { submitDailyReport, reviewReport, getReportDetail } from "@/modules/reports/service";
 import { markAttendance, listAttendanceForDate } from "@/modules/attendance/service";
 import { createIssue } from "@/modules/issues/service";
 
@@ -66,7 +62,9 @@ async function run() {
   const { presetIds } = await installTemplate(ctx(ownerUser, true), TEMPLATE_BOATBUILDING.key);
   log(`✓ org "قوارب التجربة" + template installed (org ${orgId.slice(0, 8)}…)`);
 
-  const ali = (await createEmployee(ctx(ownerUser, true), "owner", { name: "علي", userId: foremanUser })).id;
+  const ali = (
+    await createEmployee(ctx(ownerUser, true), "owner", { name: "علي", userId: foremanUser })
+  ).id;
   const sami = (await createEmployee(ctx(ownerUser, true), "owner", { name: "سامي" })).id;
   await setEmployeeTerms(ctx(ownerUser, true), "owner", ali, { salaryMinor: 20800, otRate: 1.25 }); // 100/hr
   await setEmployeeTerms(ctx(ownerUser, true), "owner", sami, { salaryMinor: 41600, otRate: 1.5 }); // 200/hr
@@ -106,7 +104,9 @@ async function run() {
   const asForeman = await getReportDetail(ctx(foremanUser, false), "foreman", reportId);
   const foremanSeesCost = asForeman!.labourLines.some((l) => l.labourCostMinor !== null);
   const rawForemanCostRows = (await withCtx(ctx(foremanUser, false), (tx) =>
-    tx.execute(sql`select count(*)::int as n from public.report_labour_cost where report_id = ${reportId}`),
+    tx.execute(
+      sql`select count(*)::int as n from public.report_labour_cost where report_id = ${reportId}`,
+    ),
   )) as unknown as Array<{ n: number }>;
   log(
     `✓ frozen labour cost — owner: علي=${aliCost} (8×100+2×100×1.25=1050), سامي=${samiCost} (8×200=1600); ` +
@@ -153,12 +153,39 @@ async function run() {
   // ── cleanup: delete ALL synthetic rows (0 leftovers) ──────────────────────
   await owner`update public.job set current_stage_id = null where org_id = ${orgId}`;
   for (const t of [
-    "report_labour_cost", "report_labour_line", "report_material_line", "report_work_line",
-    "daily_report", "attendance", "issue", "domain_event", "task", "job_crew", "job_stage", "job",
-    "employee_terms", "employee_hr", "employee", "team", "item", "customer", "supplier",
-    "job_preset", "reference_sequence", "org_holiday_calendar", "config_revision",
-    "org_entitlement_override", "comment", "audit_log", "activity", "app_settings",
-    "sign_in_log", "org_plan_state", "membership", "role_definition", "company",
+    "report_labour_cost",
+    "report_labour_line",
+    "report_material_line",
+    "report_work_line",
+    "daily_report",
+    "attendance",
+    "issue",
+    "domain_event",
+    "task",
+    "job_crew",
+    "job_stage",
+    "job",
+    "employee_terms",
+    "employee_hr",
+    "employee",
+    "team",
+    "item",
+    "customer",
+    "supplier",
+    "job_preset",
+    "reference_sequence",
+    "org_holiday_calendar",
+    "config_revision",
+    "org_entitlement_override",
+    "comment",
+    "audit_log",
+    "activity",
+    "app_settings",
+    "sign_in_log",
+    "org_plan_state",
+    "membership",
+    "role_definition",
+    "company",
   ]) {
     await owner.unsafe(`delete from public.${t} where org_id = $1`, [orgId]);
   }
@@ -166,7 +193,9 @@ async function run() {
   await owner`delete from public.user_profile where id = any(${[ownerUser, foremanUser, managerUser]}::uuid[])`;
   await owner`delete from auth.users where id = any(${[ownerUser, foremanUser, managerUser]}::uuid[])`;
   const leftover = (await owner`
-    select count(*)::int as n from public.org where id = ${orgId}`) as unknown as Array<{ n: number }>;
+    select count(*)::int as n from public.org where id = ${orgId}`) as unknown as Array<{
+    n: number;
+  }>;
   log(`✓ cleanup complete — org rows left: ${leftover[0]!.n} (expect 0)`);
   log("── demo complete ────────────────────────────────────────────────");
 }
@@ -184,12 +213,39 @@ run()
       if (orgId) {
         await owner`update public.job set current_stage_id = null where org_id = ${orgId}`;
         for (const t of [
-          "report_labour_cost", "report_labour_line", "report_material_line", "report_work_line",
-          "daily_report", "attendance", "issue", "domain_event", "task", "job_crew", "job_stage",
-          "job", "employee_terms", "employee_hr", "employee", "team", "item", "customer", "supplier",
-          "job_preset", "reference_sequence", "org_holiday_calendar", "config_revision",
-          "org_entitlement_override", "comment", "audit_log", "activity", "app_settings",
-          "sign_in_log", "org_plan_state", "membership", "role_definition", "company",
+          "report_labour_cost",
+          "report_labour_line",
+          "report_material_line",
+          "report_work_line",
+          "daily_report",
+          "attendance",
+          "issue",
+          "domain_event",
+          "task",
+          "job_crew",
+          "job_stage",
+          "job",
+          "employee_terms",
+          "employee_hr",
+          "employee",
+          "team",
+          "item",
+          "customer",
+          "supplier",
+          "job_preset",
+          "reference_sequence",
+          "org_holiday_calendar",
+          "config_revision",
+          "org_entitlement_override",
+          "comment",
+          "audit_log",
+          "activity",
+          "app_settings",
+          "sign_in_log",
+          "org_plan_state",
+          "membership",
+          "role_definition",
+          "company",
         ]) {
           await owner.unsafe(`delete from public.${t} where org_id = $1`, [orgId]);
         }
