@@ -62,7 +62,15 @@ export type Action =
   | "po.manage"
   | "po.view"
   | "grn.create"
-  | "grn.cancel";
+  | "grn.cancel"
+  // S5 (doc 06 rows 58-59 + the Today/exception surfaces): Measure.
+  | "expenses.create"
+  | "expenses.void"
+  | "expenses.view"
+  | "costing.view"
+  | "today.view"
+  | "exceptions.view"
+  | "exceptions.dismiss";
 
 type Grantable = Exclude<RoleArchetype, "worker_reserved_p3">;
 
@@ -157,4 +165,29 @@ export const MATRIX: Record<Action, readonly Grantable[]> = {
   // O/A/M/Foreman(assigned)/Procurement; cancel (the M) = admin (+ owner superset).
   "grn.create": ["owner", "admin", "manager", "foreman", "procurement"],
   "grn.cancel": ["owner", "admin"],
+  // ── S5 "Measure" (doc 06 rows 58-59 + Today/exception surfaces) ────────────
+  // "Expenses: create / approve" C C C − C M/A(rule) − − — create = O/A/M/Proc/Acc
+  // (foreman −, F-23: field seat sees no costs).
+  "expenses.create": ["owner", "admin", "manager", "procurement", "accounts"],
+  // Void = Owner/Admin/Accounts (owner ruling); a mandatory reason is the service
+  // + the DB CHECK. Managers/Procurement/Foremen/Viewers cannot void.
+  "expenses.void": ["owner", "admin", "accounts"],
+  // Viewing expenses (cost data) = the finance/supply roles; foreman NEVER (F-23).
+  "expenses.view": ["owner", "admin", "manager", "procurement", "accounts"],
+  // "Job costing / margins" V V 🔒 − − V − − — page access O/A/M/Accounts; the
+  // labour + total + margin FIELDS are gated by the costPrivileged/pricePrivileged
+  // flags at the serializer (manager viewCosts OFF by default → cost EXCLUDING
+  // labour; no margin without viewPrices). Foreman/Procurement have no access.
+  "costing.view": ["owner", "admin", "manager", "accounts"],
+  // The S5 Today screens are the FOREMAN + MANAGER compositions; management
+  // (owner/admin) see the manager composition. The Owner/Accounts/Procurement
+  // SPECIALISED Today screens are S6 (F-55).
+  "today.view": ["owner", "admin", "manager", "foreman"],
+  // Exceptions: view is audience-scoped — the grant is broad, the SERVICE narrows
+  // to (archetype ∈ audience_roles) ∧ job-scope (foreman sees only own-relevant).
+  // Viewer excluded.
+  "exceptions.view": ["owner", "admin", "manager", "foreman", "procurement", "accounts"],
+  // Dismiss / manual-resolve = Owner/Admin/Manager (manager audience+job-scope
+  // limited at the service; owner ruling). Auto-resolution stays engine-controlled.
+  "exceptions.dismiss": ["owner", "admin", "manager"],
 };

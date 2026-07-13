@@ -57,6 +57,14 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
     "po.view",
     "grn.create",
     "grn.cancel",
+    // S5 Measure: full expenses (incl. void), costing page, Today, exceptions.
+    "expenses.create",
+    "expenses.void",
+    "expenses.view",
+    "costing.view",
+    "today.view",
+    "exceptions.view",
+    "exceptions.dismiss",
   ],
   admin: [
     "members.view",
@@ -101,6 +109,14 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
     "po.view",
     "grn.create",
     "grn.cancel",
+    // S5 Measure: same as owner (Owner ≡ Admin footnote).
+    "expenses.create",
+    "expenses.void",
+    "expenses.view",
+    "costing.view",
+    "today.view",
+    "exceptions.view",
+    "exceptions.dismiss",
   ],
   // Manager (doc 08: the Workshop Manager variant): masters M, jobs/reports, NO
   // config, NO salary/HR side-tables, no invite/deactivate/legal-hold.
@@ -138,6 +154,14 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
     "po.manage",
     "po.view",
     "grn.create",
+    // S5 Measure: create expenses (not void); costing page (labour+margin redacted
+    // — viewCosts OFF by default); manager Today; view + dismiss audience exceptions.
+    "expenses.create",
+    "expenses.view",
+    "costing.view",
+    "today.view",
+    "exceptions.view",
+    "exceptions.dismiss",
   ],
   // Field seat (doc 06 literal row): assigned jobs (v) + own reports. NO
   // employee/catalog/member/customer/config surfaces — S3's report form gets
@@ -155,6 +179,10 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
     // approvals, never manages POs, never sees cost/price.
     "mr.create",
     "grn.create",
+    // S5 Measure: the field Today screen; view OWN-relevant exceptions only (service
+    // audience+scope). NO money anywhere (no expenses/costing) — F-23; cannot dismiss.
+    "today.view",
+    "exceptions.view",
   ],
   procurement: [
     "members.view",
@@ -172,6 +200,12 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
     "po.manage",
     "po.view",
     "grn.create",
+    // S5 Measure: procurement creates + views expenses (petty-cash purchases); may
+    // view exceptions only when a rule names their role (service audience filter);
+    // cannot dismiss. No costing page, no Today screen (S6).
+    "expenses.create",
+    "expenses.view",
+    "exceptions.view",
   ],
   accounts: [
     "members.view",
@@ -189,6 +223,14 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
     // slices) and VIEW POs. Cost-privileged, so amounts are visible to them.
     "approvals.decide",
     "po.view",
+    // S5 Measure: accounts is the back-office finance seat — full expenses (incl.
+    // void), the costing page (cost-privileged, sees labour + margin), and view
+    // audience exceptions (cannot dismiss; owner ruling). Accounts Today is S6.
+    "expenses.create",
+    "expenses.void",
+    "expenses.view",
+    "costing.view",
+    "exceptions.view",
   ],
   // Viewer (doc 06): jobs v (redacted) + week view + attendance V — other rows −.
   viewer: ["members.view", "jobs.view", "week.view", "attendance.view"],
