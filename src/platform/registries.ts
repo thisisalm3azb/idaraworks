@@ -85,6 +85,7 @@ export const AUDIT_ENTITY_TYPES = [
   "attendance", // S3 — the manual grid mark is an audited HR mutation (no files)
   "approval", // S4 — the decision record (submit/decide/withdraw are audited)
   "approval_rule", // S4 — rule edits are config-audited
+  "exception", // S5 — user dismiss/resolve is an audited mutation (engine raise/auto-clear is a materialized derivation, not audited)
 ] as const;
 export type AuditEntityType = (typeof AUDIT_ENTITY_TYPES)[number];
 
@@ -182,5 +183,6 @@ export const NOTIFICATION_KINDS = [
   "system",
   "approval_requested", // S4 — pushed to the assigned role's members on submission
   "approval_decided", // S4 — pushed to the requester on approve/reject
+  "exception_raised", // S5 — pushed to a raised exception's audience (redacted body, F-23)
 ] as const;
 export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];

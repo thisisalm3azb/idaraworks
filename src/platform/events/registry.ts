@@ -21,8 +21,14 @@ export const APPROVAL_SUBMITTED = "approval/submitted" as const; // S4
 export const APPROVAL_DECIDED = "approval/decided" as const; // S4
 export const PURCHASE_ORDER_APPROVED = "purchase_order/approved" as const; // S4 (→ LPO PDF)
 export const GOODS_RECEIPT_RECORDED = "goods_receipt/recorded" as const; // S4
-// Placeholder exception channel (doc 11 S2 DoD): the S5/S7 engine subscribes to
-// this NAME; until then the facts accumulate on the bus.
+export const GOODS_RECEIPT_CANCELLED = "goods_receipt/cancelled" as const; // S5 (→ cost rollup invalidate)
+export const EXPENSE_CREATED = "expense/created" as const; // S5 (→ cost rollup invalidate)
+export const EXPENSE_VOIDED = "expense/voided" as const; // S5 (→ cost rollup invalidate)
+// The cross-module exception SIGNAL channel: modules that detect a condition
+// outside the exception engine emit this (S2 F-5 billing-point reopen; the S4 E-03
+// approval-stuck stub), and the S5 engine's materializer subscribes to this NAME
+// and upserts an exception row. The engine's own rules (E-01/E-02/E-04/E-07/C-10)
+// write rows directly, not through this event.
 export const EXCEPTION_RAISED = "exception/raised" as const;
 
 /** Fields every org-scoped event carries. */
@@ -110,6 +116,27 @@ export const GoodsReceiptRecordedData = z.object({
 });
 export type GoodsReceiptRecordedData = z.infer<typeof GoodsReceiptRecordedData>;
 
+export const GoodsReceiptCancelledData = z.object({
+  ...orgScoped,
+  goodsReceiptId: z.string().uuid(),
+  purchaseOrderId: z.string().uuid(),
+});
+export type GoodsReceiptCancelledData = z.infer<typeof GoodsReceiptCancelledData>;
+
+export const ExpenseCreatedData = z.object({
+  ...orgScoped,
+  expenseId: z.string().uuid(),
+  jobId: z.string().uuid().optional(),
+});
+export type ExpenseCreatedData = z.infer<typeof ExpenseCreatedData>;
+
+export const ExpenseVoidedData = z.object({
+  ...orgScoped,
+  expenseId: z.string().uuid(),
+  jobId: z.string().uuid().optional(),
+});
+export type ExpenseVoidedData = z.infer<typeof ExpenseVoidedData>;
+
 export const DailyReportReviewedData = z.object({
   ...orgScoped,
   reportId: z.string().uuid(),
@@ -160,6 +187,9 @@ export const EVENT_DEFS = {
   [APPROVAL_DECIDED]: { version: 1, schema: ApprovalDecidedData },
   [PURCHASE_ORDER_APPROVED]: { version: 1, schema: PurchaseOrderApprovedData },
   [GOODS_RECEIPT_RECORDED]: { version: 1, schema: GoodsReceiptRecordedData },
+  [GOODS_RECEIPT_CANCELLED]: { version: 1, schema: GoodsReceiptCancelledData },
+  [EXPENSE_CREATED]: { version: 1, schema: ExpenseCreatedData },
+  [EXPENSE_VOIDED]: { version: 1, schema: ExpenseVoidedData },
   [EXCEPTION_RAISED]: { version: 1, schema: ExceptionRaisedData },
 } as const satisfies Record<string, EventDef>;
 

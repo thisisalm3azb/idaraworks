@@ -23,6 +23,9 @@ import {
   APPROVAL_DECIDED,
   PURCHASE_ORDER_APPROVED,
   GOODS_RECEIPT_RECORDED,
+  GOODS_RECEIPT_CANCELLED,
+  EXPENSE_CREATED,
+  EXPENSE_VOIDED,
   EXCEPTION_RAISED,
   FileUploadedData,
   DemoHeartbeatData,
@@ -38,6 +41,9 @@ import {
   ApprovalDecidedData,
   PurchaseOrderApprovedData,
   GoodsReceiptRecordedData,
+  GoodsReceiptCancelledData,
+  ExpenseCreatedData,
+  ExpenseVoidedData,
   ExceptionRaisedData,
 } from "./registry";
 
@@ -56,6 +62,9 @@ export {
   APPROVAL_DECIDED,
   PURCHASE_ORDER_APPROVED,
   GOODS_RECEIPT_RECORDED,
+  GOODS_RECEIPT_CANCELLED,
+  EXPENSE_CREATED,
+  EXPENSE_VOIDED,
   EXCEPTION_RAISED,
   FileUploadedData,
   DemoHeartbeatData,
@@ -71,6 +80,9 @@ export {
   ApprovalDecidedData,
   PurchaseOrderApprovedData,
   GoodsReceiptRecordedData,
+  GoodsReceiptCancelledData,
+  ExpenseCreatedData,
+  ExpenseVoidedData,
   ExceptionRaisedData,
 };
 export type { FileUploadedData as FileUploadedPayload } from "./registry";
@@ -106,6 +118,11 @@ export const purchaseOrderApprovedEvent = eventType(PURCHASE_ORDER_APPROVED, {
 export const goodsReceiptRecordedEvent = eventType(GOODS_RECEIPT_RECORDED, {
   schema: GoodsReceiptRecordedData,
 });
+export const goodsReceiptCancelledEvent = eventType(GOODS_RECEIPT_CANCELLED, {
+  schema: GoodsReceiptCancelledData,
+});
+export const expenseCreatedEvent = eventType(EXPENSE_CREATED, { schema: ExpenseCreatedData });
+export const expenseVoidedEvent = eventType(EXPENSE_VOIDED, { schema: ExpenseVoidedData });
 export const exceptionRaisedEvent = eventType(EXCEPTION_RAISED, { schema: ExceptionRaisedData });
 
 /** name → its trigger. Paired with EVENT_DEFS[name].schema so defineOrgFunction
@@ -125,6 +142,9 @@ export const EVENT_TRIGGERS = {
   [APPROVAL_DECIDED]: approvalDecidedEvent,
   [PURCHASE_ORDER_APPROVED]: purchaseOrderApprovedEvent,
   [GOODS_RECEIPT_RECORDED]: goodsReceiptRecordedEvent,
+  [GOODS_RECEIPT_CANCELLED]: goodsReceiptCancelledEvent,
+  [EXPENSE_CREATED]: expenseCreatedEvent,
+  [EXPENSE_VOIDED]: expenseVoidedEvent,
   [EXCEPTION_RAISED]: exceptionRaisedEvent,
 } as const;
 
