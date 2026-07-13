@@ -83,6 +83,8 @@ export const AUDIT_ENTITY_TYPES = [
   "team", // S1 masters — no file attachments in MVP, but audited
   "item", // S1 catalog — audited (costs are financial config)
   "attendance", // S3 — the manual grid mark is an audited HR mutation (no files)
+  "approval", // S4 — the decision record (submit/decide/withdraw are audited)
+  "approval_rule", // S4 — rule edits are config-audited
 ] as const;
 export type AuditEntityType = (typeof AUDIT_ENTITY_TYPES)[number];
 
@@ -176,5 +178,9 @@ export type Locale = (typeof SUPPORTED_LOCALES)[number];
 // ── Notification kinds (doc 01 F-12; Phase F substrate) ─────────────────────
 // Closed registry; later slices add their kinds (e.g. 'approval.requested',
 // 'report.returned') with the surfaces that emit them — one file, one owner.
-export const NOTIFICATION_KINDS = ["system"] as const;
+export const NOTIFICATION_KINDS = [
+  "system",
+  "approval_requested", // S4 — pushed to the assigned role's members on submission
+  "approval_decided", // S4 — pushed to the requester on approve/reject
+] as const;
 export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];

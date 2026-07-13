@@ -19,6 +19,10 @@ import {
   DAILY_REPORT_RETURNED,
   ISSUE_RAISED,
   ISSUE_RESOLVED,
+  APPROVAL_SUBMITTED,
+  APPROVAL_DECIDED,
+  PURCHASE_ORDER_APPROVED,
+  GOODS_RECEIPT_RECORDED,
   EXCEPTION_RAISED,
   FileUploadedData,
   DemoHeartbeatData,
@@ -30,6 +34,10 @@ import {
   DailyReportReturnedData,
   IssueRaisedData,
   IssueResolvedData,
+  ApprovalSubmittedData,
+  ApprovalDecidedData,
+  PurchaseOrderApprovedData,
+  GoodsReceiptRecordedData,
   ExceptionRaisedData,
 } from "./registry";
 
@@ -44,6 +52,10 @@ export {
   DAILY_REPORT_RETURNED,
   ISSUE_RAISED,
   ISSUE_RESOLVED,
+  APPROVAL_SUBMITTED,
+  APPROVAL_DECIDED,
+  PURCHASE_ORDER_APPROVED,
+  GOODS_RECEIPT_RECORDED,
   EXCEPTION_RAISED,
   FileUploadedData,
   DemoHeartbeatData,
@@ -55,6 +67,10 @@ export {
   DailyReportReturnedData,
   IssueRaisedData,
   IssueResolvedData,
+  ApprovalSubmittedData,
+  ApprovalDecidedData,
+  PurchaseOrderApprovedData,
+  GoodsReceiptRecordedData,
   ExceptionRaisedData,
 };
 export type { FileUploadedData as FileUploadedPayload } from "./registry";
@@ -80,6 +96,16 @@ export const dailyReportReturnedEvent = eventType(DAILY_REPORT_RETURNED, {
 });
 export const issueRaisedEvent = eventType(ISSUE_RAISED, { schema: IssueRaisedData });
 export const issueResolvedEvent = eventType(ISSUE_RESOLVED, { schema: IssueResolvedData });
+export const approvalSubmittedEvent = eventType(APPROVAL_SUBMITTED, {
+  schema: ApprovalSubmittedData,
+});
+export const approvalDecidedEvent = eventType(APPROVAL_DECIDED, { schema: ApprovalDecidedData });
+export const purchaseOrderApprovedEvent = eventType(PURCHASE_ORDER_APPROVED, {
+  schema: PurchaseOrderApprovedData,
+});
+export const goodsReceiptRecordedEvent = eventType(GOODS_RECEIPT_RECORDED, {
+  schema: GoodsReceiptRecordedData,
+});
 export const exceptionRaisedEvent = eventType(EXCEPTION_RAISED, { schema: ExceptionRaisedData });
 
 /** name → its trigger. Paired with EVENT_DEFS[name].schema so defineOrgFunction
@@ -95,6 +121,10 @@ export const EVENT_TRIGGERS = {
   [DAILY_REPORT_RETURNED]: dailyReportReturnedEvent,
   [ISSUE_RAISED]: issueRaisedEvent,
   [ISSUE_RESOLVED]: issueResolvedEvent,
+  [APPROVAL_SUBMITTED]: approvalSubmittedEvent,
+  [APPROVAL_DECIDED]: approvalDecidedEvent,
+  [PURCHASE_ORDER_APPROVED]: purchaseOrderApprovedEvent,
+  [GOODS_RECEIPT_RECORDED]: goodsReceiptRecordedEvent,
   [EXCEPTION_RAISED]: exceptionRaisedEvent,
 } as const;
 

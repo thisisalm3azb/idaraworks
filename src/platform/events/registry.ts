@@ -17,7 +17,11 @@ export const DAILY_REPORT_REVIEWED = "daily_report/reviewed" as const; // S3
 export const DAILY_REPORT_RETURNED = "daily_report/returned" as const; // S3
 export const ISSUE_RAISED = "issue/raised" as const; // S3
 export const ISSUE_RESOLVED = "issue/resolved" as const; // S3
-// Placeholder exception channel (doc 11 S2 DoD): the S7 engine subscribes to
+export const APPROVAL_SUBMITTED = "approval/submitted" as const; // S4
+export const APPROVAL_DECIDED = "approval/decided" as const; // S4
+export const PURCHASE_ORDER_APPROVED = "purchase_order/approved" as const; // S4 (→ LPO PDF)
+export const GOODS_RECEIPT_RECORDED = "goods_receipt/recorded" as const; // S4
+// Placeholder exception channel (doc 11 S2 DoD): the S5/S7 engine subscribes to
 // this NAME; until then the facts accumulate on the bus.
 export const EXCEPTION_RAISED = "exception/raised" as const;
 
@@ -64,11 +68,47 @@ export type JobStageReopenedData = z.infer<typeof JobStageReopenedData>;
 
 export const ExceptionRaisedData = z.object({
   ...orgScoped,
-  kind: z.enum(["billing_point_reopened"]), // the E-catalogue grows with S7
-  jobId: z.string().uuid(),
+  // The E-catalogue grows with later slices. S4 adds approval_stuck (E-03 stub).
+  kind: z.enum(["billing_point_reopened", "approval_stuck"]),
+  jobId: z.string().uuid().optional(),
   stageKey: z.string().min(1).max(40).optional(),
+  subjectType: z.string().min(1).max(40).optional(),
+  subjectId: z.string().uuid().optional(),
+  severity: z.enum(["info", "warning", "critical"]).optional(),
 });
 export type ExceptionRaisedData = z.infer<typeof ExceptionRaisedData>;
+
+export const ApprovalSubmittedData = z.object({
+  ...orgScoped,
+  approvalId: z.string().uuid(),
+  subjectType: z.string().min(1).max(40),
+  subjectId: z.string().uuid(),
+  assignedRole: z.string().min(1).max(20),
+});
+export type ApprovalSubmittedData = z.infer<typeof ApprovalSubmittedData>;
+
+export const ApprovalDecidedData = z.object({
+  ...orgScoped,
+  approvalId: z.string().uuid(),
+  subjectType: z.string().min(1).max(40),
+  subjectId: z.string().uuid(),
+  outcome: z.enum(["approved", "rejected", "withdrawn"]),
+});
+export type ApprovalDecidedData = z.infer<typeof ApprovalDecidedData>;
+
+export const PurchaseOrderApprovedData = z.object({
+  ...orgScoped,
+  purchaseOrderId: z.string().uuid(),
+  reference: z.string().min(1).max(40),
+});
+export type PurchaseOrderApprovedData = z.infer<typeof PurchaseOrderApprovedData>;
+
+export const GoodsReceiptRecordedData = z.object({
+  ...orgScoped,
+  goodsReceiptId: z.string().uuid(),
+  purchaseOrderId: z.string().uuid(),
+});
+export type GoodsReceiptRecordedData = z.infer<typeof GoodsReceiptRecordedData>;
 
 export const DailyReportReviewedData = z.object({
   ...orgScoped,
@@ -116,6 +156,10 @@ export const EVENT_DEFS = {
   [DAILY_REPORT_RETURNED]: { version: 1, schema: DailyReportReturnedData },
   [ISSUE_RAISED]: { version: 1, schema: IssueRaisedData },
   [ISSUE_RESOLVED]: { version: 1, schema: IssueResolvedData },
+  [APPROVAL_SUBMITTED]: { version: 1, schema: ApprovalSubmittedData },
+  [APPROVAL_DECIDED]: { version: 1, schema: ApprovalDecidedData },
+  [PURCHASE_ORDER_APPROVED]: { version: 1, schema: PurchaseOrderApprovedData },
+  [GOODS_RECEIPT_RECORDED]: { version: 1, schema: GoodsReceiptRecordedData },
   [EXCEPTION_RAISED]: { version: 1, schema: ExceptionRaisedData },
 } as const satisfies Record<string, EventDef>;
 
