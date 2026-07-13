@@ -69,6 +69,15 @@ export default async function OrgLayout({
       ? [{ href: `/o/${orgId}/expenses`, label: t("nav.expenses") }]
       : []),
     ...(can(a, "costing.view") ? [{ href: `/o/${orgId}/costing`, label: t("nav.costing") }] : []),
+    // S6 "Bill" surfaces (gated per doc 06).
+    ...(can(a, "quotes.view") ? [{ href: `/o/${orgId}/quotes`, label: t("nav.quotes") }] : []),
+    ...(can(a, "invoices.view")
+      ? [{ href: `/o/${orgId}/invoices`, label: t("nav.invoices") }]
+      : []),
+    ...(can(a, "payments.view")
+      ? [{ href: `/o/${orgId}/payments`, label: t("nav.payments") }]
+      : []),
+    ...(can(a, "ar.view") ? [{ href: `/o/${orgId}/ar`, label: t("nav.ar") }] : []),
     ...(can(a, "employees.view") ? [{ href: `/o/${orgId}/people`, label: t("nav.people") }] : []),
     ...(can(a, "customers.view")
       ? [{ href: `/o/${orgId}/customers`, label: t("nav.customers") }]
