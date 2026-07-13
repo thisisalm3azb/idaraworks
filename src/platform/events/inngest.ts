@@ -31,6 +31,10 @@ import {
   INVOICE_VOIDED,
   CREDIT_NOTE_ISSUED,
   PAYMENT_RECORDED,
+  NIGHTLY_ORG_DUE,
+  CUSTOMER_UPDATE_SENT,
+  SHARE_TOKEN_CREATED,
+  SHARE_TOKEN_REVOKED,
   EXCEPTION_RAISED,
   FileUploadedData,
   DemoHeartbeatData,
@@ -54,6 +58,10 @@ import {
   InvoiceVoidedData,
   CreditNoteIssuedData,
   PaymentRecordedData,
+  NightlyOrgDueData,
+  CustomerUpdateSentData,
+  ShareTokenCreatedData,
+  ShareTokenRevokedData,
   ExceptionRaisedData,
 } from "./registry";
 
@@ -80,6 +88,10 @@ export {
   INVOICE_VOIDED,
   CREDIT_NOTE_ISSUED,
   PAYMENT_RECORDED,
+  NIGHTLY_ORG_DUE,
+  CUSTOMER_UPDATE_SENT,
+  SHARE_TOKEN_CREATED,
+  SHARE_TOKEN_REVOKED,
   EXCEPTION_RAISED,
   FileUploadedData,
   DemoHeartbeatData,
@@ -103,6 +115,10 @@ export {
   InvoiceVoidedData,
   CreditNoteIssuedData,
   PaymentRecordedData,
+  NightlyOrgDueData,
+  CustomerUpdateSentData,
+  ShareTokenCreatedData,
+  ShareTokenRevokedData,
   ExceptionRaisedData,
 };
 export type { FileUploadedData as FileUploadedPayload } from "./registry";
@@ -150,6 +166,16 @@ export const creditNoteIssuedEvent = eventType(CREDIT_NOTE_ISSUED, {
   schema: CreditNoteIssuedData,
 });
 export const paymentRecordedEvent = eventType(PAYMENT_RECORDED, { schema: PaymentRecordedData });
+export const nightlyOrgDueEvent = eventType(NIGHTLY_ORG_DUE, { schema: NightlyOrgDueData });
+export const customerUpdateSentEvent = eventType(CUSTOMER_UPDATE_SENT, {
+  schema: CustomerUpdateSentData,
+});
+export const shareTokenCreatedEvent = eventType(SHARE_TOKEN_CREATED, {
+  schema: ShareTokenCreatedData,
+});
+export const shareTokenRevokedEvent = eventType(SHARE_TOKEN_REVOKED, {
+  schema: ShareTokenRevokedData,
+});
 export const exceptionRaisedEvent = eventType(EXCEPTION_RAISED, { schema: ExceptionRaisedData });
 
 /** name → its trigger. Paired with EVENT_DEFS[name].schema so defineOrgFunction
@@ -177,6 +203,10 @@ export const EVENT_TRIGGERS = {
   [INVOICE_VOIDED]: invoiceVoidedEvent,
   [CREDIT_NOTE_ISSUED]: creditNoteIssuedEvent,
   [PAYMENT_RECORDED]: paymentRecordedEvent,
+  [NIGHTLY_ORG_DUE]: nightlyOrgDueEvent,
+  [CUSTOMER_UPDATE_SENT]: customerUpdateSentEvent,
+  [SHARE_TOKEN_CREATED]: shareTokenCreatedEvent,
+  [SHARE_TOKEN_REVOKED]: shareTokenRevokedEvent,
   [EXCEPTION_RAISED]: exceptionRaisedEvent,
 } as const;
 

@@ -30,6 +30,11 @@ export const INVOICE_ISSUED = "invoice/issued" as const; // → PDF render + e-i
 export const INVOICE_VOIDED = "invoice/voided" as const;
 export const CREDIT_NOTE_ISSUED = "credit_note/issued" as const;
 export const PAYMENT_RECORDED = "payment/recorded" as const;
+// S7 "Improve": the staggered per-org nightly fan-out trigger + customer-update facts.
+export const NIGHTLY_ORG_DUE = "nightly/org_due" as const; // dispatcher → per-org child (staggered)
+export const CUSTOMER_UPDATE_SENT = "customer_update/sent" as const;
+export const SHARE_TOKEN_CREATED = "share_token/created" as const;
+export const SHARE_TOKEN_REVOKED = "share_token/revoked" as const;
 // The cross-module exception SIGNAL channel: modules that detect a condition
 // outside the exception engine emit this (S2 F-5 billing-point reopen; the S4 E-03
 // approval-stuck stub), and the S5 engine's materializer subscribes to this NAME
@@ -207,6 +212,34 @@ export const IssueResolvedData = z.object({
 });
 export type IssueResolvedData = z.infer<typeof IssueResolvedData>;
 
+// S7 "Improve": staggered per-org nightly run + customer-update facts.
+export const NightlyOrgDueData = z.object({
+  ...orgScoped,
+  asOf: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  nowMs: z.number().int().nonnegative(),
+});
+export type NightlyOrgDueData = z.infer<typeof NightlyOrgDueData>;
+
+export const CustomerUpdateSentData = z.object({
+  ...orgScoped,
+  customerUpdateId: z.string().uuid(),
+  jobId: z.string().uuid().optional(),
+});
+export type CustomerUpdateSentData = z.infer<typeof CustomerUpdateSentData>;
+
+export const ShareTokenCreatedData = z.object({
+  ...orgScoped,
+  shareTokenId: z.string().uuid(),
+  customerUpdateId: z.string().uuid(),
+});
+export type ShareTokenCreatedData = z.infer<typeof ShareTokenCreatedData>;
+
+export const ShareTokenRevokedData = z.object({
+  ...orgScoped,
+  shareTokenId: z.string().uuid(),
+});
+export type ShareTokenRevokedData = z.infer<typeof ShareTokenRevokedData>;
+
 export type EventDef = { version: number; schema: z.ZodTypeAny };
 
 export const EVENT_DEFS = {
@@ -232,6 +265,10 @@ export const EVENT_DEFS = {
   [INVOICE_VOIDED]: { version: 1, schema: InvoiceVoidedData },
   [CREDIT_NOTE_ISSUED]: { version: 1, schema: CreditNoteIssuedData },
   [PAYMENT_RECORDED]: { version: 1, schema: PaymentRecordedData },
+  [NIGHTLY_ORG_DUE]: { version: 1, schema: NightlyOrgDueData },
+  [CUSTOMER_UPDATE_SENT]: { version: 1, schema: CustomerUpdateSentData },
+  [SHARE_TOKEN_CREATED]: { version: 1, schema: ShareTokenCreatedData },
+  [SHARE_TOKEN_REVOKED]: { version: 1, schema: ShareTokenRevokedData },
   [EXCEPTION_RAISED]: { version: 1, schema: ExceptionRaisedData },
 } as const satisfies Record<string, EventDef>;
 

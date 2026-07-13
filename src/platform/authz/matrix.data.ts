@@ -73,6 +73,12 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
     "payments.view",
     "payments.manage",
     "ar.view",
+    // S7 Improve: owner sees the digest card + owns customer updates.
+    "digest.view",
+    "customer_updates.draft",
+    "customer_updates.send",
+    "customer_updates.share",
+    "customer_updates.revoke",
   ],
   admin: [
     "members.view",
@@ -133,6 +139,12 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
     "payments.view",
     "payments.manage",
     "ar.view",
+    // S7 Improve.
+    "digest.view",
+    "customer_updates.draft",
+    "customer_updates.send",
+    "customer_updates.share",
+    "customer_updates.revoke",
   ],
   // Manager (doc 08: the Workshop Manager variant): masters M, jobs/reports, NO
   // config, NO salary/HR side-tables, no invite/deactivate/legal-hold.
@@ -182,6 +194,12 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
     // Manager has NO invoice/payment/AR access (row 57 −).
     "quotes.view",
     "quotes.manage",
+    // S7 Improve: manager sees the digest + drafts/sends customer updates.
+    "digest.view",
+    "customer_updates.draft",
+    "customer_updates.send",
+    "customer_updates.share",
+    "customer_updates.revoke",
   ],
   // Field seat (doc 06 literal row): assigned jobs (v) + own reports. NO
   // employee/catalog/member/customer/config surfaces — S3's report form gets
@@ -203,6 +221,8 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
     // audience+scope). NO money anywhere (no expenses/costing) — F-23; cannot dismiss.
     "today.view",
     "exceptions.view",
+    // S7 Improve: the field digest card (deterministic; no money — F-23 at collection).
+    "digest.view",
   ],
   procurement: [
     "members.view",
@@ -228,6 +248,8 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
     "exceptions.view",
     // S6 Bill: the Procurement Today screen (approved MRs to convert, open POs, …).
     "today.view",
+    // S7 Improve: procurement digest card.
+    "digest.view",
   ],
   accounts: [
     "members.view",
@@ -262,6 +284,8 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
     "payments.manage",
     "ar.view",
     "today.view",
+    // S7 Improve: accounts digest card.
+    "digest.view",
   ],
   // Viewer (doc 06): jobs v (redacted) + week view + attendance V — other rows −.
   viewer: ["members.view", "jobs.view", "week.view", "attendance.view"],

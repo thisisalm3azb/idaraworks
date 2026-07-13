@@ -40,8 +40,26 @@ export const RULE_KEYS = [
   "billing_point_reopened",
   "billing_point_uninvoiced", // S6 E-09
   "overdue_invoice", // S6 E-10
+  "margin_drift", // S7 E-05
+  "late_po", // S7 E-06 (per-PO)
+  "late_supplier", // S7 E-06 (aggregate)
+  "unusual_expense", // S7 E-08
+  "document_expiry", // S7 E-13
 ] as const;
 export type RuleKey = (typeof RULE_KEYS)[number];
+
+// S7 rule default thresholds (template #1 defaults; doc 04 catalogue + doc 09 schema #8).
+// Named so a future config-tuning pass can override per org without touching the rules.
+const S7_DEFAULTS = {
+  marginDriftPoints: 15, // E-05: cost% − progress% over this ⇒ drift
+  costOfQuotePct: 90, // E-05: cost ≥ this % of quote while pre-final ⇒ drift
+  preFinalProgressPct: 90, // E-05: progress below this = "pre-final" (template-agnostic C-11)
+  supplierLeadDays: 14, // E-06: a PO open this many days past approval = late
+  supplierLateCount: 3, // E-06: ≥ this many late POs / 90 days ⇒ aggregate supplier alert
+  expenseMedianMultiple: 3, // E-08: expense > this × the category's trailing median on the job
+  expenseMinSample: 4, // E-08: need at least this many priors before the multiple is meaningful
+  documentExpiryWindowDays: 30, // E-13: ID/passport/visa expiring within this many calendar days
+} as const;
 
 // Act-within-hours rules push to their audience; the rest surface on Today (pull).
 const PUSH_RULES: ReadonlySet<RuleKey> = new Set(["approval_stuck", "blocking_issue"]);
@@ -278,6 +296,67 @@ export async function evaluateReportAnomalies(
   });
 }
 
+// ── E-08: unusual expense on create (event lane) ─────────────────────────────────
+// An expense above N× the trailing median of its category ON THAT JOB (with enough
+// priors to be meaningful). Subject = the expense; audience accounts/owner. On void the
+// exception self-clears (the same entry point handles the EXPENSE_VOIDED event). Expense
+// amounts are org-readable (not RLS-walled); the audience filter keeps E-08 off non-cost
+// screens. Evidence carries the MULTIPLE + category, not raw amounts.
+export async function evaluateExpenseAnomaly(
+  ctx: Ctx,
+  expenseId: string,
+): Promise<{ raised: number; cleared: number }> {
+  return withCtx(ctx, async (tx) => {
+    const dedup = `unusual_expense:${expenseId}`;
+    const meta = (await tx.execute(sql`
+      select job_id::text as job_id, category_key, total_minor, (voided_at is not null) as voided
+      from public.expense where id = ${expenseId} and org_id = ${ctx.orgId}
+    `)) as unknown as Array<{
+      job_id: string | null;
+      category_key: string;
+      total_minor: string;
+      voided: boolean;
+    }>;
+    const e = meta[0];
+    // A voided expense (or one with no job / already gone) never carries an anomaly.
+    if (!e || e.voided || !e.job_id) {
+      await clearExceptionIn(tx, ctx, dedup);
+      return { raised: 0, cleared: 1 };
+    }
+    // Trailing median of OTHER non-voided expenses in the same job + category.
+    const stat = (await tx.execute(sql`
+      select count(*)::int as n,
+             percentile_cont(0.5) within group (order by total_minor)::numeric as median
+      from public.expense
+      where org_id = ${ctx.orgId} and job_id = ${e.job_id} and category_key = ${e.category_key}
+        and voided_at is null and id <> ${expenseId}
+    `)) as unknown as Array<{ n: number; median: string | null }>;
+    const n = stat[0]?.n ?? 0;
+    const median = stat[0]?.median ? Number(stat[0].median) : 0;
+    const amount = Number(e.total_minor);
+    const isAnomaly =
+      n >= S7_DEFAULTS.expenseMinSample &&
+      median > 0 &&
+      amount > S7_DEFAULTS.expenseMedianMultiple * median;
+    if (isAnomaly) {
+      const multiple = Math.round((amount / median) * 10) / 10;
+      const r = await raiseExceptionIn(tx, ctx, {
+        ruleKey: "unusual_expense",
+        severity: "warning",
+        jobId: e.job_id,
+        subjectType: "expense",
+        subjectId: expenseId,
+        evidenceRefs: [{ categoryKey: e.category_key, multiple, sampleSize: n }],
+        audienceRoles: ["accounts", "owner"],
+        dedupKey: dedup,
+      });
+      return { raised: r.created ? 1 : 0, cleared: 0 };
+    }
+    await clearExceptionIn(tx, ctx, dedup);
+    return { raised: 0, cleared: 1 };
+  });
+}
+
 // ── Nightly evaluator: E-01, E-02, E-04 (raise + clear + self-heal), calendar-aware ─
 export async function evaluateNightly(
   ctx: Ctx,
@@ -287,14 +366,20 @@ export async function evaluateNightly(
   overdue: number;
   blockers: number;
   billing: number;
+  marginDrift: number;
+  lateSupplier: number;
+  documentExpiry: number;
   cleared: number;
 }> {
   const cal = await loadCalendar(ctx);
-  const [missing, overdue, blockers, billing] = await Promise.all([
+  const [missing, overdue, blockers, billing, margin, supplier, docs] = await Promise.all([
     evaluateMissingReports(ctx, cal, opts.asOf),
     evaluateOverdueJobs(ctx, cal, opts.asOf),
     evaluateBlockingIssues(ctx, opts.nowMs),
     evaluateBillingExceptions(ctx, cal, opts.asOf),
+    evaluateMarginDrift(ctx), // E-05
+    evaluateLateSuppliers(ctx, opts.asOf), // E-06
+    evaluateDocumentExpiry(ctx), // E-13
   ]);
   // The active-only evaluators never revisit a job once it leaves 'active', so an
   // open missing_report/overdue_stage on a now-delivered/cancelled job would linger
@@ -306,8 +391,194 @@ export async function evaluateNightly(
     overdue: overdue.raised,
     blockers: blockers.raised,
     billing: billing.raised,
-    cleared: missing.cleared + overdue.cleared + blockers.cleared + billing.cleared + healed,
+    marginDrift: margin.raised,
+    lateSupplier: supplier.raised,
+    documentExpiry: docs.raised,
+    cleared:
+      missing.cleared +
+      overdue.cleared +
+      blockers.cleared +
+      billing.cleared +
+      margin.cleared +
+      supplier.cleared +
+      docs.cleared +
+      healed,
   };
+}
+
+// ── E-05 margin drift (nightly; owner/accounts; critical) ────────────────────────
+// Full cost (incl labour) / quoted (C-10) vs U7 progress — computed behind the labour
+// wall by the app.margin_drift_candidates DEFINER helper, which returns PERCENTAGES only
+// so no raw cost amount ever reaches the engine or the exception evidence. Suppressed
+// when there is no quote (quoted null → no candidate). Clears when neither arm holds.
+async function evaluateMarginDrift(ctx: Ctx) {
+  const audience: RoleArchetype[] = ["owner", "accounts"];
+  return withCtx(ctx, async (tx) => {
+    let raised = 0;
+    let cleared = 0;
+    const rows = (await tx.execute(sql`
+      select job_id::text as job_id, cost_pct, progress_pct, arm
+      from app.margin_drift_candidates(${ctx.orgId}, ${S7_DEFAULTS.marginDriftPoints},
+        ${S7_DEFAULTS.costOfQuotePct}, ${S7_DEFAULTS.preFinalProgressPct})
+    `)) as unknown as Array<{
+      job_id: string;
+      cost_pct: string;
+      progress_pct: string;
+      arm: string;
+    }>;
+    const flagged = new Set(rows.map((r) => r.job_id));
+    for (const r of rows) {
+      const res = await raiseExceptionIn(tx, ctx, {
+        ruleKey: "margin_drift",
+        severity: "critical",
+        jobId: r.job_id,
+        subjectType: "job",
+        subjectId: r.job_id,
+        evidenceRefs: [
+          { costPct: Number(r.cost_pct), progressPct: Number(r.progress_pct), arm: r.arm },
+        ],
+        audienceRoles: audience,
+        dedupKey: `margin_drift:${r.job_id}`,
+      });
+      if (res.created) raised++;
+    }
+    // Self-heal: an open margin_drift on a job no longer flagged (or no longer active)
+    // clears. We already have the flagged set; clear every open row not in it.
+    const open = (await tx.execute(sql`
+      select job_id::text as job_id, dedup_key from public.exception
+      where org_id = ${ctx.orgId} and rule_key = 'margin_drift' and resolved_at is null
+    `)) as unknown as Array<{ job_id: string; dedup_key: string }>;
+    for (const o of open) {
+      if (!flagged.has(o.job_id)) {
+        await clearExceptionIn(tx, ctx, o.dedup_key);
+        cleared++;
+      }
+    }
+    return { raised, cleared };
+  });
+}
+
+// ── E-06 late supplier (nightly; procurement + owner-aggregate; warning) ─────────
+// Per-PO: an open PO (approved/sent/partially_received) past approval + lead-time without
+// full receipt. Aggregate: a supplier with >= N such late POs in a trailing 90 days.
+async function evaluateLateSuppliers(ctx: Ctx, asOf: string) {
+  return withCtx(ctx, async (tx) => {
+    let raised = 0;
+    let cleared = 0;
+    // Per-PO late list (DB-side; approved_at is the base since the MVP PO has no expected
+    // date — a config lead-time stands in, doc 09 tunable).
+    const latePos = (await tx.execute(sql`
+      select po.id::text as id, po.supplier_id::text as supplier_id,
+             po.approved_at::date::text as approved_date
+      from public.purchase_order po
+      where po.org_id = ${ctx.orgId}
+        and po.status in ('approved', 'sent', 'partially_received')
+        and po.approved_at is not null
+        and (po.approved_at::date + ${S7_DEFAULTS.supplierLeadDays}) < ${asOf}::date
+    `)) as unknown as Array<{ id: string; supplier_id: string | null; approved_date: string }>;
+    const latePoIds = new Set(latePos.map((p) => p.id));
+    for (const p of latePos) {
+      const res = await raiseExceptionIn(tx, ctx, {
+        ruleKey: "late_po",
+        severity: "warning",
+        subjectType: "purchase_order",
+        subjectId: p.id,
+        evidenceRefs: [{ approvedDate: p.approved_date, leadDays: S7_DEFAULTS.supplierLeadDays }],
+        audienceRoles: ["procurement"],
+        dedupKey: `late_po:${p.id}`,
+      });
+      if (res.created) raised++;
+    }
+    // Self-heal per-PO: an open late_po now received/closed (not in the late set) clears.
+    const openPo = (await tx.execute(sql`
+      select subject_id::text as id, dedup_key from public.exception
+      where org_id = ${ctx.orgId} and rule_key = 'late_po' and resolved_at is null
+    `)) as unknown as Array<{ id: string; dedup_key: string }>;
+    for (const o of openPo) {
+      if (!latePoIds.has(o.id)) {
+        await clearExceptionIn(tx, ctx, o.dedup_key);
+        cleared++;
+      }
+    }
+    // Aggregate: suppliers with >= N late POs (approved in the trailing 90 days).
+    const lateSuppliers = (await tx.execute(sql`
+      select po.supplier_id::text as supplier_id, count(*)::int as n
+      from public.purchase_order po
+      where po.org_id = ${ctx.orgId}
+        and po.status in ('approved', 'sent', 'partially_received')
+        and po.approved_at is not null
+        and (po.approved_at::date + ${S7_DEFAULTS.supplierLeadDays}) < ${asOf}::date
+        and po.approved_at::date >= (${asOf}::date - 90)
+      group by po.supplier_id
+      having count(*) >= ${S7_DEFAULTS.supplierLateCount}
+    `)) as unknown as Array<{ supplier_id: string; n: number }>;
+    const flaggedSuppliers = new Set(lateSuppliers.map((s) => s.supplier_id));
+    for (const s of lateSuppliers) {
+      const res = await raiseExceptionIn(tx, ctx, {
+        ruleKey: "late_supplier",
+        severity: "warning",
+        subjectType: "supplier",
+        subjectId: s.supplier_id,
+        evidenceRefs: [{ latePoCount: s.n, windowDays: 90 }],
+        audienceRoles: ["procurement", "owner"],
+        dedupKey: `late_supplier:${s.supplier_id}`,
+      });
+      if (res.created) raised++;
+    }
+    // Self-heal aggregate: a supplier below the threshold clears.
+    const openSup = (await tx.execute(sql`
+      select subject_id::text as id, dedup_key from public.exception
+      where org_id = ${ctx.orgId} and rule_key = 'late_supplier' and resolved_at is null
+    `)) as unknown as Array<{ id: string; dedup_key: string }>;
+    for (const o of openSup) {
+      if (!flaggedSuppliers.has(o.id)) {
+        await clearExceptionIn(tx, ctx, o.dedup_key);
+        cleared++;
+      }
+    }
+    return { raised, cleared };
+  });
+}
+
+// ── E-13 document expiry (nightly; admin/owner; warning) ─────────────────────────
+// Reads the owner/admin-walled employee_hr through app.document_expiry_candidates (DEFINER),
+// which returns only (employee_id, doc_type, expiry) — never the document number.
+async function evaluateDocumentExpiry(ctx: Ctx) {
+  const audience: RoleArchetype[] = ["owner", "admin"];
+  return withCtx(ctx, async (tx) => {
+    let raised = 0;
+    let cleared = 0;
+    const rows = (await tx.execute(sql`
+      select employee_id::text as employee_id, doc_type, expiry_date::text as expiry_date
+      from app.document_expiry_candidates(${ctx.orgId}, ${S7_DEFAULTS.documentExpiryWindowDays})
+    `)) as unknown as Array<{ employee_id: string; doc_type: string; expiry_date: string }>;
+    const flagged = new Set(rows.map((r) => `${r.employee_id}:${r.doc_type}`));
+    for (const r of rows) {
+      const res = await raiseExceptionIn(tx, ctx, {
+        ruleKey: "document_expiry",
+        severity: "warning",
+        subjectType: "employee",
+        subjectId: r.employee_id,
+        evidenceRefs: [{ docType: r.doc_type, expiryDate: r.expiry_date }],
+        audienceRoles: audience,
+        dedupKey: `document_expiry:${r.employee_id}:${r.doc_type}`,
+      });
+      if (res.created) raised++;
+    }
+    // Self-heal: renewed (expiry beyond window) or deactivated → not in the candidate set.
+    const open = (await tx.execute(sql`
+      select dedup_key from public.exception
+      where org_id = ${ctx.orgId} and rule_key = 'document_expiry' and resolved_at is null
+    `)) as unknown as Array<{ dedup_key: string }>;
+    for (const o of open) {
+      const key = o.dedup_key.slice("document_expiry:".length);
+      if (!flagged.has(key)) {
+        await clearExceptionIn(tx, ctx, o.dedup_key);
+        cleared++;
+      }
+    }
+    return { raised, cleared };
+  });
 }
 
 // ── E-09 billing point uninvoiced + E-10 overdue invoice (S6 money-loop rules) ─

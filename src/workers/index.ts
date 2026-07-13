@@ -20,8 +20,14 @@ export {
 export {
   exceptionSignalMaterializer,
   exceptionClearOnApprovalDecided,
-  exceptionNightlySweep,
+  expenseAnomalyOnCreate,
+  expenseAnomalyOnVoid,
+  exceptionNightlyDispatch,
+  nightlyOrgRun,
   sweepExceptions,
+  dispatchNightly,
+  runOrgNightly,
+  computeStaggerSeconds,
 } from "./functions/exception-engine";
 // S6 "Bill": invoice issue → e-invoice + PDF seam; payment approval → reconcile.
 export {
@@ -48,7 +54,10 @@ import {
 import {
   exceptionSignalMaterializer,
   exceptionClearOnApprovalDecided,
-  exceptionNightlySweep,
+  expenseAnomalyOnCreate,
+  expenseAnomalyOnVoid,
+  exceptionNightlyDispatch,
+  nightlyOrgRun,
 } from "./functions/exception-engine";
 import { invoiceOnIssued, paymentReconcileOnDecision } from "./functions/invoice-billing";
 
@@ -68,7 +77,10 @@ export const workerFunctions = [
   costRollupOnGoodsReceiptCancel,
   exceptionSignalMaterializer,
   exceptionClearOnApprovalDecided,
-  exceptionNightlySweep,
+  expenseAnomalyOnCreate,
+  expenseAnomalyOnVoid,
+  exceptionNightlyDispatch,
+  nightlyOrgRun,
   invoiceOnIssued,
   paymentReconcileOnDecision,
 ];

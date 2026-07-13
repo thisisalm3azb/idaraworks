@@ -102,7 +102,19 @@ creds · email/WhatsApp creds · e-invoice/government creds · delete 4 junk Ver
   `customer_update` (draft/sent, frozen safe `content` jsonb at send, draft-only edit RLS) + `share_token` (token_hash only,
   expires/revoke, ≥128-bit) + **app.resolve_share_token(hash) SECURITY DEFINER** = the one no-auth public read path (returns
   ONLY safe columns of an active token's sent update). All org-scoped RLS, NO DELETE grants, composite (id,org_id) FKs.
-- REMAINING S7: E-rule services (E-05/06/08/13 in exceptions/service.ts + expenses hook for E-08) · scheduler fan-out refactor
+- **DONE (commit pending): E-rules + scheduler + events + authz.** Migration 0048 (app.margin_drift_candidates +
+  app.document_expiry_candidates DEFINER helpers so the nightly worker reads the labour/HR walls safely, returning
+  percentages/ids only). E-05 margin_drift (nightly, critical, owner/accounts, C-10 quoted, suppressed when no quote),
+  E-06 late_po + late_supplier (nightly, procurement/owner, approved_at+lead-time — no PO schema change), E-08
+  unusual_expense (event-driven on expense/created, self-clear on voided, ≥4-sample 3×-median), E-13 document_expiry
+  (nightly, admin/owner, 30 calendar days). All raise+dedup+self-heal; evidence carries percentages/ratios not raw money.
+  Scheduler REFACTORED: exceptionNightlySweep (serial herd) → exceptionNightlyDispatch (cron fan-out) + nightlyOrgRun
+  (defineOrgFunction, concurrency 10) + runOrgNightly (idempotent per-org unit) + computeStaggerSeconds (deterministic
+  FNV offset across a 240-min window); sweepExceptions kept as the direct/on-demand path. defineOrgFunction gained a
+  concurrency cap. Events NIGHTLY_ORG_DUE + CUSTOMER_UPDATE_SENT + SHARE_TOKEN_CREATED/REVOKED wired (registry+inngest+
+  index, parity 4/4). Workers registered (expenseAnomalyOnCreate/Void, exceptionNightlyDispatch, nightlyOrgRun). Authz
+  digest.view + customer_updates.draft/send/share/revoke in BOTH transcriptions (parity 8/8). Typecheck clean.
+- REMAINING S7 (was): E-rule services (E-05/06/08/13 in exceptions/service.ts + expenses hook for E-08) · scheduler fan-out refactor
   (workers/functions/exception-engine.ts) · digest composer (modules/digest) + numbers-subset validator + src/platform/ai
   narration adapter (disabled seam) · customer_update service + share surface + /s/[token] public page + sharp watermark
   derivative · quote-vs-actual view (extend costing page) · owner digest card live · 13-question golden fixtures · authz

@@ -83,6 +83,9 @@ export function defineOrgFunction<E extends EventName>(
      * from the same registry entry, so they can never be mismatched (review m6). */
     event: E;
     retries?: number;
+    /** Optional concurrency cap (S7: the staggered nightly fan-out child bounds how
+     * many org runs execute at once so the fleet stays inside the night window). */
+    concurrency?: number;
   },
   handler: (args: { payload: PayloadOf<E>; ctx: Ctx; runId: string }) => Promise<unknown>,
 ) {
@@ -91,6 +94,7 @@ export function defineOrgFunction<E extends EventName>(
     id: opts.id,
     retries: opts.retries ?? 3,
     triggers: [EVENT_TRIGGERS[opts.event]],
+    ...(opts.concurrency ? { concurrency: { limit: opts.concurrency } } : {}),
   } as unknown as CreateFnOptions;
   return inngest.createFunction(options, async ({ event, runId }) => {
     const { payload, ctx } = await verifyOrgPayload(

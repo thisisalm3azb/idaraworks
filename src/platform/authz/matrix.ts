@@ -78,7 +78,13 @@ export type Action =
   | "invoices.manage"
   | "payments.view"
   | "payments.manage"
-  | "ar.view";
+  | "ar.view"
+  // ── S7 "Improve" ──
+  | "digest.view"
+  | "customer_updates.draft"
+  | "customer_updates.send"
+  | "customer_updates.share"
+  | "customer_updates.revoke";
 
 type Grantable = Exclude<RoleArchetype, "worker_reserved_p3">;
 
@@ -211,4 +217,14 @@ export const MATRIX: Record<Action, readonly Grantable[]> = {
   "payments.manage": ["owner", "admin", "accounts"],
   // AR (accounts receivable) view — composed from invoices+payments; O/A/Accounts.
   "ar.view": ["owner", "admin", "accounts"],
+
+  // ── S7 "Improve" (doc 06 rows 62, 65) ─────────────────────────────────────
+  // Row 65 digest column = V for everyone except Worker (cut) and Viewer.
+  "digest.view": ["owner", "admin", "manager", "foreman", "procurement", "accounts"],
+  // Row 62 "Customer updates: draft/send" = M/A M/A M − − − − − → O/A/M only.
+  // share/revoke ride the same holders (org-revocable per F-22); send is always human.
+  "customer_updates.draft": ["owner", "admin", "manager"],
+  "customer_updates.send": ["owner", "admin", "manager"],
+  "customer_updates.share": ["owner", "admin", "manager"],
+  "customer_updates.revoke": ["owner", "admin", "manager"],
 };
