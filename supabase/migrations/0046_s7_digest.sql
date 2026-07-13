@@ -49,7 +49,10 @@ create policy digest_update on public.digest
 -- are updated post-compose (lazy narration fill); the deterministic payload is immutable
 -- once composed for a given day (a recompose replaces the whole row via the unique key).
 grant select, insert on public.digest to app_user;
-grant update (narration, narration_lang, narration_status, updated_at) on public.digest to app_user;
+-- A nightly RE-compose replaces the whole deterministic payload (upsert DO UPDATE), and the
+-- lazy narration fill updates the narration columns. Both are the trusted composer; no wall.
+grant update (payload, computed_at, narration, narration_lang, narration_status, updated_at)
+  on public.digest to app_user;
 
 create table public.ai_interaction (
   id uuid primary key default gen_random_uuid(),

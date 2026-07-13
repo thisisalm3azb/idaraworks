@@ -81,7 +81,7 @@ export async function composeOwnerDigest(
       select count(*)::int as n from public.exception
       where org_id = ${ctx.orgId} and resolved_at is null and rule_key = 'overdue_invoice'`,
     );
-    const arOutstanding = await arOutstandingMinor(tx, ctx.orgId, digestDate);
+    const arOutstanding = await arOutstandingMinor(tx, ctx.orgId);
 
     // Q6 — supply lateness.
     const supply = await scalar(
@@ -367,7 +367,7 @@ async function scalar(tx: TenantTx, q: ReturnType<typeof sql>): Promise<number> 
 
 /** AR outstanding (base minor units) — the same net as computeAR, but trusted (no ctx gate),
  * for the compose step. Credit notes offset the invoice they correct, floored at 0. */
-async function arOutstandingMinor(tx: TenantTx, orgId: string, asOf: string): Promise<number> {
+async function arOutstandingMinor(tx: TenantTx, orgId: string): Promise<number> {
   const rows = (await tx.execute(sql`
     with inv as (
       select greatest(0,

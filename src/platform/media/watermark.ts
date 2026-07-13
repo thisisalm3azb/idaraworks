@@ -23,14 +23,15 @@ const escapeXml = (s: string) =>
  * downsized. The watermark text (org name / "preview") is drawn diagonally, semi-transparent.
  */
 export async function watermarkImage(input: Buffer, text: string): Promise<Buffer> {
-  const base = sharp(input, { failOn: "error" }).rotate(); // honour orientation, then strip
-  const meta = await base.metadata();
-  const srcW = meta.width ?? 1200;
-  const srcH = meta.height ?? 900;
-  // Post-resize dimensions (for placing the SVG overlay at the right size).
-  const scale = Math.min(1, MAX_EDGE / Math.max(srcW, srcH));
-  const w = Math.max(1, Math.round(srcW * scale));
-  const h = Math.max(1, Math.round(srcH * scale));
+  // Rotate to honour EXIF orientation (then metadata is dropped), downsize, and re-encode.
+  // Resolve WITH the info object so the overlay is sized from the ACTUAL output dimensions
+  // (EXIF orientation can swap width/height — sizing from pre-rotate metadata mismatches).
+  const { data: resized, info } = await sharp(input, { failOn: "error" })
+    .rotate()
+    .resize({ width: MAX_EDGE, height: MAX_EDGE, fit: "inside", withoutEnlargement: true })
+    .toBuffer({ resolveWithObject: true });
+  const w = info.width;
+  const h = info.height;
   const fontSize = Math.max(16, Math.round(w / 14));
   const svg = Buffer.from(
     `<svg width="${w}" height="${h}" xmlns="http://www.w3.org/2000/svg">` +
@@ -39,8 +40,7 @@ export async function watermarkImage(input: Buffer, text: string): Promise<Buffe
       `text-anchor="middle" dominant-baseline="middle" ` +
       `transform="rotate(-30 ${w / 2} ${h / 2})">${escapeXml(text)}</text></svg>`,
   );
-  return base
-    .resize({ width: w, height: h, fit: "inside", withoutEnlargement: true })
+  return sharp(resized)
     .composite([{ input: svg, gravity: "center" }])
     .jpeg({ quality: 80 })
     .toBuffer();

@@ -386,6 +386,27 @@ export const SEEDERS: Record<string, Seeder> = {
             values (${org}, ${pmt}, ${"RCP-BL-" + randomUUID().slice(0, 8)})`;
   },
 
+  // ── S7 "Improve" tables ──
+  digest: async (o, org) => {
+    await o`insert into public.digest (org_id, audience, digest_date, payload)
+            values (${org}, 'owner', '2026-02-14', '{"audience":"owner","sections":[],"numbers":[]}'::jsonb)`;
+  },
+  ai_interaction: async (o, org, u) => {
+    await o`insert into public.ai_interaction (org_id, feature, provider, validator_verdict, status, created_by)
+            values (${org}, 'digest_narration', 'fake', 'na', 'ok', ${u})`;
+  },
+  customer_update: async (o, org, u) => {
+    await o`insert into public.customer_update (org_id, title, language, body, created_by)
+            values (${org}, 'Bleed update', 'ar', 'Bleed body', ${u})`;
+  },
+  share_token: async (o, org, u) => {
+    const cu = randomUUID();
+    await o`insert into public.customer_update (id, org_id, title, language, body, status, content, sent_at, created_by)
+            values (${cu}, ${org}, 'Bleed sent', 'ar', 'Bleed', 'sent', '{}'::jsonb, now(), ${u})`;
+    await o`insert into public.share_token (org_id, customer_update_id, token_hash, expires_at, created_by)
+            values (${org}, ${cu}, ${"blhash-" + randomUUID()}, now() + interval '30 days', ${u})`;
+  },
+
   // Seeded under the org's OWN user (not the shared recipient): sign_in_log's
   // policy is user-OR-org, so a shared user would be visible cross-org by design
   // (the user's own events). Using a disjoint user tests the cross-USER isolation.

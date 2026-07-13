@@ -96,6 +96,19 @@ creds · email/WhatsApp creds · e-invoice/government creds · delete 4 junk Ver
   Marine+TESTING untouched · memory · report. Then auto-begin S7.
 
 ## S7 — BUILD LOG
+- **IMPLEMENTATION ~COMPLETE (commits af88959, 051950b, 27ab952, 137d07c, 833215c; migrations 0045-0048 hosted):**
+  E-rules E-05/06/08/13 + staggered fan-out scheduler + events/authz (051950b); deterministic digest + AI narration
+  seam + numbers-subset validator (27ab952); customer-update service + tokenized share surface + /s/[token] public
+  page + sharp watermark + C-10 quote-vs-actual wiring (137d07c); owner digest card + customer-update UI + en/ar
+  i18n (833215c). Typecheck/i18n-parity/build all green at each step.
+- **REMAINING S7:** tests (unit: numbers-subset/stagger/watermark done-next; integration: E-rule lifecycles, digest
+  compose/read/redaction/narration/credit-meter, customer-update draft→send→resolve→revoke→expire, share-token
+  cross-org bleed, quote-vs-actual + divergence, worker direct-invocation; bleed seeders for digest/ai_interaction/
+  customer_update/share_token; thirteen-questions golden fixture) · prod demo (s7-prod-demo.ts) · full gates ·
+  multi-lens review + fixes · deploy · prod health · Arabic thirteen-questions DoD demo · cleanup · report.
+  NOTE: af88959 + all S7 commits are LOCAL (unpushed) — push with the test commit once gates are green.
+
+
 - **Migrations 0045-0047 WRITTEN + APPLIED to hosted (DB now 0000-0047, next 0048):** 0045 exception rule_key widen
   (+margin_drift, late_po, late_supplier, unusual_expense, document_expiry) + subject index; 0046 `digest` (per org/audience/
   date, redacted-at-collection payload jsonb, narration seam nullable) + `ai_interaction` append-only credit ledger; 0047

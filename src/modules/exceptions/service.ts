@@ -474,7 +474,7 @@ async function evaluateLateSuppliers(ctx: Ctx, asOf: string) {
       where po.org_id = ${ctx.orgId}
         and po.status in ('approved', 'sent', 'partially_received')
         and po.approved_at is not null
-        and (po.approved_at::date + ${S7_DEFAULTS.supplierLeadDays}) < ${asOf}::date
+        and (po.approved_at::date + ${S7_DEFAULTS.supplierLeadDays}::int) < ${asOf}::date
     `)) as unknown as Array<{ id: string; supplier_id: string | null; approved_date: string }>;
     const latePoIds = new Set(latePos.map((p) => p.id));
     for (const p of latePos) {
@@ -507,7 +507,7 @@ async function evaluateLateSuppliers(ctx: Ctx, asOf: string) {
       where po.org_id = ${ctx.orgId}
         and po.status in ('approved', 'sent', 'partially_received')
         and po.approved_at is not null
-        and (po.approved_at::date + ${S7_DEFAULTS.supplierLeadDays}) < ${asOf}::date
+        and (po.approved_at::date + ${S7_DEFAULTS.supplierLeadDays}::int) < ${asOf}::date
         and po.approved_at::date >= (${asOf}::date - 90)
       group by po.supplier_id
       having count(*) >= ${S7_DEFAULTS.supplierLateCount}

@@ -56,12 +56,11 @@ create policy customer_update_insert on public.customer_update
   for insert to app_user
   with check (org_id = (select app.current_org_id()) and created_by = (select app.current_user_id()));
 -- Draft-only edits: once sent, the update + its snapshot are immutable (a correction is a
--- new update, the money/record rule §4.7 by analogy).
+-- new update, the money/record rule §4.7 by analogy). The USING clause reads the ROW's OWN
+-- status column directly — a subquery back onto customer_update would recurse (42P17).
 create policy customer_update_update on public.customer_update
   for update to app_user
-  using (org_id = (select app.current_org_id())
-    and exists (select 1 from public.customer_update cu where cu.id = customer_update.id
-      and cu.org_id = (select app.current_org_id()) and cu.status = 'draft'))
+  using (org_id = (select app.current_org_id()) and status = 'draft')
   with check (org_id = (select app.current_org_id()));
 grant select, insert on public.customer_update to app_user;
 -- No DELETE grant (D-1.7). The send transition + the draft edits update these columns.
