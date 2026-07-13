@@ -34,6 +34,7 @@ import {
   evaluateExpenseAnomaly,
 } from "@/modules/exceptions/service";
 import { reconcileOrgRollups } from "@/modules/costing/service";
+import { composeOwnerDigest } from "@/modules/digest/service";
 import { logger } from "@/platform/logger";
 
 // The night window across which per-org runs are spread, and how many run at once.
@@ -100,9 +101,11 @@ export const expenseAnomalyOnVoid = defineOrgFunction(
 export async function runOrgNightly(
   ctx: Ctx,
   clock: { asOf: string; nowMs: number },
-): Promise<{ raised: number; drifted: number }> {
+): Promise<{ raised: number; drifted: number; digestSections: number }> {
   const ex = await evaluateNightly(ctx, clock);
   const rec = await reconcileOrgRollups(ctx);
+  // Compose the owner digest AFTER the evaluators so it reflects this morning's exceptions.
+  const digest = await composeOwnerDigest(ctx, clock.asOf);
   const raised =
     ex.missing +
     ex.overdue +
@@ -111,7 +114,7 @@ export async function runOrgNightly(
     ex.marginDrift +
     ex.lateSupplier +
     ex.documentExpiry;
-  return { raised, drifted: rec.drifted };
+  return { raised, drifted: rec.drifted, digestSections: digest.sections };
 }
 
 /**
