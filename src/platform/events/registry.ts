@@ -13,6 +13,10 @@ export const JOB_CREATED = "job/created" as const; // S1 walking skeleton
 export const DAILY_REPORT_SUBMITTED = "daily_report/submitted" as const; // S1
 export const JOB_STAGE_COMPLETED = "job_stage/completed" as const; // S2
 export const JOB_STAGE_REOPENED = "job_stage/reopened" as const; // S2 (F-5)
+export const DAILY_REPORT_REVIEWED = "daily_report/reviewed" as const; // S3
+export const DAILY_REPORT_RETURNED = "daily_report/returned" as const; // S3
+export const ISSUE_RAISED = "issue/raised" as const; // S3
+export const ISSUE_RESOLVED = "issue/resolved" as const; // S3
 // Placeholder exception channel (doc 11 S2 DoD): the S7 engine subscribes to
 // this NAME; until then the facts accumulate on the bus.
 export const EXCEPTION_RAISED = "exception/raised" as const;
@@ -66,6 +70,39 @@ export const ExceptionRaisedData = z.object({
 });
 export type ExceptionRaisedData = z.infer<typeof ExceptionRaisedData>;
 
+export const DailyReportReviewedData = z.object({
+  ...orgScoped,
+  reportId: z.string().uuid(),
+  jobId: z.string().uuid(),
+  reportDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+});
+export type DailyReportReviewedData = z.infer<typeof DailyReportReviewedData>;
+
+export const DailyReportReturnedData = z.object({
+  ...orgScoped,
+  reportId: z.string().uuid(),
+  jobId: z.string().uuid(),
+  reportDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  reason: z.string().min(1).max(2000),
+});
+export type DailyReportReturnedData = z.infer<typeof DailyReportReturnedData>;
+
+export const IssueRaisedData = z.object({
+  ...orgScoped,
+  issueId: z.string().uuid(),
+  jobId: z.string().uuid().optional(),
+  severity: z.enum(["low", "medium", "high", "critical"]),
+  isBlocker: z.boolean(),
+});
+export type IssueRaisedData = z.infer<typeof IssueRaisedData>;
+
+export const IssueResolvedData = z.object({
+  ...orgScoped,
+  issueId: z.string().uuid(),
+  jobId: z.string().uuid().optional(),
+});
+export type IssueResolvedData = z.infer<typeof IssueResolvedData>;
+
 export type EventDef = { version: number; schema: z.ZodTypeAny };
 
 export const EVENT_DEFS = {
@@ -75,6 +112,10 @@ export const EVENT_DEFS = {
   [DAILY_REPORT_SUBMITTED]: { version: 1, schema: DailyReportSubmittedData },
   [JOB_STAGE_COMPLETED]: { version: 1, schema: JobStageCompletedData },
   [JOB_STAGE_REOPENED]: { version: 1, schema: JobStageReopenedData },
+  [DAILY_REPORT_REVIEWED]: { version: 1, schema: DailyReportReviewedData },
+  [DAILY_REPORT_RETURNED]: { version: 1, schema: DailyReportReturnedData },
+  [ISSUE_RAISED]: { version: 1, schema: IssueRaisedData },
+  [ISSUE_RESOLVED]: { version: 1, schema: IssueResolvedData },
   [EXCEPTION_RAISED]: { version: 1, schema: ExceptionRaisedData },
 } as const satisfies Record<string, EventDef>;
 

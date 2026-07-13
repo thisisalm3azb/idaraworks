@@ -15,6 +15,10 @@ import {
   DAILY_REPORT_SUBMITTED,
   JOB_STAGE_COMPLETED,
   JOB_STAGE_REOPENED,
+  DAILY_REPORT_REVIEWED,
+  DAILY_REPORT_RETURNED,
+  ISSUE_RAISED,
+  ISSUE_RESOLVED,
   EXCEPTION_RAISED,
   FileUploadedData,
   DemoHeartbeatData,
@@ -22,6 +26,10 @@ import {
   DailyReportSubmittedData,
   JobStageCompletedData,
   JobStageReopenedData,
+  DailyReportReviewedData,
+  DailyReportReturnedData,
+  IssueRaisedData,
+  IssueResolvedData,
   ExceptionRaisedData,
 } from "./registry";
 
@@ -32,6 +40,10 @@ export {
   DAILY_REPORT_SUBMITTED,
   JOB_STAGE_COMPLETED,
   JOB_STAGE_REOPENED,
+  DAILY_REPORT_REVIEWED,
+  DAILY_REPORT_RETURNED,
+  ISSUE_RAISED,
+  ISSUE_RESOLVED,
   EXCEPTION_RAISED,
   FileUploadedData,
   DemoHeartbeatData,
@@ -39,6 +51,10 @@ export {
   DailyReportSubmittedData,
   JobStageCompletedData,
   JobStageReopenedData,
+  DailyReportReviewedData,
+  DailyReportReturnedData,
+  IssueRaisedData,
+  IssueResolvedData,
   ExceptionRaisedData,
 };
 export type { FileUploadedData as FileUploadedPayload } from "./registry";
@@ -56,6 +72,14 @@ export const jobStageCompletedEvent = eventType(JOB_STAGE_COMPLETED, {
 export const jobStageReopenedEvent = eventType(JOB_STAGE_REOPENED, {
   schema: JobStageReopenedData,
 });
+export const dailyReportReviewedEvent = eventType(DAILY_REPORT_REVIEWED, {
+  schema: DailyReportReviewedData,
+});
+export const dailyReportReturnedEvent = eventType(DAILY_REPORT_RETURNED, {
+  schema: DailyReportReturnedData,
+});
+export const issueRaisedEvent = eventType(ISSUE_RAISED, { schema: IssueRaisedData });
+export const issueResolvedEvent = eventType(ISSUE_RESOLVED, { schema: IssueResolvedData });
 export const exceptionRaisedEvent = eventType(EXCEPTION_RAISED, { schema: ExceptionRaisedData });
 
 /** name → its trigger. Paired with EVENT_DEFS[name].schema so defineOrgFunction
@@ -67,6 +91,10 @@ export const EVENT_TRIGGERS = {
   [DAILY_REPORT_SUBMITTED]: dailyReportSubmittedEvent,
   [JOB_STAGE_COMPLETED]: jobStageCompletedEvent,
   [JOB_STAGE_REOPENED]: jobStageReopenedEvent,
+  [DAILY_REPORT_REVIEWED]: dailyReportReviewedEvent,
+  [DAILY_REPORT_RETURNED]: dailyReportReturnedEvent,
+  [ISSUE_RAISED]: issueRaisedEvent,
+  [ISSUE_RESOLVED]: issueResolvedEvent,
   [EXCEPTION_RAISED]: exceptionRaisedEvent,
 } as const;
 
