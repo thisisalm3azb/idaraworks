@@ -252,6 +252,68 @@ export const SEEDERS: Record<string, Seeder> = {
             values (${org}, 'Bleed issue', 'medium', false, 'open', ${u})`;
   },
 
+  // ── S4 supply & approve ──
+  approval_rule: async (o, org) => {
+    await o`insert into public.approval_rule (org_id, subject_type, condition_kind, assigned_role)
+            values (${org}, 'material_request', 'always', 'manager')`;
+  },
+  approval: async (o, org, u) => {
+    await o`insert into public.approval
+              (org_id, subject_type, subject_id, subject_summary, requested_by, assigned_role, state)
+            values (${org}, 'material_request', ${randomUUID()},
+                    '{"title":"Bleed approval"}'::jsonb, ${u}, 'manager', 'pending')`;
+  },
+  material_request: async (o, org, u) => {
+    await o`insert into public.material_request (org_id, reference, status, created_by)
+            values (${org}, ${"BLM-" + randomUUID().slice(0, 8)}, 'draft', ${u})`;
+  },
+  material_request_line: async (o, org, u) => {
+    const mr = randomUUID();
+    await o`insert into public.material_request (id, org_id, reference, status, created_by)
+            values (${mr}, ${org}, ${"BLML-" + randomUUID().slice(0, 8)}, 'draft', ${u})`;
+    await o`insert into public.material_request_line (org_id, mr_id, item_name, qty, unit)
+            values (${org}, ${mr}, 'Bleed line', 2, 'ea')`;
+  },
+  purchase_order: async (o, org, u) => {
+    const sup = randomUUID();
+    await o`insert into public.supplier (id, org_id, name) values (${sup}, ${org}, 'Bleed PO Supplier')`;
+    await o`insert into public.purchase_order (org_id, reference, supplier_id, status, created_by)
+            values (${org}, ${"BLP-" + randomUUID().slice(0, 8)}, ${sup}, 'draft', ${u})`;
+  },
+  purchase_order_line: async (o, org, u) => {
+    const sup = randomUUID();
+    const po = randomUUID();
+    await o`insert into public.supplier (id, org_id, name) values (${sup}, ${org}, 'Bleed POL Supplier')`;
+    await o`insert into public.purchase_order (id, org_id, reference, supplier_id, status, created_by)
+            values (${po}, ${org}, ${"BLPL-" + randomUUID().slice(0, 8)}, ${sup}, 'draft', ${u})`;
+    await o`insert into public.purchase_order_line (org_id, po_id, item_name, qty, unit, unit_cost_minor)
+            values (${org}, ${po}, 'Bleed POL', 3, 'ea', 1000)`;
+  },
+  goods_receipt: async (o, org, u) => {
+    const sup = randomUUID();
+    const po = randomUUID();
+    await o`insert into public.supplier (id, org_id, name) values (${sup}, ${org}, 'Bleed GRN Supplier')`;
+    await o`insert into public.purchase_order (id, org_id, reference, supplier_id, status, created_by)
+            values (${po}, ${org}, ${"BLG-" + randomUUID().slice(0, 8)}, ${sup}, 'approved', ${u})`;
+    await o`insert into public.goods_receipt (org_id, reference, po_id, status, received_date, created_by)
+            values (${org}, ${"BLGR-" + randomUUID().slice(0, 8)}, ${po}, 'recorded', '2026-02-10', ${u})`;
+  },
+  goods_receipt_line: async (o, org, u) => {
+    const sup = randomUUID();
+    const po = randomUUID();
+    const pol = randomUUID();
+    const grn = randomUUID();
+    await o`insert into public.supplier (id, org_id, name) values (${sup}, ${org}, 'Bleed GRNL Supplier')`;
+    await o`insert into public.purchase_order (id, org_id, reference, supplier_id, status, created_by)
+            values (${po}, ${org}, ${"BLGL-" + randomUUID().slice(0, 8)}, ${sup}, 'approved', ${u})`;
+    await o`insert into public.purchase_order_line (id, org_id, po_id, item_name, qty, unit, unit_cost_minor)
+            values (${pol}, ${org}, ${po}, 'Bleed', 5, 'ea', 1000)`;
+    await o`insert into public.goods_receipt (id, org_id, reference, po_id, status, received_date, created_by)
+            values (${grn}, ${org}, ${"BLGLR-" + randomUUID().slice(0, 8)}, ${po}, 'recorded', '2026-02-11', ${u})`;
+    await o`insert into public.goods_receipt_line (org_id, grn_id, po_line_id, ordered_qty, received_qty)
+            values (${org}, ${grn}, ${pol}, 5, 2)`;
+  },
+
   // Seeded under the org's OWN user (not the shared recipient): sign_in_log's
   // policy is user-OR-org, so a shared user would be visible cross-org by design
   // (the user's own events). Using a disjoint user tests the cross-USER isolation.
