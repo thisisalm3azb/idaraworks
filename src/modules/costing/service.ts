@@ -151,9 +151,19 @@ export async function getJobCosting(
     );
     const sellingPriceMinor =
       jobRows[0].selling_price_minor === null ? null : Number(jobRows[0].selling_price_minor);
-    // Accepted-quote precedence input is S6 (no quote entity yet) → null in S5.
-    const { quotedMinor } = resolveQuotedMinor({
-      acceptedQuoteTotalMinor: null,
+    // C-10 precedence: the accepted quote (S6) wins as the quoted figure; a divergence
+    // between it and a manually-set selling price is raised as an exception, never
+    // silently resolved (raiseQuoteDivergence, below).
+    const acceptedQuote = (await tx.execute(sql`
+      select base_total_minor from public.quote
+      where org_id = ${ctx.orgId} and converted_job_id = ${jobId} and status = 'converted'
+      order by accepted_at desc nulls last limit 1
+    `)) as unknown as Array<{ base_total_minor: string | number }>;
+    const acceptedQuoteTotalMinor = acceptedQuote[0]
+      ? Number(acceptedQuote[0].base_total_minor)
+      : null;
+    const { quotedMinor, divergence } = resolveQuotedMinor({
+      acceptedQuoteTotalMinor,
       sellingPriceMinor,
       adjustmentsMinor: adjustments,
     });
@@ -184,9 +194,19 @@ export async function getJobCosting(
       totalCostMinor,
       quotedMinor: quotedRedacted,
       marginMinor,
-    } satisfies CostingView;
+      _divergence: divergence,
+    };
   });
-  return view;
+  // C-10: surface (or clear) the quote-vs-selling-price divergence as its own exception —
+  // idempotent (dedup key), owner/admin audience. Kept OUT of the read tx above.
+  if (view._divergence) {
+    await raiseQuoteDivergence(ctx, { jobId, evidence: [{ acceptedQuote: true }] });
+  } else {
+    await clearQuoteDivergence(ctx, jobId);
+  }
+  const { _divergence, ...costingView } = view;
+  void _divergence;
+  return costingView satisfies CostingView;
 }
 
 /**

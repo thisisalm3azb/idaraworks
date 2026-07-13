@@ -86,6 +86,8 @@ export const AUDIT_ENTITY_TYPES = [
   "approval", // S4 — the decision record (submit/decide/withdraw are audited)
   "approval_rule", // S4 — rule edits are config-audited
   "exception", // S5 — user dismiss/resolve is an audited mutation (engine raise/auto-clear is a materialized derivation, not audited)
+  "customer_update", // S7 — draft/edit/send are audited customer-facing mutations
+  "share_token", // S7 — mint/revoke of a public share link are audited
 ] as const;
 export type AuditEntityType = (typeof AUDIT_ENTITY_TYPES)[number];
 

@@ -19,6 +19,9 @@ export const RATE_RULES = {
   // Phase I review fix: /api/health fans out to DB + storage per call and is
   // unauthenticated — bound it. Generous enough for smoke suites + monitors.
   health: { limit: 30, windowSeconds: 60 },
+  // S7: the PUBLIC customer-share page (doc 10 item 14). Unauthenticated + token-bearer;
+  // bound per-IP to blunt token enumeration / scraping. Upstash is the real store (OA-4).
+  share: { limit: 30, windowSeconds: 60 },
 } as const satisfies Record<string, Rule>;
 
 export type RateScope = keyof typeof RATE_RULES;
