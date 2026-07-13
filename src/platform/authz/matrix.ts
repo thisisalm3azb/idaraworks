@@ -47,7 +47,14 @@ export type Action =
   | "crew.manage"
   | "week.view"
   | "comments.create"
-  | "reports.create";
+  | "reports.create"
+  // S3 (doc 06 rows 45-47, 61): review loop, backfill, issues, attendance.
+  | "reports.review"
+  | "reports.backfill"
+  | "issues.raise"
+  | "issues.resolve"
+  | "attendance.manage"
+  | "attendance.view";
 
 type Grantable = Exclude<RoleArchetype, "worker_reserved_p3">;
 
@@ -107,4 +114,23 @@ export const MATRIX: Record<Action, readonly Grantable[]> = {
   // contributor archetype, NOT the read-only viewer; foreman is assigned-scoped
   // (enforced server-side by the F-6 resolver in the action).
   "comments.create": ["owner", "admin", "manager", "foreman", "procurement", "accounts"],
+  // ── S3 "Report: the heartbeat" (doc 06 rows) ──────────────────────────────
+  // "Daily reports: review; edit materials post-submit" A/M A/M A/M − ...
+  "reports.review": ["owner", "admin", "manager"],
+  // "Reports: backfill history" row shows Owner=− Admin=M, but the governing
+  // footnote "Owner ≡ Admin in MVP permissions; Owner additionally holds..."
+  // makes Owner a strict superset in every other row — a lone Owner<Admin cell
+  // is the doc typo, the footnote is normative → owner+admin. (Reconciliation
+  // documented in the S3 completion report.)
+  "reports.backfill": ["owner", "admin"],
+  // "Issues: raise / resolve" C/M C/M C/M C(assigned) C C C(own) − — raise (C)
+  // is every contributor incl. foreman(assigned)/procurement/accounts; resolve
+  // (M) is O/A/M. Worker(own) is the P3 archetype, excluded from the build.
+  "issues.raise": ["owner", "admin", "manager", "foreman", "procurement", "accounts"],
+  "issues.resolve": ["owner", "admin", "manager"],
+  // "Attendance: mark / view" M M M − − V − V — mark (M) is O/A/M; view adds
+  // Accounts + Viewer (V). Foreman does NOT read the grid (labour lines are the
+  // write, audit C-3 — the derivation is a DEFINER path, not a foreman grant).
+  "attendance.manage": ["owner", "admin", "manager"],
+  "attendance.view": ["owner", "admin", "manager", "accounts", "viewer"],
 };

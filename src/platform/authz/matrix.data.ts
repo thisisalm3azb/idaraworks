@@ -44,6 +44,12 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
     "week.view",
     "comments.create",
     "reports.create",
+    "reports.review",
+    "reports.backfill",
+    "issues.raise",
+    "issues.resolve",
+    "attendance.manage",
+    "attendance.view",
   ],
   admin: [
     "members.view",
@@ -75,6 +81,12 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
     "week.view",
     "comments.create",
     "reports.create",
+    "reports.review",
+    "reports.backfill",
+    "issues.raise",
+    "issues.resolve",
+    "attendance.manage",
+    "attendance.view",
   ],
   // Manager (doc 08: the Workshop Manager variant): masters M, jobs/reports, NO
   // config, NO salary/HR side-tables, no invite/deactivate/legal-hold.
@@ -100,6 +112,11 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
     "week.view",
     "comments.create",
     "reports.create",
+    "reports.review",
+    "issues.raise",
+    "issues.resolve",
+    "attendance.manage",
+    "attendance.view",
   ],
   // Field seat (doc 06 literal row): assigned jobs (v) + own reports. NO
   // employee/catalog/member/customer/config surfaces — S3's report form gets
@@ -111,6 +128,8 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
     "week.view",
     "comments.create",
     "reports.create",
+    // "Issues: raise" C (assigned) — the field's fast path to flag a blocker.
+    "issues.raise",
   ],
   procurement: [
     "members.view",
@@ -119,6 +138,8 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
     "jobs.view",
     "week.view",
     "comments.create",
+    // "Issues: raise" C for procurement (materials problems → tickets).
+    "issues.raise",
   ],
   accounts: [
     "members.view",
@@ -128,7 +149,11 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
     "jobs.view",
     "week.view",
     "comments.create",
+    // "Issues: raise" C + "Attendance: view" V (payroll input, D-6.2 cost-priv
+    // holder — but attendance itself is not a cost wall).
+    "issues.raise",
+    "attendance.view",
   ],
-  // Viewer (doc 06): jobs v (redacted) + week view — masters rows are all −.
-  viewer: ["members.view", "jobs.view", "week.view"],
+  // Viewer (doc 06): jobs v (redacted) + week view + attendance V — other rows −.
+  viewer: ["members.view", "jobs.view", "week.view", "attendance.view"],
 };
