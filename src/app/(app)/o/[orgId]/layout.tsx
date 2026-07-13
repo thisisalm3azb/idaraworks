@@ -35,6 +35,7 @@ export default async function OrgLayout({
     ...(can(a, "jobs.view")
       ? [{ href: `/o/${orgId}/jobs`, label: term("job", terms, "plural") }]
       : []),
+    ...(can(a, "week.view") ? [{ href: `/o/${orgId}/week`, label: t("nav.week") }] : []),
     ...(can(a, "employees.view") ? [{ href: `/o/${orgId}/people`, label: t("nav.people") }] : []),
     ...(can(a, "customers.view")
       ? [{ href: `/o/${orgId}/customers`, label: t("nav.customers") }]

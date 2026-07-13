@@ -72,13 +72,19 @@ export default async function JobsPage({
                   href={`/o/${orgId}/jobs/${j.id}`}
                   className="flex min-h-14 items-center justify-between gap-3 py-2"
                 >
-                  <div>
+                  <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium text-ink">
                       {j.reference} — {j.name}
                     </p>
                     <p className="text-xs text-ink-muted">
                       {j.presetCode ?? ""} {j.customerName ? `· ${j.customerName}` : ""}
+                      {j.progress !== null && j.progress !== undefined ? ` · ${j.progress}%` : ""}
                     </p>
+                    {j.progress !== null && j.progress !== undefined ? (
+                      <div className="mt-1 h-1.5 w-full max-w-48 overflow-hidden rounded-full bg-sunken">
+                        <div className="h-full bg-brand" style={{ width: `${j.progress}%` }} />
+                      </div>
+                    ) : null}
                   </div>
                   <Badge
                     tone={STATUS_TONE[j.statusCategory as keyof typeof STATUS_TONE] ?? "neutral"}
