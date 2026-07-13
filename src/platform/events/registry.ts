@@ -24,6 +24,12 @@ export const GOODS_RECEIPT_RECORDED = "goods_receipt/recorded" as const; // S4
 export const GOODS_RECEIPT_CANCELLED = "goods_receipt/cancelled" as const; // S5 (→ cost rollup invalidate)
 export const EXPENSE_CREATED = "expense/created" as const; // S5 (→ cost rollup invalidate)
 export const EXPENSE_VOIDED = "expense/voided" as const; // S5 (→ cost rollup invalidate)
+// S6 "Bill": the money-loop facts.
+export const QUOTE_ACCEPTED = "quote/accepted" as const;
+export const INVOICE_ISSUED = "invoice/issued" as const; // → PDF render + e-invoice submit workers
+export const INVOICE_VOIDED = "invoice/voided" as const;
+export const CREDIT_NOTE_ISSUED = "credit_note/issued" as const;
+export const PAYMENT_RECORDED = "payment/recorded" as const;
 // The cross-module exception SIGNAL channel: modules that detect a condition
 // outside the exception engine emit this (S2 F-5 billing-point reopen; the S4 E-03
 // approval-stuck stub), and the S5 engine's materializer subscribes to this NAME
@@ -137,6 +143,37 @@ export const ExpenseVoidedData = z.object({
 });
 export type ExpenseVoidedData = z.infer<typeof ExpenseVoidedData>;
 
+export const QuoteAcceptedData = z.object({
+  ...orgScoped,
+  quoteId: z.string().uuid(),
+  jobId: z.string().uuid(),
+});
+export type QuoteAcceptedData = z.infer<typeof QuoteAcceptedData>;
+
+export const InvoiceIssuedData = z.object({
+  ...orgScoped,
+  invoiceId: z.string().uuid(),
+  jobId: z.string().uuid().optional(),
+});
+export type InvoiceIssuedData = z.infer<typeof InvoiceIssuedData>;
+
+export const InvoiceVoidedData = z.object({ ...orgScoped, invoiceId: z.string().uuid() });
+export type InvoiceVoidedData = z.infer<typeof InvoiceVoidedData>;
+
+export const CreditNoteIssuedData = z.object({
+  ...orgScoped,
+  invoiceId: z.string().uuid(),
+  correctsInvoiceId: z.string().uuid(),
+});
+export type CreditNoteIssuedData = z.infer<typeof CreditNoteIssuedData>;
+
+export const PaymentRecordedData = z.object({
+  ...orgScoped,
+  paymentId: z.string().uuid(),
+  invoiceId: z.string().uuid().optional(),
+});
+export type PaymentRecordedData = z.infer<typeof PaymentRecordedData>;
+
 export const DailyReportReviewedData = z.object({
   ...orgScoped,
   reportId: z.string().uuid(),
@@ -190,6 +227,11 @@ export const EVENT_DEFS = {
   [GOODS_RECEIPT_CANCELLED]: { version: 1, schema: GoodsReceiptCancelledData },
   [EXPENSE_CREATED]: { version: 1, schema: ExpenseCreatedData },
   [EXPENSE_VOIDED]: { version: 1, schema: ExpenseVoidedData },
+  [QUOTE_ACCEPTED]: { version: 1, schema: QuoteAcceptedData },
+  [INVOICE_ISSUED]: { version: 1, schema: InvoiceIssuedData },
+  [INVOICE_VOIDED]: { version: 1, schema: InvoiceVoidedData },
+  [CREDIT_NOTE_ISSUED]: { version: 1, schema: CreditNoteIssuedData },
+  [PAYMENT_RECORDED]: { version: 1, schema: PaymentRecordedData },
   [EXCEPTION_RAISED]: { version: 1, schema: ExceptionRaisedData },
 } as const satisfies Record<string, EventDef>;
 

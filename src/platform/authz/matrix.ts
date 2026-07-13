@@ -70,7 +70,15 @@ export type Action =
   | "costing.view"
   | "today.view"
   | "exceptions.view"
-  | "exceptions.dismiss";
+  | "exceptions.dismiss"
+  // S6 (doc 06 rows 55-57): Bill — quotes/invoices/payments/AR.
+  | "quotes.view"
+  | "quotes.manage"
+  | "invoices.view"
+  | "invoices.manage"
+  | "payments.view"
+  | "payments.manage"
+  | "ar.view";
 
 type Grantable = Exclude<RoleArchetype, "worker_reserved_p3">;
 
@@ -179,10 +187,9 @@ export const MATRIX: Record<Action, readonly Grantable[]> = {
   // flags at the serializer (manager viewCosts OFF by default → cost EXCLUDING
   // labour; no margin without viewPrices). Foreman/Procurement have no access.
   "costing.view": ["owner", "admin", "manager", "accounts"],
-  // The S5 Today screens are the FOREMAN + MANAGER compositions; management
-  // (owner/admin) see the manager composition. The Owner/Accounts/Procurement
-  // SPECIALISED Today screens are S6 (F-55).
-  "today.view": ["owner", "admin", "manager", "foreman"],
+  // Today screens: S5 shipped foreman+manager; S6 adds the Accounts + Procurement
+  // compositions (owner/admin see the owner/management view). doc 03 §5 roles.
+  "today.view": ["owner", "admin", "manager", "foreman", "accounts", "procurement"],
   // Exceptions: view is audience-scoped — the grant is broad, the SERVICE narrows
   // to (archetype ∈ audience_roles) ∧ job-scope (foreman sees only own-relevant).
   // Viewer excluded.
@@ -190,4 +197,18 @@ export const MATRIX: Record<Action, readonly Grantable[]> = {
   // Dismiss / manual-resolve = Owner/Admin/Manager (manager audience+job-scope
   // limited at the service; owner ruling). Auto-resolution stays engine-controlled.
   "exceptions.dismiss": ["owner", "admin", "manager"],
+  // ── S6 "Bill" (doc 06 rows 55-57) ─────────────────────────────────────────
+  // "Quotes: draft / approve-send" M/A M/A M − − V − − — draft (M) = O/A/M; the
+  // approve-send (A) is the quote_send approval decided via approvals.decide (rule
+  // → O/A). Accounts view-only.
+  "quotes.view": ["owner", "admin", "manager", "accounts"],
+  "quotes.manage": ["owner", "admin", "manager"],
+  // "Invoices & payments: manage" M − M − − M − − — only O/A/Accounts. Manager −.
+  // invoice_issue is a direct action, NOT an approval subject (audit C-1).
+  "invoices.view": ["owner", "admin", "accounts"],
+  "invoices.manage": ["owner", "admin", "accounts"],
+  "payments.view": ["owner", "admin", "accounts"],
+  "payments.manage": ["owner", "admin", "accounts"],
+  // AR (accounts receivable) view — composed from invoices+payments; O/A/Accounts.
+  "ar.view": ["owner", "admin", "accounts"],
 };

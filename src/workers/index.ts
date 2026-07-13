@@ -23,6 +23,12 @@ export {
   exceptionNightlySweep,
   sweepExceptions,
 } from "./functions/exception-engine";
+// S6 "Bill": invoice issue → e-invoice + PDF seam; payment approval → reconcile.
+export {
+  invoiceOnIssued,
+  paymentReconcileOnDecision,
+  buildInvoiceForIssue,
+} from "./functions/invoice-billing";
 export { verifyOrgPayload, defineOrgFunction, OrgVerificationError } from "./harness";
 
 import { imageDerivatives } from "./functions/image-derivatives";
@@ -44,6 +50,7 @@ import {
   exceptionClearOnApprovalDecided,
   exceptionNightlySweep,
 } from "./functions/exception-engine";
+import { invoiceOnIssued, paymentReconcileOnDecision } from "./functions/invoice-billing";
 
 export const workerFunctions = [
   imageDerivatives,
@@ -58,7 +65,10 @@ export const workerFunctions = [
   costRollupOnExpenseCreate,
   costRollupOnExpenseVoid,
   costRollupOnGoodsReceipt,
+  costRollupOnGoodsReceiptCancel,
   exceptionSignalMaterializer,
   exceptionClearOnApprovalDecided,
   exceptionNightlySweep,
+  invoiceOnIssued,
+  paymentReconcileOnDecision,
 ];

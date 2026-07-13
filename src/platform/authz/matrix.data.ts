@@ -65,6 +65,14 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
     "today.view",
     "exceptions.view",
     "exceptions.dismiss",
+    // S6 Bill: quotes + invoices + payments + AR.
+    "quotes.view",
+    "quotes.manage",
+    "invoices.view",
+    "invoices.manage",
+    "payments.view",
+    "payments.manage",
+    "ar.view",
   ],
   admin: [
     "members.view",
@@ -117,6 +125,14 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
     "today.view",
     "exceptions.view",
     "exceptions.dismiss",
+    // S6 Bill: same as owner (Owner ≡ Admin footnote).
+    "quotes.view",
+    "quotes.manage",
+    "invoices.view",
+    "invoices.manage",
+    "payments.view",
+    "payments.manage",
+    "ar.view",
   ],
   // Manager (doc 08: the Workshop Manager variant): masters M, jobs/reports, NO
   // config, NO salary/HR side-tables, no invite/deactivate/legal-hold.
@@ -162,6 +178,10 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
     "today.view",
     "exceptions.view",
     "exceptions.dismiss",
+    // S6 Bill: draft/edit quotes (approve-send is via approvals.decide, rule → O/A).
+    // Manager has NO invoice/payment/AR access (row 57 −).
+    "quotes.view",
+    "quotes.manage",
   ],
   // Field seat (doc 06 literal row): assigned jobs (v) + own reports. NO
   // employee/catalog/member/customer/config surfaces — S3's report form gets
@@ -206,6 +226,8 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
     "expenses.create",
     "expenses.view",
     "exceptions.view",
+    // S6 Bill: the Procurement Today screen (approved MRs to convert, open POs, …).
+    "today.view",
   ],
   accounts: [
     "members.view",
@@ -231,6 +253,15 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
     "expenses.view",
     "costing.view",
     "exceptions.view",
+    // S6 Bill: the back-office finance seat — quotes view, invoices + payments +
+    // AR manage/view, and the Accounts Today screen. (Manage but not draft quotes.)
+    "quotes.view",
+    "invoices.view",
+    "invoices.manage",
+    "payments.view",
+    "payments.manage",
+    "ar.view",
+    "today.view",
   ],
   // Viewer (doc 06): jobs v (redacted) + week view + attendance V — other rows −.
   viewer: ["members.view", "jobs.view", "week.view", "attendance.view"],

@@ -17,6 +17,7 @@
 import { sql, withCtx, type Ctx } from "@/platform/tenancy";
 import { assignedJobCondition } from "@/modules/jobs/service";
 import { listOpenExceptions } from "@/modules/exceptions/service";
+import { computeAR } from "@/modules/invoices/service";
 import type { RoleArchetype } from "@/platform/registries";
 
 export type FreshnessStamp = { computedAt: string; lastInputAt?: string | null };
@@ -26,8 +27,9 @@ export type TodayCard = {
   items: Array<Record<string, unknown>>;
   freshness: FreshnessStamp;
 };
+export type TodayScreen = "foreman" | "manager" | "owner" | "accounts" | "procurement";
 export type TodayPayload = {
-  screen: "foreman" | "manager";
+  screen: TodayScreen;
   computedAt: string;
   cards: TodayCard[];
 };
@@ -37,9 +39,26 @@ export async function composeToday(
   archetype: RoleArchetype,
   opts: { asOf: string; computedAt: string },
 ): Promise<TodayPayload> {
-  const screen: "foreman" | "manager" = archetype === "foreman" ? "foreman" : "manager";
+  const screen: TodayScreen =
+    archetype === "foreman"
+      ? "foreman"
+      : archetype === "accounts"
+        ? "accounts"
+        : archetype === "procurement"
+          ? "procurement"
+          : archetype === "owner" || archetype === "admin"
+            ? "owner"
+            : "manager";
   const cards =
-    screen === "foreman" ? await foremanCards(ctx, opts) : await managerCards(ctx, archetype, opts);
+    screen === "foreman"
+      ? await foremanCards(ctx, opts)
+      : screen === "accounts"
+        ? await accountsCards(ctx, archetype, opts)
+        : screen === "procurement"
+          ? await procurementCards(ctx, opts)
+          : screen === "owner"
+            ? await ownerCards(ctx, archetype, opts)
+            : await managerCards(ctx, archetype, opts);
   return { screen, computedAt: opts.computedAt, cards };
 }
 
@@ -219,4 +238,147 @@ async function managerCards(
       freshness: fr(),
     },
   ];
+}
+
+// ── S6 "Bill" screens: Accounts, Owner, Procurement (doc 03) ─────────────────
+function fr(computedAt: string): FreshnessStamp {
+  return { computedAt };
+}
+
+async function accountsCards(
+  ctx: Ctx,
+  archetype: RoleArchetype,
+  opts: { asOf: string; computedAt: string },
+): Promise<TodayCard[]> {
+  const exceptions = await listOpenExceptions(ctx, archetype, { limit: 200 });
+  const byRule = (rule: string) => exceptions.filter((e) => e.ruleKey === rule);
+  // computeAR already redacts money (null) when !pricePrivileged; mirror that for the
+  // raw payments-sum below so no money reaches a non-price-privileged viewer's payload.
+  const seesPrice = ctx.pricePrivileged;
+  const ar = await computeAR(ctx, archetype, opts.asOf);
+  const db = await withCtx(ctx, async (tx) => {
+    const payments = (await tx.execute(sql`
+      select count(*)::int as n, coalesce(sum(base_amount_minor),0)::bigint as total
+      from public.payment where org_id = ${ctx.orgId} and status in ('recorded','confirmed')
+        and payment_date >= (${opts.asOf}::date - 7)
+    `)) as unknown as Array<{ n: number; total: string }>;
+    const expenses = (await tx.execute(sql`
+      select count(*)::int as n from public.expense
+      where org_id = ${ctx.orgId} and voided_at is null and payment_status = 'unpaid'
+    `)) as unknown as Array<{ n: number }>;
+    return { payments: payments[0]!, expenses: expenses[0]! };
+  });
+  return [
+    {
+      key: "invoices_to_issue",
+      count: byRule("billing_point_uninvoiced").length,
+      items: byRule("billing_point_uninvoiced").map((e) => ({
+        id: e.id,
+        jobId: e.jobId,
+        severity: e.severity,
+      })),
+      freshness: fr(opts.computedAt),
+    },
+    {
+      key: "overdue_receivables",
+      count: byRule("overdue_invoice").length,
+      items: byRule("overdue_invoice").map((e) => ({
+        id: e.id,
+        subjectId: e.subjectId,
+        severity: e.severity,
+        evidence: e.evidenceRefs,
+      })),
+      freshness: fr(opts.computedAt),
+    },
+    {
+      key: "ar_summary",
+      count: ar.outstandingMinor ?? 0,
+      items: [
+        {
+          outstandingMinor: ar.outstandingMinor,
+          current: ar.current,
+          d1_30: ar.d1_30,
+          d31_60: ar.d31_60,
+          d61_90: ar.d61_90,
+          over90: ar.over90,
+        },
+      ],
+      freshness: fr(opts.computedAt),
+    },
+    {
+      key: "payments_week",
+      count: db.payments.n,
+      items: [{ amountMinor: seesPrice ? Number(db.payments.total) : null }],
+      freshness: fr(opts.computedAt),
+    },
+    {
+      key: "expenses_queue",
+      count: db.expenses.n,
+      items: [],
+      freshness: fr(opts.computedAt),
+    },
+  ];
+}
+
+async function ownerCards(
+  ctx: Ctx,
+  archetype: RoleArchetype,
+  opts: { asOf: string; computedAt: string },
+): Promise<TodayCard[]> {
+  const exceptions = await listOpenExceptions(ctx, archetype, { limit: 200 });
+  const atRisk = exceptions.filter((e) =>
+    ["overdue_stage", "missing_report", "overdue_invoice", "billing_point_uninvoiced"].includes(
+      e.ruleKey,
+    ),
+  );
+  const ar = await computeAR(ctx, archetype, opts.asOf);
+  const db = await withCtx(ctx, async (tx) => {
+    const pending = (await tx.execute(sql`
+      select count(*)::int as n from public.approval
+      where org_id = ${ctx.orgId} and state = 'pending'
+    `)) as unknown as Array<{ n: number }>;
+    return { pending: pending[0]! };
+  });
+  return [
+    {
+      key: "needs_decision",
+      count: db.pending.n,
+      items: [],
+      freshness: fr(opts.computedAt),
+    },
+    {
+      key: "at_risk",
+      count: atRisk.length,
+      items: atRisk
+        .slice(0, 10)
+        .map((e) => ({ id: e.id, ruleKey: e.ruleKey, jobId: e.jobId, severity: e.severity })),
+      freshness: fr(opts.computedAt),
+    },
+    {
+      key: "collections",
+      count: ar.outstandingMinor ?? 0,
+      items: [{ outstandingMinor: ar.outstandingMinor, over90: ar.over90 }],
+      freshness: fr(opts.computedAt),
+    },
+  ];
+}
+
+async function procurementCards(
+  ctx: Ctx,
+  opts: { asOf: string; computedAt: string },
+): Promise<TodayCard[]> {
+  return withCtx(ctx, async (tx) => {
+    const approvedMrs = (await tx.execute(sql`
+      select count(*)::int as n from public.material_request
+      where org_id = ${ctx.orgId} and status = 'approved'
+    `)) as unknown as Array<{ n: number }>;
+    const openPos = (await tx.execute(sql`
+      select count(*)::int as n from public.purchase_order
+      where org_id = ${ctx.orgId} and status in ('approved','sent','partially_received')
+    `)) as unknown as Array<{ n: number }>;
+    return [
+      { key: "approved_mrs", count: approvedMrs[0]!.n, items: [], freshness: fr(opts.computedAt) },
+      { key: "open_pos", count: openPos[0]!.n, items: [], freshness: fr(opts.computedAt) },
+    ];
+  });
 }

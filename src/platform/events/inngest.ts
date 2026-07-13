@@ -26,6 +26,11 @@ import {
   GOODS_RECEIPT_CANCELLED,
   EXPENSE_CREATED,
   EXPENSE_VOIDED,
+  QUOTE_ACCEPTED,
+  INVOICE_ISSUED,
+  INVOICE_VOIDED,
+  CREDIT_NOTE_ISSUED,
+  PAYMENT_RECORDED,
   EXCEPTION_RAISED,
   FileUploadedData,
   DemoHeartbeatData,
@@ -44,6 +49,11 @@ import {
   GoodsReceiptCancelledData,
   ExpenseCreatedData,
   ExpenseVoidedData,
+  QuoteAcceptedData,
+  InvoiceIssuedData,
+  InvoiceVoidedData,
+  CreditNoteIssuedData,
+  PaymentRecordedData,
   ExceptionRaisedData,
 } from "./registry";
 
@@ -65,6 +75,11 @@ export {
   GOODS_RECEIPT_CANCELLED,
   EXPENSE_CREATED,
   EXPENSE_VOIDED,
+  QUOTE_ACCEPTED,
+  INVOICE_ISSUED,
+  INVOICE_VOIDED,
+  CREDIT_NOTE_ISSUED,
+  PAYMENT_RECORDED,
   EXCEPTION_RAISED,
   FileUploadedData,
   DemoHeartbeatData,
@@ -83,6 +98,11 @@ export {
   GoodsReceiptCancelledData,
   ExpenseCreatedData,
   ExpenseVoidedData,
+  QuoteAcceptedData,
+  InvoiceIssuedData,
+  InvoiceVoidedData,
+  CreditNoteIssuedData,
+  PaymentRecordedData,
   ExceptionRaisedData,
 };
 export type { FileUploadedData as FileUploadedPayload } from "./registry";
@@ -123,6 +143,13 @@ export const goodsReceiptCancelledEvent = eventType(GOODS_RECEIPT_CANCELLED, {
 });
 export const expenseCreatedEvent = eventType(EXPENSE_CREATED, { schema: ExpenseCreatedData });
 export const expenseVoidedEvent = eventType(EXPENSE_VOIDED, { schema: ExpenseVoidedData });
+export const quoteAcceptedEvent = eventType(QUOTE_ACCEPTED, { schema: QuoteAcceptedData });
+export const invoiceIssuedEvent = eventType(INVOICE_ISSUED, { schema: InvoiceIssuedData });
+export const invoiceVoidedEvent = eventType(INVOICE_VOIDED, { schema: InvoiceVoidedData });
+export const creditNoteIssuedEvent = eventType(CREDIT_NOTE_ISSUED, {
+  schema: CreditNoteIssuedData,
+});
+export const paymentRecordedEvent = eventType(PAYMENT_RECORDED, { schema: PaymentRecordedData });
 export const exceptionRaisedEvent = eventType(EXCEPTION_RAISED, { schema: ExceptionRaisedData });
 
 /** name → its trigger. Paired with EVENT_DEFS[name].schema so defineOrgFunction
@@ -145,6 +172,11 @@ export const EVENT_TRIGGERS = {
   [GOODS_RECEIPT_CANCELLED]: goodsReceiptCancelledEvent,
   [EXPENSE_CREATED]: expenseCreatedEvent,
   [EXPENSE_VOIDED]: expenseVoidedEvent,
+  [QUOTE_ACCEPTED]: quoteAcceptedEvent,
+  [INVOICE_ISSUED]: invoiceIssuedEvent,
+  [INVOICE_VOIDED]: invoiceVoidedEvent,
+  [CREDIT_NOTE_ISSUED]: creditNoteIssuedEvent,
+  [PAYMENT_RECORDED]: paymentRecordedEvent,
   [EXCEPTION_RAISED]: exceptionRaisedEvent,
 } as const;
 

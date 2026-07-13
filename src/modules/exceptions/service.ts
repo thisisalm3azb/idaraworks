@@ -38,6 +38,8 @@ export const RULE_KEYS = [
   "labour_outlier",
   "quote_divergence",
   "billing_point_reopened",
+  "billing_point_uninvoiced", // S6 E-09
+  "overdue_invoice", // S6 E-10
 ] as const;
 export type RuleKey = (typeof RULE_KEYS)[number];
 
@@ -280,12 +282,19 @@ export async function evaluateReportAnomalies(
 export async function evaluateNightly(
   ctx: Ctx,
   opts: { asOf: string; nowMs: number },
-): Promise<{ missing: number; overdue: number; blockers: number; cleared: number }> {
+): Promise<{
+  missing: number;
+  overdue: number;
+  blockers: number;
+  billing: number;
+  cleared: number;
+}> {
   const cal = await loadCalendar(ctx);
-  const [missing, overdue, blockers] = await Promise.all([
+  const [missing, overdue, blockers, billing] = await Promise.all([
     evaluateMissingReports(ctx, cal, opts.asOf),
     evaluateOverdueJobs(ctx, cal, opts.asOf),
     evaluateBlockingIssues(ctx, opts.nowMs),
+    evaluateBillingExceptions(ctx, cal, opts.asOf),
   ]);
   // The active-only evaluators never revisit a job once it leaves 'active', so an
   // open missing_report/overdue_stage on a now-delivered/cancelled job would linger
@@ -296,8 +305,115 @@ export async function evaluateNightly(
     missing: missing.raised,
     overdue: overdue.raised,
     blockers: blockers.raised,
-    cleared: missing.cleared + overdue.cleared + blockers.cleared + healed,
+    billing: billing.raised,
+    cleared: missing.cleared + overdue.cleared + blockers.cleared + billing.cleared + healed,
   };
+}
+
+// ── E-09 billing point uninvoiced + E-10 overdue invoice (S6 money-loop rules) ─
+async function evaluateBillingExceptions(ctx: Ctx, cal: Calendar, asOf: string) {
+  const audience: RoleArchetype[] = ["owner", "admin", "accounts"];
+  return withCtx(ctx, async (tx) => {
+    let raised = 0;
+    let cleared = 0;
+
+    // E-09: an active job whose completed stage is a billing milestone (trigger in
+    // billing_points) but has NO non-cancelled invoice → the work was never billed.
+    const e09jobs = (await tx.execute(sql`
+      select j.id::text as job_id from public.job j
+      where j.org_id = ${ctx.orgId} and j.status_category = 'active' and j.archived = false
+        and exists (
+          select 1 from public.job_stage s
+          where s.job_id = j.id and s.org_id = ${ctx.orgId} and s.status = 'completed'
+            and s.stage_key in (
+              select bp->>'trigger' from jsonb_array_elements(j.billing_points) bp
+              where bp->>'trigger' <> 'on_acceptance'
+            )
+        )
+        and not exists (
+          select 1 from public.invoice i where i.job_id = j.id and i.org_id = ${ctx.orgId}
+            and i.kind = 'invoice' and i.status <> 'cancelled'
+        )
+    `)) as unknown as Array<{ job_id: string }>;
+    for (const j of e09jobs) {
+      const r = await raiseExceptionIn(tx, ctx, {
+        ruleKey: "billing_point_uninvoiced",
+        severity: "warning",
+        jobId: j.job_id,
+        subjectType: "job",
+        subjectId: j.job_id,
+        audienceRoles: audience,
+        dedupKey: `billing_point_uninvoiced:${j.job_id}`,
+      });
+      if (r.created) raised++;
+    }
+    // Self-heal E-09: a job that now has an invoice (or left active) clears.
+    const e09heal = (await tx.execute(sql`
+      update public.exception e set resolved_at = now(), resolution = 'auto'
+      where e.org_id = ${ctx.orgId} and e.rule_key = 'billing_point_uninvoiced' and e.resolved_at is null
+        and exists (
+          select 1 from public.invoice i where i.job_id = e.job_id and i.org_id = ${ctx.orgId}
+            and i.kind = 'invoice' and i.status <> 'cancelled'
+        )
+      returning e.id
+    `)) as unknown as Array<{ id: string }>;
+    cleared += e09heal.length;
+
+    // E-10: an issued/partially-paid invoice past its due date with a POSITIVE net
+    // balance → overdue; severity escalates to critical past 30 WORKING days (F-41).
+    // Net = base − payments − credit notes: a fully-credited invoice is never overdue
+    // even if a stale status lingers (belt-and-suspenders with reconcile-on-credit).
+    const overdue = (await tx.execute(sql`
+      select i.id::text as id, i.due_date::text as due_date from public.invoice i
+      where i.org_id = ${ctx.orgId} and i.kind = 'invoice'
+        and i.status in ('issued', 'partially_paid') and i.due_date is not null and i.due_date < ${asOf}
+        and (
+          i.base_total_minor
+          - coalesce((select sum(p.base_amount_minor) from public.payment p
+                      where p.invoice_id = i.id and p.org_id = ${ctx.orgId}
+                        and p.status in ('recorded','confirmed')), 0)
+          - coalesce((select sum(cn.base_total_minor) from public.invoice cn
+                      where cn.corrects_invoice_id = i.id and cn.org_id = ${ctx.orgId}
+                        and cn.kind = 'credit_note' and cn.status <> 'cancelled'), 0)
+        ) > 0
+    `)) as unknown as Array<{ id: string; due_date: string }>;
+    for (const inv of overdue) {
+      const daysOver = workingDaysBetween(cal, inv.due_date, asOf);
+      const r = await raiseExceptionIn(tx, ctx, {
+        ruleKey: "overdue_invoice",
+        severity: daysOver > 30 ? "critical" : "warning",
+        subjectType: "invoice",
+        subjectId: inv.id,
+        evidenceRefs: [{ dueDate: inv.due_date, workingDaysOverdue: daysOver }],
+        audienceRoles: audience,
+        dedupKey: `overdue_invoice:${inv.id}`,
+      });
+      if (r.created) raised++;
+    }
+    // Self-heal E-10: an invoice now paid/cancelled/credited/not-overdue clears.
+    // Symmetric with the raise query above (same positive-net-balance predicate).
+    const e10heal = (await tx.execute(sql`
+      update public.exception e set resolved_at = now(), resolution = 'auto'
+      where e.org_id = ${ctx.orgId} and e.rule_key = 'overdue_invoice' and e.resolved_at is null
+        and not exists (
+          select 1 from public.invoice i where i.id = e.subject_id and i.org_id = ${ctx.orgId}
+            and i.status in ('issued', 'partially_paid') and i.due_date is not null and i.due_date < ${asOf}
+            and (
+              i.base_total_minor
+              - coalesce((select sum(p.base_amount_minor) from public.payment p
+                          where p.invoice_id = i.id and p.org_id = ${ctx.orgId}
+                            and p.status in ('recorded','confirmed')), 0)
+              - coalesce((select sum(cn.base_total_minor) from public.invoice cn
+                          where cn.corrects_invoice_id = i.id and cn.org_id = ${ctx.orgId}
+                            and cn.kind = 'credit_note' and cn.status <> 'cancelled'), 0)
+            ) > 0
+        )
+      returning e.id
+    `)) as unknown as Array<{ id: string }>;
+    cleared += e10heal.length;
+
+    return { raised, cleared };
+  });
 }
 
 async function selfHealInactiveJobExceptions(ctx: Ctx): Promise<number> {
