@@ -314,6 +314,34 @@ export const SEEDERS: Record<string, Seeder> = {
             values (${org}, ${grn}, ${pol}, 5, 2)`;
   },
 
+  // ── S5 "Measure" tables ──
+  expense: async (o, org, u) => {
+    await o`insert into public.expense
+              (org_id, reference, category_key, costing_mapping, description, expense_date,
+               amount_minor, vat_amount_minor, total_minor, created_by)
+            values (${org}, ${"BLEXP-" + randomUUID().slice(0, 8)}, 'misc', 'overhead', 'bleed',
+                    '2026-02-12', 1000, 50, 1050, ${u})`;
+  },
+  exception: async (o, org) => {
+    await o`insert into public.exception (org_id, rule_key, severity, audience_roles, dedup_key)
+            values (${org}, 'missing_report', 'warning', array['manager']::text[],
+                    ${"missing_report:" + randomUUID()})`;
+  },
+  cost_rollup: async (o, org, u) => {
+    const job = randomUUID();
+    await o`insert into public.job (id, org_id, reference, name, status_key, status_category, created_by)
+            values (${job}, ${org}, ${"BLCR-" + randomUUID().slice(0, 8)}, 'bleed', 'active', 'active', ${u})`;
+    await o`insert into public.cost_rollup (org_id, job_id, cost_basis, total_ex_labour_minor)
+            values (${org}, ${job}, 'ex_vat', 1000)`;
+  },
+  cost_rollup_labour: async (o, org, u) => {
+    const job = randomUUID();
+    await o`insert into public.job (id, org_id, reference, name, status_key, status_category, created_by)
+            values (${job}, ${org}, ${"BLCRL-" + randomUUID().slice(0, 8)}, 'bleed', 'active', 'active', ${u})`;
+    await o`insert into public.cost_rollup_labour (org_id, job_id, labour_cost_minor, total_cost_minor)
+            values (${org}, ${job}, 500, 1500)`;
+  },
+
   // Seeded under the org's OWN user (not the shared recipient): sign_in_log's
   // policy is user-OR-org, so a shared user would be visible cross-org by design
   // (the user's own events). Using a disjoint user tests the cross-USER isolation.
