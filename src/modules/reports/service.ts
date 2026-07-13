@@ -11,6 +11,7 @@ import { command } from "@/platform/audit";
 import { assertCan, ForbiddenError } from "@/platform/authz";
 import { DAILY_REPORT_SUBMITTED } from "@/platform/events";
 import { sql, withCtx, type Ctx } from "@/platform/tenancy";
+import { isAssigned } from "@/modules/jobs/service";
 import type { RoleArchetype } from "@/platform/registries";
 
 export class DuplicateReportError extends Error {
@@ -46,17 +47,10 @@ export async function submitDailyReport(
   assertCan(archetype, "reports.create");
   const data = SubmitReportInput.parse(input);
 
-  // Foreman condition (doc 06 "assigned"): S1 assignment = job.foreman_user_id
-  // or creator; managers+ report on any job.
-  if (archetype === "foreman") {
-    const rows = (await withCtx(ctx, (tx) =>
-      tx.execute(sql`
-        select 1 as ok from public.job
-        where org_id = ${ctx.orgId} and id = ${data.jobId}
-          and (foreman_user_id = ${ctx.userId} or created_by = ${ctx.userId})
-      `),
-    )) as unknown as Array<{ ok: number }>;
-    if (rows.length === 0) throw new ForbiddenError("reports.create");
+  // Foreman condition (doc 06 "assigned") — the ONE F-6 resolver (S2):
+  // manager/foreman user refs OR an active job_crew membership.
+  if (archetype === "foreman" && !(await isAssigned(ctx, data.jobId))) {
+    throw new ForbiddenError("reports.create");
   }
 
   const id = randomUUID();

@@ -171,6 +171,28 @@ async function loadFile(tx: TenantTx, fileId: string): Promise<FileRecord | null
   return rows[0] ? mapRow(rows[0]) : null;
 }
 
+/** Files attached to one entity (S2 job files tab) — ready, non-voided. */
+export async function listEntityFiles(
+  ctx: Ctx,
+  attachedToType: string,
+  attachedToId: string,
+): Promise<FileRecord[]> {
+  const rows = (await withCtx(ctx, (tx) =>
+    tx.execute(sql`
+      select id::text as id from public.file
+      where org_id = ${ctx.orgId} and attached_to_type = ${attachedToType}
+        and attached_to_id = ${attachedToId} and voided_at is null
+      order by created_at desc
+    `),
+  )) as unknown as Array<{ id: string }>;
+  const files: FileRecord[] = [];
+  for (const r of rows) {
+    const f = await getFile(ctx, r.id);
+    if (f) files.push(f);
+  }
+  return files;
+}
+
 export async function getFile(ctx: Ctx, fileId: string): Promise<FileRecord | null> {
   // RLS does the org scoping AND the class gating (0008 file_select).
   return withCtx(ctx, (tx) => loadFile(tx, fileId));

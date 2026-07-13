@@ -13,10 +13,16 @@ import {
   DEMO_HEARTBEAT,
   JOB_CREATED,
   DAILY_REPORT_SUBMITTED,
+  JOB_STAGE_COMPLETED,
+  JOB_STAGE_REOPENED,
+  EXCEPTION_RAISED,
   FileUploadedData,
   DemoHeartbeatData,
   JobCreatedData,
   DailyReportSubmittedData,
+  JobStageCompletedData,
+  JobStageReopenedData,
+  ExceptionRaisedData,
 } from "./registry";
 
 export {
@@ -24,10 +30,16 @@ export {
   DEMO_HEARTBEAT,
   JOB_CREATED,
   DAILY_REPORT_SUBMITTED,
+  JOB_STAGE_COMPLETED,
+  JOB_STAGE_REOPENED,
+  EXCEPTION_RAISED,
   FileUploadedData,
   DemoHeartbeatData,
   JobCreatedData,
   DailyReportSubmittedData,
+  JobStageCompletedData,
+  JobStageReopenedData,
+  ExceptionRaisedData,
 };
 export type { FileUploadedData as FileUploadedPayload } from "./registry";
 
@@ -38,6 +50,13 @@ export const jobCreatedEvent = eventType(JOB_CREATED, { schema: JobCreatedData }
 export const dailyReportSubmittedEvent = eventType(DAILY_REPORT_SUBMITTED, {
   schema: DailyReportSubmittedData,
 });
+export const jobStageCompletedEvent = eventType(JOB_STAGE_COMPLETED, {
+  schema: JobStageCompletedData,
+});
+export const jobStageReopenedEvent = eventType(JOB_STAGE_REOPENED, {
+  schema: JobStageReopenedData,
+});
+export const exceptionRaisedEvent = eventType(EXCEPTION_RAISED, { schema: ExceptionRaisedData });
 
 /** name → its trigger. Paired with EVENT_DEFS[name].schema so defineOrgFunction
  * binds BOTH from a single event key — a trigger/schema mismatch is impossible. */
@@ -46,6 +65,9 @@ export const EVENT_TRIGGERS = {
   [DEMO_HEARTBEAT]: demoHeartbeatEvent,
   [JOB_CREATED]: jobCreatedEvent,
   [DAILY_REPORT_SUBMITTED]: dailyReportSubmittedEvent,
+  [JOB_STAGE_COMPLETED]: jobStageCompletedEvent,
+  [JOB_STAGE_REOPENED]: jobStageReopenedEvent,
+  [EXCEPTION_RAISED]: exceptionRaisedEvent,
 } as const;
 
 export const inngest = new Inngest({

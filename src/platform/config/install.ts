@@ -88,6 +88,16 @@ export async function installTemplate(ctx: Ctx, templateKey: string): Promise<In
   await apply("config.reference_patterns", manifest.reference_patterns, "reference patterns");
   await apply("config.roles", manifest.role_presets, "role presets");
   if (calendar) await apply("config.holiday_calendar", calendar, "holiday calendar");
+  if (manifest.field_definitions?.job) {
+    await apply("config.fields.job", manifest.field_definitions.job, "job custom fields");
+  }
+  if (manifest.field_definitions?.customer) {
+    await apply(
+      "config.fields.customer",
+      manifest.field_definitions.customer,
+      "customer custom fields",
+    );
+  }
   await apply("terminology.template", manifest.key, "terminology");
 
   // Retry/reinstall safety (review fix): reuse the EXISTING row's id per preset

@@ -25,6 +25,10 @@ export { installTemplate, getTemplate, TemplateInstallError, type InstallResult 
 export { TEMPLATES, TEMPLATE_BOATBUILDING } from "./templates/boatbuilding";
 export { TemplateManifestSchema, type TemplateManifest } from "./schemas/manifest";
 export {
+  FieldDefinitionSchema,
+  FieldDefinitionSetSchema,
+  type FieldDefinition,
+  type FieldDefinitionSet,
   StageTemplateSchema,
   StatusSetSchema,
   JobPresetSchema,
@@ -49,3 +53,4 @@ export {
   type ConfigRevisionRow,
 } from "./queries";
 export { lockOrgConfig, lockOrgConfigShared } from "./pipeline";
+export { mergeCustomValues, CustomValueError } from "./customFields";

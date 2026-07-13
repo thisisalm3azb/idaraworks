@@ -382,6 +382,30 @@ export const TEMPLATE_BOATBUILDING: TemplateManifest = {
     };
   }),
 
+  // ── Custom fields on job (doc 08: engine_package, colour_scheme) ──────────
+  field_definitions: {
+    job: {
+      fields: [
+        {
+          field_key: "engine_package",
+          type: "text",
+          labels: L("Engine package", "باقة المحرك"),
+          required: false,
+          visibility: [],
+          retired: false,
+        },
+        {
+          field_key: "colour_scheme",
+          type: "text",
+          labels: L("Colour scheme", "نظام الألوان"),
+          required: false,
+          visibility: [],
+          retired: false,
+        },
+      ],
+    },
+  },
+
   // ── Holiday calendars per country (F-41; install picks the org's country) ─
   // 2026 dates; org-editable after install (the calendar is config, not law).
   holiday_calendars: {

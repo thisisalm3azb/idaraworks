@@ -35,6 +35,17 @@ export type Action =
   | "catalog.manage"
   | "jobs.view"
   | "jobs.create"
+  | "jobs.edit"
+  | "jobs.price.manage"
+  | "jobs.price.adjust"
+  | "jobs.progress.override"
+  | "stages.update"
+  | "stages.request_complete"
+  | "stages.reopen"
+  | "tasks.manage"
+  | "tasks.update_status"
+  | "crew.manage"
+  | "week.view"
   | "reports.create";
 
 type Grantable = Exclude<RoleArchetype, "worker_reserved_p3">;
@@ -69,4 +80,26 @@ export const MATRIX: Record<Action, readonly Grantable[]> = {
   "jobs.create": ["owner", "admin", "manager"],
   // "Daily reports: create/edit own draft" = C for O/A/M + Foreman(assigned, own).
   "reports.create": ["owner", "admin", "manager", "foreman"],
+  // S2 (doc 06): "Jobs: create/edit core" M = O/A/M.
+  "jobs.edit": ["owner", "admin", "manager"],
+  // Pricing surfaces are price-privileged O/A (manager is the Workshop variant
+  // with viewPrices OFF; server-side redaction is the wall — F-23).
+  "jobs.price.manage": ["owner", "admin"],
+  // Price adjustments are the MVP scope-change mechanism — OWNER-only (F-10).
+  "jobs.price.adjust": ["owner"],
+  // progress_override is a management-judgment override (D-1.4) — O/A/M.
+  "jobs.progress.override": ["owner", "admin", "manager"],
+  // "Stages: update status" M M M; foreman = C (assigned; request-complete).
+  "stages.update": ["owner", "admin", "manager"],
+  "stages.request_complete": ["owner", "admin", "manager", "foreman"],
+  // Reopen is a manager action with required reason (doc 01 F-5).
+  "stages.reopen": ["owner", "admin", "manager"],
+  // "Tasks: manage / update own status" M M M; foreman C (assigned).
+  "tasks.manage": ["owner", "admin", "manager"],
+  "tasks.update_status": ["owner", "admin", "manager", "foreman"],
+  // job_crew membership management rides the job-planning surface (O/A/M).
+  "crew.manage": ["owner", "admin", "manager"],
+  // "Week plan: view published" = V for every archetype (the plan ENTITY was
+  // cut, F-15 — the derived week VIEW keeps the row's audience).
+  "week.view": ["owner", "admin", "manager", "foreman", "procurement", "accounts", "viewer"],
 };

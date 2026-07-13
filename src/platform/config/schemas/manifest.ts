@@ -10,6 +10,7 @@ import { CONTAINER_KINDS } from "@/platform/registries";
 import { TerminologyOverrideSchema } from "./terminology";
 import {
   CategorySetSchema,
+  FieldDefinitionSetSchema,
   HolidayCalendarSchema,
   JobPresetSchema,
   ReferencePatternSetSchema,
@@ -38,6 +39,14 @@ export const TemplateManifestSchema = z
     presets: z.array(JobPresetSchema).min(1),
     /** Per-country holiday calendars; install picks the org's country (F-41). */
     holiday_calendars: z.record(z.string().regex(/^[A-Z]{2}$/), HolidayCalendarSchema),
+    /** Custom-field definitions per entity (doc 09 #6; optional — S2). */
+    field_definitions: z
+      .object({
+        job: FieldDefinitionSetSchema.optional(),
+        customer: FieldDefinitionSetSchema.optional(),
+      })
+      .strict()
+      .optional(),
   })
   .strict()
   .superRefine((m, ctx) => {

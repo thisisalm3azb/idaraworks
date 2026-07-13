@@ -26,6 +26,8 @@ import { TerminologyOverrideSchema } from "./schemas/terminology";
 import { TEMPLATES } from "./templates/boatbuilding";
 import {
   CategorySetSchema,
+  FieldDefinitionSetSchema,
+  type FieldDefinitionSet,
   HolidayCalendarSchema,
   JobPresetSchema,
   ReferencePatternSetSchema,
@@ -207,6 +209,33 @@ const categoryGuard =
       }
     }
   };
+
+const fieldsGuard: Handler["guard"] = async (tx, ctx, key, next, current) => {
+  const nxt = (next as FieldDefinitionSet | null)?.fields ?? [];
+  const cur = (current as FieldDefinitionSet | null)?.fields ?? [];
+  // Per-entity cap = limit.custom_fields_per_entity (doc 09 #6), counting
+  // ACTIVE (non-retired) definitions.
+  const limit = await getLimit(ctx, "limit.custom_fields_per_entity");
+  const active = nxt.filter((f) => !f.retired).length;
+  if (limit !== null && active > limit) {
+    throw new ConfigGuardError(key, `custom-field limit is ${limit} per entity (got ${active})`);
+  }
+  // D-9.2: existing field keys never vanish and never change TYPE (values
+  // reference both forever); retire instead.
+  const nextByKey = new Map(nxt.map((f) => [f.field_key, f]));
+  for (const f of cur) {
+    const n = nextByKey.get(f.field_key);
+    if (!n) {
+      throw new ConfigGuardError(
+        key,
+        `field "${f.field_key}" cannot be removed — retire it (retired: true) (D-9.2)`,
+      );
+    }
+    if (n.type !== f.type) {
+      throw new ConfigGuardError(key, `field "${f.field_key}" type is immutable (${f.type})`);
+    }
+  }
+};
 
 // ── table-backed handlers ─────────────────────────────────────────────────────
 const rolesHandler: Handler = {
@@ -394,6 +423,9 @@ const FIXED_HANDLERS: Record<string, Handler> = {
   "config.reference_patterns": blobHandler(ReferencePatternSetSchema),
   "config.roles": rolesHandler,
   "config.holiday_calendar": holidayHandler,
+  // Custom-field definitions (doc-09 #6; entities job, customer — F-13).
+  "config.fields.job": blobHandler(FieldDefinitionSetSchema, fieldsGuard),
+  "config.fields.customer": blobHandler(FieldDefinitionSetSchema, fieldsGuard),
   // The selected terminology template (resolution: override → template → default).
   "terminology.template": blobHandler(
     zx.string().refine((k) => k in TEMPLATES, "unknown template key"),

@@ -7,6 +7,9 @@ export {
   DEMO_HEARTBEAT,
   JOB_CREATED,
   DAILY_REPORT_SUBMITTED,
+  JOB_STAGE_COMPLETED,
+  JOB_STAGE_REOPENED,
+  EXCEPTION_RAISED,
   FileUploadedData,
   DemoHeartbeatData,
 } from "./inngest";

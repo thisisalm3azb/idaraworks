@@ -222,3 +222,57 @@ export const HolidayCalendarSchema = z
   })
   .strict();
 export type HolidayCalendar = z.infer<typeof HolidayCalendarSchema>;
+
+// ── #6 FieldDefinition (S2; custom-field registry MVP = job, customer — F-13) ─
+export const FIELD_ENTITIES = ["job", "customer"] as const;
+export type FieldEntity = (typeof FIELD_ENTITIES)[number];
+export const FIELD_TYPES = [
+  "text",
+  "number",
+  "money",
+  "date",
+  "select",
+  "multiselect",
+  "boolean",
+  "photo",
+] as const;
+
+export const FieldDefinitionSchema = z
+  .object({
+    field_key: configKey, // immutable (D-9.2)
+    type: z.enum(FIELD_TYPES),
+    labels,
+    required: z.boolean().default(false),
+    /** Archetypes that SEE the field; empty = everyone (doc 09 visibility). */
+    visibility: z.array(z.enum(MVP_GRANTABLE_ARCHETYPES)).default([]),
+    /** select/multiselect options — keys immutable, labels mutable. */
+    options: z
+      .array(z.object({ key: configKey, labels }))
+      .max(50)
+      .optional(),
+    retired: z.boolean().default(false), // D-9.2: retire, never delete
+  })
+  .strict()
+  .superRefine((f, ctx) => {
+    const needsOptions = f.type === "select" || f.type === "multiselect";
+    if (needsOptions && (!f.options || f.options.length === 0)) {
+      ctx.addIssue({ code: "custom", message: `${f.type} field needs options` });
+    }
+    if (!needsOptions && f.options) {
+      ctx.addIssue({ code: "custom", message: "options are only for select/multiselect" });
+    }
+    if (f.options && new Set(f.options.map((o) => o.key)).size !== f.options.length) {
+      ctx.addIssue({ code: "custom", message: "duplicate option key" });
+    }
+  });
+
+export const FieldDefinitionSetSchema = z
+  .object({ fields: z.array(FieldDefinitionSchema).max(30) })
+  .strict()
+  .superRefine((v, ctx) => {
+    if (new Set(v.fields.map((f) => f.field_key)).size !== v.fields.length) {
+      ctx.addIssue({ code: "custom", message: "duplicate field_key" });
+    }
+  });
+export type FieldDefinition = z.infer<typeof FieldDefinitionSchema>;
+export type FieldDefinitionSet = z.infer<typeof FieldDefinitionSetSchema>;

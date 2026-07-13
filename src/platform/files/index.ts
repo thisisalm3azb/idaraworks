@@ -14,6 +14,7 @@ export {
   voidFile,
   setLegalHold,
   getFile,
+  listEntityFiles,
   getStorageUsage,
   applyUsageDelta,
   evaluateQuota,
