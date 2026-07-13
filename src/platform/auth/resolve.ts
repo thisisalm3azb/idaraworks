@@ -16,6 +16,7 @@ export type ResolvedCtx = {
   archetype: RoleArchetype;
   roleKey: string;
   orgName: string;
+  baseCurrency: string;
   mfaRequired: boolean;
   mfaSatisfied: boolean;
 };
@@ -65,11 +66,11 @@ export async function resolveCtx(orgId: string): Promise<ResolvedCtx | ResolveFa
   // Membership check runs user-side (no org GUC yet) — deactivation enforced here.
   const membership = await withUserCtx(user.id, async (tx) => {
     const rows = (await tx.execute(sql`
-      select m.role_key, o.name as org_name
+      select m.role_key, o.name as org_name, o.base_currency
       from public.membership m
       join public.org o on o.id = m.org_id
       where m.user_id = ${user.id} and m.org_id = ${orgId} and m.deactivated_at is null
-    `)) as unknown as Array<{ role_key: string; org_name: string }>;
+    `)) as unknown as Array<{ role_key: string; org_name: string; base_currency: string }>;
     return rows[0];
   });
   if (!membership) return "no_membership";
@@ -114,6 +115,7 @@ export async function resolveCtx(orgId: string): Promise<ResolvedCtx | ResolveFa
     archetype: details.role.archetype,
     roleKey: membership.role_key,
     orgName: membership.org_name,
+    baseCurrency: membership.base_currency,
     mfaRequired: details.mfaRequired,
     mfaSatisfied: !details.mfaRequired || user.aal === "aal2",
   };

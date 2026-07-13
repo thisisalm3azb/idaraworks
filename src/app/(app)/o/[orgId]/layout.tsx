@@ -54,6 +54,16 @@ export default async function OrgLayout({
       ? [{ href: `/o/${orgId}/attendance`, label: t("nav.attendance") }]
       : []),
     ...(can(a, "issues.raise") ? [{ href: `/o/${orgId}/issues`, label: t("nav.issues") }] : []),
+    // S4 supply & approve surfaces (gated per doc 06).
+    ...(can(a, "approvals.decide")
+      ? [{ href: `/o/${orgId}/approvals`, label: t("nav.approvals") }]
+      : []),
+    ...(can(a, "mr.create")
+      ? [{ href: `/o/${orgId}/material-requests`, label: t("nav.material_requests") }]
+      : []),
+    ...(can(a, "po.view")
+      ? [{ href: `/o/${orgId}/purchase-orders`, label: t("nav.purchase_orders") }]
+      : []),
     ...(can(a, "employees.view") ? [{ href: `/o/${orgId}/people`, label: t("nav.people") }] : []),
     ...(can(a, "customers.view")
       ? [{ href: `/o/${orgId}/customers`, label: t("nav.customers") }]
@@ -98,6 +108,9 @@ export default async function OrgLayout({
               </ul>
             </details>
           ) : null}
+          <Link href={`/o/${orgId}/settings/notifications`} className="text-ink-secondary">
+            {t("nav.notifications")}
+          </Link>
           <Link href={`/o/${orgId}/settings/members`} className="text-ink-secondary">
             {t("members.title")}
           </Link>
