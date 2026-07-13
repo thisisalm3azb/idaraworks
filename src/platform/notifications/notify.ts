@@ -6,7 +6,7 @@
  */
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
-import { sql, withCtx, type Ctx } from "@/platform/tenancy";
+import { sql, withCtx, type Ctx, type TenantTx } from "@/platform/tenancy";
 import { NOTIFICATION_KINDS } from "@/platform/registries";
 
 export type Channel = "in_app" | "email" | "push";
@@ -49,6 +49,29 @@ export async function createNotification(ctx: Ctx, raw: unknown): Promise<{ id: 
               ${input.body ?? null}, ${input.entityType ?? null}, ${input.entityId ?? null})
     `),
   );
+  return { id };
+}
+
+/**
+ * In-transaction notification insert (S4) — for callers that must persist the
+ * notification ATOMICALLY with their own mutation (e.g. an approval submission
+ * pushing to the assigned role in the SAME command tx). Same insert as
+ * createNotification; no `returning` (recipient-private row, AR-1). Bodies must be
+ * pre-REDACTED by the caller — never put cost/price in a notification (F-23).
+ */
+export async function createNotificationIn(
+  tx: TenantTx,
+  ctx: Ctx,
+  raw: unknown,
+): Promise<{ id: string }> {
+  const input = CreateNotificationInput.parse(raw);
+  const id = randomUUID();
+  await tx.execute(sql`
+    insert into public.notification
+      (id, org_id, user_id, kind, title, body, entity_type, entity_id)
+    values (${id}, ${ctx.orgId}, ${input.recipientUserId}, ${input.kind}, ${input.title},
+            ${input.body ?? null}, ${input.entityType ?? null}, ${input.entityId ?? null})
+  `);
   return { id };
 }
 
