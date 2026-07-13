@@ -8,6 +8,21 @@ export { outboxRelay, outboxRetention } from "./functions/outbox-relay";
 export { demoHeartbeat } from "./functions/demo-heartbeat";
 export { approvalStuckEvaluator, sweepStuckApprovals } from "./functions/approval-stuck";
 export { lpoPdfRenderer, buildLpoForPo } from "./functions/lpo-pdf";
+// S5 "Measure": cost-rollup invalidation + the exception engine.
+export {
+  costRollupOnReportSubmit,
+  costRollupOnReportReturn,
+  costRollupOnExpenseCreate,
+  costRollupOnExpenseVoid,
+  costRollupOnGoodsReceipt,
+  costRollupOnGoodsReceiptCancel,
+} from "./functions/cost-rollup";
+export {
+  exceptionSignalMaterializer,
+  exceptionClearOnApprovalDecided,
+  exceptionNightlySweep,
+  sweepExceptions,
+} from "./functions/exception-engine";
 export { verifyOrgPayload, defineOrgFunction, OrgVerificationError } from "./harness";
 
 import { imageDerivatives } from "./functions/image-derivatives";
@@ -16,6 +31,19 @@ import { outboxRelay, outboxRetention } from "./functions/outbox-relay";
 import { demoHeartbeat } from "./functions/demo-heartbeat";
 import { approvalStuckEvaluator } from "./functions/approval-stuck";
 import { lpoPdfRenderer } from "./functions/lpo-pdf";
+import {
+  costRollupOnReportSubmit,
+  costRollupOnReportReturn,
+  costRollupOnExpenseCreate,
+  costRollupOnExpenseVoid,
+  costRollupOnGoodsReceipt,
+  costRollupOnGoodsReceiptCancel,
+} from "./functions/cost-rollup";
+import {
+  exceptionSignalMaterializer,
+  exceptionClearOnApprovalDecided,
+  exceptionNightlySweep,
+} from "./functions/exception-engine";
 
 export const workerFunctions = [
   imageDerivatives,
@@ -25,4 +53,12 @@ export const workerFunctions = [
   demoHeartbeat,
   approvalStuckEvaluator,
   lpoPdfRenderer,
+  costRollupOnReportSubmit,
+  costRollupOnReportReturn,
+  costRollupOnExpenseCreate,
+  costRollupOnExpenseVoid,
+  costRollupOnGoodsReceipt,
+  exceptionSignalMaterializer,
+  exceptionClearOnApprovalDecided,
+  exceptionNightlySweep,
 ];

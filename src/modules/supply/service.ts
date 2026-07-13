@@ -11,7 +11,11 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { command } from "@/platform/audit";
 import { assertCan, can, ForbiddenError } from "@/platform/authz";
-import { GOODS_RECEIPT_RECORDED, PURCHASE_ORDER_APPROVED } from "@/platform/events";
+import {
+  GOODS_RECEIPT_RECORDED,
+  GOODS_RECEIPT_CANCELLED,
+  PURCHASE_ORDER_APPROVED,
+} from "@/platform/events";
 import { allocateReference, formatRef } from "@/platform/reference/sequence";
 import { sql, withCtx, type Ctx, type TenantTx } from "@/platform/tenancy";
 import { isAssignedIn } from "@/modules/jobs/service";
@@ -663,6 +667,15 @@ export async function cancelGoodsReceipt(
         entityId: r.id,
         summary: `Cancelled goods receipt`,
       }),
+      // A cancel changes the job's PO cost (the rollup counts only 'recorded' GRNs),
+      // so it must invalidate the cached rollup — else the cost stays overstated until
+      // the nightly reconcile fires a false drift alarm (review finding).
+      events: (r: { id: string; poId: string }) => [
+        {
+          name: GOODS_RECEIPT_CANCELLED,
+          payload: { goodsReceiptId: r.id, purchaseOrderId: r.poId },
+        },
+      ],
     },
     async (tx) => {
       const rows = (await tx.execute(sql`
