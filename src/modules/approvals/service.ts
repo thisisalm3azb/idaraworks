@@ -69,6 +69,10 @@ export class ApprovalAlreadyPendingError extends Error {
 // (submitForApproval) is the only module edge.
 type SubjectConfig = {
   table: string;
+  // `live` is the status the subject holds WHILE its approval is pending. The engine's
+  // subject UPDATE is guarded on it (D-5.1): if the subject has since moved (voided,
+  // withdrawn, converted), a late decide is a no-op instead of resurrecting a dead row.
+  live: string;
   onApprove: string;
   onReject: string;
   onWithdraw: string;
@@ -76,15 +80,34 @@ type SubjectConfig = {
 const SUBJECTS: Record<string, SubjectConfig> = {
   material_request: {
     table: "material_request",
+    live: "submitted",
     onApprove: "approved",
     onReject: "rejected",
     onWithdraw: "draft",
   },
   purchase_order: {
     table: "purchase_order",
+    live: "draft",
     onApprove: "approved",
     onReject: "draft",
     onWithdraw: "draft",
+  },
+  // S6 (doc 05 D-5.3): quote_send makes a quote sendable (reject → back to draft for
+  // revision; customer rejection is a separate rejectQuote path with a reason).
+  quote_send: {
+    table: "quote",
+    live: "pending_approval",
+    onApprove: "approved",
+    onReject: "draft",
+    onWithdraw: "draft",
+  },
+  // S6 (OP-7): a recorded payment is confirmed (or rejected — reason in decision_note).
+  payment: {
+    table: "payment",
+    live: "recorded",
+    onApprove: "confirmed",
+    onReject: "rejected",
+    onWithdraw: "recorded",
   },
 };
 
@@ -569,7 +592,10 @@ export async function decideApproval(
       const row = updated[0];
       if (!row) throw new ApprovalStateError("approval was concurrently decided");
 
-      // SOLE WRITER: advance the SUBJECT's own status in the SAME tx (D-5.1).
+      // SOLE WRITER: advance the SUBJECT's own status in the SAME tx (D-5.1). The
+      // UPDATE is GUARDED on the subject's live/pending state and detects a no-op via
+      // RETURNING — so a decide that lands after the subject already moved (e.g. the
+      // payment was voided while its approval sat pending) cannot resurrect it.
       const cfg = SUBJECTS[row.subject_type];
       if (cfg) {
         const newStatus = input.decision === "approved" ? cfg.onApprove : cfg.onReject;
@@ -577,12 +603,14 @@ export async function decideApproval(
           row.subject_type === "purchase_order" && input.decision === "approved"
             ? sql`, approved_at = now()`
             : sql``;
-        await tx.execute(
+        const moved = (await tx.execute(
           sql`update public.${sql.raw(cfg.table)} set status = ${newStatus}${extra}, updated_at = now()
-              where id = ${row.subject_id} and org_id = ${ctx.orgId}`,
-        );
-        // A newly-approved PO triggers the LPO PDF worker (needs the real ref).
-        if (row.subject_type === "purchase_order" && input.decision === "approved") {
+              where id = ${row.subject_id} and org_id = ${ctx.orgId} and status = ${cfg.live}
+              returning id`,
+        )) as unknown as Array<{ id: string }>;
+        // A newly-approved PO triggers the LPO PDF worker (needs the real ref) — only
+        // if the subject actually transitioned (guard above matched a live row).
+        if (moved[0] && row.subject_type === "purchase_order" && input.decision === "approved") {
           const poRows = (await tx.execute(sql`
             select reference from public.purchase_order
             where id = ${row.subject_id} and org_id = ${ctx.orgId}
