@@ -878,7 +878,7 @@ export async function signJobPhotoUpload(
 
 // ── module public surface re-exports (Bible §3.2) ────────────────────────────
 export { computeProgress, displayProgress, currentStage } from "./progress";
-export { isAssigned, assignedJobCondition } from "./assigned";
+export { isAssigned, isAssignedIn, assignedJobCondition } from "./assigned";
 export {
   listStages,
   startStage,

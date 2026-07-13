@@ -65,16 +65,24 @@ export async function getWeekView(
       return { weekStart, weekEnd: addDays(weekStart, 7), jobs: [] };
     }
     const jobIds = jobs.map((j) => j.id);
+    // drizzle's `sql` flattens a JS array to comma-separated params, so
+    // `= any(${arr}::uuid[])` binds a SCALAR (malformed array literal) — build an
+    // explicit IN-list instead. (Fixes a latent S2 week-view crash: this path was
+    // never exercised by an S2 test, so the broken idiom shipped unnoticed.)
+    const jobIdList = sql.join(
+      jobIds.map((id) => sql`${id}::uuid`),
+      sql`, `,
+    );
 
     const stages = (await tx.execute(sql`
       select job_id::text as job_id, weight, status from public.job_stage
-      where org_id = ${ctx.orgId} and job_id = any(${jobIds}::uuid[])
+      where org_id = ${ctx.orgId} and job_id in (${jobIdList})
     `)) as unknown as Array<{ job_id: string; weight: number; status: StageForProgress["status"] }>;
 
     const crew = (await tx.execute(sql`
       select jc.job_id::text as job_id, e.name from public.job_crew jc
       join public.employee e on e.id = jc.employee_id
-      where jc.org_id = ${ctx.orgId} and jc.job_id = any(${jobIds}::uuid[])
+      where jc.org_id = ${ctx.orgId} and jc.job_id in (${jobIdList})
         and jc.removed_at is null
       order by e.name
     `)) as unknown as Array<{ job_id: string; name: string }>;
@@ -84,7 +92,7 @@ export async function getWeekView(
              t.due_date::text as due_date, e.name as assignee_name
       from public.task t
       left join public.employee e on e.id = t.assignee_employee_id
-      where t.org_id = ${ctx.orgId} and t.job_id = any(${jobIds}::uuid[])
+      where t.org_id = ${ctx.orgId} and t.job_id in (${jobIdList})
         and t.status in ('pending', 'in_progress')
         and t.due_date >= ${weekStart}::date and t.due_date < ${weekStart}::date + 7
       order by t.due_date
