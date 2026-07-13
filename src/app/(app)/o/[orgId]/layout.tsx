@@ -78,6 +78,10 @@ export default async function OrgLayout({
       ? [{ href: `/o/${orgId}/payments`, label: t("nav.payments") }]
       : []),
     ...(can(a, "ar.view") ? [{ href: `/o/${orgId}/ar`, label: t("nav.ar") }] : []),
+    // S7 "Improve" surface.
+    ...(can(a, "customer_updates.draft")
+      ? [{ href: `/o/${orgId}/customer-updates`, label: t("nav.customer_updates") }]
+      : []),
     ...(can(a, "employees.view") ? [{ href: `/o/${orgId}/people`, label: t("nav.people") }] : []),
     ...(can(a, "customers.view")
       ? [{ href: `/o/${orgId}/customers`, label: t("nav.customers") }]

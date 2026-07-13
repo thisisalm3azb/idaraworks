@@ -6,6 +6,9 @@ import { resolveCtx } from "@/platform/auth/resolve";
 import { can } from "@/platform/authz";
 import { loadOrgTerminology, term } from "@/platform/terminology";
 import { composeToday, type TodayCard } from "@/modules/today/service";
+import { getOwnerDigest, type DigestSection } from "@/modules/digest/service";
+import { formatMoney } from "@/platform/format/money";
+import type { CurrencyCode } from "@/platform/registries";
 import { dismissExceptionAction } from "./actions";
 
 const SEV_TONE: Record<string, "neutral" | "info" | "warning" | "danger"> = {
@@ -51,6 +54,12 @@ export default async function OrgHome({
     computedAt: now.toISOString(),
   });
   const canDismiss = can(resolved.archetype, "exceptions.dismiss");
+  // S7: the owner digest card (doc 03 card 6) — the persisted deterministic digest, narrated
+  // when AI is enabled, always readable without it. Money redacts per the reader (getOwnerDigest).
+  const digest = can(resolved.archetype, "digest.view")
+    ? await getOwnerDigest(resolved.ctx, resolved.archetype)
+    : null;
+  const currency = resolved.baseCurrency as CurrencyCode;
 
   return (
     <div className="flex flex-col gap-4">
@@ -62,6 +71,36 @@ export default async function OrgHome({
         <Badge tone="success">{t("today.dismissed")}</Badge>
       ) : sp.error ? (
         <Badge tone="danger">{t("common.error")}</Badge>
+      ) : null}
+
+      {digest ? (
+        <Card>
+          <CardHeader
+            title={t("digest.title")}
+            meta={
+              <span className="text-xs text-ink-muted">{`${t("today.card_as_of")} ${digest.computedAt.slice(11, 16)}`}</span>
+            }
+          />
+          {digest.narration ? (
+            <p className="mb-2 text-sm leading-relaxed text-ink">{digest.narration}</p>
+          ) : null}
+          <ul className="flex flex-col">
+            {digest.sections
+              .filter((s) => s.count > 0 || s.moneyMinor)
+              .map((s) => (
+                <DigestRow
+                  key={s.key}
+                  section={s}
+                  orgId={orgId}
+                  label={t(s.labelKey)}
+                  currency={currency}
+                />
+              ))}
+          </ul>
+          {digest.sections.every((s) => s.count === 0 && !s.moneyMinor) ? (
+            <p className="text-xs text-ink-muted">{t("digest.all_clear")}</p>
+          ) : null}
+        </Card>
       ) : null}
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
@@ -79,6 +118,43 @@ export default async function OrgHome({
         ))}
       </div>
     </div>
+  );
+}
+
+// Deep-link target per digest section (evidence links come from the structured source).
+const DIGEST_LINK: Record<string, string> = {
+  needs_decision: "approvals",
+  at_risk: "week",
+  collections: "ar",
+  supply: "purchase-orders",
+  yesterday: "reports/review",
+  crew: "week",
+  customers_awaiting: "customer-updates",
+  this_week: "week",
+};
+
+function DigestRow({
+  section,
+  orgId,
+  label,
+  currency,
+}: {
+  section: DigestSection;
+  orgId: string;
+  label: string;
+  currency: CurrencyCode;
+}) {
+  const href = `/o/${orgId}/${DIGEST_LINK[section.key] ?? ""}`;
+  return (
+    <li className="flex items-center justify-between gap-2 border-b border-line py-2 text-sm last:border-0">
+      <Link href={href} className="text-ink hover:underline">
+        {label}
+      </Link>
+      <span className="flex items-center gap-2 font-mono text-ink" dir="ltr">
+        {section.moneyMinor !== null ? formatMoney(section.moneyMinor, currency) : null}
+        <Badge tone={section.count > 0 ? "brand" : "neutral"}>{section.count}</Badge>
+      </span>
+    </li>
   );
 }
 
