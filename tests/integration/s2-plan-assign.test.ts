@@ -16,7 +16,6 @@ import {
   completeStage,
   createJobFromPreset,
   createTask,
-  getJob,
   listCrew,
   listJobs,
   listStages,
@@ -29,6 +28,10 @@ import {
   updateJobPricing,
   updateJobStatus,
   updateTaskStatus,
+  getJob,
+  getJobDetail,
+  getJobPricing,
+  addJobComment,
 } from "@/modules/jobs/service";
 import { ForbiddenError } from "@/platform/authz";
 import { ownerSql } from "./helpers";
@@ -65,6 +68,9 @@ beforeAll(async () => {
 }, 240_000);
 
 afterAll(async () => {
+  // Clear the current-stage denormalisation first — job.current_stage_id ->
+  // job_stage is ON DELETE RESTRICT (0027), so it must be nulled before stages go.
+  await owner`update public.job set current_stage_id = null where org_id = ${orgId}`;
   for (const t of [
     "daily_report",
     "domain_event",
@@ -320,6 +326,63 @@ describe("tasks + walls", () => {
       where org_id = ${orgId} and action = 'job.progress_override' and entity_id = ${job.id}
     `) as unknown as Array<{ ok: number }>;
     expect(audits).toHaveLength(1);
+  });
+
+  // ── S2 review-fix regressions ──
+  it("getJob/getJobDetail surface the override on DETAIL, and pricing is F-23 walled", async () => {
+    const ctx = ctxOf(ownerUser);
+    const job = (await listJobs(ctx, "owner")).find((j) => j.name === "Lifecycle Boat")!;
+    await setProgressOverride(ctx, "owner", job.id, { percent: 55, reason: "detail check" });
+    // Detail read now carries the override + flag (was undefined before the fix).
+    const detailJob = await getJob(ctx, "owner", job.id);
+    expect(detailJob!.progress).toBe(55);
+    expect(detailJob!.progressOverridden).toBe(true);
+    await clearProgressOverride(ctx, "owner", job.id);
+
+    // Pricing wall: a manager (viewPrices off) or non-price-privileged owner
+    // session receives NULL — the wall is server-side, not a JSX conditional.
+    expect(await getJobPricing(ctxOf(ownerUser, false), "owner", job.id)).toBeNull();
+    await expect(getJobPricing(ctx, "manager", job.id)).rejects.toThrow(ForbiddenError);
+    expect((await getJobPricing(ctx, "owner", job.id))?.sellingPriceMinor).toBe(45000000);
+  });
+
+  it("comments are gated: viewer blocked, unassigned foreman blocked", async () => {
+    const ctx = ctxOf(ownerUser);
+    const assigned = (await listJobs(ctx, "owner")).find((j) => j.name === "Lifecycle Boat")!;
+    const other = (await listJobs(ctx, "owner")).find((j) => j.name === "Unassigned Boat")!;
+    await expect(addJobComment(ctx, "viewer", assigned.id, "nope")).rejects.toThrow(ForbiddenError);
+    // Foreman assigned to Lifecycle Boat, NOT to Unassigned Boat.
+    const fctx = ctxOf(foremanUser, false);
+    await expect(addJobComment(fctx, "foreman", other.id, "nope")).rejects.toThrow(ForbiddenError);
+    await addJobComment(fctx, "foreman", assigned.id, "port hull laminated");
+    const rows = (await owner`
+      select body from public.comment where org_id = ${orgId} and entity_id = ${assigned.id}
+    `) as unknown as Array<{ body: string }>;
+    expect(rows.some((r) => r.body === "port hull laminated")).toBe(true);
+  });
+
+  it("a task cannot reference another job's stage (composite FK + app check)", async () => {
+    const ctx = ctxOf(ownerUser);
+    const jobs = await listJobs(ctx, "owner");
+    const jobA = jobs.find((j) => j.name === "Lifecycle Boat")!;
+    const jobB = jobs.find((j) => j.name === "Unassigned Boat")!;
+    const jobBStage = (await listStages(ctx, jobB.id))[0]!;
+    await expect(
+      createTask(ctx, "owner", { jobId: jobA.id, title: "cross", stageId: jobBStage.id }),
+    ).rejects.toThrow(/stage does not belong/);
+  });
+
+  it("valid preset dates are accepted (regex fix)", async () => {
+    const ctx = ctxOf(ownerUser);
+    const { id } = await createJobFromPreset(ctx, "owner", {
+      presetId: presetIds["34C"]!,
+      name: "Dated Boat",
+      startDate: "2026-08-01",
+      dueDate: "2026-12-01",
+    });
+    const d = await getJobDetail(ctx, "owner", id);
+    expect(d!.startDate).toBe("2026-08-01");
+    expect(d!.dueDate).toBe("2026-12-01");
   });
 
   it("custom fields: template keys round-trip; unknown keys rejected", async () => {

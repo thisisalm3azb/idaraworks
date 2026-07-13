@@ -42,6 +42,7 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
     "tasks.update_status",
     "crew.manage",
     "week.view",
+    "comments.create",
     "reports.create",
   ],
   admin: [
@@ -72,6 +73,7 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
     "tasks.update_status",
     "crew.manage",
     "week.view",
+    "comments.create",
     "reports.create",
   ],
   // Manager (doc 08: the Workshop Manager variant): masters M, jobs/reports, NO
@@ -96,6 +98,7 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
     "tasks.update_status",
     "crew.manage",
     "week.view",
+    "comments.create",
     "reports.create",
   ],
   // Field seat (doc 06 literal row): assigned jobs (v) + own reports. NO
@@ -106,9 +109,17 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
     "stages.request_complete",
     "tasks.update_status",
     "week.view",
+    "comments.create",
     "reports.create",
   ],
-  procurement: ["members.view", "catalog.view", "catalog.manage", "jobs.view", "week.view"],
+  procurement: [
+    "members.view",
+    "catalog.view",
+    "catalog.manage",
+    "jobs.view",
+    "week.view",
+    "comments.create",
+  ],
   accounts: [
     "members.view",
     "employees.view",
@@ -116,6 +127,7 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
     "catalog.view",
     "jobs.view",
     "week.view",
+    "comments.create",
   ],
   // Viewer (doc 06): jobs v (redacted) + week view — masters rows are all −.
   viewer: ["members.view", "jobs.view", "week.view"],

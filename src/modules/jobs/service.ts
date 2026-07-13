@@ -7,12 +7,14 @@
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { command } from "@/platform/audit";
-import { assertCan } from "@/platform/authz";
+import { assertCan, ForbiddenError } from "@/platform/authz";
 import { JOB_CREATED } from "@/platform/events";
 import { getLimit } from "@/platform/entitlements";
 import { renderReference } from "@/platform/config/reference";
 import { lockOrgConfigShared } from "@/platform/config/pipeline";
 import { mergeCustomValues } from "@/platform/config/customFields";
+import { createComment } from "@/platform/comments";
+import { signUpload, type SignedUpload } from "@/platform/files";
 import type { FieldDefinitionSet, StageTemplate, JobPreset } from "@/platform/config";
 import { assignedJobCondition, isAssigned } from "./assigned";
 import { computeProgress, type StageForProgress } from "./progress";
@@ -36,11 +38,11 @@ export const CreateJobInput = z.object({
   managerUserId: z.string().uuid().optional(),
   startDate: z
     .string()
-    .regex(/^d{4}-d{2}-d{2}$/)
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
     .optional(),
   dueDate: z
     .string()
-    .regex(/^d{4}-d{2}-d{2}$/)
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
     .optional(),
   customValues: z.record(z.string(), z.unknown()).optional(),
 });
@@ -295,10 +297,17 @@ export async function getJob(
 }
 
 async function listJobsById(ctx: Ctx, jobId: string): Promise<JobRow[]> {
+  // Review fix: the detail read must carry progress + override too, so the
+  // job page shows the SAME progress number as the list/week and can render
+  // the "Overridden" chip (D-1.4: an override is display + a visible chip,
+  // never silent). Derived progress computed from the job's own stages.
   const rows = (await withCtx(ctx, (tx) =>
     tx.execute(sql`
       select j.id::text as id, j.reference, j.name, j.status_key, j.status_category,
-             p.code as preset_code, c.name as customer_name, j.created_at::text as created_at
+             p.code as preset_code, c.name as customer_name, j.created_at::text as created_at,
+             j.due_date::text as due_date, j.progress_override,
+             (select coalesce(json_agg(json_build_object('weight', s.weight, 'status', s.status)), '[]'::json)
+                from public.job_stage s where s.job_id = j.id) as stages
       from public.job j
       left join public.job_preset p on p.id = j.preset_id
       left join public.customer c on c.id = j.customer_id
@@ -313,6 +322,9 @@ async function listJobsById(ctx: Ctx, jobId: string): Promise<JobRow[]> {
     preset_code: string | null;
     customer_name: string | null;
     created_at: string;
+    due_date: string | null;
+    progress_override: number | null;
+    stages: StageForProgress[];
   }>;
   return rows.map((r) => ({
     id: r.id,
@@ -323,6 +335,10 @@ async function listJobsById(ctx: Ctx, jobId: string): Promise<JobRow[]> {
     presetCode: r.preset_code,
     customerName: r.customer_name,
     createdAt: r.created_at,
+    dueDate: r.due_date,
+    progress:
+      r.progress_override !== null ? Number(r.progress_override) : computeProgress(r.stages),
+    progressOverridden: r.progress_override !== null,
   }));
 }
 
@@ -535,6 +551,26 @@ export async function updateJobPricing(
       },
     },
     async (tx) => {
+      // Every stage-trigger billing point must reference one of THIS job's
+      // stage snapshots (review m10 — a bogus stage_key would never fire E-09
+      // and would silently misprice the invoice).
+      if (data.billingPoints) {
+        const stageKeys = new Set(
+          (
+            (await tx.execute(sql`
+              select stage_key from public.job_stage
+              where org_id = ${ctx.orgId} and job_id = ${jobId}
+            `)) as unknown as Array<{ stage_key: string }>
+          ).map((r) => r.stage_key),
+        );
+        for (const bp of data.billingPoints) {
+          if (typeof bp.trigger === "object" && !stageKeys.has(bp.trigger.stage_key)) {
+            throw new Error(
+              `billing trigger stage "${bp.trigger.stage_key}" is not a stage of this job`,
+            );
+          }
+        }
+      }
       await tx.execute(sql`
         update public.job
         set selling_price_minor = ${data.sellingPriceMinor === undefined ? sql`selling_price_minor` : (data.sellingPriceMinor ?? null)},
@@ -658,6 +694,186 @@ export async function clearProgressOverride(
         where org_id = ${ctx.orgId} and id = ${jobId}
       `),
   );
+}
+
+// ── S2 detail reads (Bible §3.2 — pages consume these, never raw SQL) ────────
+export type JobDetail = {
+  startDate: string | null;
+  dueDate: string | null;
+  customerId: string | null;
+  foremanUserId: string | null;
+  managerUserId: string | null;
+  customValues: Record<string, unknown>;
+  progressOverride: number | null;
+  progressOverrideReason: string | null;
+};
+
+export async function getJobDetail(
+  ctx: Ctx,
+  archetype: RoleArchetype,
+  jobId: string,
+): Promise<JobDetail | null> {
+  assertCan(archetype, "jobs.view");
+  if (archetype === "foreman" && !(await isAssigned(ctx, jobId))) return null;
+  const rows = (await withCtx(ctx, (tx) =>
+    tx.execute(sql`
+      select start_date::text as start_date, due_date::text as due_date,
+             customer_id::text as customer_id, foreman_user_id::text as foreman_user_id,
+             manager_user_id::text as manager_user_id, custom_values,
+             progress_override, progress_override_reason
+      from public.job where org_id = ${ctx.orgId} and id = ${jobId}
+    `),
+  )) as unknown as Array<{
+    start_date: string | null;
+    due_date: string | null;
+    customer_id: string | null;
+    foreman_user_id: string | null;
+    manager_user_id: string | null;
+    custom_values: Record<string, unknown>;
+    progress_override: number | null;
+    progress_override_reason: string | null;
+  }>;
+  const r = rows[0];
+  if (!r) return null;
+  return {
+    startDate: r.start_date,
+    dueDate: r.due_date,
+    customerId: r.customer_id,
+    foremanUserId: r.foreman_user_id,
+    managerUserId: r.manager_user_id,
+    customValues: r.custom_values ?? {},
+    progressOverride: r.progress_override !== null ? Number(r.progress_override) : null,
+    progressOverrideReason: r.progress_override_reason,
+  };
+}
+
+export type JobPricing = {
+  sellingPriceMinor: number | null;
+  paymentTerms: string | null;
+  priceAdjustments: Array<{ amountMinor: number; reason: string; at: string }>;
+};
+
+/** Pricing read — price-privileged ONLY (F-23: the wall is server-side, not a
+ * JSX conditional; a foreman/viewer/manager session never receives these). */
+export async function getJobPricing(
+  ctx: Ctx,
+  archetype: RoleArchetype,
+  jobId: string,
+): Promise<JobPricing | null> {
+  assertCan(archetype, "jobs.price.manage");
+  if (!ctx.pricePrivileged) return null;
+  const rows = (await withCtx(ctx, (tx) =>
+    tx.execute(sql`
+      select selling_price_minor, payment_terms, price_adjustments
+      from public.job where org_id = ${ctx.orgId} and id = ${jobId}
+    `),
+  )) as unknown as Array<{
+    selling_price_minor: number | null;
+    payment_terms: string | null;
+    price_adjustments: Array<{ amount_minor: number; reason: string; at: string }>;
+  }>;
+  const r = rows[0];
+  if (!r) return null;
+  return {
+    sellingPriceMinor: r.selling_price_minor !== null ? Number(r.selling_price_minor) : null,
+    paymentTerms: r.payment_terms,
+    priceAdjustments: (r.price_adjustments ?? []).map((a) => ({
+      amountMinor: Number(a.amount_minor),
+      reason: a.reason,
+      at: a.at,
+    })),
+  };
+}
+
+export type ActivityRow = { summary: string; createdAt: string; actorName: string | null };
+
+export async function listJobActivity(
+  ctx: Ctx,
+  archetype: RoleArchetype,
+  jobId: string,
+  limit = 50,
+): Promise<ActivityRow[]> {
+  assertCan(archetype, "jobs.view");
+  if (archetype === "foreman" && !(await isAssigned(ctx, jobId))) return [];
+  const rows = (await withCtx(ctx, (tx) =>
+    tx.execute(sql`
+      select a.summary, a.created_at::text as created_at, u.full_name
+      from public.activity a
+      left join public.user_profile u on u.id = a.actor_user_id
+      where a.org_id = ${ctx.orgId} and a.entity_type = 'job' and a.entity_id = ${jobId}
+      order by a.created_at desc
+      limit ${Math.min(Math.max(limit, 1), 200)}
+    `),
+  )) as unknown as Array<{ summary: string; created_at: string; full_name: string | null }>;
+  return rows.map((r) => ({ summary: r.summary, createdAt: r.created_at, actorName: r.full_name }));
+}
+
+/** The org's job custom-field definitions, visibility-filtered for the caller. */
+export async function listJobFields(
+  ctx: Ctx,
+  archetype: RoleArchetype,
+): Promise<
+  Array<{ key: string; type: string; labels: { en: string; ar: string }; required: boolean }>
+> {
+  const rows = (await withCtx(ctx, (tx) =>
+    tx.execute(sql`
+      select value from public.app_settings
+      where org_id = ${ctx.orgId} and key = 'config.fields.job'
+    `),
+  )) as unknown as Array<{ value: FieldDefinitionSet | null }>;
+  return (rows[0]?.value?.fields ?? [])
+    .filter(
+      (f) =>
+        !f.retired && (f.visibility.length === 0 || (f.visibility as string[]).includes(archetype)),
+    )
+    .map((f) => ({ key: f.field_key, type: f.type, labels: f.labels, required: f.required }));
+}
+
+// ── job-scoped comment + photo upload (authz lives HERE, not the action) ─────
+export async function addJobComment(
+  ctx: Ctx,
+  archetype: RoleArchetype,
+  jobId: string,
+  body: string,
+): Promise<void> {
+  assertCan(archetype, "comments.create");
+  // Foreman is assigned-scoped (F-6); the job must exist in-org for everyone.
+  if (archetype === "foreman") {
+    if (!(await isAssigned(ctx, jobId))) throw new ForbiddenError("comments.create");
+  } else {
+    const rows = (await withCtx(ctx, (tx) =>
+      tx.execute(sql`select 1 as ok from public.job where org_id = ${ctx.orgId} and id = ${jobId}`),
+    )) as unknown as Array<{ ok: number }>;
+    if (rows.length === 0) throw new Error("job not found");
+  }
+  await createComment(ctx, { entityType: "job", entityId: jobId, body });
+}
+
+export async function signJobPhotoUpload(
+  ctx: Ctx,
+  archetype: RoleArchetype,
+  accessToken: string,
+  jobId: string,
+  file: { name: string; mime: string; sizeBytes: number },
+): Promise<SignedUpload> {
+  // The job must exist in-org and (foreman) be ASSIGNED before we mint a
+  // signed PUT — the Phase E class wall alone let a foreman attach to ANY job
+  // (review fix, F-6 write scope).
+  const rows = (await withCtx(ctx, (tx) =>
+    tx.execute(sql`select 1 as ok from public.job where org_id = ${ctx.orgId} and id = ${jobId}`),
+  )) as unknown as Array<{ ok: number }>;
+  if (rows.length === 0) throw new Error("job not found");
+  if (archetype === "foreman" && !(await isAssigned(ctx, jobId))) {
+    throw new ForbiddenError("reports.create");
+  }
+  return signUpload(ctx, archetype, accessToken, {
+    accessClass: "job_media",
+    attachedToType: "job",
+    attachedToId: jobId,
+    originalName: file.name,
+    mime: file.mime,
+    sizeBytes: file.sizeBytes,
+  });
 }
 
 // ── module public surface re-exports (Bible §3.2) ────────────────────────────

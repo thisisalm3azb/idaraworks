@@ -48,13 +48,36 @@ export async function createTask(
         summary: `added task "${data.title}"`,
       },
     },
-    (tx) =>
-      tx.execute(sql`
+    async (tx) => {
+      // Referential integrity (review fix): RLS blocks cross-ORG, but not
+      // cross-JOB within the org (a stage/employee of ANOTHER job). Validate
+      // the job exists in-org, the stage belongs to THIS job, and the
+      // assignee is an in-org employee — before the insert.
+      const jobRows = (await tx.execute(sql`
+        select 1 as ok from public.job where org_id = ${ctx.orgId} and id = ${data.jobId}
+      `)) as unknown as Array<{ ok: number }>;
+      if (jobRows.length === 0) throw new Error("job not found");
+      if (data.stageId) {
+        const st = (await tx.execute(sql`
+          select 1 as ok from public.job_stage
+          where org_id = ${ctx.orgId} and id = ${data.stageId} and job_id = ${data.jobId}
+        `)) as unknown as Array<{ ok: number }>;
+        if (st.length === 0) throw new Error("stage does not belong to this job");
+      }
+      if (data.assigneeEmployeeId) {
+        const emp = (await tx.execute(sql`
+          select 1 as ok from public.employee
+          where org_id = ${ctx.orgId} and id = ${data.assigneeEmployeeId}
+        `)) as unknown as Array<{ ok: number }>;
+        if (emp.length === 0) throw new Error("assignee not found");
+      }
+      await tx.execute(sql`
         insert into public.task
           (id, org_id, job_id, stage_id, title, assignee_employee_id, due_date, created_by)
         values (${id}, ${ctx.orgId}, ${data.jobId}, ${data.stageId ?? null}, ${data.title},
                 ${data.assigneeEmployeeId ?? null}, ${data.dueDate ?? null}, ${ctx.userId})
-      `),
+      `);
+    },
   );
   return { id };
 }

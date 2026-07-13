@@ -90,9 +90,14 @@ async function recomputeCurrentStageIn(tx: TenantTx, ctx: Ctx, jobId: string): P
 type StageTarget = { id: string; stage_key: string; status: string; job_id: string };
 
 async function loadStageIn(tx: TenantTx, ctx: Ctx, stageId: string): Promise<StageTarget> {
+  // FOR UPDATE serializes concurrent transitions on the SAME stage (review
+  // fix — two managers completing/reopening at once must not both pass the
+  // precondition and each emit an event); the status re-check in every UPDATE
+  // WHERE is the second belt (a mismatched status yields 0 rows → we throw).
   const rows = (await tx.execute(sql`
     select id::text as id, stage_key, status, job_id::text as job_id
     from public.job_stage where org_id = ${ctx.orgId} and id = ${stageId}
+    for update
   `)) as unknown as StageTarget[];
   const stage = rows[0];
   if (!stage) throw new Error("stage not found");

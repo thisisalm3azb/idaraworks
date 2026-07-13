@@ -46,6 +46,7 @@ export type Action =
   | "tasks.update_status"
   | "crew.manage"
   | "week.view"
+  | "comments.create"
   | "reports.create";
 
 type Grantable = Exclude<RoleArchetype, "worker_reserved_p3">;
@@ -102,4 +103,8 @@ export const MATRIX: Record<Action, readonly Grantable[]> = {
   // "Week plan: view published" = V for every archetype (the plan ENTITY was
   // cut, F-15 — the derived week VIEW keeps the row's audience).
   "week.view": ["owner", "admin", "manager", "foreman", "procurement", "accounts", "viewer"],
+  // Comments are operational CONTRIBUTION (like issues, doc 06): every
+  // contributor archetype, NOT the read-only viewer; foreman is assigned-scoped
+  // (enforced server-side by the F-6 resolver in the action).
+  "comments.create": ["owner", "admin", "manager", "foreman", "procurement", "accounts"],
 };

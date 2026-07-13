@@ -35,12 +35,21 @@ export async function addCrewMember(
         select name from public.employee where org_id = ${ctx.orgId} and id = ${employeeId}
       `)) as unknown as Array<{ name: string }>;
       if (!rows[0]) throw new Error("employee not found");
+      // The job must exist in-org (review fix — the caller-supplied jobId was
+      // previously trusted; RLS blocks cross-org but not a bogus in-org uuid).
+      const jobRows = (await tx.execute(sql`
+        select 1 as ok from public.job where org_id = ${ctx.orgId} and id = ${jobId}
+      `)) as unknown as Array<{ ok: number }>;
+      if (jobRows.length === 0) throw new Error("job not found");
       // Re-adding a removed member revives the SAME row (PK job+employee).
+      // added_by/added_at are NOT re-stamped (review fix: they stay outside the
+      // UPDATE grant — 0027 — so the DB actor pin holds; the audit_log row
+      // records who re-added).
       await tx.execute(sql`
         insert into public.job_crew (org_id, job_id, employee_id, added_by)
         values (${ctx.orgId}, ${jobId}, ${employeeId}, ${ctx.userId})
         on conflict (job_id, employee_id) do update
-          set removed_at = null, removed_by = null, added_by = ${ctx.userId}, added_at = now()
+          set removed_at = null, removed_by = null
       `);
       return { name: rows[0].name };
     },

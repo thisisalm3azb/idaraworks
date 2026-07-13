@@ -185,12 +185,11 @@ export async function listEntityFiles(
       order by created_at desc
     `),
   )) as unknown as Array<{ id: string }>;
-  const files: FileRecord[] = [];
-  for (const r of rows) {
-    const f = await getFile(ctx, r.id);
-    if (f) files.push(f);
-  }
-  return files;
+  // Resolve the records CONCURRENTLY (review fix — the sequential per-id
+  // getFile was an N+1 of separate withCtx transactions; concurrent withCtx
+  // transactions on the shared pool are the sanctioned pattern, A-B5/VC-1).
+  const resolved = await Promise.all(rows.map((r) => getFile(ctx, r.id)));
+  return resolved.filter((f): f is FileRecord => f !== null);
 }
 
 export async function getFile(ctx: Ctx, fileId: string): Promise<FileRecord | null> {

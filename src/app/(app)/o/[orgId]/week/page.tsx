@@ -93,7 +93,9 @@ export default async function WeekPage({
                     {j.dueDate ? ` · ${t("jobs.due")}: ${formatDate(j.dueDate, { locale })}` : ""}
                   </p>
                   {j.crew.length > 0 ? (
-                    <p className="text-xs text-ink-secondary">{j.crew.join("، ")}</p>
+                    <p className="text-xs text-ink-secondary">
+                      {j.crew.join(locale === "ar" ? "، " : ", ")}
+                    </p>
                   ) : null}
                   {j.tasksDue.length > 0 ? (
                     <p className="text-xs text-warning">

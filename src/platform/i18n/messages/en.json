@@ -192,5 +192,6 @@
   "upload.confirming": "Processing…",
   "upload.done": "Uploaded",
   "upload.retry": "Retry",
-  "upload.quota_warn": "Storage almost full"
+  "upload.quota_warn": "Storage almost full",
+  "jobs.manager": "Manager"
 }

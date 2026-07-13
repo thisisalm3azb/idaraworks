@@ -9,7 +9,11 @@ import { can } from "@/platform/authz";
 import {
   computeProgress,
   getJob,
+  getJobDetail,
+  getJobPricing,
   getJobStatusLabels,
+  listJobActivity,
+  listJobFields,
   listAssignableMembers,
   listCrew,
   listJobTasks,
@@ -18,9 +22,8 @@ import {
 } from "@/modules/jobs/service";
 import { listCustomers, listEmployees } from "@/modules/masters/service";
 import { listComments } from "@/platform/comments";
-import { listEntityFiles, signRead } from "@/platform/files";
-import type { FieldDefinitionSet } from "@/platform/config";
-import { sql, withCtx, supabaseServer } from "@/platform/tenancy";
+import { canAccessFileClass, listEntityFiles, signRead } from "@/platform/files";
+import { supabaseServer } from "@/platform/tenancy";
 import { formatDate, formatDateTime } from "@/platform/format";
 import {
   addCommentAction,
@@ -196,37 +199,13 @@ async function OverviewTab(props: {
   const customers = canEdit && can(a, "customers.view") ? await listCustomers(resolved.ctx, a) : [];
   const members = canEdit ? await listAssignableMembers(resolved.ctx, a) : [];
 
-  const detail = (await withCtx(resolved.ctx, (tx) =>
-    tx.execute(sql`
-      select start_date::text as start_date, due_date::text as due_date,
-             customer_id::text as customer_id, foreman_user_id::text as foreman_user_id,
-             custom_values, selling_price_minor, payment_terms, price_adjustments,
-             progress_override, progress_override_reason
-      from public.job where org_id = ${resolved.ctx.orgId} and id = ${jobId}
-    `),
-  )) as unknown as Array<{
-    start_date: string | null;
-    due_date: string | null;
-    customer_id: string | null;
-    foreman_user_id: string | null;
-    custom_values: Record<string, unknown>;
-    selling_price_minor: number | null;
-    payment_terms: string | null;
-    price_adjustments: Array<{ amount_minor: number; reason: string; at: string }>;
-    progress_override: number | null;
-    progress_override_reason: string | null;
-  }>;
-  const d = detail[0]!;
-
-  const fieldDefs = (await withCtx(resolved.ctx, (tx) =>
-    tx.execute(sql`
-      select value from public.app_settings
-      where org_id = ${resolved.ctx.orgId} and key = 'config.fields.job'
-    `),
-  )) as unknown as Array<{ value: FieldDefinitionSet | null }>;
-  const fields = (fieldDefs[0]?.value?.fields ?? []).filter(
-    (f) => !f.retired && (f.visibility.length === 0 || (f.visibility as string[]).includes(a)),
-  );
+  // Service reads (Bible §3.2 — no raw SQL in pages). Pricing is fetched ONLY
+  // for a price-privileged session: the wall is server-side (F-23), never a JSX
+  // conditional over already-loaded data (review fix).
+  const d = await getJobDetail(resolved.ctx, a, jobId);
+  if (!d) return null;
+  const pricing = canPricing ? await getJobPricing(resolved.ctx, a, jobId) : null;
+  const fields = await listJobFields(resolved.ctx, a);
 
   const statusForm = jobStatusAction.bind(null, orgId, jobId);
   const coreForm = updateJobCoreAction.bind(null, orgId, jobId);
@@ -272,13 +251,13 @@ async function OverviewTab(props: {
               label={t("jobs.start")}
               name="start_date"
               type="date"
-              defaultValue={d.start_date ?? ""}
+              defaultValue={d.startDate ?? ""}
             />
             <Field
               label={t("jobs.due")}
               name="due_date"
               type="date"
-              defaultValue={d.due_date ?? ""}
+              defaultValue={d.dueDate ?? ""}
             />
             {customers.length > 0 ? (
               <div className="flex flex-col gap-1.5">
@@ -288,7 +267,7 @@ async function OverviewTab(props: {
                 <select
                   id="customer_id"
                   name="customer_id"
-                  defaultValue={d.customer_id ?? ""}
+                  defaultValue={d.customerId ?? ""}
                   className="min-h-11 rounded-md border border-line-strong bg-card px-3 text-base text-ink"
                 >
                   <option value="">{t("common.none")}</option>
@@ -308,7 +287,27 @@ async function OverviewTab(props: {
                 <select
                   id="foreman_user_id"
                   name="foreman_user_id"
-                  defaultValue={d.foreman_user_id ?? ""}
+                  defaultValue={d.foremanUserId ?? ""}
+                  className="min-h-11 rounded-md border border-line-strong bg-card px-3 text-base text-ink"
+                >
+                  <option value="">{t("common.none")}</option>
+                  {members.map((m) => (
+                    <option key={m.userId} value={m.userId}>
+                      {m.fullName || m.userId.slice(0, 8)} ({m.roleKey})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
+            {members.length > 0 ? (
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="manager_user_id" className="text-sm font-medium text-ink">
+                  {t("jobs.manager")}
+                </label>
+                <select
+                  id="manager_user_id"
+                  name="manager_user_id"
+                  defaultValue={d.managerUserId ?? ""}
                   className="min-h-11 rounded-md border border-line-strong bg-card px-3 text-base text-ink"
                 >
                   <option value="">{t("common.none")}</option>
@@ -322,10 +321,10 @@ async function OverviewTab(props: {
             ) : null}
             {fields.map((f) => (
               <Field
-                key={f.field_key}
+                key={f.key}
                 label={locale === "ar" ? f.labels.ar : f.labels.en}
-                name={`cf_${f.field_key}`}
-                defaultValue={String(d.custom_values?.[f.field_key] ?? "")}
+                name={`cf_${f.key}`}
+                defaultValue={String(d.customValues?.[f.key] ?? "")}
                 required={f.required}
               />
             ))}
@@ -333,10 +332,22 @@ async function OverviewTab(props: {
           </form>
         ) : (
           <dl className="flex flex-col gap-2 text-sm">
+            {d.startDate ? (
+              <div className="flex justify-between gap-2">
+                <dt className="text-ink-muted">{t("jobs.start")}</dt>
+                <dd className="text-ink">{formatDate(d.startDate, { locale })}</dd>
+              </div>
+            ) : null}
+            {d.dueDate ? (
+              <div className="flex justify-between gap-2">
+                <dt className="text-ink-muted">{t("jobs.due")}</dt>
+                <dd className="text-ink">{formatDate(d.dueDate, { locale })}</dd>
+              </div>
+            ) : null}
             {fields.map((f) => (
-              <div key={f.field_key} className="flex justify-between gap-2">
+              <div key={f.key} className="flex justify-between gap-2">
                 <dt className="text-ink-muted">{locale === "ar" ? f.labels.ar : f.labels.en}</dt>
-                <dd className="text-ink">{String(d.custom_values?.[f.field_key] ?? "—")}</dd>
+                <dd className="text-ink">{String(d.customValues?.[f.key] ?? "—")}</dd>
               </div>
             ))}
           </dl>
@@ -390,10 +401,10 @@ async function OverviewTab(props: {
       {canOverride ? (
         <Card>
           <CardHeader title={t("jobs.override.title")} />
-          {d.progress_override !== null ? (
+          {d.progressOverride !== null ? (
             <div className="mb-3 flex items-center justify-between gap-2 text-sm">
               <span className="text-ink">
-                {Number(d.progress_override)}% — {d.progress_override_reason}
+                {Number(d.progressOverride)}% — {d.progressOverrideReason}
               </span>
               <form action={clearOverrideForm}>
                 <Button type="submit" variant="ghost">
@@ -420,7 +431,7 @@ async function OverviewTab(props: {
         </Card>
       ) : null}
 
-      {canPricing ? (
+      {pricing ? (
         <Card>
           <CardHeader title={t("jobs.pricing.title")} />
           <form action={pricingForm} className="flex flex-col gap-3">
@@ -428,25 +439,27 @@ async function OverviewTab(props: {
               label={t("jobs.pricing.selling_price")}
               name="selling_price_minor"
               type="number"
-              defaultValue={d.selling_price_minor !== null ? String(d.selling_price_minor) : ""}
+              defaultValue={
+                pricing!.sellingPriceMinor !== null ? String(pricing!.sellingPriceMinor) : ""
+              }
             />
             <Field
               label={t("jobs.pricing.payment_terms")}
               name="payment_terms"
-              defaultValue={d.payment_terms ?? ""}
+              defaultValue={pricing!.paymentTerms ?? ""}
             />
             <Button type="submit" variant="secondary">
               {t("common.save")}
             </Button>
           </form>
-          {(d.price_adjustments ?? []).length > 0 ? (
+          {(pricing!.priceAdjustments ?? []).length > 0 ? (
             <div className="mt-3">
               <p className="text-sm font-medium text-ink">{t("jobs.pricing.adjustments")}</p>
               <ul className="divide-y divide-line text-sm">
-                {d.price_adjustments.map((adj, i) => (
+                {pricing!.priceAdjustments.map((adj, i) => (
                   <li key={i} className="py-2">
                     <span className="font-mono" dir="ltr">
-                      {adj.amount_minor}
+                      {adj.amountMinor}
                     </span>{" "}
                     — {adj.reason}
                   </li>
@@ -704,17 +717,7 @@ async function TasksTab(props: {
 
 async function ActivityTab(props: { resolved: Resolved; jobId: string; locale: "en" | "ar" }) {
   const t = await getT();
-  const rows = (await withCtx(props.resolved.ctx, (tx) =>
-    tx.execute(sql`
-      select a.summary, a.created_at::text as created_at, u.full_name
-      from public.activity a
-      left join public.user_profile u on u.id = a.actor_user_id
-      where a.org_id = ${props.resolved.ctx.orgId} and a.entity_type = 'job'
-        and a.entity_id = ${props.jobId}
-      order by a.created_at desc
-      limit 50
-    `),
-  )) as unknown as Array<{ summary: string; created_at: string; full_name: string | null }>;
+  const rows = await listJobActivity(props.resolved.ctx, props.resolved.archetype, props.jobId);
   return (
     <Card>
       {rows.length === 0 ? (
@@ -724,10 +727,10 @@ async function ActivityTab(props: { resolved: Resolved; jobId: string; locale: "
           {rows.map((r, i) => (
             <li key={i} className="py-2">
               <p className="text-sm text-ink">
-                <span className="font-medium">{r.full_name ?? ""}</span> {r.summary}
+                <span className="font-medium">{r.actorName ?? ""}</span> {r.summary}
               </p>
               <p className="text-xs text-ink-muted">
-                {formatDateTime(r.created_at, { locale: props.locale })}
+                {formatDateTime(r.createdAt, { locale: props.locale })}
               </p>
             </li>
           ))}
@@ -743,19 +746,29 @@ async function FilesTab(props: { orgId: string; jobId: string; resolved: Resolve
   const store = await cookies();
   const { data } = await supabaseServer(store).auth.getSession();
   const token = data.session?.access_token ?? "";
-  const thumbs: Array<{ id: string; name: string; url: string | null }> = [];
-  for (const f of files) {
-    let url: string | null = null;
-    if (token && f.status === "ready") {
-      try {
-        url = (await signRead(props.resolved.ctx, props.resolved.archetype, token, f.id, "thumb"))
-          .url;
-      } catch {
-        url = null; // class denial or missing variant — show the name only
+  // Sign thumbnails CONCURRENTLY (review fix — sequential signRead was N round
+  // trips to storage). A class denial / missing variant falls back to the name.
+  const thumbs = await Promise.all(
+    files.map(async (f) => {
+      let url: string | null = null;
+      if (token && f.status === "ready") {
+        try {
+          url = (await signRead(props.resolved.ctx, props.resolved.archetype, token, f.id, "thumb"))
+            .url;
+        } catch {
+          url = null;
+        }
       }
-    }
-    thumbs.push({ id: f.id, name: f.originalName, url });
-  }
+      return { id: f.id, name: f.originalName, url };
+    }),
+  );
+  // Only roles that may WRITE job_media see the upload control (F-23 class map).
+  const canUpload = canAccessFileClass(
+    props.resolved.archetype,
+    props.resolved.ctx.pricePrivileged,
+    "job_media",
+    true,
+  );
   const labels = {
     idle: t("upload.idle"),
     compressing: t("upload.compressing"),
@@ -768,9 +781,11 @@ async function FilesTab(props: { orgId: string; jobId: string; resolved: Resolve
   };
   return (
     <Card>
-      <div className="mb-3">
-        <JobPhotoUpload orgId={props.orgId} jobId={props.jobId} labels={labels} />
-      </div>
+      {canUpload ? (
+        <div className="mb-3">
+          <JobPhotoUpload orgId={props.orgId} jobId={props.jobId} labels={labels} />
+        </div>
+      ) : null}
       {thumbs.length === 0 ? (
         <EmptyState title={t("files.empty")} />
       ) : (

@@ -133,7 +133,7 @@
   "jobs.tab.files": "الصور والملفات",
   "jobs.tab.comments": "التعليقات",
   "jobs.progress": "الإنجاز",
-  "jobs.progress.overridden": "معدل يدويا",
+  "jobs.progress.overridden": "معدَّل يدويًا",
   "jobs.due": "الاستحقاق",
   "jobs.start": "البدء",
   "jobs.completed_on": "اكتمل",
@@ -192,5 +192,6 @@
   "upload.confirming": "جارٍ المعالجة…",
   "upload.done": "تم الرفع",
   "upload.retry": "إعادة المحاولة",
-  "upload.quota_warn": "مساحة التخزين شبه ممتلئة"
+  "upload.quota_warn": "مساحة التخزين شبه ممتلئة",
+  "jobs.manager": "المدير"
 }

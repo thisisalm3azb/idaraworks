@@ -5,9 +5,11 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { resolveCtxForAction } from "@/platform/auth/resolve";
 import { supabaseServer } from "@/platform/tenancy";
-import { createComment } from "@/platform/comments";
+
 import {
   addCrewMember,
+  addJobComment,
+  signJobPhotoUpload,
   addPriceAdjustment,
   clearProgressOverride,
   completeStage,
@@ -22,7 +24,7 @@ import {
   updateJobStatus,
   updateTaskStatus,
 } from "@/modules/jobs/service";
-import { confirmUpload, signUpload, type SignedUpload } from "@/platform/files";
+import { confirmUpload, type SignedUpload } from "@/platform/files";
 
 async function resolveOr(orgId: string) {
   const resolved = await resolveCtxForAction(orgId);
@@ -110,8 +112,14 @@ export const updateJobCoreAction = jobAction("overview", async (r, _o, jobId, f)
   await updateJobCore(r.ctx, r.archetype, jobId, {
     name: String(f.get("name") ?? ""),
     customerId: (f.get("customer_id") as string) || null,
-    foremanUserId: (f.get("foreman_user_id") as string) || null,
-    managerUserId: (f.get("manager_user_id") as string) || null,
+    // Only touch an assignment leg when the form posted its field — a form
+    // that omits manager must NOT wipe manager_user_id (review fix, F-6).
+    ...(f.has("foreman_user_id")
+      ? { foremanUserId: (f.get("foreman_user_id") as string) || null }
+      : {}),
+    ...(f.has("manager_user_id")
+      ? { managerUserId: (f.get("manager_user_id") as string) || null }
+      : {}),
     startDate: (f.get("start_date") as string) || null,
     dueDate: (f.get("due_date") as string) || null,
     customValues: custom,
@@ -143,13 +151,9 @@ export const clearOverrideAction = jobAction("overview", async (r, _o, jobId) =>
   clearProgressOverride(r.ctx, r.archetype, jobId),
 );
 
-// ── comments (Phase F engine) ────────────────────────────────────────────────
+// ── comments (job-scoped: authz + F-6 assigned scope live in the service) ────
 export const addCommentAction = jobAction("comments", async (r, _o, jobId, f) => {
-  await createComment(r.ctx, {
-    entityType: "job",
-    entityId: jobId,
-    body: String(f.get("body") ?? ""),
-  });
+  await addJobComment(r.ctx, r.archetype, jobId, String(f.get("body") ?? ""));
 });
 
 // ── files (Phase E engine — sign/confirm server actions for the upload hook) ─
@@ -163,14 +167,9 @@ export async function signJobUploadAction(
   const { data } = await supabaseServer(store).auth.getSession();
   const token = data.session?.access_token;
   if (!token) redirect("/login");
-  return signUpload(resolved.ctx, resolved.archetype, token, {
-    accessClass: "job_media",
-    attachedToType: "job",
-    attachedToId: jobId,
-    originalName: file.name,
-    mime: file.mime,
-    sizeBytes: file.sizeBytes,
-  });
+  // The service validates the job is in-org and (foreman) assigned before
+  // minting a signed PUT (review fix — F-6 write scope).
+  return signJobPhotoUpload(resolved.ctx, resolved.archetype, token, jobId, file);
 }
 
 export async function confirmJobUploadAction(orgId: string, fileId: string): Promise<void> {
