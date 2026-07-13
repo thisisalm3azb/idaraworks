@@ -33,14 +33,19 @@ export async function submitReportAction(orgId: string, formData: FormData): Pro
   if (resolved === "mfa_required") redirect("/mfa");
   if (typeof resolved === "string") redirect("/");
   const jobId = String(formData.get("job_id") ?? "");
+  const reportDate = String(formData.get("report_date") ?? "");
   const base = `/o/${orgId}/jobs/${jobId}`;
   try {
     await submitDailyReport(resolved.ctx, resolved.archetype, {
       jobId,
-      reportDate: String(formData.get("report_date") ?? ""),
+      reportDate,
       summary: String(formData.get("summary") ?? ""),
       blockers: (formData.get("blockers") as string) || undefined,
       nextSteps: (formData.get("next_steps") as string) || undefined,
+      // DETERMINISTIC key per (job, date) — same as the composer (review finding
+      // C): a resubmit for the same day resolves the existing report in place
+      // rather than colliding on the (job, date) unique.
+      idempotencyKey: `dr:${jobId}:${reportDate}`,
     });
   } catch (err) {
     if ((err as { digest?: string }).digest?.startsWith("NEXT_REDIRECT")) throw err;

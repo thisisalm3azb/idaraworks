@@ -37,8 +37,6 @@ function backTo(orgId: string, jobId: string, tab: string) {
   return `/o/${orgId}/jobs/${jobId}?tab=${tab}`;
 }
 
-type Act = (formData: FormData) => Promise<void>;
-
 function jobAction(
   tab: string,
   run: (

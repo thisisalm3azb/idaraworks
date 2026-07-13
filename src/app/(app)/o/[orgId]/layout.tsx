@@ -36,6 +36,24 @@ export default async function OrgLayout({
       ? [{ href: `/o/${orgId}/jobs`, label: term("job", terms, "plural") }]
       : []),
     ...(can(a, "week.view") ? [{ href: `/o/${orgId}/week`, label: t("nav.week") }] : []),
+    // S3 heartbeat surfaces (gated per doc 06).
+    ...(can(a, "reports.create")
+      ? [
+          {
+            href: `/o/${orgId}/reports/new`,
+            label: t("reports.new.title", {
+              daily_report: term("daily_report", terms, "singular"),
+            }),
+          },
+        ]
+      : []),
+    ...(can(a, "reports.review")
+      ? [{ href: `/o/${orgId}/reports/review`, label: t("nav.reports_review") }]
+      : []),
+    ...(can(a, "attendance.view")
+      ? [{ href: `/o/${orgId}/attendance`, label: t("nav.attendance") }]
+      : []),
+    ...(can(a, "issues.raise") ? [{ href: `/o/${orgId}/issues`, label: t("nav.issues") }] : []),
     ...(can(a, "employees.view") ? [{ href: `/o/${orgId}/people`, label: t("nav.people") }] : []),
     ...(can(a, "customers.view")
       ? [{ href: `/o/${orgId}/customers`, label: t("nav.customers") }]
