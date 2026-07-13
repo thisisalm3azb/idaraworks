@@ -36,24 +36,31 @@ function canonicalize(token: string): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-/** Every numeric token in a string, canonicalised to values (deduped). */
+// A numeric token: a digit run with optional grouping separators, then an OPTIONAL decimal
+// part that must be a separator FOLLOWED by digits (so a trailing '.'/',' at a sentence
+// boundary is NOT swallowed), then an optional trailing percent. Tightened (review): the
+// old class [\d,.٫٬]* greedily ate a trailing '.', canonicalize() then returned null, and
+// the token was silently dropped — a hallucinated sentence-final number was never checked.
+const NUM_TOKEN = /\d[\d,٬]*(?:[.٫]\d+)?\s?[%٪]?/g;
+
+/** Every numeric token in a string, canonicalised to values. An uncanonicalizable token
+ * (should be impossible with NUM_TOKEN, but defensive) surfaces as NaN so the validator
+ * fails CLOSED rather than dropping it. */
 export function extractNumbers(text: string): number[] {
   const norm = normalizeNumerals(text);
-  // A run of digits with optional grouping/decimal and optional trailing %.
-  const matches = norm.match(/\d[\d,.٫٬]*\s?%?/g) ?? [];
-  const values: number[] = [];
-  for (const m of matches) {
+  const matches = norm.match(NUM_TOKEN) ?? [];
+  return matches.map((m) => {
     const v = canonicalize(m.trim());
-    if (v !== null) values.push(v);
-  }
-  return values;
+    return v === null ? NaN : v;
+  });
 }
 
 /**
  * True iff EVERY number in `text` appears in `allowed` (compared by value, with a small
  * epsilon for the 1-dp rounding the digest uses). An empty-number narration trivially
- * passes (prose with no figures is fine). `allowed` is the set of numbers the
- * deterministic payload contains.
+ * passes (prose with no figures is fine). A token that looks numeric but cannot be parsed
+ * (NaN) is treated as OFFENDING — the validator FAILS CLOSED. `allowed` is the set of
+ * numbers the deterministic payload contains.
  */
 export function validateNumbersSubset(
   text: string,
@@ -62,7 +69,7 @@ export function validateNumbersSubset(
   const allowedSet = allowed.map((n) => Number(n));
   const offending: number[] = [];
   for (const n of extractNumbers(text)) {
-    const found = allowedSet.some((a) => Math.abs(a - n) < 0.05);
+    const found = Number.isFinite(n) && allowedSet.some((a) => Math.abs(a - n) < 0.05);
     if (!found) offending.push(n);
   }
   return { ok: offending.length === 0, offending };

@@ -9,7 +9,7 @@
 import { randomUUID } from "node:crypto";
 import { createHash } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { closeAppDb, type Ctx } from "@/platform/tenancy";
+import { closeAppDb, withCtx, sql, type Ctx } from "@/platform/tenancy";
 import { createOrgForUser } from "@/platform/auth/identity";
 import { installTemplate, TEMPLATE_BOATBUILDING } from "@/platform/config";
 import { invalidateEntitlements } from "@/platform/entitlements/resolve";
@@ -261,4 +261,97 @@ describe("quote-vs-actual (C-10) + worker direct invocation", () => {
     expect(typeof b.digestSections).toBe("number");
     expect(afterB).toBe(afterA); // no duplication on the second sweep
   }, 120_000); // the full nightly runs twice over an org with several seeded jobs (Seoul RTT)
+});
+
+describe("regression #4 — DEFINER candidate helpers enforce the org self-check", () => {
+  it("cross-org p_org yields NOTHING: a caller only ever reads its OWN org's walled candidates", async () => {
+    // A SECOND org B with real walled candidate data (a soon-expiring visa AND a drift job).
+    // The DEFINER functions bypass RLS, so their ONLY tenant guard is p_org = current_org_id().
+    const orgB = await createOrgForUser(ownerUser, {
+      name: "S7 Org B",
+      country: "AE",
+      baseCurrency: "AED",
+    });
+    const ctxB: Ctx = {
+      orgId: orgB,
+      userId: ownerUser,
+      costPrivileged: true,
+      pricePrivileged: true,
+      requestId: "s7-test-b",
+    };
+    // E-13 candidate in B: employee whose visa expires in 10 days.
+    const empB = randomUUID();
+    await owner`insert into public.employee (id, org_id, name) values (${empB}, ${orgB}, 'B-Emp')`;
+    await owner`insert into public.employee_hr (employee_id, org_id, visa_expiry)
+                values (${empB}, ${orgB}, (current_date + 10))`;
+    // E-05 candidate in B: active job, not-started stage (progress 0), labour ≈ 90% of quote.
+    const jobB = randomUUID();
+    await owner`
+      insert into public.job (id, org_id, reference, name, status_key, status_category, created_by,
+                              start_date, selling_price_minor, billing_points)
+      values (${jobB}, ${orgB}, ${`B-MD-${run}`}, 'B drift', 'active', 'active', ${ownerUser}, '2026-01-01',
+              1000000, '[{"trigger":"lamination","pct":100}]'::jsonb)`;
+    await owner`insert into public.job_stage (org_id, job_id, stage_key, name, weight, sort, status)
+                values (${orgB}, ${jobB}, 'lamination', '{"en":"Lamination","ar":"ت"}'::jsonb, 100, 0, 'not_started')`;
+    const reportB = randomUUID();
+    const empB2 = randomUUID();
+    await owner`insert into public.employee (id, org_id, name) values (${empB2}, ${orgB}, 'B-Ali')`;
+    await owner`insert into public.daily_report (id, org_id, job_id, report_date, summary, status, submitted_by, submitted_at)
+                values (${reportB}, ${orgB}, ${jobB}, '2026-02-01', 'w', 'submitted', ${ownerUser}, now())`;
+    await owner`insert into public.report_labour_cost (org_id, report_id, employee_id, hourly_cost_minor, ot_rate, labour_cost_minor)
+                values (${orgB}, ${reportB}, ${empB2}, 5000, 1.5, 900000)`;
+    await refreshRollup(ctxB, jobB);
+
+    // Baseline — from B's OWN context, both helpers return B's candidates.
+    const [ownDocs, ownDrift] = await withCtx(ctxB, async (tx) => {
+      const docs = (await tx.execute(
+        sql`select employee_id::text as id from app.document_expiry_candidates(${orgB}, 30)`,
+      )) as unknown as Array<{ id: string }>;
+      const drift = (await tx.execute(
+        sql`select job_id::text as id from app.margin_drift_candidates(${orgB}, 15, 90, 90)`,
+      )) as unknown as Array<{ id: string }>;
+      return [docs, drift];
+    });
+    expect(ownDocs.some((r) => r.id === empB)).toBe(true);
+    expect(ownDrift.some((r) => r.id === jobB)).toBe(true);
+
+    // ATTACK — from org A's context, ask for org B's uuid. The self-check must return ZERO rows.
+    const [xDocs, xDrift] = await withCtx(ownerCtx(), async (tx) => {
+      const docs = (await tx.execute(
+        sql`select employee_id::text as id from app.document_expiry_candidates(${orgB}, 30)`,
+      )) as unknown as Array<{ id: string }>;
+      const drift = (await tx.execute(
+        sql`select job_id::text as id from app.margin_drift_candidates(${orgB}, 15, 90, 90)`,
+      )) as unknown as Array<{ id: string }>;
+      return [docs, drift];
+    });
+    expect(xDocs).toHaveLength(0); // B's walled HR never leaks to A
+    expect(xDrift).toHaveLength(0); // B's labour-derived drift never leaks to A
+  }, 120_000);
+});
+
+describe("regression #5 — digest headline count is a full COUNT, never the LIMIT-10 preview length", () => {
+  it("at_risk count reflects the TRUE number of open owner-risk exceptions, items[] stay capped at 10", async () => {
+    // Seed 12 open owner-audience risk exceptions (> the 10-row items preview cap).
+    await owner`
+      insert into public.exception (org_id, rule_key, severity, audience_roles, dedup_key)
+      select ${orgId}, 'overdue_stage', 'warning', array['owner'],
+             'capcheck-' || ${run} || '-' || g
+      from generate_series(1, 12) g`;
+    // Ground truth: the same predicate composeOwnerDigest uses for the at_risk section.
+    const [truth] = (await owner`
+      select count(*)::int as n from public.exception
+      where org_id = ${orgId} and resolved_at is null and 'owner' = any(audience_roles)
+        and rule_key in ('overdue_stage','margin_drift','missing_report','approval_stuck','billing_point_uninvoiced')`) as unknown as Array<{
+      n: number;
+    }>;
+    expect(truth!.n).toBeGreaterThan(10); // precondition: more than the preview cap
+
+    await composeOwnerDigest(ownerCtx(), AS_OF);
+    const view = await getOwnerDigest(ownerCtx(), "owner");
+    const atRisk = view!.sections.find((s) => s.key === "at_risk")!;
+    expect(atRisk.count).toBe(truth!.n); // headline is the FULL count, not min(count, 10)
+    expect(atRisk.count).toBeGreaterThan(atRisk.items.length); // proves it is not the capped length
+    expect(atRisk.items.length).toBeLessThanOrEqual(10); // preview list still bounded
+  });
 });

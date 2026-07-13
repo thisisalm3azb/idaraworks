@@ -12,6 +12,8 @@ import {
 import { computeStaggerSeconds } from "@/workers/functions/exception-engine";
 import { watermarkImage } from "@/platform/media/watermark";
 import { getNarrationProvider } from "@/platform/ai/adapter";
+import { buildNarrationInputs, type DigestPayload } from "@/modules/digest/service";
+import { clientIpFromHeaders } from "@/platform/http/clientIp";
 
 describe("numbers-subset validator (review #AI-hallucination)", () => {
   it("normalises Arabic-Indic + extended digits to Latin", () => {
@@ -36,6 +38,90 @@ describe("numbers-subset validator (review #AI-hallucination)", () => {
 
   it("prose with no numbers trivially passes", () => {
     expect(validateNumbersSubset("Everything looks on track today.", []).ok).toBe(true);
+  });
+
+  // Regression — review finding #2 (fail-OPEN). The old token class [\d,.٫٬]* greedily ate a
+  // trailing '.', canonicalize() then returned null, and the token was SILENTLY DROPPED — a
+  // hallucinated sentence-final number was never checked. It must now be caught (fail closed).
+  it("catches a hallucinated sentence-FINAL number (trailing dot no longer swallowed)", () => {
+    const r = validateNumbersSubset("Progress reached 87.", [3, 10500]);
+    expect(r.ok).toBe(false);
+    expect(r.offending).toContain(87);
+  });
+
+  it("a legitimate sentence-final allowed number still passes (dot dropped, value kept)", () => {
+    expect(validateNumbersSubset("You have 3.", [3]).ok).toBe(true);
+  });
+
+  it("a genuine decimal that is NOT in the allow-list is caught", () => {
+    const r = validateNumbersSubset("Margin is 42.5% this week", [3, 10500]);
+    expect(r.ok).toBe(false);
+    expect(r.offending).toContain(42.5);
+  });
+
+  it("a genuine decimal that IS in the allow-list passes", () => {
+    expect(validateNumbersSubset("Margin is 42.5% this week", [42.5]).ok).toBe(true);
+  });
+});
+
+describe("digest narration inputs (review #1 — money must never enter narration)", () => {
+  const payload: DigestPayload = {
+    audience: "owner",
+    computedAt: "2026-07-14T00:00:00.000Z",
+    sections: [
+      {
+        key: "collections",
+        labelKey: "digest.section.collections",
+        count: 4,
+        moneyMinor: 987654321, // a large AR figure — must NOT reach the model or the allow-list
+        items: [],
+      },
+      {
+        key: "at_risk",
+        labelKey: "digest.section.at_risk",
+        count: 12,
+        moneyMinor: null,
+        items: [],
+      },
+      { key: "crew", labelKey: "digest.section.crew", count: 0, moneyMinor: null, items: [] },
+    ],
+    numbers: [4, 987654321, 12],
+  };
+
+  it("request items carry section COUNTS only — no money figure crosses into the model", () => {
+    const { req } = buildNarrationInputs(payload, "en", (k) => k);
+    const numbersSent = req.items.flatMap((i) => i.numbers);
+    expect(numbersSent).not.toContain(987654321);
+    expect(numbersSent).toEqual([4, 12]); // zero-count sections dropped; money excluded
+  });
+
+  it("allow-list is counts only, so the validator would REJECT the money figure as offending", () => {
+    const { allowed } = buildNarrationInputs(payload, "en", (k) => k);
+    expect(allowed).not.toContain(987654321);
+    // A narration that tried to state the AR money value fails numbers-subset → deterministic fallback.
+    expect(validateNumbersSubset("Outstanding is 9876543.21", allowed).ok).toBe(false);
+  });
+});
+
+describe("clientIpFromHeaders (review #3 — share-page rate-limit key is not spoofable)", () => {
+  it("prefers the platform-trusted header over a spoofed x-forwarded-for", () => {
+    const h = new Headers({
+      "x-vercel-forwarded-for": "203.0.113.7",
+      "x-forwarded-for": "1.1.1.1, 2.2.2.2", // attacker-controlled — must be ignored
+    });
+    expect(clientIpFromHeaders(h)).toBe("203.0.113.7");
+  });
+
+  it("falls back through true-client-ip → xff → x-real-ip → constant", () => {
+    expect(clientIpFromHeaders(new Headers({ "true-client-ip": "198.51.100.9" }))).toBe(
+      "198.51.100.9",
+    );
+    expect(clientIpFromHeaders(new Headers({ "x-forwarded-for": " 9.9.9.9 , 8.8.8.8" }))).toBe(
+      "9.9.9.9",
+    );
+    expect(clientIpFromHeaders(new Headers({ "x-real-ip": "7.7.7.7" }))).toBe("7.7.7.7");
+    // No IP headers → a CONSTANT key (still throttles; never a per-request-unique value).
+    expect(clientIpFromHeaders(new Headers())).toBe("unknown");
   });
 });
 

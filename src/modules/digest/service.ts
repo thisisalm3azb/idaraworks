@@ -46,6 +46,31 @@ function collectNumbers(sections: DigestSection[]): number[] {
 }
 
 /**
+ * Build the CLOSED AI-narration request + numbers allow-list from a digest payload.
+ *
+ * Money is DELIBERATELY excluded from BOTH the request and the allow-list (review finding
+ * #1): the narration row is stored once and getOwnerDigest returns it verbatim to every
+ * digest.view audience — including non-price-privileged manager / foreman / procurement —
+ * so a money figure in the prose would bypass the F-23 section redaction. Only non-financial
+ * section COUNTS (and resolved labels) cross into the model, and the allow-list is counts
+ * only, so the numbers-subset validator rejects any money-looking token as offending.
+ * Pure + exported so the money-exclusion invariant is unit-tested without a database.
+ */
+export function buildNarrationInputs(
+  payload: DigestPayload,
+  lang: "en" | "ar",
+  t: (key: string) => string,
+): { req: NarrationRequest; allowed: number[] } {
+  const items = payload.sections
+    .filter((s) => s.count > 0)
+    .map((s) => ({ label: t(s.labelKey), numbers: [s.count] }));
+  return {
+    req: { lang, title: t("digest.title"), items },
+    allowed: payload.sections.map((s) => s.count),
+  };
+}
+
+/**
  * Compose + persist the OWNER digest for `digestDate`. Idempotent: upserts by
  * (org, 'owner', date), so a re-run (retry / duplicate delivery) replaces the row with the
  * same deterministic result. Called by the per-org nightly run.
@@ -65,7 +90,9 @@ export async function composeOwnerDigest(
       select count(*)::int as n from public.approval where org_id = ${ctx.orgId} and state = 'pending'`,
     );
 
-    // Q2/Q4/Q10 — open owner-audience risk exceptions (grouped items with evidence).
+    // Q2/Q4/Q10 — open owner-audience risk exceptions. The headline count is a full
+    // count(*) (never the LIMIT-10 preview length, which would silently cap at 10 and
+    // understate the true total — review); items[] stay capped at 10 for display.
     const risk = (await tx.execute(sql`
       select id::text as id, rule_key, job_id::text as job_id, severity
       from public.exception
@@ -73,6 +100,13 @@ export async function composeOwnerDigest(
         and rule_key in ('overdue_stage','margin_drift','missing_report','approval_stuck','billing_point_uninvoiced')
       order by (severity = 'critical') desc limit 10
     `)) as unknown as Array<Record<string, unknown>>;
+    const riskCount = await scalar(
+      tx,
+      sql`
+      select count(*)::int as n from public.exception
+      where org_id = ${ctx.orgId} and resolved_at is null and 'owner' = any(audience_roles)
+        and rule_key in ('overdue_stage','margin_drift','missing_report','approval_stuck','billing_point_uninvoiced')`,
+    );
 
     // Q12 — collections: overdue invoice count + AR outstanding (money, trusted compose).
     const overdue = await scalar(
@@ -122,6 +156,20 @@ export async function composeOwnerDigest(
         )
       limit 10
     `)) as unknown as Array<Record<string, unknown>>;
+    const awaitingCount = await scalar(
+      tx,
+      sql`
+      select count(*)::int as n from public.job j
+      where j.org_id = ${ctx.orgId} and j.status_category = 'active' and j.archived = false
+        and exists (
+          select 1 from public.job_stage s where s.job_id = j.id and s.org_id = ${ctx.orgId}
+            and s.status = 'completed'
+            and s.stage_key in (select bp->>'trigger' from jsonb_array_elements(j.billing_points) bp
+                                where bp->>'trigger' <> 'on_acceptance'))
+        and not exists (
+          select 1 from public.customer_update cu where cu.job_id = j.id and cu.org_id = ${ctx.orgId}
+            and cu.status = 'sent' and cu.sent_at >= (${digestDate}::date - 14))`,
+    );
 
     // Q1/Q5 — this week: jobs due within the window + approved MRs awaiting conversion.
     const dueThisWeek = await scalar(
@@ -149,7 +197,7 @@ export async function composeOwnerDigest(
       {
         key: "at_risk",
         labelKey: "digest.section.at_risk",
-        count: risk.length,
+        count: riskCount,
         moneyMinor: null,
         items: risk.map((r) => ({
           id: r.id,
@@ -183,7 +231,7 @@ export async function composeOwnerDigest(
       {
         key: "customers_awaiting",
         labelKey: "digest.section.customers_awaiting",
-        count: awaiting.length,
+        count: awaitingCount,
         moneyMinor: null,
         items: awaiting.map((a) => ({ jobId: a.job_id, reference: a.reference })),
       },
@@ -300,17 +348,7 @@ export async function generateOwnerNarration(
   if (!digest) return { narration: null, status: "not_found" };
   const payload = digest.payload as DigestPayload;
 
-  // Closed payload: resolved LABELS + the section numbers only (no raw tenant free-text).
-  const req: NarrationRequest = {
-    lang,
-    title: t("digest.title"),
-    items: payload.sections
-      .filter((s) => s.count > 0 || s.moneyMinor)
-      .map((s) => ({
-        label: t(s.labelKey),
-        numbers: [s.count, ...(s.moneyMinor !== null ? [s.moneyMinor] : [])],
-      })),
-  };
+  const { req, allowed } = buildNarrationInputs(payload, lang, t);
   const provider = getNarrationProvider();
   let result;
   try {
@@ -323,8 +361,8 @@ export async function generateOwnerNarration(
     result = null;
   }
 
-  // Validate: every number in the narration must be in the payload's allow-list.
-  const allowed = payload.numbers;
+  // `allowed` (from buildNarrationInputs) is the COUNTS-only set — a narration can never
+  // legitimise a money figure (any money-looking token → offending → fall back to deterministic).
   let verdict: "pass" | "fail" | "na" = "na";
   let narration: string | null = null;
   let status = "failed";

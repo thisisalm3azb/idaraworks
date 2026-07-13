@@ -113,6 +113,7 @@ export default async function OrgHome({
             emptyLabel={t("today.card_empty")}
             canDismiss={canDismiss && EXCEPTION_CARDS.has(card.key)}
             dismissLabel={t("today.dismiss")}
+            asOfLabel={t("today.card_as_of")}
             severityLabel={(s: string) => t(`exceptions.severity.${s}`)}
           />
         ))}
@@ -165,6 +166,7 @@ function TodayCardView({
   emptyLabel,
   canDismiss,
   dismissLabel,
+  asOfLabel,
   severityLabel,
 }: {
   card: TodayCard;
@@ -173,6 +175,7 @@ function TodayCardView({
   emptyLabel: string;
   canDismiss: boolean;
   dismissLabel: string;
+  asOfLabel: string;
   severityLabel: (s: string) => string;
 }) {
   const asOf = new Date(card.freshness.computedAt).toISOString().slice(11, 16);
@@ -183,7 +186,7 @@ function TodayCardView({
         meta={
           <span className="flex items-center gap-2 text-xs text-ink-muted">
             <Badge tone={card.count > 0 ? "brand" : "neutral"}>{card.count}</Badge>
-            <span>{`as of ${asOf}`}</span>
+            <span>{`${asOfLabel} ${asOf}`}</span>
           </span>
         }
       />

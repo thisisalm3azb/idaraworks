@@ -206,7 +206,7 @@ export async function dispatchNightly(clock: {
 
 export const exceptionNightlyDispatch = inngest.createFunction(
   { id: "exception-nightly-dispatch", retries: 1, triggers: [cron("0 0 * * *")] }, // ~00:00 UTC, then staggered
-  async ({ runId }) => {
+  async () => {
     const now = new Date();
     return dispatchNightly({ asOf: now.toISOString().slice(0, 10), nowMs: now.getTime() });
   },

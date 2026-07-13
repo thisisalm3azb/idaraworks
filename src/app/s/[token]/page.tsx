@@ -9,6 +9,7 @@ import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { resolvePublicShare } from "@/modules/customer-updates/service";
 import { rateLimit } from "@/platform/http/rateLimit";
+import { clientIpFromHeaders } from "@/platform/http/clientIp";
 
 export const dynamic = "force-dynamic";
 
@@ -25,15 +26,10 @@ type Content = {
   nextMilestones: Array<{ en: string; ar: string }>;
 };
 
-function clientIp(h: Headers): string {
-  const fwd = h.get("x-forwarded-for");
-  return (fwd ? fwd.split(",")[0]!.trim() : null) ?? h.get("x-real-ip") ?? "unknown";
-}
-
 export default async function SharePage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
   const h = await headers();
-  const gate = await rateLimit("share", clientIp(h));
+  const gate = await rateLimit("share", clientIpFromHeaders(h));
   const update = gate.allowed ? await resolvePublicShare(token) : null;
 
   if (!update) {

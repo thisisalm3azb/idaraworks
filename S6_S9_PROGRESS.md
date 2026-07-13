@@ -7,9 +7,27 @@ cleaned slice.**
 
 ## Current position
 - **Current slice:** S7 — Improve / Intelligence (S6 DONE)
-- **Current task:** begin S7 scope freeze (read governing docs), then implement automatically
+- **Current task:** S7 implemented + 6 adversarial-review findings FIXED + regression-covered.
+  - **Fixes applied (all in working tree, NOT yet committed):** #1 narration money-leak (`buildNarrationInputs`
+    counts-only, digest/service.ts) · #2 numbers-subset fail-CLOSED (numbers-subset.ts tightened regex + NaN→offending)
+    · #3 share rate-limit IP (new `platform/http/clientIp.ts` `clientIpFromHeaders`, used by s/[token]/page.tsx)
+    · #4 DEFINER org self-check (migration **0049** — applied to hosted) · #5 digest headline COUNT(*) not LIMIT-10
+    length (digest/service.ts riskCount/awaitingCount) · #6 owner Today `card_as_of` i18n (o/[orgId]/page.tsx).
+  - **Regressions added:** 4 unit (buildNarrationInputs money-exclusion, numbers-subset sentence-final/decimal,
+    clientIpFromHeaders precedence) + 2 integration (cross-org DEFINER returns 0 rows, digest count>10 items≤10).
+  - **Local gates GREEN:** format ✓ · lint 0 errors ✓ · typecheck ✓ · **unit 273/273** ✓ · build ✓.
+  - **Hosted integration:** ENVIRONMENTAL WALL — Seoul network is ~15-20× normal latency right now (10-21s PER
+    test). Long test files exceed 2-4 min; the FULL multi-file suite would take >1h. Proven NOT a code bug: a
+    ZERO-S7 control file (s3-report) behaves identically (passes tests then my own `timeout` SIGTERMs it). The
+    earlier "20-min hang" was the default reporter buffering file-summaries over slow DB-only tests, not a hang.
+    PLAN (matches S6 precedent): validate s7-improve file in isolation vs hosted (RUNNING bg bemj3zx0e, verbose,
+    monitor bdsgp6de2) + rely on **GitHub CI** (fast local ephemeral Supabase) for the full-suite green.
+  - **NEXT:** confirm s7-improve isolation green → commit review fixes → push (S7 commits af88959..c6efe9c + fix
+    commit; all LOCAL/unpushed) → CI green → deploy (Vercel auto on push) → prod `/api/health` commit → Arabic
+    thirteen-questions demo (tooling/scripts/s7-prod-demo.ts) → cleanup S7 synthetic → report (docs/S7-IMPROVE-COMPLETION.md drafted).
 - **Completed slices (this run):** S6 — Bill ✅ (deployed ee5eb7a; CI green; prod DoD demo passed; baseline restored)
-- **New baseline:** hosted migrations 0000-0044, next 0045 · deployed ee5eb7a · prod orgs [Alpha Marine, TESTING] only
+- **Migrations:** hosted at **0000-0049** (0045-0048 = S7 core; **0049** = review-fix DEFINER org self-check, applied). Next: 0050.
+- **New baseline (pre-S7):** deployed ee5eb7a · prod orgs [Alpha Marine, TESTING] only (must stay untouched)
 
 ## Verified baseline (start of run)
 - Deployed S5 commit: `e98a34c` (prod alias serves it)
