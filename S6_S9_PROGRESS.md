@@ -95,6 +95,94 @@ creds · email/WhatsApp creds · e-invoice/government creds · delete 4 junk Ver
   prod health · Arabic full-loop DoD demo (s6-prod-demo.ts) · remove only S6 synthetic data · verify Alpha
   Marine+TESTING untouched · memory · report. Then auto-begin S7.
 
+## S7 — BUILD LOG
+- **Migrations 0045-0047 WRITTEN + APPLIED to hosted (DB now 0000-0047, next 0048):** 0045 exception rule_key widen
+  (+margin_drift, late_po, late_supplier, unusual_expense, document_expiry) + subject index; 0046 `digest` (per org/audience/
+  date, redacted-at-collection payload jsonb, narration seam nullable) + `ai_interaction` append-only credit ledger; 0047
+  `customer_update` (draft/sent, frozen safe `content` jsonb at send, draft-only edit RLS) + `share_token` (token_hash only,
+  expires/revoke, ≥128-bit) + **app.resolve_share_token(hash) SECURITY DEFINER** = the one no-auth public read path (returns
+  ONLY safe columns of an active token's sent update). All org-scoped RLS, NO DELETE grants, composite (id,org_id) FKs.
+- REMAINING S7: E-rule services (E-05/06/08/13 in exceptions/service.ts + expenses hook for E-08) · scheduler fan-out refactor
+  (workers/functions/exception-engine.ts) · digest composer (modules/digest) + numbers-subset validator + src/platform/ai
+  narration adapter (disabled seam) · customer_update service + share surface + /s/[token] public page + sharp watermark
+  derivative · quote-vs-actual view (extend costing page) · owner digest card live · 13-question golden fixtures · authz
+  (digest.view, customer_updates.*) + config (ExceptionThresholdSet params) + entitlement enforcement (feat.ai_narration/
+  ai_drafts, limit.ai_credits_month) · events (customer_update/sent, share_token/created+revoked) · i18n en/ar · tests ·
+  review · gates · deploy · Arabic DoD demo (thirteen-questions) · cleanup · report.
+
+## S7 — Improve & intelligence — FROZEN SCOPE (informational; decisions taken for every ambiguity)
+Scope-freeze reader workflow output: session subagents/workflows/wf_2f93988b-4ca. Objective: "the system starts
+telling the owner where to look." Baseline: migrations 0000-0044 (next 0045), deployed ee5eb7a, prod=[Alpha Marine, TESTING].
+
+**Four new E-rules (extend the S5 engine; versioned code + raise/clear + threshold unit tests):**
+- E-05 margin_drift — NIGHTLY; subject job; dedup `margin_drift:{jobId}`; severity **critical**; audience owner,accounts;
+  raise when (cost% − progress% > marginDriftPoints[15]) OR (cost > costOfQuotePct[90]% of quoted while isPreFinal
+  [pre-finishing stage, template #1]); quoted via costing C-10 precedence; **DECISION: suppress when quoted is null**;
+  clear when neither arm holds; DB-side SQL aggregate.
+- E-06 late_supplier — NIGHTLY; two arms: per-PO `late_po:{poId}` warning audience procurement (PO past expected date
+  w/o full GRN); aggregate `late_supplier:{supplierId}` warning audience procurement+owner (≥ lateCount[3] late POs in
+  trailing 90 CALENDAR days). Clear per-PO on full receipt/close; aggregate when <3.
+- E-08 unusual_expense — **DECISION: event-driven on expense create** (mirrors E-07); subject expense; dedup
+  `unusual_expense:{expenseId}`; warning; audience accounts,owner; raise when amount > medianMultiple[3]× trailing median
+  of same category on same job AND ≥ minSample[4] priors; clear on void / nightly recheck.
+- E-13 document_expiry — NIGHTLY; subject employee; dedup `document_expiry:{employeeId}:{docType}` (id/passport/visa);
+  warning; audience admin,owner; raise when any employee_hr expiry within windowDays[30] **CALENDAR** days; clear on
+  renewal or deactivate. **Data source EXISTS: employee_hr.{id,passport,visa}_expiry (reserved in 0020 for E-13).**
+- DEFERRED (NOT S7): E-11 (quote-vs-actual VARIANCE rule, P3), E-12, E-14, E-15.
+
+**Staggered nightly scheduler:** refactor src/workers/functions/exception-engine.ts (today a single serial cron looping
+all orgs — the F-31 herd) into a **fan-out dispatcher** (platform task) that enqueues one ORG-SCOPED child per org,
+staggered by deterministic offset = hash(org_id) % windowMinutes + a concurrency cap + per-org runtime budget; each child
+runs evaluateNightly + reconcile + **digest compose**. Keep dedicated-client org discovery + per-org isolation. DB-side
+aggregates (F-30). Measured-runtime re-stagger + per-work-class pools DEFERRED (1000-company tier).
+
+**Deterministic digest + AI narration seam:** new `digest` table (org_id, id, digest_date, audience/role, payload jsonb
+[structured, redacted-at-collection per audience], narration text nullable, narration_status, computed_at). Composed in the
+nightly window per org, **S7 surfaces the OWNER digest only** (per-role composition capability built; only owner card 6 lit).
+Deterministic payload = ranked critical-exceptions → decisions-waiting → new-info → plan, cap ~10 + counts, evidence links
+from the STRUCTURED source. **AI narration = DISABLED seam** (src/platform/ai adapter getNarrationProvider(), fake/disabled
+like einvoice), generated LAZILY on card expand + cached on the digest row, gated feat.ai_narration + credits + non-trialing;
+**numbers-subset validator** (canonical numeral normalization: Arabic-Indic→Latin, strip separators/symbols, compare numeric
+VALUES) gates narration → deterministic fallback. **Deterministic digest is the always-shippable MVP.** Credit metering via
+new `ai_interaction` ledger (org, feature, tokens, cost, validator verdict) + limit.ai_credits_month; analytics NEVER metered.
+Platform daily-spend circuit-breaker = minimal dormant hook. Evening digest DEFERRED (F-20).
+
+**Customer-update drafts + tokenized share surface (F-22):** `customer_update` table (org_id, id, job_id, customer snapshot,
+title, body[editable], status draft|sent, curated photo file_ids, language). Body may be AI-drafted (disabled seam,
+feat.ai_drafts+credits) OR manually written (fallback so the surface works w/o AI). Send is human → mints WATERMARKED
+derivatives (customer_share file class via sharp watermark) + a `share_token` (org_id, id, customer_update_id, token_hash
+[store hash not raw], expires_at [default 90d configurable], revoked_at, created_by; ≥128-bit random). **DECISION: "single-use"
+= per-update-scoped revisitable-until-expiry/revoke link — PB-5 "revocable web link" (owner freeze decision) governs.**
+Public page `/s/[token]`: no auth, **noindex**, rate-limited (30/min/IP, 10/min/token defaults), org resolved from token
+server-side, renders ONLY the safe-by-construction payload (stage completions, progress%, watermarked photos, next
+milestones — NEVER cost/labour/margin/internal/other-customer) + PDF (PB-5). Two-org bleed asserts token-A never surfaces B.
+Authz customer_updates.draft/send/share/revoke = [owner,admin,manager] (row 62 governs; Accounts none); cap.customer_updates.
+
+**Quote-vs-actual view:** extend the S5 job costing page with a quote-vs-actual section (MoneyRollup quotedMinor via C-10,
+costMinor, invoicedMinor, paidMinor); gated finance.viewPrices + finance.viewCosts; server-side redaction (Manager sees
+prices, cost/margin redacted unless viewCosts).
+
+**Owner Today digest card (card 6) live:** headline+expand, source digest store, evidence links; collapses to notification-only
+if AI narration disabled. **The digest content answers Q6/Q7/Q11** (the three §5 questions with no dedicated owner card) via
+aggregated lines + deep-links — resolves the mapping gap WITHOUT adding cards (frozen 6-card design preserved).
+
+**13-question → card mapping (authored S7 artifact, the DoD gate):** Q1→digest/ThisWeek; Q2→Card2(E-02); Q3→Card1; Q4→Card2;
+Q5→Card5(MRs); Q6→Card5/digest(E-06); Q7→digest crew line; Q8→Card1(blocking issues); Q9→Card3(Yesterday); Q10→Card2(E-05)+
+deep-link quote-vs-actual; Q11→digest customers-awaiting line; Q12→Card4(E-10); Q13→Card1. Golden-fixture CI asserts each
+question's mapped card + payload vs a fixture dataset; live owner demo is the human gate (re-run S11).
+
+**Authz new actions:** digest.view [owner,admin,manager,foreman,procurement,accounts]; customer_updates.draft/send/share/revoke
+[owner,admin,manager]. Narration is server-automatic (entitlement-gated, no can() action). Config: ExceptionThresholdSet params
+for E-05/06/08/13 (typed, minor-units, defaults above); TodayCardConfig lights owner digest card; digest cadence fixed
+working-morning (non-configurable); limit.exception_rules_tuned unmetered in MVP.
+
+**Migrations 0045+ (org-scoped RLS, NO DELETE grants, composite FKs):** digest; ai_interaction; customer_update; share_token;
+exception rule_key widen (+margin_drift, late_po, late_supplier, unusual_expense, document_expiry). No new schema for E-13.
+**Events:** customer_update/sent, share_token/created+revoked. **Entitlements:** enforce existing feat.ai_narration/ai_drafts +
+limit.ai_credits_month (no new keys). **Owner actions (documented, non-blocking):** AI-provider creds (narration+drafts dormant;
+deterministic digest + manual update + share surface all work without AI); watermark brand text; share expiry/rate-limit finals;
+pen-test the public share surface.
+
 ## Resume instruction
 If interrupted during S6 scope freeze: re-read phase2/01,05,06,09,10,12,13 + BUILD_BIBLE
 for the Bill slice; the reader-workflow output (if present) is under the session
