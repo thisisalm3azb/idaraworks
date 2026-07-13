@@ -61,17 +61,28 @@ async function seedUser(id: string, label: string) {
             ${`s6demo-${label}-${id.slice(0, 8)}@example.com`}, '{"full_name":"S6 Demo"}'::jsonb, now(), now())`;
 }
 
-// FK-topological, children before parents. S6 billing tables lead so they clear
-// before the job/customer/quote they reference (all on delete restrict).
+// Remaining org-scoped tables, FK-topological (children before parents). The invoice
+// FAMILY (payment_receipt/payment/einvoice_submission/invoice_line/credit-notes/
+// invoices) and quote family are cleared explicitly first in cleanup() because the
+// invoice self-FK (credit_note → corrects_invoice_id) needs a precise order.
 const TABLES = [
-  "payment_receipt",
-  "payment",
-  "einvoice_submission",
-  "invoice_line",
-  "invoice",
-  "quote_line",
-  "quote",
+  "cost_rollup_labour",
+  "cost_rollup",
   "exception",
+  "goods_receipt_line",
+  "goods_receipt",
+  "purchase_order_line",
+  "purchase_order",
+  "material_request_line",
+  "material_request",
+  "approval",
+  "report_labour_cost",
+  "report_labour_line",
+  "attendance",
+  "report_material_line",
+  "report_work_line",
+  "daily_report",
+  "issue",
   "domain_event",
   "notification",
   "notification_preference",
@@ -79,6 +90,11 @@ const TABLES = [
   "job_crew",
   "job_stage",
   "job",
+  "employee_terms",
+  "employee_hr",
+  "employee",
+  "team",
+  "item",
   "customer",
   "supplier",
   "job_preset",
@@ -94,16 +110,27 @@ const TABLES = [
   "company",
 ];
 
+export async function cleanupOrg(o: typeof owner, org: string, user: string) {
+  await o`update public.job set current_stage_id = null where org_id = ${org}`;
+  // Invoice family: grandchildren/children first, then credit notes (self-FK to the
+  // corrected invoice), then invoices. invoice_line MUST go before ANY invoice delete.
+  await o`delete from public.payment_receipt where org_id = ${org}`;
+  await o`delete from public.payment where org_id = ${org}`;
+  await o`delete from public.einvoice_submission where org_id = ${org}`;
+  await o`delete from public.invoice_line where org_id = ${org}`;
+  await o`delete from public.invoice where org_id = ${org} and corrects_invoice_id is not null`;
+  await o`delete from public.invoice where org_id = ${org}`;
+  await o`delete from public.quote_line where org_id = ${org}`;
+  await o`delete from public.quote where org_id = ${org}`;
+  for (const t of TABLES) await o.unsafe(`delete from public.${t} where org_id = $1`, [org]);
+  await o`delete from public.org where id = ${org}`;
+  await o`delete from public.user_profile where id = ${user}`;
+  await o`delete from auth.users where id = ${user}`;
+}
+
 async function cleanup() {
   if (!orgId) return;
-  await owner`update public.job set current_stage_id = null where org_id = ${orgId}`;
-  // Credit notes carry a self-FK to the invoice they correct (restrict) — remove
-  // them before the generic invoice delete so the single statement can't trip it.
-  await owner`delete from public.invoice where org_id = ${orgId} and corrects_invoice_id is not null`;
-  for (const t of TABLES) await owner.unsafe(`delete from public.${t} where org_id = $1`, [orgId]);
-  await owner`delete from public.org where id = ${orgId}`;
-  await owner`delete from public.user_profile where id = ${ownerUser}`;
-  await owner`delete from auth.users where id = ${ownerUser}`;
+  await cleanupOrg(owner, orgId, ownerUser);
 }
 
 async function run() {
