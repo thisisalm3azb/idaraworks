@@ -67,9 +67,17 @@ beforeAll(async () => {
 }, 120_000);
 
 afterAll(async () => {
+  // S2's createJobFromPreset seeds job_stage rows and sets current_stage_id, so
+  // the S1 walking-skeleton jobs now have stage/child rows — clear the
+  // current-stage denormalisation and delete the S2 children before `job`
+  // (job_stage → job is ON DELETE RESTRICT).
+  await owner`update public.job set current_stage_id = null where org_id = ${orgId}`;
   for (const t of [
     "daily_report",
     "domain_event",
+    "task",
+    "job_crew",
+    "job_stage",
     "job",
     "employee_terms",
     "employee_hr",
