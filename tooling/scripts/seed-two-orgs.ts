@@ -195,6 +195,63 @@ export const SEEDERS: Record<string, Seeder> = {
             values (${org}, ${job}, ${emp}, ${u})`;
   },
 
+  // ── S3 report heartbeat ──
+  report_work_line: async (o, org, u) => {
+    const job = randomUUID();
+    const rep = randomUUID();
+    await o`insert into public.job (id, org_id, reference, name, status_key, status_category, created_by)
+            values (${job}, ${org}, ${"BLW-" + randomUUID().slice(0, 8)}, 'Bleed Work Job', 'draft', 'draft', ${u})`;
+    await o`insert into public.daily_report (id, org_id, job_id, report_date, summary, submitted_by)
+            values (${rep}, ${org}, ${job}, '2026-02-01', 'bleed', ${u})`;
+    await o`insert into public.report_work_line (org_id, report_id, description)
+            values (${org}, ${rep}, 'bleed work line')`;
+  },
+  report_material_line: async (o, org, u) => {
+    const job = randomUUID();
+    const rep = randomUUID();
+    await o`insert into public.job (id, org_id, reference, name, status_key, status_category, created_by)
+            values (${job}, ${org}, ${"BLM-" + randomUUID().slice(0, 8)}, 'Bleed Mat Job', 'draft', 'draft', ${u})`;
+    await o`insert into public.daily_report (id, org_id, job_id, report_date, summary, submitted_by)
+            values (${rep}, ${org}, ${job}, '2026-02-02', 'bleed', ${u})`;
+    await o`insert into public.report_material_line (org_id, report_id, item_name, qty, unit)
+            values (${org}, ${rep}, 'Bleed Resin', 2, 'L')`;
+  },
+  report_labour_line: async (o, org, u) => {
+    const job = randomUUID();
+    const rep = randomUUID();
+    const emp = randomUUID();
+    await o`insert into public.job (id, org_id, reference, name, status_key, status_category, created_by)
+            values (${job}, ${org}, ${"BLL-" + randomUUID().slice(0, 8)}, 'Bleed Lab Job', 'draft', 'draft', ${u})`;
+    await o`insert into public.daily_report (id, org_id, job_id, report_date, summary, submitted_by)
+            values (${rep}, ${org}, ${job}, '2026-02-03', 'bleed', ${u})`;
+    await o`insert into public.employee (id, org_id, name) values (${emp}, ${org}, 'Bleed Labour')`;
+    await o`insert into public.report_labour_line (org_id, report_id, employee_id, normal_hours, ot_hours)
+            values (${org}, ${rep}, ${emp}, 8, 1)`;
+  },
+  report_labour_cost: async (o, org, u) => {
+    const job = randomUUID();
+    const rep = randomUUID();
+    const emp = randomUUID();
+    await o`insert into public.job (id, org_id, reference, name, status_key, status_category, created_by)
+            values (${job}, ${org}, ${"BLK-" + randomUUID().slice(0, 8)}, 'Bleed Cost Job', 'draft', 'draft', ${u})`;
+    await o`insert into public.daily_report (id, org_id, job_id, report_date, summary, submitted_by)
+            values (${rep}, ${org}, ${job}, '2026-02-04', 'bleed', ${u})`;
+    await o`insert into public.employee (id, org_id, name) values (${emp}, ${org}, 'Bleed Cost Emp')`;
+    await o`insert into public.report_labour_cost
+              (org_id, report_id, employee_id, hourly_cost_minor, ot_rate, labour_cost_minor)
+            values (${org}, ${rep}, ${emp}, 100, 1.25, 1050)`;
+  },
+  attendance: async (o, org, u) => {
+    const emp = randomUUID();
+    await o`insert into public.employee (id, org_id, name) values (${emp}, ${org}, 'Bleed Att Emp')`;
+    await o`insert into public.attendance (org_id, employee_id, attendance_date, status, source, marked_by)
+            values (${org}, ${emp}, '2026-02-05', 'present', 'manual', ${u})`;
+  },
+  issue: async (o, org, u) => {
+    await o`insert into public.issue (org_id, title, severity, is_blocker, status, raised_by)
+            values (${org}, 'Bleed issue', 'medium', false, 'open', ${u})`;
+  },
+
   // Seeded under the org's OWN user (not the shared recipient): sign_in_log's
   // policy is user-OR-org, so a shared user would be visible cross-org by design
   // (the user's own events). Using a disjoint user tests the cross-USER isolation.

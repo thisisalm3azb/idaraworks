@@ -6,7 +6,7 @@
  */
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { closeAppDb, sql, withCtx, type Ctx } from "@/platform/tenancy";
+import { closeAppDb, type Ctx } from "@/platform/tenancy";
 import { createOrgForUser } from "@/platform/auth/identity";
 import { installTemplate, TEMPLATE_BOATBUILDING } from "@/platform/config";
 import {

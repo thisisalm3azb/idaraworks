@@ -421,6 +421,7 @@ describe("walking skeleton (DoD: job from preset + daily report, end-to-end)", (
       reportDate: "2026-07-13",
       summary: "Lamination completed on the port hull.",
       blockers: "Waiting on resin delivery",
+      idempotencyKey: "s1-report-owner-1",
     });
     const events = (await owner`
       select 1 as ok from public.domain_event
@@ -433,6 +434,7 @@ describe("walking skeleton (DoD: job from preset + daily report, end-to-end)", (
         jobId: job.id,
         reportDate: "2026-07-13",
         summary: "duplicate",
+        idempotencyKey: "s1-report-owner-2-different-key",
       }),
     ).rejects.toThrow(DuplicateReportError);
   });
@@ -446,6 +448,7 @@ describe("walking skeleton (DoD: job from preset + daily report, end-to-end)", (
         jobId: job.id,
         reportDate: "2026-07-14",
         summary: "not my job",
+        idempotencyKey: "s1-report-foreman-denied",
       }),
     ).rejects.toThrow(ForbiddenError);
 
@@ -454,6 +457,7 @@ describe("walking skeleton (DoD: job from preset + daily report, end-to-end)", (
       jobId: job.id,
       reportDate: "2026-07-14",
       summary: "my assigned job",
+      idempotencyKey: "s1-report-foreman-assigned",
     });
     expect(id).toBeTruthy();
   });
