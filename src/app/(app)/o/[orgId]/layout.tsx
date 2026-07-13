@@ -64,6 +64,11 @@ export default async function OrgLayout({
     ...(can(a, "po.view")
       ? [{ href: `/o/${orgId}/purchase-orders`, label: t("nav.purchase_orders") }]
       : []),
+    // S5 "Measure" surfaces (gated per doc 06).
+    ...(can(a, "expenses.view")
+      ? [{ href: `/o/${orgId}/expenses`, label: t("nav.expenses") }]
+      : []),
+    ...(can(a, "costing.view") ? [{ href: `/o/${orgId}/costing`, label: t("nav.costing") }] : []),
     ...(can(a, "employees.view") ? [{ href: `/o/${orgId}/people`, label: t("nav.people") }] : []),
     ...(can(a, "customers.view")
       ? [{ href: `/o/${orgId}/customers`, label: t("nav.customers") }]

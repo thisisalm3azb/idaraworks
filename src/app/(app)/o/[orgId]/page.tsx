@@ -1,37 +1,159 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Badge, Card, CardHeader, EmptyState } from "@/platform/ui";
+import { Badge, Button, Card, CardHeader, EmptyState } from "@/platform/ui";
+import { getT, getServerLocale } from "@/platform/i18n/server";
 import { resolveCtx } from "@/platform/auth/resolve";
-import { resolveEntitlements } from "@/platform/entitlements";
+import { can } from "@/platform/authz";
+import { loadOrgTerminology, term } from "@/platform/terminology";
+import { composeToday, type TodayCard } from "@/modules/today/service";
+import { dismissExceptionAction } from "./actions";
 
-export default async function OrgHome({ params }: { params: Promise<{ orgId: string }> }) {
+const SEV_TONE: Record<string, "neutral" | "info" | "warning" | "danger"> = {
+  info: "info",
+  warning: "warning",
+  critical: "danger",
+};
+// Manager exception cards carry a dismiss action (owner/admin/manager, audience+scope).
+const EXCEPTION_CARDS = new Set(["missing_reports", "overdue", "blockers"]);
+
+export default async function OrgHome({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ orgId: string }>;
+  searchParams: Promise<{ ok?: string; error?: string }>;
+}) {
   const { orgId } = await params;
+  const sp = await searchParams;
   const resolved = await resolveCtx(orgId);
   if (typeof resolved === "string") redirect("/");
-  const ent = await resolveEntitlements(resolved.ctx);
+  const t = await getT();
+
+  // The S5 Today screens are FOREMAN + MANAGER (management sees the manager view).
+  if (!can(resolved.archetype, "today.view")) {
+    return (
+      <EmptyState
+        title={t("today.other_role.title")}
+        description={t("today.other_role.description")}
+      />
+    );
+  }
+
+  const locale = await getServerLocale();
+  const terms = await loadOrgTerminology(resolved.ctx, locale);
+  const jobVars = {
+    job: term("job", terms, "singular"),
+    jobs: term("job", terms, "plural"),
+  };
+  const now = new Date();
+  const payload = await composeToday(resolved.ctx, resolved.archetype, {
+    asOf: now.toISOString().slice(0, 10),
+    computedAt: now.toISOString(),
+  });
+  const canDismiss = can(resolved.archetype, "exceptions.dismiss");
+
   return (
     <div className="flex flex-col gap-4">
-      <Card>
-        <CardHeader
-          title="Workspace"
-          meta={
-            <span className="flex items-center gap-2">
-              {resolved.roleKey}
-              <Badge tone={ent.billingState === "trialing" ? "info" : "brand"}>
-                {ent.planKey} · {ent.billingState}
-              </Badge>
-            </span>
-          }
-        />
-        <p className="text-sm text-ink-secondary">
-          Identity and entitlements are live: memberships, roles, org-scoped access, and the
-          resolved plan all flow through the platform layer. Operational surfaces arrive with the
-          next slices.
-        </p>
-      </Card>
-      <EmptyState
-        title="Today will live here"
-        description="The role-scoped Today screen ships in slice S5, once daily reports and costing exist to feed it."
-      />
+      <div className="flex items-center justify-between gap-2">
+        <h1 className="text-lg font-semibold text-ink">{t("today.title")}</h1>
+        <Badge tone="neutral">{t(`today.screen.${payload.screen}`)}</Badge>
+      </div>
+      {sp.ok === "dismissed" ? (
+        <Badge tone="success">{t("today.dismissed")}</Badge>
+      ) : sp.error ? (
+        <Badge tone="danger">{t("common.error")}</Badge>
+      ) : null}
+
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+        {payload.cards.map((card) => (
+          <TodayCardView
+            key={card.key}
+            card={card}
+            orgId={orgId}
+            title={t(`today.card.${card.key}`, jobVars)}
+            emptyLabel={t("today.card_empty")}
+            canDismiss={canDismiss && EXCEPTION_CARDS.has(card.key)}
+            dismissLabel={t("today.dismiss")}
+            severityLabel={(s: string) => t(`exceptions.severity.${s}`)}
+          />
+        ))}
+      </div>
     </div>
   );
+}
+
+function TodayCardView({
+  card,
+  orgId,
+  title,
+  emptyLabel,
+  canDismiss,
+  dismissLabel,
+  severityLabel,
+}: {
+  card: TodayCard;
+  orgId: string;
+  title: string;
+  emptyLabel: string;
+  canDismiss: boolean;
+  dismissLabel: string;
+  severityLabel: (s: string) => string;
+}) {
+  const asOf = new Date(card.freshness.computedAt).toISOString().slice(11, 16);
+  return (
+    <Card>
+      <CardHeader
+        title={title}
+        meta={
+          <span className="flex items-center gap-2 text-xs text-ink-muted">
+            <Badge tone={card.count > 0 ? "brand" : "neutral"}>{card.count}</Badge>
+            <span>{`as of ${asOf}`}</span>
+          </span>
+        }
+      />
+      {card.count === 0 ? (
+        <p className="text-xs text-ink-muted">{emptyLabel}</p>
+      ) : (
+        <ul className="flex flex-col gap-2">
+          {card.items.slice(0, 8).map((item, i) => (
+            <li
+              key={String(item.id ?? i)}
+              className="flex items-center justify-between gap-2 rounded-md border border-line p-2 text-sm"
+            >
+              <span className="min-w-0 truncate text-ink">
+                {typeof item.severity === "string" ? (
+                  <Badge tone={SEV_TONE[item.severity] ?? "neutral"}>
+                    {severityLabel(item.severity)}
+                  </Badge>
+                ) : null}{" "}
+                {itemLabel(item, orgId)}
+              </span>
+              {canDismiss && typeof item.id === "string" ? (
+                <form action={dismissExceptionAction.bind(null, orgId)}>
+                  <input type="hidden" name="exception_id" value={item.id} />
+                  <Button type="submit" variant="ghost">
+                    {dismissLabel}
+                  </Button>
+                </form>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
+  );
+}
+
+function itemLabel(item: Record<string, unknown>, orgId: string) {
+  const ref = (item.reference as string | undefined) ?? (item.name as string | undefined);
+  const jobId = item.jobId as string | undefined;
+  const label = ref ?? (typeof item.reportDate === "string" ? item.reportDate : "—");
+  if (jobId) {
+    return (
+      <Link href={`/o/${orgId}/jobs/${jobId}`} className="text-brand hover:underline">
+        {label}
+      </Link>
+    );
+  }
+  return <span>{label}</span>;
 }
