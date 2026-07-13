@@ -342,6 +342,50 @@ export const SEEDERS: Record<string, Seeder> = {
             values (${org}, ${job}, 500, 1500)`;
   },
 
+  // ── S6 "Bill" tables ──
+  quote: async (o, org, u) => {
+    await o`insert into public.quote (org_id, reference, customer_name, status, created_by)
+            values (${org}, ${"BLQ-" + randomUUID().slice(0, 8)}, 'Bleed customer', 'draft', ${u})`;
+  },
+  quote_line: async (o, org, u) => {
+    const q = randomUUID();
+    await o`insert into public.quote (id, org_id, reference, customer_name, status, created_by)
+            values (${q}, ${org}, ${"BLQL-" + randomUUID().slice(0, 8)}, 'Bleed customer', 'draft', ${u})`;
+    await o`insert into public.quote_line (org_id, quote_id, description, qty, unit)
+            values (${org}, ${q}, 'Bleed line', 1, 'ea')`;
+  },
+  invoice: async (o, org, u) => {
+    await o`insert into public.invoice (org_id, reference, customer_name, status, created_by)
+            values (${org}, ${"BLI-" + randomUUID().slice(0, 8)}, 'Bleed customer', 'draft', ${u})`;
+  },
+  invoice_line: async (o, org, u) => {
+    const inv = randomUUID();
+    await o`insert into public.invoice (id, org_id, reference, customer_name, status, created_by)
+            values (${inv}, ${org}, ${"BLIL-" + randomUUID().slice(0, 8)}, 'Bleed customer', 'draft', ${u})`;
+    await o`insert into public.invoice_line (org_id, invoice_id, description, qty, unit)
+            values (${org}, ${inv}, 'Bleed line', 1, 'ea')`;
+  },
+  einvoice_submission: async (o, org, u) => {
+    const inv = randomUUID();
+    await o`insert into public.invoice (id, org_id, reference, customer_name, status, issued_at, created_by)
+            values (${inv}, ${org}, ${"BLES-" + randomUUID().slice(0, 8)}, 'Bleed customer', 'issued', now(), ${u})`;
+    await o`insert into public.einvoice_submission (org_id, invoice_id, provider, status)
+            values (${org}, ${inv}, 'fake', 'pending')`;
+  },
+  payment: async (o, org, u) => {
+    await o`insert into public.payment
+              (org_id, reference, status, method, payment_date, amount_minor, created_by)
+            values (${org}, ${"BLPMT-" + randomUUID().slice(0, 8)}, 'recorded', 'cash', '2026-02-13', 1000, ${u})`;
+  },
+  payment_receipt: async (o, org, u) => {
+    const pmt = randomUUID();
+    await o`insert into public.payment
+              (id, org_id, reference, status, method, payment_date, amount_minor, created_by)
+            values (${pmt}, ${org}, ${"BLPR-" + randomUUID().slice(0, 8)}, 'recorded', 'cash', '2026-02-13', 1000, ${u})`;
+    await o`insert into public.payment_receipt (org_id, payment_id, reference)
+            values (${org}, ${pmt}, ${"RCP-BL-" + randomUUID().slice(0, 8)})`;
+  },
+
   // Seeded under the org's OWN user (not the shared recipient): sign_in_log's
   // policy is user-OR-org, so a shared user would be visible cross-org by design
   // (the user's own events). Using a disjoint user tests the cross-USER isolation.
