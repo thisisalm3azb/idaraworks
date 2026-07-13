@@ -54,7 +54,15 @@ export type Action =
   | "issues.raise"
   | "issues.resolve"
   | "attendance.manage"
-  | "attendance.view";
+  | "attendance.view"
+  // S4 (doc 06 rows 50-53): Supply & Approve.
+  | "approvals.decide"
+  | "mr.create"
+  | "mr.convert"
+  | "po.manage"
+  | "po.view"
+  | "grn.create"
+  | "grn.cancel";
 
 type Grantable = Exclude<RoleArchetype, "worker_reserved_p3">;
 
@@ -133,4 +141,20 @@ export const MATRIX: Record<Action, readonly Grantable[]> = {
   // write, audit C-3 — the derivation is a DEFINER path, not a foreman grant).
   "attendance.manage": ["owner", "admin", "manager"],
   "attendance.view": ["owner", "admin", "manager", "accounts", "viewer"],
+  // ── S4 "Supply & Approve" (doc 06 rows 50-53) ─────────────────────────────
+  // "Approvals: decide" A A A(rule-scoped) − − A(rule-scoped) − − — owner/admin
+  // decide anything routed to them; manager/accounts decide ONLY approvals whose
+  // rule assigned_role ∈ their roles (the rule-scope is the SERVICE gate).
+  "approvals.decide": ["owner", "admin", "manager", "accounts"],
+  // "Material requests: create / convert" C C C C(assigned) C+convert − − −.
+  "mr.create": ["owner", "admin", "manager", "foreman", "procurement"],
+  // convert is procurement's "+convert" (+ owner/admin superset); manager = C only.
+  "mr.convert": ["owner", "admin", "procurement"],
+  // "POs: manage / view" A/M A/M M − M V − − — manage = O/A/M/Procurement.
+  "po.manage": ["owner", "admin", "manager", "procurement"],
+  "po.view": ["owner", "admin", "manager", "procurement", "accounts"],
+  // "Goods receipts: create / cancel" C C/M C C(assigned) C − − − — create =
+  // O/A/M/Foreman(assigned)/Procurement; cancel (the M) = admin (+ owner superset).
+  "grn.create": ["owner", "admin", "manager", "foreman", "procurement"],
+  "grn.cancel": ["owner", "admin"],
 };

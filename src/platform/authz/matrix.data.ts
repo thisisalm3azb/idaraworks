@@ -50,6 +50,13 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
     "issues.resolve",
     "attendance.manage",
     "attendance.view",
+    "approvals.decide",
+    "mr.create",
+    "mr.convert",
+    "po.manage",
+    "po.view",
+    "grn.create",
+    "grn.cancel",
   ],
   admin: [
     "members.view",
@@ -87,6 +94,13 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
     "issues.resolve",
     "attendance.manage",
     "attendance.view",
+    "approvals.decide",
+    "mr.create",
+    "mr.convert",
+    "po.manage",
+    "po.view",
+    "grn.create",
+    "grn.cancel",
   ],
   // Manager (doc 08: the Workshop Manager variant): masters M, jobs/reports, NO
   // config, NO salary/HR side-tables, no invite/deactivate/legal-hold.
@@ -117,6 +131,13 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
     "issues.resolve",
     "attendance.manage",
     "attendance.view",
+    // S4: decide rule-routed approvals; MR + PO manage + GRN create (no convert,
+    // no PO approve beyond decide, no grn.cancel — those are procurement/admin).
+    "approvals.decide",
+    "mr.create",
+    "po.manage",
+    "po.view",
+    "grn.create",
   ],
   // Field seat (doc 06 literal row): assigned jobs (v) + own reports. NO
   // employee/catalog/member/customer/config surfaces — S3's report form gets
@@ -130,6 +151,10 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
     "reports.create",
     // "Issues: raise" C (assigned) — the field's fast path to flag a blocker.
     "issues.raise",
+    // S4: MR + GRN create on ASSIGNED jobs (server-enforced F-6); never decides
+    // approvals, never manages POs, never sees cost/price.
+    "mr.create",
+    "grn.create",
   ],
   procurement: [
     "members.view",
@@ -140,6 +165,13 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
     "comments.create",
     // "Issues: raise" C for procurement (materials problems → tickets).
     "issues.raise",
+    // S4: procurement owns the supply chain — raise MRs, CONVERT them to POs,
+    // manage POs, receive goods. Does NOT decide approvals.
+    "mr.create",
+    "mr.convert",
+    "po.manage",
+    "po.view",
+    "grn.create",
   ],
   accounts: [
     "members.view",
@@ -153,6 +185,10 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
     // holder — but attendance itself is not a cost wall).
     "issues.raise",
     "attendance.view",
+    // S4: accounts decide rule-routed approvals (e.g. expense/payment in later
+    // slices) and VIEW POs. Cost-privileged, so amounts are visible to them.
+    "approvals.decide",
+    "po.view",
   ],
   // Viewer (doc 06): jobs v (redacted) + week view + attendance V — other rows −.
   viewer: ["members.view", "jobs.view", "week.view", "attendance.view"],
