@@ -170,6 +170,31 @@ export const SEEDERS: Record<string, Seeder> = {
             values (${org}, ${job}, '2026-01-15', 'bleed', ${u})`;
   },
 
+  // ── S2 plan & assign ──
+  job_stage: async (o, org, u) => {
+    const job = randomUUID();
+    await o`insert into public.job (id, org_id, reference, name, status_key, status_category, created_by)
+            values (${job}, ${org}, ${"BLS-" + randomUUID().slice(0, 8)}, 'Bleed Stage Job', 'draft', 'draft', ${u})`;
+    await o`insert into public.job_stage (org_id, job_id, stage_key, name, weight, sort)
+            values (${org}, ${job}, 'lamination', '{"en":"Lamination","ar":"تصفيح"}'::jsonb, 50, 0)`;
+  },
+  task: async (o, org, u) => {
+    const job = randomUUID();
+    await o`insert into public.job (id, org_id, reference, name, status_key, status_category, created_by)
+            values (${job}, ${org}, ${"BLT-" + randomUUID().slice(0, 8)}, 'Bleed Task Job', 'draft', 'draft', ${u})`;
+    await o`insert into public.task (org_id, job_id, title, created_by)
+            values (${org}, ${job}, 'bleed task', ${u})`;
+  },
+  job_crew: async (o, org, u) => {
+    const job = randomUUID();
+    const emp = randomUUID();
+    await o`insert into public.job (id, org_id, reference, name, status_key, status_category, created_by)
+            values (${job}, ${org}, ${"BLC-" + randomUUID().slice(0, 8)}, 'Bleed Crew Job', 'draft', 'draft', ${u})`;
+    await o`insert into public.employee (id, org_id, name) values (${emp}, ${org}, 'Bleed Crew Member')`;
+    await o`insert into public.job_crew (org_id, job_id, employee_id, added_by)
+            values (${org}, ${job}, ${emp}, ${u})`;
+  },
+
   // Seeded under the org's OWN user (not the shared recipient): sign_in_log's
   // policy is user-OR-org, so a shared user would be visible cross-org by design
   // (the user's own events). Using a disjoint user tests the cross-USER isolation.
