@@ -4,8 +4,9 @@ import { Badge, Button, Card, CardHeader } from "@/platform/ui";
 import { getT, getServerLocale } from "@/platform/i18n/server";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { can } from "@/platform/authz";
+import { getCatalogueEntry } from "@/platform/config";
 import { getOnboardingSession } from "@/modules/onboarding/service";
-import { applyOnboardingAction, undoOnboardingAction } from "../actions";
+import { applyOnboardingAction, undoOnboardingAction, chooseAlternativeAction } from "../actions";
 
 export default async function OnboardingPreviewPage({
   params,
@@ -26,6 +27,10 @@ export default async function OnboardingPreviewPage({
   if (!session || !session.proposal) redirect(`/o/${orgId}/onboarding`);
   const p = session.proposal;
   const canManage = can(resolved.archetype, "config.manage");
+  // Catalogue entry for the selected template — names + honest limitations. Sessions
+  // predating the template catalogue carry no recommendation fields; render defensively.
+  const entry = getCatalogueEntry(p.template_key);
+  const alternatives = p.template_alternatives ?? [];
 
   return (
     <div className="mx-auto flex w-full max-w-lg flex-col gap-4">
@@ -57,6 +62,50 @@ export default async function OnboardingPreviewPage({
           {t("onboarding.preview.template")}: <span className="font-mono">{p.template_key}</span>
         </p>
       </Card>
+
+      <Card>
+        <CardHeader title={t("onboarding.preview.recommended")} />
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-sm font-semibold text-ink">
+            {entry ? (ar ? entry.names.ar : entry.names.en) : p.template_key}
+          </span>
+          {p.template_confident === false ? (
+            <Badge tone="warning">{t("onboarding.preview.not_confident")}</Badge>
+          ) : null}
+        </div>
+        {p.template_reason_en || p.template_reason_ar ? (
+          <p className="mt-1 text-sm text-ink-muted">
+            {ar ? p.template_reason_ar : p.template_reason_en}
+          </p>
+        ) : null}
+      </Card>
+
+      {session.status === "proposed" && alternatives.length > 0 ? (
+        <Card>
+          <CardHeader title={t("onboarding.preview.alternatives")} />
+          <p className="text-xs text-ink-muted">{t("onboarding.preview.alternatives_note")}</p>
+          <ul className="mt-2 flex flex-col gap-2">
+            {alternatives.map((alt) => (
+              <li
+                key={alt.key}
+                className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-line px-3 py-2"
+              >
+                <div className="flex flex-col">
+                  <span className="text-sm text-ink">{ar ? alt.name_ar : alt.name_en}</span>
+                  <span className="text-xs text-ink-muted">
+                    {t("onboarding.preview.match_score", { score: alt.score })}
+                  </span>
+                </div>
+                <form action={chooseAlternativeAction.bind(null, orgId, sessionId, alt.key)}>
+                  <Button type="submit" variant="secondary">
+                    {t("onboarding.preview.use_template")}
+                  </Button>
+                </form>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      ) : null}
 
       <Card>
         <CardHeader title={t("onboarding.preview.will_apply")} />
@@ -97,6 +146,17 @@ export default async function OnboardingPreviewPage({
             ))}
           </ul>
           <p className="mt-2 text-xs text-ink-muted">{t("onboarding.preview.upgrade_note")}</p>
+        </Card>
+      ) : null}
+
+      {entry ? (
+        <Card>
+          <CardHeader title={t("onboarding.preview.limitations")} />
+          <ul className="ms-4 flex list-disc flex-col gap-1 text-sm text-ink-muted">
+            {entry.limitations.map((l) => (
+              <li key={l.en}>{ar ? l.ar : l.en}</li>
+            ))}
+          </ul>
         </Card>
       ) : null}
 

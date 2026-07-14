@@ -9,6 +9,7 @@
 import { z } from "zod";
 import { command } from "@/platform/audit";
 import { assertCan } from "@/platform/authz";
+import { requireCapability } from "@/platform/entitlements";
 import { sql, withCtx, type Ctx } from "@/platform/tenancy";
 import type { RoleArchetype } from "@/platform/registries";
 
@@ -46,6 +47,9 @@ export async function markAttendance(
   input: unknown,
 ): Promise<{ employeeId: string; attendanceDate: string }> {
   assertCan(archetype, "attendance.manage");
+  // Add-on gate (FR-9): the manual MARK only — the grid read never gates (and the
+  // derived write lives inside report submit, untouched here).
+  await requireCapability(ctx, "cap.attendance");
   const data = MarkAttendanceInput.parse(input);
   return command<{ employeeId: string; attendanceDate: string }>(
     ctx,

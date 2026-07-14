@@ -5,6 +5,7 @@ import { getT, getServerLocale } from "@/platform/i18n/server";
 import { getSessionUser, listMyOrgs, resolveCtx } from "@/platform/auth/resolve";
 import { loadOrgTerminology, term } from "@/platform/terminology";
 import { can } from "@/platform/authz";
+import { resolveEntitlements } from "@/platform/entitlements";
 
 /**
  * The org-scoped guard (S0 checklist §5): every /o/[orgId] route resolves the
@@ -30,6 +31,12 @@ export default async function OrgLayout({
   const locale = await getServerLocale();
   const terms = await loadOrgTerminology(resolved.ctx, locale);
   const a = resolved.archetype;
+  // Add-on model (0065): the nav de-emphasises modules whose capability is OFF
+  // (free base / no add-on) — NAV ONLY, never a route guard: lists stay readable
+  // via direct URL (freeze FR-9 — entitlements gate ADD, never seeing). Paid-tier
+  // orgs have every feature enabled, so their nav is unchanged.
+  const ent = await resolveEntitlements(resolved.ctx);
+  const has = (key: string) => ent.features[key] ?? false;
   // S1 section nav (mobile-first: wraps; the full S5 IA replaces this).
   const links: Array<{ href: string; label: string }> = [
     ...(can(a, "jobs.view")
@@ -50,7 +57,7 @@ export default async function OrgLayout({
     ...(can(a, "reports.review")
       ? [{ href: `/o/${orgId}/reports/review`, label: t("nav.reports_review") }]
       : []),
-    ...(can(a, "attendance.view")
+    ...(can(a, "attendance.view") && has("cap.attendance")
       ? [{ href: `/o/${orgId}/attendance`, label: t("nav.attendance") }]
       : []),
     ...(can(a, "issues.raise") ? [{ href: `/o/${orgId}/issues`, label: t("nav.issues") }] : []),
@@ -58,31 +65,37 @@ export default async function OrgLayout({
     ...(can(a, "approvals.decide")
       ? [{ href: `/o/${orgId}/approvals`, label: t("nav.approvals") }]
       : []),
-    ...(can(a, "mr.create")
+    ...(can(a, "mr.create") && has("cap.material_requests")
       ? [{ href: `/o/${orgId}/material-requests`, label: t("nav.material_requests") }]
       : []),
-    ...(can(a, "po.view")
+    ...(can(a, "po.view") && has("cap.purchase_orders")
       ? [{ href: `/o/${orgId}/purchase-orders`, label: t("nav.purchase_orders") }]
       : []),
     // S5 "Measure" surfaces (gated per doc 06).
-    ...(can(a, "expenses.view")
+    ...(can(a, "expenses.view") && has("cap.expenses")
       ? [{ href: `/o/${orgId}/expenses`, label: t("nav.expenses") }]
       : []),
-    ...(can(a, "costing.view") ? [{ href: `/o/${orgId}/costing`, label: t("nav.costing") }] : []),
+    ...(can(a, "costing.view") && has("cap.costing")
+      ? [{ href: `/o/${orgId}/costing`, label: t("nav.costing") }]
+      : []),
     // S6 "Bill" surfaces (gated per doc 06).
-    ...(can(a, "quotes.view") ? [{ href: `/o/${orgId}/quotes`, label: t("nav.quotes") }] : []),
-    ...(can(a, "invoices.view")
+    ...(can(a, "quotes.view") && has("cap.quoting")
+      ? [{ href: `/o/${orgId}/quotes`, label: t("nav.quotes") }]
+      : []),
+    ...(can(a, "invoices.view") && has("cap.invoicing")
       ? [{ href: `/o/${orgId}/invoices`, label: t("nav.invoices") }]
       : []),
-    ...(can(a, "payments.view")
+    ...(can(a, "payments.view") && has("cap.payments")
       ? [{ href: `/o/${orgId}/payments`, label: t("nav.payments") }]
       : []),
     ...(can(a, "ar.view") ? [{ href: `/o/${orgId}/ar`, label: t("nav.ar") }] : []),
     // S7 "Improve" surface.
-    ...(can(a, "customer_updates.draft")
+    ...(can(a, "customer_updates.draft") && has("cap.customer_updates")
       ? [{ href: `/o/${orgId}/customer-updates`, label: t("nav.customer_updates") }]
       : []),
-    ...(can(a, "imports.manage") ? [{ href: `/o/${orgId}/imports`, label: t("nav.imports") }] : []),
+    ...(can(a, "imports.manage") && has("feat.data_import")
+      ? [{ href: `/o/${orgId}/imports`, label: t("nav.imports") }]
+      : []),
     ...(can(a, "onboarding.run")
       ? [{ href: `/o/${orgId}/onboarding`, label: t("nav.onboarding") }]
       : []),

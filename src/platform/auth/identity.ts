@@ -8,6 +8,7 @@ import { z } from "zod";
 import { appDb } from "@/platform/tenancy/db";
 import { sql, withCtx, withUserCtx, type Ctx, type TenantTx } from "@/platform/tenancy";
 import { assertCan } from "@/platform/authz";
+import { getLimit } from "@/platform/entitlements";
 import { CURRENCY_CODES, type RoleArchetype } from "@/platform/registries";
 import { command } from "@/platform/audit";
 import { sendEmail } from "@/platform/notifications/email";
@@ -143,6 +144,26 @@ export async function createOrgForUser(userId: string, raw: unknown): Promise<st
   return orgId;
 }
 
+/** A seat limit was hit on invite. Adds are blocked — reads never are (FR-9);
+ * existing members keep full visibility, the org just cannot ADD this seat class. */
+export class SeatLimitError extends Error {
+  constructor(
+    public readonly limitKey: "limit.full_users" | "limit.viewer_users",
+    public readonly limit: number,
+  ) {
+    super(
+      `seat limit reached (${limit}) — adding members is blocked, viewing is never blocked. ` +
+        `Add a seat pack or free a seat.`,
+    );
+    this.name = "SeatLimitError";
+  }
+}
+
+/** Seat classification (product law): full seats = office archetypes; field
+ * (foreman) seats are FREE and never limited; viewers have their own cap.
+ * Anything unclassified counts as a full seat (fail-closed for new archetypes). */
+const FULL_SEAT_ARCHETYPES = ["owner", "admin", "manager", "procurement", "accounts"] as const;
+
 // ── invites ───────────────────────────────────────────────────────────────────
 export function hashInviteToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
@@ -165,6 +186,11 @@ export async function inviteMember(
   const token = randomBytes(32).toString("base64url");
   const tokenHash = hashInviteToken(token);
 
+  // Seat limits resolve BEFORE the tx (cached; mirrors jobs.create) — the
+  // authoritative recount happens IN-TX under the advisory lock below.
+  const fullLimit = await getLimit(ctx, "limit.full_users");
+  const viewerLimit = await getLimit(ctx, "limit.viewer_users");
+
   // Insert + audit atomically through the command path (audit_log).
   const inviteId = await command(
     ctx,
@@ -178,10 +204,45 @@ export async function inviteMember(
     },
     async (tx) => {
       const role = (await tx.execute(sql`
-        select key from public.role_definition
+        select key, archetype from public.role_definition
         where org_id = ${ctx.orgId} and key = ${input.roleKey} and key <> 'owner'
-      `)) as unknown as Array<{ key: string }>;
+      `)) as unknown as Array<{ key: string; archetype: RoleArchetype }>;
       if (!role[0]) throw new Error("unknown role for invite");
+      // Per-org invite mutex + IN-TX seat recount (the jobs.create idiom): N
+      // concurrent invites serialize here, so the seat limit cannot be raced.
+      // Field (foreman) seats are NEVER limited — free by product law.
+      if (role[0].archetype !== "foreman") {
+        const isViewer = role[0].archetype === "viewer";
+        const seatLimit = isViewer ? viewerLimit : fullLimit;
+        if (seatLimit !== null) {
+          await tx.execute(
+            sql`select pg_advisory_xact_lock(hashtextextended(${ctx.orgId + ":members.invite"}, 0))`,
+          );
+          const cls = isViewer ? ["viewer"] : [...FULL_SEAT_ARCHETYPES];
+          // Occupied seats = active memberships + pending (unaccepted, unrevoked,
+          // unexpired) invites of the same seat class.
+          const counted = (await tx.execute(sql`
+            select
+              (select count(*) from public.membership m
+                 join public.role_definition r on r.org_id = m.org_id and r.key = m.role_key
+               where m.org_id = ${ctx.orgId} and m.deactivated_at is null
+                 and r.archetype = any(${cls}::text[]))
+              +
+              (select count(*) from public.membership_invite i
+                 join public.role_definition r on r.org_id = i.org_id and r.key = i.role_key
+               where i.org_id = ${ctx.orgId} and i.accepted_at is null
+                 and i.revoked_at is null and i.expires_at > now()
+                 and r.archetype = any(${cls}::text[]))
+              as n
+          `)) as unknown as Array<{ n: number }>;
+          if (Number(counted[0]?.n ?? 0) >= seatLimit) {
+            throw new SeatLimitError(
+              isViewer ? "limit.viewer_users" : "limit.full_users",
+              seatLimit,
+            );
+          }
+        }
+      }
       const rows = (await tx.execute(sql`
         insert into public.membership_invite (org_id, email, role_key, token_hash, invited_by, expires_at)
         values (${ctx.orgId}, ${input.email.toLowerCase()}, ${input.roleKey}, ${tokenHash},

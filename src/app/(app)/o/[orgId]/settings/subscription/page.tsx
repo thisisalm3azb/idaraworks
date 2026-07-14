@@ -1,12 +1,32 @@
 import { redirect } from "next/navigation";
 import { Badge, Button, Card, CardHeader } from "@/platform/ui";
-import { getT } from "@/platform/i18n/server";
+import { getT, getServerLocale } from "@/platform/i18n/server";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { can } from "@/platform/authz";
 import { readSubscription } from "@/modules/subscription/service";
 import { listImpersonations } from "@/modules/support/service";
 import { formatMoney } from "@/platform/format";
-import { changePlanAction, cancelSubscriptionAction } from "./actions";
+import { sql, withCtx } from "@/platform/tenancy";
+import {
+  ADDONS,
+  BUNDLES,
+  getAddon,
+  getBundle,
+  isPurchasable,
+  bundleIsPurchasable,
+  bundleMemberTotalMinor,
+  resolveEntitlements,
+  type AddonDef,
+  type BundleDef,
+} from "@/platform/entitlements";
+import { getStorageUsage } from "@/platform/files";
+import { loadOrgTerminology, term } from "@/platform/terminology";
+import {
+  addAddonAction,
+  removeAddonAction,
+  selectBundleAction,
+  cancelSubscriptionAction,
+} from "./actions";
 
 const STATE_TONE: Record<string, "success" | "brand" | "warning" | "danger" | "neutral"> = {
   active: "success",
@@ -19,15 +39,51 @@ const STATE_TONE: Record<string, "success" | "brand" | "warning" | "danger" | "n
   purge_pending: "danger",
   purged: "danger",
 };
-const PLAN_ORDER = ["starter", "growth", "business"] as const;
 // Whitelisted notices + their tone — 'error' MUST render in the danger tone, never the green
-// success banner (review): a failed cancel/plan-change must not look like it succeeded.
+// success banner (review): a failed add-on/bundle change must not look like it succeeded.
 const NOTICE_TONE: Record<string, "success" | "danger"> = {
   upgrade: "success",
   downgrade: "success",
   cancel_requested: "success",
+  addon_added: "success",
+  addon_removed: "success",
+  bundle_selected: "success",
   error: "danger",
 };
+
+// Display groups for the individual add-on catalogue. Availability decides the
+// honesty groups (gated/later); the rest follow the catalogue's sort bands.
+type GroupKey =
+  "seats" | "money" | "purchasing" | "costing" | "data" | "support" | "gated" | "later";
+const GROUP_ORDER: GroupKey[] = [
+  "seats",
+  "money",
+  "purchasing",
+  "costing",
+  "data",
+  "support",
+  "gated",
+  "later",
+];
+function groupOf(a: AddonDef): GroupKey {
+  if (a.availability === "deferred") return "later";
+  if (a.availability === "credential_gated" || a.availability === "d1_gated") return "gated";
+  if (a.sort <= 30) return "seats";
+  if (a.sort <= 60) return "money";
+  if (a.sort <= 110) return "purchasing";
+  if (a.sort <= 160) return "costing";
+  if (a.sort <= 210) return "data";
+  return "support";
+}
+
+type OrgAddonRow = {
+  addon_key: string;
+  quantity: number;
+  status: "active" | "removal_scheduled";
+  source: string;
+};
+
+const GIB = 1024 ** 3;
 
 export default async function SubscriptionPage({
   params,
@@ -37,6 +93,7 @@ export default async function SubscriptionPage({
   searchParams: Promise<{ notice?: string }>;
 }) {
   const t = await getT();
+  const locale = await getServerLocale();
   const { orgId } = await params;
   const { notice } = await searchParams;
   const resolved = await resolveCtx(orgId);
@@ -45,17 +102,93 @@ export default async function SubscriptionPage({
 
   const view = await readSubscription(resolved.ctx, resolved.archetype);
   const active = await listImpersonations(resolved.ctx, resolved.archetype, true);
+  const ent = await resolveEntitlements(resolved.ctx);
+  const storage = await getStorageUsage(resolved.ctx);
+  // Domain nouns arrive as ICU variables (doc 07 #1 — never baked into a catalog string).
+  const terms = await loadOrgTerminology(resolved.ctx, locale);
+  const jobsNoun = term("job", terms, "plural");
   const canManage = can(resolved.archetype, "billing.manage");
-  const changeWithOrg = changePlanAction.bind(null, orgId);
+  const addWithOrg = addAddonAction.bind(null, orgId);
+  const removeWithOrg = removeAddonAction.bind(null, orgId);
+  const selectWithOrg = selectBundleAction.bind(null, orgId);
   const cancelWithOrg = cancelSubscriptionAction.bind(null, orgId);
 
-  // A month price per plan in the org's… we show the base currency the price book carries; pick AED
-  // then USD as the display currency (placeholder book). Real per-currency price IDs land at D1.
-  const displayCurrency = view.prices.some((p) => p.currency === "AED") ? "AED" : "USD";
-  const monthly = (plan: string) =>
-    view.prices.find(
-      (p) => p.planKey === plan && p.interval === "month" && p.currency === displayCurrency,
-    );
+  // Active add-ons (tenant SELECT — org_addon is tenant-read-only) + the cheap
+  // usage counts for the seats card, in one tenant transaction. Seat classes
+  // mirror identity.ts (office archetypes; field/foreman seats are never limited).
+  const { addonRows, officeSeats, viewerSeats, activeJobs } = await withCtx(
+    resolved.ctx,
+    async (tx) => {
+      const addons = (await tx.execute(sql`
+        select addon_key, quantity, status, source from public.org_addon
+        where org_id = ${resolved.ctx.orgId} and status in ('active','removal_scheduled')
+        order by addon_key`)) as unknown as OrgAddonRow[];
+      const seats = (await tx.execute(sql`
+        select
+          count(*) filter (where r.archetype in ('owner','admin','manager','procurement','accounts'))::int as office,
+          count(*) filter (where r.archetype = 'viewer')::int as viewer
+        from public.membership m
+        join public.role_definition r on r.org_id = m.org_id and r.key = m.role_key
+        where m.org_id = ${resolved.ctx.orgId} and m.deactivated_at is null`)) as unknown as Array<{
+        office: number;
+        viewer: number;
+      }>;
+      const jobs = (await tx.execute(sql`
+        select count(*)::int as n from public.job
+        where org_id = ${resolved.ctx.orgId} and archived = false
+          and status_category in ('draft', 'active', 'on_hold')`)) as unknown as Array<{
+        n: number;
+      }>;
+      return {
+        addonRows: addons,
+        officeSeats: Number(seats[0]?.office ?? 0),
+        viewerSeats: Number(seats[0]?.viewer ?? 0),
+        activeJobs: Number(jobs[0]?.n ?? 0),
+      };
+    },
+  );
+
+  // Display currency: AED when the price book carries it, else USD (the code
+  // catalogue carries exactly these two; real per-currency price IDs land at D1).
+  const displayCurrency: "AED" | "USD" = view.prices.some((p) => p.currency === "AED")
+    ? "AED"
+    : "USD";
+  const addonMonthly = (a: AddonDef) =>
+    displayCurrency === "AED" ? a.aedMonthlyMinor : a.usdMonthlyMinor;
+  const bundleMonthly = (b: BundleDef) =>
+    displayCurrency === "AED" ? b.aedMonthlyMinor : b.usdMonthlyMinor;
+
+  // Current monthly total: bundle-sourced rows charge the BUNDLE price once
+  // (that is what the org pays — never the undiscounted member sum); individual
+  // rows charge the add-on price × quantity. Labelled tax-exclusive + indicative.
+  const countedBundles = new Set<string>();
+  let monthlyTotalMinor = 0;
+  for (const row of addonRows) {
+    const bundle = row.source !== "individual" ? getBundle(row.source) : undefined;
+    if (bundle) {
+      if (!countedBundles.has(bundle.key)) {
+        countedBundles.add(bundle.key);
+        monthlyTotalMinor += bundleMonthly(bundle);
+      }
+      continue;
+    }
+    const def = getAddon(row.addon_key);
+    if (def) monthlyTotalMinor += addonMonthly(def) * Math.max(1, Number(row.quantity) || 1);
+  }
+
+  const addonState = new Map(addonRows.map((r) => [r.addon_key, r]));
+  const bundleActive = (b: BundleDef) => addonRows.some((r) => r.source === b.key);
+
+  const grouped = new Map<GroupKey, AddonDef[]>();
+  for (const a of [...ADDONS].sort((x, y) => x.sort - y.sort)) {
+    const g = groupOf(a);
+    grouped.set(g, [...(grouped.get(g) ?? []), a]);
+  }
+
+  const limitLabel = (used: number | string, limit: number | string | null) =>
+    limit === null
+      ? t("subscription.usage.of_limit", { used, limit: t("subscription.usage.unlimited") })
+      : t("subscription.usage.of_limit", { used, limit });
 
   return (
     <div className="flex flex-col gap-4">
@@ -79,6 +212,7 @@ export default async function SubscriptionPage({
         </p>
       ) : null}
 
+      {/* 1 — current state: plan, billing state, trial note, monthly total. */}
       <Card>
         <CardHeader
           title={t("subscription.title")}
@@ -93,6 +227,13 @@ export default async function SubscriptionPage({
             <span className="text-ink-muted">{t("subscription.current_plan")}</span>
             <span className="font-medium">{t(`subscription.plan.${view.planKey}`)}</span>
           </div>
+          <div className="flex items-center justify-between">
+            <span className="text-ink-muted">{t("subscription.monthly_total")}</span>
+            <span dir="ltr" className="font-mono font-medium">
+              {formatMoney(monthlyTotalMinor, displayCurrency)}
+            </span>
+          </div>
+          <p className="text-xs text-ink-muted">{t("subscription.monthly_total_note")}</p>
           {view.trialEnd ? (
             <div className="flex items-center justify-between">
               <span className="text-ink-muted">{t("subscription.trial_ends")}</span>
@@ -100,6 +241,9 @@ export default async function SubscriptionPage({
                 {view.trialEnd.slice(0, 10)}
               </span>
             </div>
+          ) : null}
+          {view.billingState === "trialing" ? (
+            <p className="text-xs text-ink-muted">{t("subscription.trial_note")}</p>
           ) : null}
           {view.scheduledPlanKey ? (
             <div className="flex items-center justify-between text-warning">
@@ -113,52 +257,227 @@ export default async function SubscriptionPage({
         </div>
       </Card>
 
-      {/* Provider-disabled (pre-D1) state: no live checkout / Buy action. */}
+      {/* 2 — the free base: always included, on every workspace, forever. */}
+      <Card>
+        <CardHeader title={t("subscription.free_base.title")} />
+        <ul className="list-inside list-disc text-sm text-ink">
+          <li>{t("subscription.free_base.core", { jobs: jobsNoun })}</li>
+          <li>{t("subscription.free_base.records")}</li>
+          <li>{t("subscription.free_base.seats")}</li>
+          <li>{t("subscription.free_base.storage")}</li>
+        </ul>
+      </Card>
+
+      {/* Provider-disabled (pre-D1) state: no live purchase actions of any kind. */}
       {!view.providerEnabled ? (
         <div className="rounded-md bg-sunken p-3 text-sm text-ink-muted" role="note">
           {t("subscription.activation_unavailable")}
         </div>
       ) : null}
 
+      {/* 3 — recommended bundles FIRST (discounted collections of the same add-ons). */}
       <Card>
-        <CardHeader title={t("subscription.plans_title")} />
+        <CardHeader title={t("subscription.bundles_title")} />
         <p className="mb-3 text-xs text-ink-muted">{t("subscription.indicative_pricing")}</p>
         <ul className="flex flex-col gap-2">
-          {PLAN_ORDER.map((plan) => {
-            const price = monthly(plan);
-            const isCurrent = plan === view.planKey;
-            return (
-              <li
-                key={plan}
-                className="flex items-center justify-between gap-3 rounded-md border border-line p-3"
-              >
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-ink">
-                    {t(`subscription.plan.${plan}`)}{" "}
-                    {isCurrent ? <Badge tone="brand">{t("subscription.current")}</Badge> : null}
-                  </p>
-                  {price ? (
-                    <p className="text-xs text-ink-muted">
-                      <span dir="ltr" className="font-mono">
-                        {formatMoney(price.unitAmountMinor, displayCurrency)}
-                      </span>{" "}
-                      / {t("subscription.per_month")}
-                      {price.isPlaceholder ? ` · ${t("subscription.indicative")}` : ""}
+          {[...BUNDLES]
+            .sort((a, b) => a.sort - b.sort)
+            .map((b) => {
+              const price = bundleMonthly(b);
+              const memberTotal = bundleMemberTotalMinor(b, displayCurrency);
+              const savePct = memberTotal > 0 ? Math.round((1 - price / memberTotal) * 100) : 0;
+              const isActive = bundleActive(b);
+              return (
+                <li key={b.key} className="flex flex-col gap-2 rounded-md border border-line p-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-sm font-medium text-ink">
+                      {b.names[locale]}{" "}
+                      {isActive ? (
+                        <Badge tone="success">{t("subscription.bundle.active")}</Badge>
+                      ) : null}
                     </p>
+                    <p className="flex flex-wrap items-center gap-2 text-sm text-ink">
+                      <span dir="ltr" className="font-mono font-medium">
+                        {formatMoney(price, displayCurrency)}
+                      </span>
+                      <span className="text-xs text-ink-muted">
+                        / {t("subscription.per_month")} · {t("subscription.excl_vat")}
+                      </span>
+                      {savePct > 0 ? (
+                        <>
+                          <span dir="ltr" className="font-mono text-xs text-ink-muted line-through">
+                            {formatMoney(memberTotal, displayCurrency)}
+                          </span>
+                          <Badge tone="success">
+                            {t("subscription.bundle.save", { percent: savePct })}
+                          </Badge>
+                        </>
+                      ) : null}
+                    </p>
+                  </div>
+                  <p className="text-xs text-ink-muted">{b.description[locale]}</p>
+                  <div className="flex flex-wrap gap-1">
+                    {b.addonKeys.map((k) => (
+                      <Badge key={k} tone="neutral">
+                        {getAddon(k)?.names[locale] ?? k}
+                      </Badge>
+                    ))}
+                  </div>
+                  {canManage && view.providerEnabled && bundleIsPurchasable(b) ? (
+                    <form action={selectWithOrg}>
+                      <input type="hidden" name="bundle" value={b.key} />
+                      <Button type="submit" variant="secondary">
+                        {t("subscription.bundle.select")}
+                      </Button>
+                    </form>
                   ) : null}
-                </div>
-                {canManage && view.providerEnabled && !isCurrent ? (
-                  <form action={changeWithOrg}>
-                    <input type="hidden" name="plan" value={plan} />
-                    <Button type="submit" variant="secondary">
-                      {t("subscription.change_to")}
-                    </Button>
-                  </form>
-                ) : null}
-              </li>
+                </li>
+              );
+            })}
+        </ul>
+      </Card>
+
+      {/* 4 — individual add-ons, grouped; honesty groups last (gated → note,
+          deferred → plainly not purchasable, no price). */}
+      <Card>
+        <CardHeader title={t("subscription.addons_title")} />
+        <p className="mb-3 text-xs text-ink-muted">{t("subscription.indicative_pricing")}</p>
+        <div className="flex flex-col gap-4">
+          {GROUP_ORDER.map((g) => {
+            const items = grouped.get(g);
+            if (!items || items.length === 0) return null;
+            return (
+              <section key={g}>
+                <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-muted">
+                  {t(`subscription.group.${g}`)}
+                </h3>
+                <ul className="flex flex-col gap-2">
+                  {items.map((a) => {
+                    const state = addonState.get(a.key);
+                    const purchasable = isPurchasable(a);
+                    const deferred = a.availability === "deferred";
+                    return (
+                      <li
+                        key={a.key}
+                        className="flex flex-col gap-2 rounded-md border border-line p-3"
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <p className="text-sm font-medium text-ink">
+                            {a.names[locale]}{" "}
+                            {state?.status === "active" ? (
+                              <Badge tone="success">
+                                {t("subscription.addon.active")}
+                                {a.stackable && state.quantity > 1 ? ` ×${state.quantity}` : ""}
+                              </Badge>
+                            ) : null}
+                            {state?.status === "removal_scheduled" ? (
+                              <Badge tone="warning">
+                                {t("subscription.addon.removal_scheduled")}
+                              </Badge>
+                            ) : null}
+                          </p>
+                          {!deferred ? (
+                            <p className="text-sm text-ink">
+                              <span dir="ltr" className="font-mono font-medium">
+                                {formatMoney(addonMonthly(a), displayCurrency)}
+                              </span>{" "}
+                              <span className="text-xs text-ink-muted">
+                                / {t("subscription.per_month")} · {t("subscription.excl_vat")}
+                              </span>
+                            </p>
+                          ) : (
+                            <Badge tone="neutral">{t("subscription.addon.coming_later")}</Badge>
+                          )}
+                        </div>
+                        <p className="text-xs text-ink-muted">{a.description[locale]}</p>
+                        {a.availabilityNote ? (
+                          <p className="text-xs text-warning">{a.availabilityNote[locale]}</p>
+                        ) : null}
+                        {canManage && view.providerEnabled && purchasable ? (
+                          <div className="flex flex-wrap items-center gap-2">
+                            <form action={addWithOrg} className="flex flex-wrap items-center gap-2">
+                              <input type="hidden" name="addon" value={a.key} />
+                              {a.stackable ? (
+                                <label className="flex items-center gap-2 text-xs text-ink-muted">
+                                  {t("subscription.addon.quantity")}
+                                  <input
+                                    type="number"
+                                    name="quantity"
+                                    min={1}
+                                    defaultValue={state?.quantity ?? 1}
+                                    className="min-h-11 w-20 rounded-md border border-line bg-card px-2 text-sm text-ink"
+                                  />
+                                </label>
+                              ) : null}
+                              <Button type="submit" variant="secondary">
+                                {state?.status === "active" && a.stackable
+                                  ? t("subscription.addon.update_quantity")
+                                  : t("subscription.addon.add")}
+                              </Button>
+                            </form>
+                            {state ? (
+                              <form action={removeWithOrg}>
+                                <input type="hidden" name="addon" value={a.key} />
+                                <Button type="submit" variant="ghost" className="text-danger">
+                                  {t("subscription.addon.remove")}
+                                </Button>
+                              </form>
+                            ) : null}
+                          </div>
+                        ) : null}
+                        {canManage && view.providerEnabled && purchasable && state ? (
+                          <p className="text-xs text-ink-muted">
+                            {t("subscription.addon.remove_note")}
+                          </p>
+                        ) : null}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </section>
             );
           })}
-        </ul>
+        </div>
+      </Card>
+
+      {/* 5 — usage & seats (limits govern ADD, never read — FR-9). */}
+      <Card>
+        <CardHeader title={t("subscription.usage_title")} />
+        <div className="flex flex-col gap-1 text-sm text-ink">
+          <div className="flex items-center justify-between">
+            <span className="text-ink-muted">{t("subscription.usage.office_seats")}</span>
+            <span dir="ltr" className="font-mono">
+              {limitLabel(officeSeats, ent.limits["limit.full_users"] ?? null)}
+            </span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-ink-muted">{t("subscription.usage.viewer_seats")}</span>
+            <span dir="ltr" className="font-mono">
+              {limitLabel(viewerSeats, ent.limits["limit.viewer_users"] ?? null)}
+            </span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-ink-muted">{t("subscription.usage.field_seats")}</span>
+            <span>{t("subscription.usage.unlimited")}</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-ink-muted">{t("subscription.usage.storage")}</span>
+            <span dir="ltr" className="font-mono">
+              {limitLabel(
+                `${(storage.bytesUsed / GIB).toFixed(2)} GB`,
+                storage.limitBytes === null ? null : `${storage.limitBytes / GIB} GB`,
+              )}
+            </span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-ink-muted">
+              {t("subscription.usage.active_jobs", { jobs: jobsNoun })}
+            </span>
+            <span dir="ltr" className="font-mono">
+              {limitLabel(activeJobs, ent.limits["limit.active_jobs"] ?? null)}
+            </span>
+          </div>
+        </div>
       </Card>
 
       {canManage && view.providerEnabled && !view.cancelAtPeriodEnd ? (

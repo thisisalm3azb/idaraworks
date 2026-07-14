@@ -1,8 +1,9 @@
 import { redirect } from "next/navigation";
 import { Badge, Button, Card, CardHeader } from "@/platform/ui";
-import { getT } from "@/platform/i18n/server";
+import { getT, getServerLocale } from "@/platform/i18n/server";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { can } from "@/platform/authz";
+import { TEMPLATE_CATALOGUE } from "@/platform/config";
 import { startOnboardingAction } from "./actions";
 
 const field = "flex flex-col gap-1 text-sm";
@@ -23,6 +24,8 @@ export default async function OnboardingPage({
   if (typeof resolved === "string") redirect("/");
   if (!can(resolved.archetype, "onboarding.run")) redirect(`/o/${orgId}`);
   const t = await getT();
+  const locale = await getServerLocale();
+  const ar = locale === "ar";
 
   return (
     <div className="mx-auto flex w-full max-w-lg flex-col gap-4">
@@ -37,6 +40,30 @@ export default async function OnboardingPage({
           <label className={field}>
             {t("onboarding.intake.business_name")}
             <input name="business_name" required maxLength={120} className={input} />
+          </label>
+          <label className={field}>
+            {t("onboarding.intake.business_description")}
+            <textarea
+              name="business_description"
+              maxLength={600}
+              rows={3}
+              placeholder={t("onboarding.intake.business_description_placeholder")}
+              className={`${input} text-base`}
+            />
+          </label>
+          <p className="text-xs text-ink-muted">
+            {t("onboarding.intake.business_description_note")}
+          </p>
+          <label className={field}>
+            {t("onboarding.intake.template_choice")}
+            <select name="template_key" defaultValue="" className={input}>
+              <option value="">{t("onboarding.intake.template_recommend")}</option>
+              {TEMPLATE_CATALOGUE.map((e) => (
+                <option key={e.key} value={e.key}>
+                  {ar ? e.names.ar : e.names.en}
+                </option>
+              ))}
+            </select>
           </label>
           <div className="grid grid-cols-2 gap-3">
             <label className={field}>

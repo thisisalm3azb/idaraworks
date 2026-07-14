@@ -12,6 +12,7 @@ import { z } from "zod";
 import { sql, withCtx, type Ctx, type TenantTx } from "@/platform/tenancy";
 import { command } from "@/platform/audit/command";
 import { assertCan } from "@/platform/authz/can";
+import { requireCapability } from "@/platform/entitlements";
 import { allocateReference, formatRef } from "@/platform/reference/sequence";
 import { EXPENSE_CREATED, EXPENSE_VOIDED } from "@/platform/events";
 import type { RoleArchetype } from "@/platform/registries";
@@ -81,6 +82,8 @@ export async function createExpense(
   raw: unknown,
 ): Promise<{ id: string; reference: string }> {
   assertCan(archetype, "expenses.create");
+  // Add-on gate (FR-9): CREATE only — the expense book and voiding never gate.
+  await requireCapability(ctx, "cap.expenses");
   const input = CreateExpenseInput.parse(raw);
   const totalMinor = input.amountMinor + input.vatAmountMinor;
 

@@ -10,6 +10,7 @@ import { z } from "zod";
 import { sql, withCtx, type Ctx, type TenantTx } from "@/platform/tenancy";
 import { command } from "@/platform/audit/command";
 import { assertCan } from "@/platform/authz/can";
+import { requireCapability } from "@/platform/entitlements";
 import { allocateReference, formatRef } from "@/platform/reference/sequence";
 import { submitForApproval } from "@/modules/approvals/service";
 import { reconcileInvoiceStatus } from "@/modules/invoices/service";
@@ -50,6 +51,8 @@ export async function recordPayment(
   raw: unknown,
 ): Promise<{ id: string; reference: string; receiptReference: string; approvalId: string | null }> {
   assertCan(archetype, "payments.manage");
+  // Add-on gate (FR-9): RECORD only — reads/AR and voiding an existing payment never gate.
+  await requireCapability(ctx, "cap.payments");
   const input = RecordPaymentInput.parse(raw);
   const currency = (input.currency ?? "AED") as CurrencyCode;
   const baseAmountMinor = Math.round(input.amountMinor * input.exchangeRate);

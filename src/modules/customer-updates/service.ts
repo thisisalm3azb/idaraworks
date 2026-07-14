@@ -12,6 +12,7 @@ import { randomBytes, createHash } from "node:crypto";
 import { sql, withCtx, createAppDb, type Ctx, type TenantTx } from "@/platform/tenancy";
 import { command } from "@/platform/audit/command";
 import { assertCan, type Action } from "@/platform/authz";
+import { requireCapability } from "@/platform/entitlements";
 import type { RoleArchetype } from "@/platform/registries";
 import { CUSTOMER_UPDATE_SENT, SHARE_TOKEN_CREATED, SHARE_TOKEN_REVOKED } from "@/platform/events";
 
@@ -45,6 +46,8 @@ export async function createDraft(
   raw: unknown,
 ): Promise<{ id: string }> {
   assertCan(archetype, "customer_updates.draft" as Action);
+  // Add-on gate (FR-9): CREATE only — reads and editing an existing draft never gate.
+  await requireCapability(ctx, "cap.customer_updates");
   const input = CreateDraftInput.parse(raw);
   return command(
     ctx,
@@ -157,6 +160,8 @@ export async function sendUpdate(
   id: string,
 ): Promise<{ shareTokenId: string; token: string; expiresAt: string }> {
   assertCan(archetype, "customer_updates.send" as Action);
+  // SEND publishes to the customer — gated like create (FR-9); revoke stays ungated.
+  await requireCapability(ctx, "cap.customer_updates");
   const rawToken = randomBytes(32).toString("base64url"); // 256-bit
   const tokenHash = createHash("sha256").update(rawToken).digest("hex");
   const result = await command<{ shareTokenId: string; expiresAt: string }>(

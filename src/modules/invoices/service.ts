@@ -12,6 +12,7 @@ import { z } from "zod";
 import { sql, withCtx, type Ctx, type TenantTx } from "@/platform/tenancy";
 import { command } from "@/platform/audit/command";
 import { assertCan } from "@/platform/authz/can";
+import { requireCapability } from "@/platform/entitlements";
 import { allocateReference, formatRef } from "@/platform/reference/sequence";
 import { getEInvoiceProvider } from "@/platform/einvoice/adapter";
 import { INVOICE_ISSUED, INVOICE_VOIDED, CREDIT_NOTE_ISSUED } from "@/platform/events";
@@ -107,6 +108,9 @@ export async function createInvoice(
   raw: unknown,
 ): Promise<{ id: string; reference: string }> {
   assertCan(archetype, "invoices.manage");
+  // Add-on gate (FR-9): CREATE/issue only — reads, void and credit notes on
+  // existing invoices never gate (a downgraded org can finish in-flight docs).
+  await requireCapability(ctx, "cap.invoicing");
   const input = CreateInvoiceInput.parse(raw);
   const currency = (input.currency ?? "AED") as CurrencyCode;
 
@@ -164,6 +168,8 @@ export async function issueInvoice(
   invoiceId: string,
 ): Promise<void> {
   assertCan(archetype, "invoices.manage");
+  // Issuance mints the immutable legal document — gated like create (FR-9).
+  await requireCapability(ctx, "cap.invoicing");
   await command(
     ctx,
     {

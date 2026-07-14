@@ -93,6 +93,9 @@ export function nextForEvent(from: BillingState, signal: SubscriptionSignal): Si
     case "plan_changed":
       // A plan change never moves billing_state — the service handles it (plan_key / scheduled_plan_key).
       return { to: null, reason: "plan change is not a state transition" };
+    case "addon_changed":
+      // An add-on change never moves billing_state — the service handles it (org_addon rows).
+      return { to: null, reason: "addon change is not a state transition" };
     case "trial_ended":
       // A trial that never converted becomes read-only (not deleted). If already converted (active), no-op.
       return from === "trialing"

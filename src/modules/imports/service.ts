@@ -9,6 +9,7 @@ import { z } from "zod";
 import { sql, withCtx, type Ctx, type TenantTx } from "@/platform/tenancy";
 import { command } from "@/platform/audit/command";
 import { assertCan, type Action } from "@/platform/authz";
+import { requireCapability } from "@/platform/entitlements";
 import type { RoleArchetype } from "@/platform/registries";
 import {
   createCustomer,
@@ -95,6 +96,9 @@ export async function stageImport(
   raw: unknown,
 ): Promise<StageResult> {
   assertCan(archetype, "imports.manage" as Action);
+  // Add-on gate (FR-9): STAGING only — applying an already-staged batch and
+  // reading batch rows never gate (in-flight imports stay finishable).
+  await requireCapability(ctx, "feat.data_import");
   const { kind, filename, rows } = StageInput.parse(raw);
   const schema = schemaFor(kind);
 

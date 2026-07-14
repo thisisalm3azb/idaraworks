@@ -10,6 +10,7 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { command } from "@/platform/audit";
 import { assertCan } from "@/platform/authz";
+import { requireCapability } from "@/platform/entitlements";
 import { sql, withCtx, type Ctx } from "@/platform/tenancy";
 import type { RoleArchetype } from "@/platform/registries";
 
@@ -462,6 +463,9 @@ export async function createItem(
   input: unknown,
 ): Promise<{ id: string }> {
   assertCan(archetype, "catalog.manage");
+  // Add-on gate (FR-9): item CREATE only — the catalogue read and item lookups
+  // in requests/orders/reports never gate.
+  await requireCapability(ctx, "cap.items");
   const data = ItemInput.parse(input);
   await assertItemCategory(ctx, data.categoryKey);
   const id = randomUUID();

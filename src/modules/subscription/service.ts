@@ -27,16 +27,23 @@ import {
   fakeBillingProvider,
   BillingProviderDisabledError,
   type NormalizedEvent,
+  type AddonChangePayload,
 } from "@/platform/billing/adapter";
+import {
+  getAddon,
+  getBundle,
+  isPurchasable,
+  type AddonAvailability,
+} from "@/platform/entitlements/addons";
 import { nextForEvent, type BillingState } from "./machine";
-import { computeWindows } from "./windows";
+import { computeWindows, monthlyPeriodEnd } from "./windows";
 import { logger } from "@/platform/logger";
 
 export { BillingProviderDisabledError };
 // Re-export the pure machine/windows surface the lifecycle worker needs, so it imports the
 // subscription module ONLY via this service.ts (BUILD_BIBLE §3.3 — no cross-module internal imports).
 export { nextForEvent } from "./machine";
-export { dueSignal, LIFECYCLE_WINDOWS, type LifecycleRow } from "./windows";
+export { dueSignal, LIFECYCLE_WINDOWS, monthlyPeriodEnd, type LifecycleRow } from "./windows";
 // The read-only concept + error live in the platform entitlement layer (the command() chokepoint
 // enforces FR-9 there). Re-export the error under the S9 name for callers/tests.
 export { isReadOnlyBillingState } from "@/platform/entitlements/resolve";
@@ -46,6 +53,18 @@ export class SubscriptionActionError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "SubscriptionActionError";
+  }
+}
+
+/** A purchase was attempted for an add-on that is not purchasable (HONESTY LAW: only
+ * available/manual_process items ever sell; the availability class says why this one doesn't). */
+export class AddonUnavailableError extends Error {
+  constructor(
+    public readonly addonKey: string,
+    public readonly availability: AddonAvailability,
+  ) {
+    super(`add-on ${addonKey} is not purchasable (${availability})`);
+    this.name = "AddonUnavailableError";
   }
 }
 
@@ -129,6 +148,23 @@ export async function processSubscriptionWebhook(
       return { status: "processed", from: org.billing_state, to: org.billing_state };
     }
 
+    // An add-on change is NOT a state transition either: apply the org_addon upsert (via the
+    // set_org_addon sole writer) and keep billing_state unchanged. A malformed/unknown payload is
+    // recorded on the inbox row — never a thrown 500 (the provider must not retry it into a storm).
+    if (evt.signal === "addon_changed") {
+      if (!evt.addonChange) {
+        await markProcessed(db, provider.id, evt.providerEventId, "ignored", "no addon payload");
+        return { status: "ignored", from: org.billing_state };
+      }
+      const res = await applyAddonChange(db, org.org_id, evt.addonChange, evt.providerEventId);
+      if (!res.ok) {
+        await markProcessed(db, provider.id, evt.providerEventId, "failed", res.error);
+        return { status: "ignored", from: org.billing_state };
+      }
+      await markProcessed(db, provider.id, evt.providerEventId, "processed", null);
+      return { status: "processed", from: org.billing_state, to: org.billing_state };
+    }
+
     // Run the state machine. A no-op signal is recorded as 'ignored' (still idempotent).
     const res = nextForEvent(org.billing_state, evt.signal);
     if (res.to === null) {
@@ -202,10 +238,12 @@ export async function applyTransition(
 /**
  * Apply a plan change WITHOUT moving billing_state. Upgrade ('immediate') sets plan_key now and
  * clears any scheduled downgrade; downgrade ('scheduled') records scheduled_plan_key (applied at
- * period end by a later immediate plan_changed event). Never deletes data — an org that exceeds the
- * new plan's limits simply loses the ability to ADD (checkLimit), never to read (FR-9).
+ * period end by a later immediate plan_changed event OR the lifecycle sweep's scheduled-plan step,
+ * which calls the 'immediate' mode here). Never deletes data — an org that exceeds the new plan's
+ * limits simply loses the ability to ADD (checkLimit), never to read (FR-9). Platform-path only
+ * (webhook processor / lifecycle worker) — exported for the worker, never for a tenant action.
  */
-async function applyPlanChange(
+export async function applyPlanChange(
   db: ReturnType<typeof createAppDb>["db"],
   orgId: string,
   state: string,
@@ -232,6 +270,45 @@ async function applyPlanChange(
         ${JSON.stringify({ plan: newPlanKey })}::jsonb)`);
   }
   invalidateEntitlements(orgId);
+}
+
+/**
+ * Apply ONE add-on change on a platform client (the webhook path — provider events remain the sole
+ * writer of org_addon; changeAddons below never writes it directly). Validates the key against the
+ * code catalogue, upserts via the DEFINER sole writer `set_org_addon`, writes the tenant-visible
+ * audit row (same style as applyPlanChange), and invalidates the entitlement cache. Any refusal
+ * (unknown key, or the DB wall rejecting e.g. a deferred add-on) is RETURNED, never thrown — the
+ * webhook processor records it on the inbox row instead of 500ing the provider into retries.
+ */
+export async function applyAddonChange(
+  db: ReturnType<typeof createAppDb>["db"],
+  orgId: string,
+  payload: AddonChangePayload,
+  eventRef: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!getAddon(payload.addon_key)) {
+    return { ok: false, error: `unknown addon key ${payload.addon_key}` };
+  }
+  try {
+    await db.execute(sql`
+      select app.set_org_addon(${orgId}::uuid, ${payload.addon_key}, ${payload.quantity},
+        ${payload.status}, ${payload.remove_at}, ${payload.source})`);
+  } catch (err) {
+    return { ok: false, error: (err as Error).message };
+  }
+  await db.execute(sql`
+    select app.record_platform_audit(${orgId}::uuid, null, 'subscription.addons_changed',
+      'subscription', ${orgId}::uuid,
+      ${`Add-on ${payload.addon_key} → ${payload.status} (×${payload.quantity})`},
+      ${JSON.stringify({
+        addon: payload.addon_key,
+        quantity: payload.quantity,
+        status: payload.status,
+        source: payload.source,
+        event: eventRef,
+      })}::jsonb)`);
+  invalidateEntitlements(orgId);
+  return { ok: true };
 }
 
 async function markProcessed(
@@ -319,6 +396,116 @@ export async function changePlan(
   // emits the webhook that this same processor applies (no different code path at activation).
   await emitFakeSignal(ctx.orgId, "plan_changed", { planKey: newPlanKey, planChangeMode: mode });
   return { mode };
+}
+
+export type AddonChangeRequest = {
+  additions: Array<{ addonKey: string; quantity?: number }>;
+  removals: string[];
+  /** Expands to its member add-ons, each tagged source 'bundle.<key>' (the SAME addon keys —
+   * a bundle is a discounted collection, never a second entitlement system). */
+  bundleKey?: string;
+};
+
+export type AddonChangeResult = {
+  added: number;
+  removalScheduled: number;
+  /** The period-end deadline scheduled removals apply at (null when nothing was removed). */
+  removeAt: string | null;
+};
+
+/**
+ * Owner changes add-ons. Additions apply immediately; removals are scheduled to PERIOD END (the org
+ * paid through the period — never mid-cycle, never deletes data). Everything is driven through the
+ * provider→webhook round-trip (with the fake provider, modelled by emitFakeSignal — one
+ * addon_changed signal per add-on), so provider events remain the SOLE writer of org_addon.
+ */
+export async function changeAddons(
+  ctx: Ctx,
+  archetype: RoleArchetype,
+  req: AddonChangeRequest,
+): Promise<AddonChangeResult> {
+  assertCan(archetype, "billing.manage");
+  const provider = getBillingProvider();
+  if (!provider.enabled) throw new BillingProviderDisabledError("changeAddons");
+
+  // Expand the bundle, then dedupe by key (last wins) so one request emits one signal per add-on.
+  const byKey = new Map<string, { quantity: number; source: string }>();
+  for (const a of req.additions) {
+    byKey.set(a.addonKey, {
+      quantity: Math.max(1, Math.trunc(a.quantity ?? 1)),
+      source: "individual",
+    });
+  }
+  if (req.bundleKey) {
+    const bundle = getBundle(req.bundleKey);
+    if (!bundle) throw new SubscriptionActionError(`unknown bundle ${req.bundleKey}`);
+    for (const key of bundle.addonKeys) byKey.set(key, { quantity: 1, source: bundle.key });
+  }
+  // HONESTY LAW: only available/manual_process add-ons are purchasable — a deferred/
+  // credential_gated/d1_gated addition is refused with its availability class.
+  for (const [key] of byKey) {
+    const def = getAddon(key);
+    if (!def) throw new SubscriptionActionError(`unknown add-on ${key}`);
+    if (!isPurchasable(def)) throw new AddonUnavailableError(def.key, def.availability);
+  }
+
+  // Removals: validate against the org's CURRENT add-ons (tenant read — org_addon is tenant-read-
+  // only) and compute the period-end deadline from the deterministic no-provider anchor
+  // (org_plan_state.period_start, set at org creation).
+  let removeAt: string | null = null;
+  const removals: Array<{ addonKey: string; quantity: number; source: string }> = [];
+  if (req.removals.length > 0) {
+    const { anchor, rows } = await withCtx(ctx, async (tx) => {
+      const plan = (await tx.execute(sql`
+        select period_start::text as period_start from public.org_plan_state
+        where org_id = ${ctx.orgId}`)) as unknown as Array<{ period_start: string }>;
+      const addons = (await tx.execute(sql`
+        select addon_key, quantity, status, source from public.org_addon
+        where org_id = ${ctx.orgId} and status in ('active','removal_scheduled')`)) as unknown as Array<{
+        addon_key: string;
+        quantity: number;
+        status: string;
+        source: string;
+      }>;
+      return { anchor: plan[0]?.period_start ?? null, rows: addons };
+    });
+    removeAt = monthlyPeriodEnd(anchor ? new Date(anchor) : new Date(), new Date());
+    for (const key of req.removals) {
+      if (!getAddon(key)) throw new SubscriptionActionError(`unknown add-on ${key}`);
+      const cur = rows.find((r) => r.addon_key === key);
+      if (!cur) throw new SubscriptionActionError(`add-on ${key} is not active`);
+      removals.push({ addonKey: key, quantity: cur.quantity, source: cur.source });
+    }
+  }
+
+  // Fake provider (dev/test): model provider → webhook, one addon_changed event per add-on. A real
+  // provider is told via its API and emits the webhooks this same processor applies. org_addon is
+  // NEVER written here — applyAddonChange (the webhook path) is the only writer.
+  for (const [key, a] of byKey) {
+    await emitFakeSignal(ctx.orgId, "addon_changed", {
+      providerEventId: `${key}_${Date.now()}`, // per-add-on suffix — never collapses as a duplicate
+      addonChange: {
+        addon_key: key,
+        quantity: a.quantity,
+        status: "active",
+        remove_at: null,
+        source: a.source,
+      },
+    });
+  }
+  for (const r of removals) {
+    await emitFakeSignal(ctx.orgId, "addon_changed", {
+      providerEventId: `${r.addonKey}_${Date.now()}`,
+      addonChange: {
+        addon_key: r.addonKey,
+        quantity: r.quantity,
+        status: "removal_scheduled",
+        remove_at: removeAt,
+        source: r.source,
+      },
+    });
+  }
+  return { added: byKey.size, removalScheduled: removals.length, removeAt };
 }
 
 export type SubscriptionView = {

@@ -21,6 +21,7 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { command } from "@/platform/audit";
 import { assertCan, can, ForbiddenError } from "@/platform/authz";
+import { requireCapability } from "@/platform/entitlements";
 import {
   emitEvent,
   APPROVAL_SUBMITTED,
@@ -265,6 +266,9 @@ export async function createApprovalRule(
   input: unknown,
 ): Promise<{ id: string }> {
   assertCan(archetype, "config.manage");
+  // Add-on gate (FR-9): RULE creation only — deciding EXISTING approvals stays
+  // ungated (in-flight documents must always be finishable).
+  await requireCapability(ctx, "cap.approvals");
   const data = CreateRuleInput.parse(input);
   if (data.conditionKind === "amount_gte" && data.amountGteMinor == null) {
     throw new RuleValidationError("amount_gte requires amountGteMinor");

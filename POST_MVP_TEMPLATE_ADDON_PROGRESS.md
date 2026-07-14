@@ -75,12 +75,16 @@ verified founder-test defect). Validator: registry membership + per-template pri
 
 ## Exact next task
 
-(1) Write docs: TEMPLATE_CATALOGUE.md, TEMPLATE_CONFIGURATION_REFERENCE.md,
-AI_TEMPLATE_SELECTION_RULES.md, ADDON_MARKET_RESEARCH.md, ADDON_PRICING_RATIONALE.md (research data
-in scratchpad task w7xycupwv.output). (2) P-TA4: migration 0065 (addon_def/addon_price/org_addon/
-bundle_def/bundle_addon/bundle_price + free plan + app.set_org_addon DEFINER), addons.ts code
-catalogue, resolver extension, seat-limit enforcement, capability gates, period-end sweep fix.
-(3) P-TA5 UI. (4) Gates → review → deploy → demo → cleanup → report.
+Implementation wave `wf_125ca704` running (6 agents): A addon lifecycle (changeAddons/webhook
+addon_changed/sweep incl. scheduled-downgrade fix + trial→free landing), B enforcement (seat limits
+at invite + requireCapability gates on module CREATE paths), C template docs (3), D commercial docs
+(6), then E onboarding UI → F pricing UI (sequential; shared i18n files). DONE so far this phase:
+addons.ts catalogue (32 add-ons/6 bundles, owner anchors kept), migration 0065, resolver add-on
+layer + requireCapability, org_addon bleed seeder, 15 honesty tests (green), commits `261b7ae` +
+`9194c23`. AFTER the wave: fix fallout → full local gates → integration-test agent for the addon
+model → apply 0065 to hosted DB (`pnpm db:migrate`) → integration suite → adversarial review →
+push/deploy/smoke → demo (fake-provider prod-backed script + deployed-UI EN/AR/375px) → guarded
+cleanup (dry-run first) → final report + evening testing instructions.
 
 ## Resume instruction
 

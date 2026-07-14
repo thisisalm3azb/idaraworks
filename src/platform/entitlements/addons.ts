@@ -676,7 +676,7 @@ export const BUNDLES: readonly BundleDef[] = [
       "addon.branding_docs",
       "addon.branding_app",
     ],
-    usdMonthlyMinor: 2900, // vs 6600 individually (−56%); the $25–45 "everything" market band
+    usdMonthlyMinor: 2900, // vs 6900 individually (−58%); the $25–45 "everything" market band
     aedMonthlyMinor: 10900,
     sort: 60,
   },

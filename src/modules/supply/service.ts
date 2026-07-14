@@ -11,6 +11,7 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { command } from "@/platform/audit";
 import { assertCan, can, ForbiddenError } from "@/platform/authz";
+import { requireCapability } from "@/platform/entitlements";
 import {
   GOODS_RECEIPT_RECORDED,
   GOODS_RECEIPT_CANCELLED,
@@ -124,6 +125,8 @@ export async function createMaterialRequest(
   input: unknown,
 ): Promise<{ id: string; reference: string }> {
   assertCan(archetype, "mr.create");
+  // Add-on gate (FR-9): CREATE only — reads and in-flight MRs never gate.
+  await requireCapability(ctx, "cap.material_requests");
   const data = CreateMrInput.parse(input);
   const id = randomUUID();
   return command<{ id: string; reference: string }>(
@@ -266,6 +269,8 @@ export async function convertMrToPo(
   input: unknown,
 ): Promise<{ poId: string; reference: string }> {
   assertCan(archetype, "mr.convert");
+  // Converting mints a NEW purchase order — gated like po.create (FR-9).
+  await requireCapability(ctx, "cap.purchase_orders");
   const data = ConvertMrInput.parse(input);
   const poId = randomUUID();
   return command<{ poId: string; reference: string }>(
@@ -385,6 +390,8 @@ export async function createPurchaseOrder(
   input: unknown,
 ): Promise<{ id: string; reference: string }> {
   assertCan(archetype, "po.manage");
+  // Add-on gate (FR-9): CREATE only — submit/receive on existing POs never gate.
+  await requireCapability(ctx, "cap.purchase_orders");
   const data = CreatePoInput.parse(input);
   const id = randomUUID();
   return command<{ id: string; reference: string }>(
@@ -552,6 +559,8 @@ export async function recordGoodsReceipt(
   input: unknown,
 ): Promise<{ id: string; reference: string }> {
   assertCan(archetype, "grn.create");
+  // Add-on gate (FR-9): RECORD only — reads and cancelling an existing GRN never gate.
+  await requireCapability(ctx, "cap.goods_receipts");
   const data = RecordGrnInput.parse(input);
   const id = randomUUID();
   return command<{ id: string; reference: string; poId: string }>(

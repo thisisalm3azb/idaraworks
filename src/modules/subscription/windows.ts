@@ -58,6 +58,42 @@ export function computeWindows(target: BillingState, nowMs: number): LifecycleWi
   }
 }
 
+/**
+ * The end of the monthly period containing `now`: the FIRST monthly anniversary of `anchor`
+ * strictly after `now`, in UTC (an anchor on the 29th–31st clamps into shorter months). This is the
+ * deterministic no-provider period boundary (fake provider / pre-D1): scheduled add-on removals and
+ * scheduled plan downgrades apply here, never mid-period. Returns an ISO string like the other
+ * window math in this file.
+ */
+export function monthlyPeriodEnd(anchor: Date, now: Date): string {
+  const anniversary = (monthsAhead: number): Date => {
+    const y = anchor.getUTCFullYear();
+    const m = anchor.getUTCMonth() + monthsAhead;
+    // Clamp the anchor's day-of-month into the target month (Jan 31 anchor → Feb 28/29).
+    const lastDay = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+    return new Date(
+      Date.UTC(
+        y,
+        m,
+        Math.min(anchor.getUTCDate(), lastDay),
+        anchor.getUTCHours(),
+        anchor.getUTCMinutes(),
+        anchor.getUTCSeconds(),
+        anchor.getUTCMilliseconds(),
+      ),
+    );
+  };
+  // Whole-month estimate, then walk forward to the first anniversary strictly after `now`
+  // (the estimate is never past it — it lands in `now`'s calendar month or earlier).
+  let n = Math.max(
+    0,
+    (now.getUTCFullYear() - anchor.getUTCFullYear()) * 12 +
+      (now.getUTCMonth() - anchor.getUTCMonth()),
+  );
+  while (anniversary(n).getTime() <= now.getTime()) n++;
+  return anniversary(n).toISOString();
+}
+
 /** A row the sweep inspects (only the fields it needs). */
 export type LifecycleRow = {
   billing_state: BillingState;

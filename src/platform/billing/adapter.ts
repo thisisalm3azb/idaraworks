@@ -29,10 +29,22 @@ export type SubscriptionSignal =
   | "payment_recovered" // a retry or manual payment succeeded
   | "canceled" // customer or provider cancelled the subscription
   | "plan_changed" // upgrade (immediate) or downgrade (scheduled/applied at period end)
+  | "addon_changed" // add-on purchased / removal scheduled / removed (never a state transition)
   | "trial_ended" // trial window elapsed with no conversion (lifecycle worker or provider)
   | "grace_elapsed" // dunning/grace window elapsed (lifecycle worker)
   | "purge_due" // read-only window elapsed → schedule purge (lifecycle worker)
   | "purged"; // purge executed (purge worker)
+
+/** For an addon_changed event: the org_addon row state the provider asserts. Mirrors the
+ * app.set_org_addon writer's vocabulary (0065) — the webhook processor validates the key against
+ * the code catalogue and the DEFINER wall enforces the rest. */
+export type AddonChangePayload = {
+  addon_key: string;
+  quantity: number;
+  status: "active" | "removal_scheduled" | "removed";
+  remove_at: string | null; // ISO period-end removal deadline (removal_scheduled only)
+  source: string; // 'individual' | 'bundle.<key>' (bundle = the SAME addon keys, tagged)
+};
 
 /** A normalized provider webhook event — every processor's raw event maps onto this shape. */
 export type NormalizedEvent = {
@@ -47,6 +59,8 @@ export type NormalizedEvent = {
   /** For a plan_changed event: 'immediate' (upgrade / period-end application) vs 'scheduled'
    * (downgrade intent recorded, applied at period end). Ignored for other signals. */
   planChangeMode?: "immediate" | "scheduled";
+  /** For an addon_changed event: the add-on row to upsert. Ignored for other signals. */
+  addonChange?: AddonChangePayload;
 };
 
 export type CheckoutInput = {
@@ -194,6 +208,27 @@ function NormalizedEventShape(o: unknown): NormalizedEvent {
       r.planChangeMode === "immediate" || r.planChangeMode === "scheduled"
         ? r.planChangeMode
         : undefined,
+    addonChange: AddonChangePayloadShape(r.addonChange),
+  };
+}
+
+/** Coerce an unknown parsed object into an AddonChangePayload, or undefined when malformed
+ * (the processor then records the event as ignored — a bad payload never throws at the boundary). */
+function AddonChangePayloadShape(o: unknown): AddonChangePayload | undefined {
+  if (o === null || typeof o !== "object") return undefined;
+  const r = o as Record<string, unknown>;
+  const key = typeof r.addon_key === "string" && r.addon_key.length > 0 ? r.addon_key : null;
+  const status =
+    r.status === "active" || r.status === "removal_scheduled" || r.status === "removed"
+      ? r.status
+      : null;
+  if (!key || !status) return undefined;
+  return {
+    addon_key: key,
+    quantity: Math.max(1, Math.trunc(Number(r.quantity) || 1)),
+    status,
+    remove_at: typeof r.remove_at === "string" && r.remove_at.length > 0 ? r.remove_at : null,
+    source: typeof r.source === "string" && r.source.length > 0 ? r.source : "individual",
   };
 }
 
