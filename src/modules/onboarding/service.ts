@@ -15,11 +15,20 @@ import { assertCan, type Action } from "@/platform/authz";
 import type { RoleArchetype } from "@/platform/registries";
 import { hasFeature, checkLimit } from "@/platform/entitlements/resolve";
 import { installTemplate, applyConfigChange, previewConfigChange } from "@/platform/config";
-import { undoRevision } from "@/platform/config";
+import { undoRevision, ConfigGuardError } from "@/platform/config";
 import { createApprovalRule } from "@/modules/approvals/service";
 import { getOnboardingProvider } from "./provider";
 import { validateProposal } from "./validate";
 import { OnboardingIntakeSchema, ConfigProposalSchema, type ConfigProposal } from "./proposal";
+
+// Bind a JS array into an array COLUMN safely. Drizzle interpolates a bare `${jsArray}` as a
+// SQL value LIST — `()` for an empty array (a syntax error), `(a,b)` otherwise — never an array
+// literal (the S3 week.ts trap). Round-tripping through jsonb yields a real array, empty-safe.
+function pgArray(arr: readonly string[], cast: "text" | "uuid") {
+  return cast === "uuid"
+    ? sql`array(select jsonb_array_elements_text(${JSON.stringify(arr)}::jsonb))::uuid[]`
+    : sql`array(select jsonb_array_elements_text(${JSON.stringify(arr)}::jsonb))::text[]`;
+}
 
 export class OnboardingError extends Error {}
 export class OnboardingCapError extends OnboardingError {}
@@ -104,7 +113,7 @@ export async function startOnboarding(
         insert into public.onboarding_session
           (org_id, status, template_key, intake, proposal, requires_upgrade, created_by)
         values (${ctx.orgId}, 'proposed', ${proposal.template_key}, ${JSON.stringify(intake)}::jsonb,
-                ${JSON.stringify(proposal)}::jsonb, ${proposal.requires_upgrade as string[]}, ${ctx.userId})
+                ${JSON.stringify(proposal)}::jsonb, ${pgArray(proposal.requires_upgrade, "text")}, ${ctx.userId})
         returning id::text as id`)) as unknown as Array<{ id: string }>;
       return {
         sessionId: rows[0]!.id,
@@ -229,7 +238,7 @@ export async function applyOnboarding(
     async (tx) => {
       await tx.execute(sql`
         update public.onboarding_session
-        set status = 'applied', applied_revision_ids = ${revisionIds}::uuid[], updated_at = now()
+        set status = 'applied', applied_revision_ids = ${pgArray(revisionIds, "uuid")}, updated_at = now()
         where org_id = ${ctx.orgId} and id = ${sessionId}`);
     },
   );
@@ -242,17 +251,31 @@ export async function undoOnboarding(
   ctx: Ctx,
   archetype: RoleArchetype,
   sessionId: string,
-): Promise<{ undone: number }> {
+): Promise<{ undone: number; retained: number }> {
   assertCan(archetype, "onboarding.run" as Action);
   assertCan(archetype, "config.manage" as Action);
   const session = await getOnboardingSession(ctx, archetype, sessionId);
   if (!session) throw new OnboardingError("session not found");
   if (session.status !== "applied")
     throw new OnboardingError("only an applied onboarding can be undone");
+  // Best-effort reverse undo: revert every revision the config pipeline permits. Some
+  // artifacts are irreversible BY DESIGN — a custom field, once defined, can only be RETIRED,
+  // not removed (D-9.2 ConfigGuardError). We honour that guard: such revisions are RETAINED
+  // (the field stays, retired if edited later) rather than forced. The install MARKER
+  // (config.template) is unguarded, so it always reverts → the org returns to un-onboarded.
   let undone = 0;
+  let retained = 0;
   for (const revId of [...session.appliedRevisionIds].reverse()) {
-    await undoRevision(ctx, revId);
-    undone++;
+    try {
+      await undoRevision(ctx, revId);
+      undone++;
+    } catch (err) {
+      if (err instanceof ConfigGuardError) {
+        retained++;
+        continue;
+      }
+      throw err;
+    }
   }
   await command(
     ctx,
@@ -261,7 +284,7 @@ export async function undoOnboarding(
         action: "onboarding.undo",
         entityType: "onboarding_session",
         entityId: sessionId,
-        summary: `Undid onboarding (${undone} revisions reverted)`,
+        summary: `Undid onboarding (${undone} reverted, ${retained} retained by config guards)`,
       },
     },
     async (tx) => {
@@ -270,5 +293,5 @@ export async function undoOnboarding(
         where org_id = ${ctx.orgId} and id = ${sessionId}`);
     },
   );
-  return { undone };
+  return { undone, retained };
 }

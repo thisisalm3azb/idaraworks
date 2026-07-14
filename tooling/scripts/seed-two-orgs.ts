@@ -406,6 +406,21 @@ export const SEEDERS: Record<string, Seeder> = {
     await o`insert into public.share_token (org_id, customer_update_id, token_hash, expires_at, created_by)
             values (${org}, ${cu}, ${"blhash-" + randomUUID()}, now() + interval '30 days', ${u})`;
   },
+  onboarding_session: async (o, org, u) => {
+    await o`insert into public.onboarding_session (org_id, status, template_key, intake, created_by)
+            values (${org}, 'draft', 'boatbuilding_marine_v1', '{}'::jsonb, ${u})`;
+  },
+  import_batch: async (o, org, u) => {
+    await o`insert into public.import_batch (org_id, kind, status, row_count, created_by)
+            values (${org}, 'customers', 'staged', 0, ${u})`;
+  },
+  import_row: async (o, org, u) => {
+    const b = randomUUID();
+    await o`insert into public.import_batch (id, org_id, kind, status, row_count, created_by)
+            values (${b}, ${org}, 'customers', 'validated', 1, ${u})`;
+    await o`insert into public.import_row (org_id, batch_id, row_number, raw, status)
+            values (${org}, ${b}, 1, '{"name":"Bleed"}'::jsonb, 'valid')`;
+  },
 
   // Seeded under the org's OWN user (not the shared recipient): sign_in_log's
   // policy is user-OR-org, so a shared user would be visible cross-org by design
