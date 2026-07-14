@@ -8,15 +8,28 @@
  * (pre-D1) the disabled adapter's verifySignature returns false, so this endpoint accepts nothing.
  */
 import { NextResponse } from "next/server";
+import { headers } from "next/headers";
 import { processSubscriptionWebhook } from "@/modules/subscription/service";
+import { rateLimit } from "@/platform/http/rateLimit";
+import { clientIpFromHeaders } from "@/platform/http/clientIp";
 import { logger } from "@/platform/logger";
 
 export const dynamic = "force-dynamic";
 
 const SIGNATURE_HEADER = "x-idara-billing-signature";
+const MAX_BODY_BYTES = 64 * 1024; // a billing event is small; anything larger is abuse
 
 export async function POST(request: Request): Promise<NextResponse> {
+  // S10: bound the unauthenticated ingress. Per-IP rate limit + a hard body-size cap BEFORE any
+  // signature-verify / org-resolve DB work (both were previously unbounded on this public route).
+  const ip = clientIpFromHeaders(await headers());
+  const limited = await rateLimit("webhook", ip);
+  if (!limited.allowed) return NextResponse.json({ ok: false }, { status: 429 });
+  const declared = Number(request.headers.get("content-length") ?? 0);
+  if (declared > MAX_BODY_BYTES) return NextResponse.json({ ok: false }, { status: 413 });
+
   const rawBody = await request.text();
+  if (rawBody.length > MAX_BODY_BYTES) return NextResponse.json({ ok: false }, { status: 413 });
   const signature = request.headers.get(SIGNATURE_HEADER) ?? "";
   try {
     const outcome = await processSubscriptionWebhook(rawBody, signature);

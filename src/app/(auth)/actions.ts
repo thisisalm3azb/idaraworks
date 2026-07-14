@@ -28,10 +28,27 @@ async function applyLocaleFromProfile(userId: string): Promise<void> {
   }
 }
 
-/** Language switcher: persist the active locale for this browser (durable pref
- * lives on user_profile.locale, edited from account settings in a later slice). */
+/** Language switcher (browser cookie only). */
 export async function setActiveLocaleAction(locale: string): Promise<void> {
   (await cookies()).set(LOCALE_COOKIE, normalizeLocale(locale), LOCALE_COOKIE_OPTS);
+}
+
+/** Language switcher form action (S10): set the active-locale cookie AND persist the choice to
+ * user_profile.locale so it follows the signed-in user across devices/sessions. Wired from the
+ * account page — before S10 the switcher seam existed but was never mounted, so Arabic/RTL was
+ * unreachable (the cookie only ever came from the profile default 'en', which nothing updated). */
+export async function changeLanguageAction(formData: FormData): Promise<void> {
+  const locale = normalizeLocale(String(formData.get("locale") ?? ""));
+  (await cookies()).set(LOCALE_COOKIE, locale, LOCALE_COOKIE_OPTS);
+  const user = await getSessionUser();
+  if (user) {
+    await withUserCtx(user.id, (tx) =>
+      tx.execute(sql`update public.user_profile set locale = ${locale} where id = ${user.id}`),
+    ).catch(() => {
+      // A persistence failure must not break the language change — the cookie already applied.
+    });
+  }
+  redirect("/account?notice=language_changed");
 }
 
 async function requestMeta() {

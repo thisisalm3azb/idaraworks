@@ -713,9 +713,12 @@ export async function withdrawApproval(
       if (!row) throw new ApprovalStateError("approval was concurrently changed");
       const cfg = SUBJECTS[row.subject_type];
       if (cfg) {
+        // S10: guard on the live status (mirrors decide) — if the subject has since moved
+        // (voided, converted), a late withdraw must NOT resurrect it (e.g. a voided payment
+        // back to 'recorded' → back into AR). A no-op when the subject is no longer live.
         await tx.execute(
           sql`update public.${sql.raw(cfg.table)} set status = ${cfg.onWithdraw}, updated_at = now()
-              where id = ${row.subject_id} and org_id = ${ctx.orgId}`,
+              where id = ${row.subject_id} and org_id = ${ctx.orgId} and status = ${cfg.live}`,
         );
       }
       return { id: a.id, subjectType: row.subject_type, subjectId: row.subject_id };

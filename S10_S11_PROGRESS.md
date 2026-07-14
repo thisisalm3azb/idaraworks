@@ -83,6 +83,24 @@ Read this file top-to-bottom, verify HEAD + deployed commit + migration ledger m
 "Current position" block, then continue from "Exact next task." Do not repeat completed work.
 
 ## S10 build log
+- **Wave A DONE (commit 30e8e6d, hosted 0000-0063, NOT pushed yet).** 8-lens audit
+  (wf_1374bc82; 6 confirmed material, ~40 minor, doc-10 gap inventory → docs/S10-AUDIT-REGISTER.md;
+  23 S9 findings recovered → docs/S9-REVIEW-FINDINGS-RECOVERED.md). Fixed: APP_ENV prod-guard on
+  3 provider seams (CRITICAL — prod served fake providers; isProd() helper + regressions), missing
+  indexes 0061, DEFINER platform-task guard + usage_event delta>=0 (0062), onboarding double-apply
+  claim + approval_rule one-always partial-unique + payment idempotency (0063 + services), worker
+  per-org fault isolation ×3, aria-label remove fix. Gates green: typecheck/lint(0)/unit 303/303/
+  tenancy+bleed 17/17/s8 5/5. Migration-ledger lesson: `status IN (...)` normalises to `= ANY(ARRAY)`
+  so match CHECK-drop DO-blocks on a literal enum value, not on 'in'.
+- **REMAINING S10 waves:** B = Arabic language switcher (MATERIAL) + redaction refinements +
+  withdraw/GRN-cancel guards + webhook cap/limit + subscription-action logging + Arabic sev-1 +
+  E-01/reconcile window + notif/auth i18n + terminology.overrides handler + events-outbox determinism
+  + s6/s7 afterAll cleanup. C(builds) = retention pruning #36, export #42 + CSV guard #25, recycle-bin/
+  closure #40/#11, backup monitor #46, egress headers #37, malware seam #27, OAuth #28, cross-instance
+  cache invalidation, telemetry-min, perf CI step. Phase 3 drills+runbooks, 4 perf pass, 5 Arabic sweep,
+  6 review/gates/deploy/demo/cleanup(+7-row purge)/report. Documented residuals: advance_subscription
+  CAS (latent/D1), approval rule_id composite FK (unreachable), dedicated platform DB role (guarded),
+  paused state (deferred), partitions (frozen).
 - **Phase 1 started.** Milestone commit c541e00 (scope freeze + purge tooling). The 23 S9
   review findings RECOVERED from wf_b583ff85 → docs/S9-REVIEW-FINDINGS-RECOVERED.md (the
   9 MINOR + 4 NIT now enumerated; notable: BILLING_PROVIDER=fake env-override order vs prod

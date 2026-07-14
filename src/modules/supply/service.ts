@@ -692,10 +692,15 @@ export async function cancelGoodsReceipt(
         select id from public.purchase_order where id = ${grn.po_id} and org_id = ${ctx.orgId}
         for update
       `);
-      await tx.execute(sql`
+      // S10: guard the cancel UPDATE on status='recorded' (the pre-check preceded the PO lock, so
+      // two concurrent cancels could both pass it) — a lost race is a no-op, not a duplicate
+      // cancel + duplicate audit row + duplicate GOODS_RECEIPT_CANCELLED event.
+      const cancelled = (await tx.execute(sql`
         update public.goods_receipt set status = 'cancelled', updated_at = now()
-        where id = ${grnId} and org_id = ${ctx.orgId}
-      `);
+        where id = ${grnId} and org_id = ${ctx.orgId} and status = 'recorded'
+        returning id
+      `)) as unknown as Array<{ id: string }>;
+      if (cancelled.length === 0) throw new SupplyStateError("GRN was concurrently cancelled");
       await reconcilePoStatus(tx, ctx, grn.po_id);
       return { id: grnId, poId: grn.po_id };
     },

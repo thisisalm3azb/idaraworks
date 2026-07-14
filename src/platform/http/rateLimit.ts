@@ -22,6 +22,9 @@ export const RATE_RULES = {
   // S7: the PUBLIC customer-share page (doc 10 item 14). Unauthenticated + token-bearer;
   // bound per-IP to blunt token enumeration / scraping. Upstash is the real store (OA-4).
   share: { limit: 30, windowSeconds: 60 },
+  // S10: the unauthenticated billing webhook — bound per-IP so an attacker can't hammer the
+  // signature-verify + org-resolve path. Generous for a real provider's legitimate burst.
+  webhook: { limit: 120, windowSeconds: 60 },
 } as const satisfies Record<string, Rule>;
 
 export type RateScope = keyof typeof RATE_RULES;
