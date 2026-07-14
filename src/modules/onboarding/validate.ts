@@ -59,7 +59,12 @@ export type ProposalValidation = { ok: boolean; errors: string[] };
 export function validateProposal(raw: unknown): ProposalValidation {
   const parsed = ConfigProposalSchema.safeParse(raw);
   if (!parsed.success) {
-    return { ok: false, errors: parsed.error.issues.slice(0, 12).map((i) => `proposal.${i.path.join(".")}: ${i.message}`) };
+    return {
+      ok: false,
+      errors: parsed.error.issues
+        .slice(0, 12)
+        .map((i) => `proposal.${i.path.join(".")}: ${i.message}`),
+    };
   }
   const proposal: ConfigProposal = parsed.data;
   const errors: string[] = [];
@@ -78,7 +83,8 @@ export function validateProposal(raw: unknown): ProposalValidation {
     }
     const r = schema.safeParse(art.value);
     if (!r.success) {
-      for (const i of r.error.issues.slice(0, 6)) errors.push(`${art.key}.${i.path.join(".")}: ${i.message}`);
+      for (const i of r.error.issues.slice(0, 6))
+        errors.push(`${art.key}.${i.path.join(".")}: ${i.message}`);
     }
     // Category kind must match the key suffix (mirror the pipeline guard).
     const cat = art.key.match(/^config\.categories\.(item|expense|quote_section)$/);

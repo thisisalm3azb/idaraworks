@@ -85,10 +85,7 @@ export type ConfigProposal = z.infer<typeof ConfigProposalSchema>;
  * proposal is capped at 2×; a proposal above the cap is REJECTED, never clamped. PLACEHOLDER
  * numbers pending OP-2/D3 (documented, like the pricing tiers).
  */
-export const TEMPLATE_APPROVAL_DEFAULT_MINOR: Record<
-  (typeof APPROVAL_SUBJECTS)[number],
-  number
-> = {
+export const TEMPLATE_APPROVAL_DEFAULT_MINOR: Record<(typeof APPROVAL_SUBJECTS)[number], number> = {
   purchase_order: 500_000,
   material_request: 300_000,
 };

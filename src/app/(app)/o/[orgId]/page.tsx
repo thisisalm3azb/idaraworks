@@ -7,6 +7,7 @@ import { can } from "@/platform/authz";
 import { loadOrgTerminology, term } from "@/platform/terminology";
 import { composeToday, type TodayCard } from "@/modules/today/service";
 import { getOwnerDigest, type DigestSection } from "@/modules/digest/service";
+import { getInstalledTemplate } from "@/platform/config";
 import { formatMoney } from "@/platform/format/money";
 import type { CurrencyCode } from "@/platform/registries";
 import { dismissExceptionAction } from "./actions";
@@ -60,6 +61,11 @@ export default async function OrgHome({
     ? await getOwnerDigest(resolved.ctx, resolved.archetype)
     : null;
   const currency = resolved.baseCurrency as CurrencyCode;
+  // First-run: an org whose owner/admin can run setup but has no template installed yet
+  // lands on Today with a seeded onboarding checklist (doc 11 S8 first-run sequence).
+  const needsSetup = can(resolved.archetype, "onboarding.run")
+    ? !(await getInstalledTemplate(resolved.ctx))
+    : false;
 
   return (
     <div className="flex flex-col gap-4">
@@ -67,6 +73,23 @@ export default async function OrgHome({
         <h1 className="text-lg font-semibold text-ink">{t("today.title")}</h1>
         <Badge tone="neutral">{t(`today.screen.${payload.screen}`)}</Badge>
       </div>
+      {needsSetup ? (
+        <Card>
+          <CardHeader title={t("onboarding.checklist.title")} />
+          <ul className="flex flex-col gap-2 text-sm">
+            <li>
+              <Link href={`/o/${orgId}/onboarding`} className="text-brand hover:underline">
+                {t("onboarding.checklist.run")}
+              </Link>
+            </li>
+            <li>
+              <Link href={`/o/${orgId}/imports`} className="text-brand hover:underline">
+                {t("onboarding.checklist.import")}
+              </Link>
+            </li>
+          </ul>
+        </Card>
+      ) : null}
       {sp.ok === "dismissed" ? (
         <Badge tone="success">{t("today.dismissed")}</Badge>
       ) : sp.error ? (

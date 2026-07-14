@@ -82,6 +82,10 @@ export default async function OrgLayout({
     ...(can(a, "customer_updates.draft")
       ? [{ href: `/o/${orgId}/customer-updates`, label: t("nav.customer_updates") }]
       : []),
+    ...(can(a, "imports.manage") ? [{ href: `/o/${orgId}/imports`, label: t("nav.imports") }] : []),
+    ...(can(a, "onboarding.run")
+      ? [{ href: `/o/${orgId}/onboarding`, label: t("nav.onboarding") }]
+      : []),
     ...(can(a, "employees.view") ? [{ href: `/o/${orgId}/people`, label: t("nav.people") }] : []),
     ...(can(a, "customers.view")
       ? [{ href: `/o/${orgId}/customers`, label: t("nav.customers") }]

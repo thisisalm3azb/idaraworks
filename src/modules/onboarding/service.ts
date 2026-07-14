@@ -75,7 +75,8 @@ export async function startOnboarding(
   // Per-org onboarding-call cap (trial abuse) + platform circuit breaker.
   const used = await withCtx(ctx, (tx) => onboardingCallsUsed(tx, ctx.orgId));
   const room = await checkLimit(ctx, "limit.ai_onboarding_calls", used);
-  if (!room.allowed) throw new OnboardingCapError("onboarding call cap reached for this organization");
+  if (!room.allowed)
+    throw new OnboardingCapError("onboarding call cap reached for this organization");
   await assertSpendBreaker();
 
   // Deterministic grounding (no AI creds required) + hard proposal validation (F-28 etc.).
@@ -182,7 +183,8 @@ export async function applyOnboarding(
   assertCan(archetype, "config.manage" as Action);
   const session = await getOnboardingSession(ctx, archetype, sessionId);
   if (!session) throw new OnboardingError("session not found");
-  if (session.status === "applied") throw new OnboardingError("this onboarding was already applied");
+  if (session.status === "applied")
+    throw new OnboardingError("this onboarding was already applied");
   const proposal = ConfigProposalSchema.parse(session.proposal); // re-validate shape
   const verdict = validateProposal(proposal);
   if (!verdict.ok) throw new OnboardingValidationError(verdict.errors);
@@ -245,7 +247,8 @@ export async function undoOnboarding(
   assertCan(archetype, "config.manage" as Action);
   const session = await getOnboardingSession(ctx, archetype, sessionId);
   if (!session) throw new OnboardingError("session not found");
-  if (session.status !== "applied") throw new OnboardingError("only an applied onboarding can be undone");
+  if (session.status !== "applied")
+    throw new OnboardingError("only an applied onboarding can be undone");
   let undone = 0;
   for (const revId of [...session.appliedRevisionIds].reverse()) {
     await undoRevision(ctx, revId);
