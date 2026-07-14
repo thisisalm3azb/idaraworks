@@ -136,6 +136,11 @@ export default async function OrgLayout({
           <Link href={`/o/${orgId}/settings/members`} className="text-ink-secondary">
             {t("members.title")}
           </Link>
+          {can(a, "billing.view") ? (
+            <Link href={`/o/${orgId}/settings/subscription`} className="text-ink-secondary">
+              {t("nav.subscription")}
+            </Link>
+          ) : null}
           <Link href="/account" className="text-ink-secondary">
             {t("auth.account.title")}
           </Link>
