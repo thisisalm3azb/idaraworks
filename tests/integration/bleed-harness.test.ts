@@ -131,7 +131,13 @@ describe("registry completeness (a new tenant table must register a seeder)", ()
 // Tables a tenant genuinely cannot read (no SELECT grant) — the ONLY tables
 // allowed to take the 42501 branch. Any OTHER unreadable table fails loudly
 // rather than silently skipping its bleed check (review, refuted-material fix).
-const NO_TENANT_READ = new Set<string>(["domain_event"]);
+const NO_TENANT_READ = new Set<string>([
+  "domain_event",
+  // S9: the raw provider webhook inbox and the ops reconciliation log are platform-internal —
+  // a tenant reads subscription changes via its own audit log, not these.
+  "subscription_event",
+  "reconciliation",
+]);
 
 describe("two-org bleed sweep (every org-scoped table is org-pure)", () => {
   it("Org A never sees Org B's rows AND does see its own, in every org-scoped table", async () => {

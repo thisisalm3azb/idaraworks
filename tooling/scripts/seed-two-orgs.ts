@@ -91,6 +91,27 @@ export const SEEDERS: Record<string, Seeder> = {
     await o`insert into public.domain_event (org_id, name, payload, actor_user_id)
             values (${org}, 'demo/heartbeat', '{}'::jsonb, ${u})`;
   },
+  // ── S9 commercial (org-scoped) ──
+  dunning_attempt: async (o, org) => {
+    await o`insert into public.dunning_attempt (org_id, cycle_key, attempt_no)
+            values (${org}, 'bleed-cycle', 1)`;
+  },
+  impersonation_session: async (o, org, u) => {
+    // break_glass=true satisfies the consent-or-break-glass CHECK; staff_user_id is a real user.
+    await o`insert into public.impersonation_session (org_id, staff_user_id, reason, break_glass)
+            values (${org}, ${u}, 'bleed test session', true)`;
+  },
+  reconciliation: async (o, org) => {
+    await o`insert into public.reconciliation (org_id, kind, detail) values (${org}, 'other', '{}'::jsonb)`;
+  },
+  subscription_event: async (o, org) => {
+    await o`insert into public.subscription_event (org_id, provider, provider_event_id, event_type)
+            values (${org}, 'fake', ${"bleed-" + randomUUID()}, 'bleed')`;
+  },
+  usage_event: async (o, org) => {
+    await o`insert into public.usage_event (org_id, meter_key, period_key, dedup_key, delta)
+            values (${org}, 'bleed.meter', '2026-07', ${randomUUID()}, 1)`;
+  },
   file: async (o, org, u) => {
     await o`insert into public.file (org_id, access_class, attached_to_type, attached_to_id,
                                      bucket, object_path, original_name, mime, created_by)
