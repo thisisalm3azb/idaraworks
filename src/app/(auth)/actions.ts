@@ -64,6 +64,34 @@ async function requestMeta() {
   return { ip, userAgent: h.get("user-agent") ?? undefined };
 }
 
+/**
+ * OAuth sign-in seam (S10, doc 11 S10 "OAuth (Google/Microsoft) added"). CREDENTIAL-GATED: the
+ * provider must be configured in the Supabase project (owner action) AND OAUTH_ENABLED=true, else
+ * the buttons are hidden (see oauthEnabled) and this action refuses. Kicks off the provider redirect;
+ * the provider calls back to /auth/callback which exchanges the code for a session.
+ */
+export function oauthEnabled(): boolean {
+  return process.env.OAUTH_ENABLED === "true";
+}
+
+const OAUTH_PROVIDERS = new Set(["google", "azure"]);
+
+export async function signInWithProviderAction(formData: FormData): Promise<void> {
+  if (!oauthEnabled()) redirect("/login?error=oauth_disabled");
+  const provider = String(formData.get("provider") ?? "");
+  if (!OAUTH_PROVIDERS.has(provider)) redirect("/login?error=invalid");
+  const h = await headers();
+  const proto = h.get("x-forwarded-proto") ?? "https";
+  const host = h.get("host") ?? "";
+  const supabase = supabaseServer(await cookies());
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: provider as "google" | "azure",
+    options: { redirectTo: `${proto}://${host}/auth/callback` },
+  });
+  if (error || !data.url) redirect("/login?error=oauth_failed");
+  redirect(data.url);
+}
+
 export async function loginAction(formData: FormData): Promise<void> {
   const email = String(formData.get("email") ?? "").toLowerCase();
   const password = String(formData.get("password") ?? "");

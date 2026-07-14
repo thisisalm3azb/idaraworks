@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { AppShell, Button, Card, Field } from "@/platform/ui";
 import { getT } from "@/platform/i18n/server";
-import { loginAction } from "../actions";
+import { loginAction, signInWithProviderAction, oauthEnabled } from "../actions";
 
 export default async function LoginPage({
   searchParams,
@@ -16,8 +16,8 @@ export default async function LoginPage({
         <Card>
           <h1 className="mb-4 text-lg font-semibold text-ink">{t("auth.login.title")}</h1>
           {notice === "confirm_email" ? (
-            <p className="mb-3 rounded-md bg-info-soft p-3 text-sm text-info">
-              Check your inbox to confirm your email, then sign in.
+            <p className="mb-3 rounded-md bg-info-soft p-3 text-sm text-info" role="status">
+              {t("auth.login.confirm_email")}
             </p>
           ) : null}
           {error ? (
@@ -42,6 +42,25 @@ export default async function LoginPage({
             />
             <Button type="submit">{t("auth.login.submit")}</Button>
           </form>
+          {oauthEnabled() ? (
+            <div className="mt-4 flex flex-col gap-2">
+              <p className="text-center text-xs text-ink-muted">
+                {t("auth.login.or_continue_with")}
+              </p>
+              <form action={signInWithProviderAction}>
+                <input type="hidden" name="provider" value="google" />
+                <Button type="submit" variant="secondary" className="w-full">
+                  {t("auth.login.google")}
+                </Button>
+              </form>
+              <form action={signInWithProviderAction}>
+                <input type="hidden" name="provider" value="azure" />
+                <Button type="submit" variant="secondary" className="w-full">
+                  {t("auth.login.microsoft")}
+                </Button>
+              </form>
+            </div>
+          ) : null}
           <p className="mt-4 text-sm text-ink-secondary">
             {t("auth.login.no_account")}{" "}
             <Link className="font-medium text-brand" href="/signup">
