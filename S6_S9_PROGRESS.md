@@ -16,6 +16,20 @@ cleaned slice.**
   from docs (PROJECT/BUILD_BIBLE S8), build, adversarial review, tests, CI, deploy, Arabic prod demo, cleanup.
   Do NOT begin S9. Old S7 sub-log below retained for history.
 
+## S8 — AI Onboarding & Imports — FROZEN SCOPE (doc 11 S8; doc 09 #12/F-28; doc 10 #32; doc 08 parity gate)
+**Objective:** "how does your business operate?" → configured workspace in ≤30 min, template #1 only, WITHOUT the builder present. The pipeline is a **validator around templates, not an agent** (doc 11 risk note).
+1. **Layer-A ConfigProposal artifact** — `{ intake_summary, template_key, artifacts:[subset of config artifacts 1–11 as full docs], rationale_per_artifact, requires_upgrade: feature_keys[] }`; Zod schema.
+2. **Grounded proposal builder (provider seam)** — deterministic FAKE/disabled provider mirroring S7 `getNarrationProvider` (works with NO AI creds = the manual fallback): grounds structured intake answers onto template #1 (`TEMPLATE_BOATBUILDING`) + org overrides (terminology/currency/calendar/VAT/thresholds). Optional real provider disabled in prod.
+3. **Validator** — every artifact through its S1 schema (`StageTemplateSchema`… in config/schemas/artifacts) PLUS proposal-level rules: (a) **no permission grants beyond preset bounds**, (b) **no capability outside entitlements** → `requires_upgrade` instead, (c) **referential closure**, (d) **F-28: AI `auto_approve_below` capped at 2× template default → REJECT (never silently clamp)**.
+4. **Pipeline** — intake → ground → propose → validate → **preview/edit** (`previewConfigChange`) → **apply-as-revision** (`applyConfigChange` with `aiFlag:true`, undoable) → **undo** (`undoRevision`). Reuses S1; each artifact applied as its own revision.
+5. **Trial-abuse controls (doc 10 #32, F-26/F-27):** `feat.ai_onboarding` free but **per-org ~30-call cap** (new `limit.ai_onboarding_calls`); disposable-email screening + per-IP/device signup throttle; **platform daily AI-spend circuit breaker**; trialing orgs = deterministic digest only + small storage/short TTL (already S7).
+6. **Guided CSV imports** (customers / employees / items): **import_batch staging** + row-level mapping + validate (per-row errors) + apply through the governed services; re-runnable.
+7. **First-run sequence:** cold org lands on **Today** with a **seeded onboarding checklist**.
+8. **DB:** `onboarding_session` (intake + proposal + status), `import_batch`(+`import_row`); widen `ai_interaction.feature` to add the onboarding metering key; entitlement `limit.ai_onboarding_calls`.
+9. **UI (en/ar/RTL/375px):** onboarding conversation/questionnaire + the **preview screen** ("best screen in the app") + import wizards.
+10. **Platform wiring:** authz actions in BOTH matrix transcriptions; events; entitlement enforcement; worker/registry parity; terminology variables.
+**Testing:** ConfigProposal schema + safety (no out-of-preset grants, F-28 caps, entitlement closure), rejection-loop (invalid proposal → validator errors → retry), **template #1 PARITY test (doc 08 gate: reproduce a real historical boat → costing within rounding of legacy `boatFinance()`)**, guided-import tests, e2e on ≥3 canned intakes, bleed/authz/tenancy. **DoD/AC:** cold org → configured workspace with a real first job <30 min without builder; undo restores; parity green. **Then:** adversarial multi-lens review + fixes → full gates → deploy → **Arabic prod demo** → remove S8 synthetic data (baseline=[Alpha Marine,TESTING]) → report. **Do NOT begin S9.** Migrations start at **0050**. Config apply API: `applyConfigChange(ctx, artifactKey, next|fn, {summary?, aiFlag?})`, `previewConfigChange(ctx, key, next)`, `undoRevision(ctx, revisionId)`; artifact keys = `CONFIG_ARTIFACT_KEYS`.
+
 ## (historical) S7 build task log
 - **Current slice:** S7 — Improve / Intelligence (S6 DONE)
 - **S7 STATUS: CODE COMPLETE + DEPLOYED + DEMOED; one action (synthetic-org cleanup) PENDING owner approval.**

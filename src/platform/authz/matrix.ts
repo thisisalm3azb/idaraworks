@@ -84,7 +84,9 @@ export type Action =
   | "customer_updates.draft"
   | "customer_updates.send"
   | "customer_updates.share"
-  | "customer_updates.revoke";
+  | "customer_updates.revoke"
+  | "onboarding.run"
+  | "imports.manage";
 
 type Grantable = Exclude<RoleArchetype, "worker_reserved_p3">;
 
@@ -227,4 +229,8 @@ export const MATRIX: Record<Action, readonly Grantable[]> = {
   "customer_updates.send": ["owner", "admin", "manager"],
   "customer_updates.share": ["owner", "admin", "manager"],
   "customer_updates.revoke": ["owner", "admin", "manager"],
+  // S8 — guided onboarding (config setup) is an owner/admin task (config.manage holders).
+  "onboarding.run": ["owner", "admin"],
+  // S8 — guided CSV imports of masters (customers/employees/items).
+  "imports.manage": ["owner", "admin", "manager"],
 };

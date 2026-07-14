@@ -41,6 +41,7 @@ export const LIMIT_KEYS = [
   "limit.active_jobs",
   "limit.storage_gb",
   "limit.ai_credits_month",
+  "limit.ai_onboarding_calls",
   "limit.custom_fields_per_entity",
   "limit.presets",
 ] as const;

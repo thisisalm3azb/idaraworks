@@ -79,6 +79,8 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
     "customer_updates.send",
     "customer_updates.share",
     "customer_updates.revoke",
+    "onboarding.run",
+    "imports.manage",
   ],
   admin: [
     "members.view",
@@ -145,6 +147,8 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
     "customer_updates.send",
     "customer_updates.share",
     "customer_updates.revoke",
+    "onboarding.run",
+    "imports.manage",
   ],
   // Manager (doc 08: the Workshop Manager variant): masters M, jobs/reports, NO
   // config, NO salary/HR side-tables, no invite/deactivate/legal-hold.
@@ -200,6 +204,7 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
     "customer_updates.send",
     "customer_updates.share",
     "customer_updates.revoke",
+    "imports.manage",
   ],
   // Field seat (doc 06 literal row): assigned jobs (v) + own reports. NO
   // employee/catalog/member/customer/config surfaces — S3's report form gets

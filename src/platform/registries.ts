@@ -88,6 +88,8 @@ export const AUDIT_ENTITY_TYPES = [
   "exception", // S5 — user dismiss/resolve is an audited mutation (engine raise/auto-clear is a materialized derivation, not audited)
   "customer_update", // S7 — draft/edit/send are audited customer-facing mutations
   "share_token", // S7 — mint/revoke of a public share link are audited
+  "onboarding_session", // S8 — propose/apply/undo of a guided onboarding are audited config mutations
+  "import_batch", // S8 — guided CSV imports (customers/employees/items) are audited
 ] as const;
 export type AuditEntityType = (typeof AUDIT_ENTITY_TYPES)[number];
 
