@@ -34,6 +34,7 @@ export type ComposerDict = {
   materials_free: string;
   blockers: string;
   add: string;
+  remove: string;
   submit: string;
   submitting: string;
   retry: string;
@@ -412,7 +413,7 @@ export function ReportComposer({
               type="button"
               onClick={() => removeMaterial(idx)}
               className="min-h-11 px-2 text-danger"
-              aria-label={dict.add}
+              aria-label={dict.remove}
             >
               ✕
             </button>

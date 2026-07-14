@@ -273,33 +273,47 @@ export async function createApprovalRule(
     throw new RuleValidationError("urgency_in requires a non-empty urgencyIn");
   }
   const id = randomUUID();
-  await command(
-    ctx,
-    {
-      audit: {
-        action: "approval_rule.create",
-        entityType: "approval_rule",
-        entityId: id,
-        summary: `Approval rule for ${data.subjectType} → ${data.assignedRole}`,
+  try {
+    await command(
+      ctx,
+      {
+        audit: {
+          action: "approval_rule.create",
+          entityType: "approval_rule",
+          entityId: id,
+          summary: `Approval rule for ${data.subjectType} → ${data.assignedRole}`,
+        },
       },
-    },
-    async (tx) => {
-      await tx.execute(sql`
-        insert into public.approval_rule
-          (id, org_id, subject_type, condition_kind, amount_gte_minor, urgency_in, assigned_role,
-           auto_approve_below_minor)
-        values (${id}, ${ctx.orgId}, ${data.subjectType}, ${data.conditionKind},
-                ${data.amountGteMinor ?? null},
-                ${data.urgencyIn ? sql`${data.urgencyIn}::text[]` : sql`null`},
-                ${data.assignedRole}, ${data.autoApproveBelowMinor ?? null})
-      `);
-      // Config-time ambiguity guard (D-5.2) INSIDE the tx — a rejected set rolls
-      // the insert back, so an ambiguous rule never persists live (review fix).
-      const rules = await loadActiveRules(tx, ctx, data.subjectType);
-      assertRuleSetUnambiguous(rules);
-      return { id };
-    },
-  );
+      async (tx) => {
+        await tx.execute(sql`
+          insert into public.approval_rule
+            (id, org_id, subject_type, condition_kind, amount_gte_minor, urgency_in, assigned_role,
+             auto_approve_below_minor)
+          values (${id}, ${ctx.orgId}, ${data.subjectType}, ${data.conditionKind},
+                  ${data.amountGteMinor ?? null},
+                  ${data.urgencyIn ? sql`${data.urgencyIn}::text[]` : sql`null`},
+                  ${data.assignedRole}, ${data.autoApproveBelowMinor ?? null})
+        `);
+        // Config-time ambiguity guard (D-5.2) INSIDE the tx — a rejected set rolls
+        // the insert back, so an ambiguous rule never persists live (review fix).
+        const rules = await loadActiveRules(tx, ctx, data.subjectType);
+        assertRuleSetUnambiguous(rules);
+        return { id };
+      },
+    );
+  } catch (err) {
+    // S10: a concurrent applyOnboarding (or double-apply) tried to open a second live
+    // 'always' rule for this subject — the 0063 partial unique rejects it at the DB layer,
+    // where the app-level ambiguity check can't see the other uncommitted tx (READ COMMITTED).
+    const cause = (err as { cause?: { code?: string; constraint_name?: string } }).cause;
+    if (
+      cause?.code === "23505" &&
+      cause.constraint_name === "approval_rule_one_always_per_subject"
+    ) {
+      throw new RuleValidationError("an 'always' rule already exists for this subject");
+    }
+    throw err;
+  }
   return { id };
 }
 

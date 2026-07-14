@@ -49,6 +49,7 @@
   "nav.items": "Items",
   "nav.configuration": "Configuration",
   "common.add": "Add",
+  "common.remove": "Remove",
   "common.name": "Name",
   "common.active": "Active",
   "common.inactive": "Inactive",

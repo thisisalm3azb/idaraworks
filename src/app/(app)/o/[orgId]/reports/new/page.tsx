@@ -116,6 +116,7 @@ export default async function NewReportPage({
     materials_free: t("reports.materials.free_text"),
     blockers: t("reports.section.blockers"),
     add: t("common.add"),
+    remove: t("common.remove"),
     submit: t("reports.submit"),
     submitting: t("reports.submitting"),
     retry: t("reports.retry"),

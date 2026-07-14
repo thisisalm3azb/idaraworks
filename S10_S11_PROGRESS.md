@@ -83,4 +83,24 @@ Read this file top-to-bottom, verify HEAD + deployed commit + migration ledger m
 "Current position" block, then continue from "Exact next task." Do not repeat completed work.
 
 ## S10 build log
-(append entries here)
+- **Phase 1 started.** Milestone commit c541e00 (scope freeze + purge tooling). The 23 S9
+  review findings RECOVERED from wf_b583ff85 → docs/S9-REVIEW-FINDINGS-RECOVERED.md (the
+  9 MINOR + 4 NIT now enumerated; notable: BILLING_PROVIDER=fake env-override order vs prod
+  guard; unauthenticated webhook DB work w/o rate limit; 0058 scan fns granted to app_user;
+  in-memory signup throttle; usage_event negative-delta tenant INSERT; dedup w/o period_key).
+- **Audit workflow wf_1374bc82-86c running** (8 lenses: tenancy-rls, concurrency,
+  paging-index, redaction, workers-outbox, i18n-a11y, errors-observability, gap-inventory;
+  materials get 2-refuter adversarial verify).
+- **Verify-first facts established:** (a) NO perf step in ci.yml — S5 harness exists
+  (tooling/scripts/s5-perf-harness.ts, self-cleaning, asserts Today p95<1.5s / costing
+  p95<1.5s / nightly<5min; default fast proxy volume 30j/10r/4l; full volume via PERF_JOBS
+  etc. env) but is not asserted per-merge → Phase 4 wires a CI perf step + adds report-submit
+  <10s + approvals-inbox <800ms assertions + one full-volume evidence run. (b) Runbooks
+  existing from Phase I: deployment-and-rollback, incident-response, dead-letter-recovery,
+  secret-rotation, restore-drill (STUB), inngest/sentry-provisioning + README — Phase 3
+  executes drills + fills evidence; break-glass runbook MISSING (#45) → write. (c) No local
+  pg_dump/psql/Docker → restore drill approach: install PostgreSQL 17 locally (winget) as
+  the plain-Postgres target + client tools; storage restore via S3 creds to a scratch
+  local dir with manifest verification. (d) test:integration is plain vitest — the S6
+  exit-code trap was shell piping (`| tail` w/o pipefail); institutionalize via a gates
+  runner script + pipefail discipline in Phase 2.

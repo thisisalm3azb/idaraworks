@@ -13,6 +13,7 @@
  * credentials (owner action) without touching any caller. No secrets in code.
  */
 import { logger } from "@/platform/logger";
+import { isProd } from "@/platform/env";
 
 export type NarrationItem = {
   /** A resolved, safe label (i18n string) — never raw tenant free-text. */
@@ -101,6 +102,6 @@ export function getNarrationProvider(): NarrationProvider {
   const configured = process.env.AI_NARRATION_PROVIDER;
   if (configured === "fake") return fakeNarrationProvider;
   if (configured === "disabled") return disabledNarrationProvider;
-  if (process.env.APP_ENV === "production" && !configured) return disabledNarrationProvider;
+  if (isProd() && !configured) return disabledNarrationProvider;
   return fakeNarrationProvider;
 }

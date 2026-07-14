@@ -14,6 +14,7 @@
  * 'unverified' and never transitions state.
  */
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { isProd } from "@/platform/env";
 
 export type ProviderName = "fake" | "stripe" | "paddle" | "lemonsqueezy" | "tap" | "moyasar";
 
@@ -206,5 +207,5 @@ export function getBillingProvider(): BillingProvider {
   if (explicit === "fake") return fakeBillingProvider;
   if (explicit === "disabled") return disabledBillingProvider;
   // Default: fake off-prod so the lifecycle is fully exercisable; disabled in production (D1 gate).
-  return process.env.APP_ENV === "production" ? disabledBillingProvider : fakeBillingProvider;
+  return isProd() ? disabledBillingProvider : fakeBillingProvider;
 }

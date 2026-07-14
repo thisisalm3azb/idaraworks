@@ -180,24 +180,36 @@ export async function dispatchNightly(clock: {
       select org_id::text as org_id, actor_user_id::text as actor_user_id
       from app.orgs_for_exception_sweep()
     `)) as unknown as Array<{ org_id: string; actor_user_id: string | null }>;
+    let failed = 0;
     for (const t of targets) {
       if (!t.actor_user_id) continue;
-      const offsetSec = computeStaggerSeconds(t.org_id, NIGHT_WINDOW_MINUTES);
-      await inngest.send({
-        name: NIGHTLY_ORG_DUE,
-        data: {
-          orgId: t.org_id,
-          actorUserId: t.actor_user_id,
-          asOf: clock.asOf,
-          nowMs: clock.nowMs,
-        },
-        // Deterministic per-night dedup so a re-dispatch can't double-enqueue an org.
-        id: `nightly-${t.org_id}-${clock.asOf}`,
-        // Spread across the night window (Inngest schedules delivery at this ts).
-        ts: clock.nowMs + offsetSec * 1000,
-      });
-      dispatched++;
+      // S10: per-org fault isolation — one failed inngest.send must not abort the whole fan-out
+      // (else a single org's transient error silently skips every remaining org's nightly run).
+      try {
+        const offsetSec = computeStaggerSeconds(t.org_id, NIGHT_WINDOW_MINUTES);
+        await inngest.send({
+          name: NIGHTLY_ORG_DUE,
+          data: {
+            orgId: t.org_id,
+            actorUserId: t.actor_user_id,
+            asOf: clock.asOf,
+            nowMs: clock.nowMs,
+          },
+          // Deterministic per-night dedup so a re-dispatch can't double-enqueue an org.
+          id: `nightly-${t.org_id}-${clock.asOf}`,
+          // Spread across the night window (Inngest schedules delivery at this ts).
+          ts: clock.nowMs + offsetSec * 1000,
+        });
+        dispatched++;
+      } catch (err) {
+        failed++;
+        logger.warn(
+          { orgId: t.org_id, err: (err as Error).message },
+          "nightly dispatch skipped for org",
+        );
+      }
     }
+    if (failed > 0) logger.warn({ failed, dispatched }, "nightly fan-out completed with failures");
   } finally {
     await end();
   }

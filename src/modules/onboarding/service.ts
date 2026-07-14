@@ -199,35 +199,60 @@ export async function applyOnboarding(
   const verdict = validateProposal(proposal);
   if (!verdict.ok) throw new OnboardingValidationError(verdict.errors);
 
+  // S10 concurrency: atomically CLAIM the session (→ 'applying') before doing any work, so a
+  // double-tapped Apply or two admin devices can't both run the install + revisions + rule seeds
+  // (which produced duplicate revisions and raced the approval-rule ambiguity guard). Only one
+  // claimant wins the guarded UPDATE; the loser sees 0 rows and bails.
+  const claimed = await withCtx(ctx, async (tx) => {
+    const rows = (await tx.execute(sql`
+      update public.onboarding_session set status = 'applying', updated_at = now()
+      where org_id = ${ctx.orgId} and id = ${sessionId} and status in ('draft', 'proposed')
+      returning id`)) as unknown as Array<{ id: string }>;
+    return rows.length > 0;
+  });
+  if (!claimed)
+    throw new OnboardingError("this onboarding is already being applied or was applied");
+
   const revisionIds: string[] = [];
-  let installed = false;
-  if (proposal.install_template) {
-    const res = await installTemplate(ctx, proposal.template_key);
-    revisionIds.push(...res.revisionIds);
-    installed = res.revisionIds.length > 0;
-  }
-  for (const art of proposal.artifacts) {
-    if (art.key === "config.template" || art.key === "terminology.template") continue;
-    const { revisionId } = await applyConfigChange(ctx, art.key, art.value, {
-      aiFlag: true,
-      summary: `Onboarding: ${art.rationale_en}`,
-    });
-    revisionIds.push(revisionId);
-  }
-  // Seed F-28-capped approval defaults as approval rules (governed service). The intake asks
-  // "auto-approve BELOW X" — the S4 engine implements that with an `always` rule carrying
-  // auto_approve_below_minor = X (review): a submitted subject ALWAYS matches, and the engine
-  // auto-approves when amount < X, else routes to the manager. (An `amount_gte X` rule does the
-  // OPPOSITE — it never auto-approves below-X and only matches at/above X — so it is wrong here.)
   let rulesCreated = 0;
-  for (const d of proposal.approval_defaults) {
-    await createApprovalRule(ctx, archetype, {
-      subjectType: d.subject_type,
-      conditionKind: "always",
-      autoApproveBelowMinor: d.auto_approve_below_minor,
-      assignedRole: "manager",
-    });
-    rulesCreated++;
+  let installed = false;
+  try {
+    if (proposal.install_template) {
+      const res = await installTemplate(ctx, proposal.template_key);
+      revisionIds.push(...res.revisionIds);
+      installed = res.revisionIds.length > 0;
+    }
+    for (const art of proposal.artifacts) {
+      if (art.key === "config.template" || art.key === "terminology.template") continue;
+      const { revisionId } = await applyConfigChange(ctx, art.key, art.value, {
+        aiFlag: true,
+        summary: `Onboarding: ${art.rationale_en}`,
+      });
+      revisionIds.push(revisionId);
+    }
+    // Seed F-28-capped approval defaults as approval rules (governed service). The intake asks
+    // "auto-approve BELOW X" — the S4 engine implements that with an `always` rule carrying
+    // auto_approve_below_minor = X (review): a submitted subject ALWAYS matches, and the engine
+    // auto-approves when amount < X, else routes to the manager. (An `amount_gte X` rule does the
+    // OPPOSITE — it never auto-approves below-X and only matches at/above X — so it is wrong here.)
+    for (const d of proposal.approval_defaults) {
+      await createApprovalRule(ctx, archetype, {
+        subjectType: d.subject_type,
+        conditionKind: "always",
+        autoApproveBelowMinor: d.auto_approve_below_minor,
+        assignedRole: "manager",
+      });
+      rulesCreated++;
+    }
+  } catch (err) {
+    // Release the claim so a corrected retry can run (best-effort; the already-applied config
+    // revisions are reverted by undoOnboarding if the operator abandons the session).
+    await withCtx(ctx, (tx) =>
+      tx.execute(sql`
+        update public.onboarding_session set status = 'proposed', updated_at = now()
+        where org_id = ${ctx.orgId} and id = ${sessionId} and status = 'applying'`),
+    ).catch(() => {});
+    throw err;
   }
 
   await command(

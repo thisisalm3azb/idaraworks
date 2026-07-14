@@ -8,6 +8,7 @@
  * credentials live in the platform secret store (BUILD_BIBLE §6.3/§6.4), never in code.
  */
 import { logger } from "@/platform/logger";
+import { isProd } from "@/platform/env";
 
 export type EInvoicePayload = {
   invoiceId: string;
@@ -91,6 +92,6 @@ export function getEInvoiceProvider(): EInvoiceProvider {
   if (configured === "fake") return fakeEInvoiceProvider;
   // Default: fake outside production (so CI/dev/demo clear), disabled in production
   // until a real partner + credentials are provisioned.
-  if (process.env.APP_ENV === "production" && !configured) return disabledProvider;
+  if (isProd() && !configured) return disabledProvider;
   return fakeEInvoiceProvider;
 }

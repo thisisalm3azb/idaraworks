@@ -40,6 +40,8 @@ export const RecordPaymentInput = z.object({
   currency: z.enum(CURRENCY_CODES as unknown as [string, ...string[]]).optional(),
   exchangeRate: z.number().positive().default(1),
   externalReference: z.string().trim().max(200).optional(),
+  // S10 idempotency: a client-generated key collapses a double-submit to one payment (0063).
+  idempotencyKey: z.string().trim().min(8).max(200).optional(),
 });
 
 export async function recordPayment(
@@ -52,87 +54,125 @@ export async function recordPayment(
   const currency = (input.currency ?? "AED") as CurrencyCode;
   const baseAmountMinor = Math.round(input.amountMinor * input.exchangeRate);
 
-  return command<{
-    id: string;
-    reference: string;
-    receiptReference: string;
-    approvalId: string | null;
-  }>(
-    ctx,
-    {
-      audit: (r) => ({
-        action: "payment.record",
-        entityType: "payment",
-        entityId: r.id,
-        summary: `Payment ${r.reference}`,
-        after: { amountMinor: input.amountMinor, currency, invoiceId: input.invoiceId ?? null },
-      }),
-      events: (r) => [
-        {
-          name: PAYMENT_RECORDED,
-          payload: { paymentId: r.id, invoiceId: input.invoiceId ?? undefined },
-        },
-      ],
-    },
-    async (tx) => {
-      let customerName: string | null = null;
-      if (input.customerId) {
-        const c = (await tx.execute(sql`
+  try {
+    return await command<{
+      id: string;
+      reference: string;
+      receiptReference: string;
+      approvalId: string | null;
+    }>(
+      ctx,
+      {
+        audit: (r) => ({
+          action: "payment.record",
+          entityType: "payment",
+          entityId: r.id,
+          summary: `Payment ${r.reference}`,
+          after: { amountMinor: input.amountMinor, currency, invoiceId: input.invoiceId ?? null },
+        }),
+        events: (r) => [
+          {
+            name: PAYMENT_RECORDED,
+            payload: { paymentId: r.id, invoiceId: input.invoiceId ?? undefined },
+          },
+        ],
+      },
+      async (tx) => {
+        let customerName: string | null = null;
+        if (input.customerId) {
+          const c = (await tx.execute(sql`
           select name from public.customer where id = ${input.customerId} and org_id = ${ctx.orgId}
         `)) as unknown as Array<{ name: string }>;
-        customerName = c[0]?.name ?? null;
-      }
-      const seq = await allocateReference(tx, ctx, "payment");
-      const reference = formatRef("PMT", seq);
-      const rows = (await tx.execute(sql`
+          customerName = c[0]?.name ?? null;
+        }
+        const seq = await allocateReference(tx, ctx, "payment");
+        const reference = formatRef("PMT", seq);
+        const rows = (await tx.execute(sql`
         insert into public.payment
           (org_id, reference, invoice_id, job_id, customer_id, customer_name, method, payment_date,
-           amount_minor, currency, exchange_rate, base_amount_minor, external_reference, created_by)
+           amount_minor, currency, exchange_rate, base_amount_minor, external_reference, created_by,
+           idempotency_key)
         values (${ctx.orgId}, ${reference}, ${input.invoiceId ?? null}, ${input.jobId ?? null},
                 ${input.customerId ?? null}, ${customerName}, ${input.method}, ${input.paymentDate},
                 ${input.amountMinor}, ${currency}, ${input.exchangeRate}, ${baseAmountMinor},
-                ${input.externalReference ?? null}, ${ctx.userId})
+                ${input.externalReference ?? null}, ${ctx.userId}, ${input.idempotencyKey ?? null})
         returning id::text as id
       `)) as unknown as Array<{ id: string }>;
-      const id = rows[0]!.id;
+        const id = rows[0]!.id;
 
-      // A recorded payment counts toward the invoice paid status immediately.
-      if (input.invoiceId) await reconcileInvoiceStatus(tx, ctx, input.invoiceId);
+        // A recorded payment counts toward the invoice paid status immediately.
+        if (input.invoiceId) await reconcileInvoiceStatus(tx, ctx, input.invoiceId);
 
-      // Printable serial receipt.
-      const rseq = await allocateReference(tx, ctx, "payment_receipt");
-      const receiptReference = formatRef("RCP", rseq);
-      await tx.execute(sql`
+        // Printable serial receipt.
+        const rseq = await allocateReference(tx, ctx, "payment_receipt");
+        const receiptReference = formatRef("RCP", rseq);
+        await tx.execute(sql`
         insert into public.payment_receipt (org_id, payment_id, reference) values (${ctx.orgId}, ${id}, ${receiptReference})
       `);
 
-      // OP-7: route for confirmation only if a payment approval rule is installed.
-      let approvalId: string | null = null;
-      const rule = (await tx.execute(sql`
+        // OP-7: route for confirmation only if a payment approval rule is installed.
+        let approvalId: string | null = null;
+        const rule = (await tx.execute(sql`
         select 1 from public.approval_rule
         where org_id = ${ctx.orgId} and subject_type = 'payment' and active = true limit 1
       `)) as unknown as Array<{ "?column?": number }>;
-      if (rule.length > 0) {
-        const res = await submitForApproval(tx, ctx, {
-          subjectType: "payment",
-          subjectId: id,
-          subjectSummary: { title: `Payment ${reference}`, amountMinor: input.amountMinor },
-          amountMinor: input.amountMinor,
-        });
-        approvalId = res.approvalId;
-        // Auto-approve (rule below threshold) decides at submission with no human
-        // decide — advance the subject here (mirrors S4 + submitQuote), else the
-        // payment is stranded 'recorded' and never reaches the documented 'confirmed'.
-        if (res.decided) {
-          await tx.execute(sql`
+        if (rule.length > 0) {
+          const res = await submitForApproval(tx, ctx, {
+            subjectType: "payment",
+            subjectId: id,
+            subjectSummary: { title: `Payment ${reference}`, amountMinor: input.amountMinor },
+            amountMinor: input.amountMinor,
+          });
+          approvalId = res.approvalId;
+          // Auto-approve (rule below threshold) decides at submission with no human
+          // decide — advance the subject here (mirrors S4 + submitQuote), else the
+          // payment is stranded 'recorded' and never reaches the documented 'confirmed'.
+          if (res.decided) {
+            await tx.execute(sql`
             update public.payment set status = 'confirmed', updated_at = now()
             where id = ${id} and org_id = ${ctx.orgId} and status = 'recorded'
           `);
+          }
         }
-      }
-      return { id, reference, receiptReference, approvalId };
-    },
-  );
+        return { id, reference, receiptReference, approvalId };
+      },
+    );
+  } catch (err) {
+    // S10 idempotent replay: a retry with the same idempotency key hits the 0063 partial
+    // unique — return the already-recorded payment instead of minting a duplicate.
+    const cause = (err as { cause?: { code?: string; constraint_name?: string } }).cause;
+    if (
+      input.idempotencyKey &&
+      cause?.code === "23505" &&
+      cause.constraint_name === "payment_idempotency_uq"
+    ) {
+      return withCtx(ctx, async (tx) => {
+        const rows = (await tx.execute(sql`
+          select p.id::text as id, p.reference,
+                 r.reference as receipt_reference,
+                 a.id::text as approval_id
+          from public.payment p
+          left join public.payment_receipt r on r.payment_id = p.id and r.org_id = p.org_id
+          left join public.approval a
+            on a.subject_type = 'payment' and a.subject_id = p.id and a.org_id = p.org_id
+          where p.org_id = ${ctx.orgId} and p.idempotency_key = ${input.idempotencyKey}
+          limit 1`)) as unknown as Array<{
+          id: string;
+          reference: string;
+          receipt_reference: string | null;
+          approval_id: string | null;
+        }>;
+        const p = rows[0]!;
+        return {
+          id: p.id,
+          reference: p.reference,
+          receiptReference: p.receipt_reference ?? "",
+          approvalId: p.approval_id,
+        };
+      });
+    }
+    throw err;
+  }
 }
 
 /** Void a payment (reason required) and re-reconcile the invoice it paid. */

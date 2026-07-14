@@ -44,16 +44,18 @@ export async function sweepLifecycle(nowMs: number): Promise<SweepResult> {
              suspend_at::text as suspend_at, purge_at::text as purge_at
       from app.lifecycle_scan()`)) as unknown as ScanRow[];
     for (const row of rows) {
-      // Dunning reminders while dunning is active (records + tenant-visible; email is the disabled seam).
-      if (row.billing_state === "past_due" || row.billing_state === "grace") {
-        if (await recordDunning(db, row, nowMs)) dunned++;
-      }
-      // Deadline-driven transition.
-      const signal = dueSignal(row, nowMs);
-      if (!signal) continue;
-      const res = nextForEvent(row.billing_state, signal);
-      if (res.to === null) continue;
+      // S10: the ENTIRE per-org body is fault-isolated — a dunning-record error (or any single
+      // org's failure) must not abort the sweep for every remaining org.
       try {
+        // Dunning reminders while dunning is active (records + tenant-visible; email is the disabled seam).
+        if (row.billing_state === "past_due" || row.billing_state === "grace") {
+          if (await recordDunning(db, row, nowMs)) dunned++;
+        }
+        // Deadline-driven transition.
+        const signal = dueSignal(row, nowMs);
+        if (!signal) continue;
+        const res = nextForEvent(row.billing_state, signal);
+        if (res.to === null) continue;
         await applyTransition(db, row.org_id, row.billing_state, res.to, res.reason, nowMs, {
           eventType: `lifecycle.${signal}`,
         });
@@ -61,8 +63,8 @@ export async function sweepLifecycle(nowMs: number): Promise<SweepResult> {
       } catch (err) {
         // e.g. legal-hold purge refusal — log + carry on (the finding is worth surfacing).
         logger.warn(
-          { orgId: row.org_id, to: res.to, err: (err as Error).message },
-          "lifecycle transition skipped",
+          { orgId: row.org_id, err: (err as Error).message },
+          "lifecycle per-org step skipped",
         );
       }
     }
@@ -119,31 +121,39 @@ export async function runReconciliation(): Promise<ReconResult> {
     }>;
     for (const row of rows) {
       if (!row.provider_customer_id) continue;
-      const remote = await provider.fetchProviderState(row.provider_customer_id);
-      let kind: string | null = null;
-      let detail: Record<string, unknown> = {};
-      if (remote === null) {
-        kind = "missing_provider_customer";
-        detail = { provider: row.provider, customerId: row.provider_customer_id };
-      } else if (remote.billingState !== row.billing_state) {
-        // Name the well-known divergences explicitly; else the generic state_divergence.
-        kind =
-          row.billing_state === "active" && remote.billingState === "cancelled"
-            ? "local_active_provider_cancelled"
-            : row.billing_state === "cancelled" && remote.billingState === "active"
-              ? "local_cancelled_provider_active"
-              : "state_divergence";
-        detail = { local: row.billing_state, provider: remote.billingState };
-      } else if (remote.planKey && remote.planKey !== row.plan_key) {
-        kind = "plan_mismatch";
-        detail = { local: row.plan_key, provider: remote.planKey };
-      }
-      if (kind) {
-        const r = (await db.execute(sql`
+      // S10: per-org fault isolation — one org's provider fetch error must not abort the fleet recon.
+      try {
+        const remote = await provider.fetchProviderState(row.provider_customer_id);
+        let kind: string | null = null;
+        let detail: Record<string, unknown> = {};
+        if (remote === null) {
+          kind = "missing_provider_customer";
+          detail = { provider: row.provider, customerId: row.provider_customer_id };
+        } else if (remote.billingState !== row.billing_state) {
+          // Name the well-known divergences explicitly; else the generic state_divergence.
+          kind =
+            row.billing_state === "active" && remote.billingState === "cancelled"
+              ? "local_active_provider_cancelled"
+              : row.billing_state === "cancelled" && remote.billingState === "active"
+                ? "local_cancelled_provider_active"
+                : "state_divergence";
+          detail = { local: row.billing_state, provider: remote.billingState };
+        } else if (remote.planKey && remote.planKey !== row.plan_key) {
+          kind = "plan_mismatch";
+          detail = { local: row.plan_key, provider: remote.planKey };
+        }
+        if (kind) {
+          const r = (await db.execute(sql`
           select app.record_reconciliation(${row.org_id}::uuid, ${kind}, ${JSON.stringify(detail)}::jsonb) as result`)) as unknown as Array<{
-          result: string;
-        }>;
-        if (r[0]?.result === "recorded") findings++;
+            result: string;
+          }>;
+          if (r[0]?.result === "recorded") findings++;
+        }
+      } catch (err) {
+        logger.warn(
+          { orgId: row.org_id, err: (err as Error).message },
+          "reconciliation per-org step skipped",
+        );
       }
     }
     return { scanned: rows.length, findings };

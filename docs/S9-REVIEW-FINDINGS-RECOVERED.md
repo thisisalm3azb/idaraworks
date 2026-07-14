@@ -1,0 +1,25 @@
+# S9 review findings — full recovered list (wf_b583ff85) for S10 triage
+
+- **MATERIAL** checkMeteredLimit is TOCTOU-racy: concurrent adds can exceed a metered limit  — `src/modules/subscription/usage.ts`
+- **MATERIAL** Tenant-context INSERT on usage_event allows negative deltas → meter deflation / metered-limit bypass  — `supabase/migrations/0054_s9_usage_audit.sql`
+- **MINOR** Dedup uniqueness excludes period_key — a dedup_key reused across periods is silently dropped  — `supabase/migrations/0054_s9_usage_audit.sql`
+- **MINOR** Read-only (suspended/cancelled) enforcement is advisory app-layer only, not DB-enforced  — `src/modules/subscription/service.ts`
+- **NIT** getLimit returns 0 (not null) for a metered key absent from the plan — checkMeteredLimit then blocks all adds  — `src/platform/entitlements/resolve.ts`
+- **MATERIAL** Out-of-order / stale provider webhooks corrupt billing state (no recency guard)  — `src/modules/subscription/service.ts`
+- **MATERIAL** Unverified events poison the idempotency inbox and suppress the genuine later event  — `src/modules/subscription/service.ts`
+- **MINOR** Hardcoded default fake webhook secret lets anyone forge VERIFIED webhooks on non-production deployments  — `src/platform/billing/adapter.ts`
+- **MINOR** Unauthenticated webhook performs DB work (org resolve + inbox insert) with no rate limiting  — `src/app/api/billing/webhook/route.ts`
+- **NIT** A trialing org with both trial_end and period_start NULL never expires  — `src/modules/subscription/windows.ts`
+- **NIT** Verified-safe: state-machine legality, purged terminality, and HMAC verification hold up  — `src/modules/subscription/machine.ts`
+- **MATERIAL** Failed billing action (notice=error) is rendered in the green SUCCESS banner — mislabels failure as success  — `src/app/(app)/o/[orgId]/settings/subscription/page.tsx`
+- **NIT** Hardcoded '/' separator between price and per-month label reads awkwardly in RTL  — `src/app/(app)/o/[orgId]/settings/subscription/page.tsx`
+- **NIT** readSubscription uses non-null assertion on org_plan_state row (rows[0]!) — throws if the row is absent  — `src/modules/subscription/service.ts`
+- **MATERIAL** lifecycle_scan / subscription_recon_scan are SECURITY DEFINER, granted to app_user, and NOT platform-task-guarded — cross-org subscription leak  — `supabase/migrations/0058_s9_platform_scans.sql`
+- **MINOR** Fake provider has a hardcoded default HMAC secret AND derives provider_customer_id deterministically from orgId — if fake is ever enabled in prod, cross-org webhook spoofing is trivial  — `src/platform/billing/adapter.ts`
+- **MINOR** platform_staff gate binds to caller-supplied p_staff, not the authenticated principal — safe only because no route wires it yet  — `supabase/migrations/0056_s9_impersonation.sql`
+- **MATERIAL** FR-9 read-only enforcement is defined but wired to NOTHING — suspended/cancelled/purged orgs can still write  — `src/modules/subscription/service.ts`
+- **MATERIAL** AI narration (real AI spend) is not gated by billing state — lapsed-trial orgs keep burning credits  — `src/modules/digest/service.ts`
+- **MATERIAL** Cleanup is scorched-earth keyed to a 2-org allowlist — deletes EVERY real customer org in S9  — `tooling/scripts/s7-cleanup.ts`
+- **MINOR** BILLING_PROVIDER=fake overrides the production D1 disable (checked before the prod guard)  — `src/platform/billing/adapter.ts`
+- **MINOR** No disposable-email control; signup throttle is in-memory / non-durable in production  — `src/app/(auth)/actions.ts`
+- **MINOR** prod-demo does not fully self-clean if it fails before org creation (orphan auth.users)  — `tooling/scripts/s9-prod-demo.ts`

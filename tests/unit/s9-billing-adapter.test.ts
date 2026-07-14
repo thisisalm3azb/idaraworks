@@ -78,4 +78,25 @@ describe("getBillingProvider selection", () => {
       else process.env.BILLING_PROVIDER = prev;
     }
   });
+
+  // S10 regression: the prod default gated on APP_ENV === "production" (a value never set;
+  // the canonical prod tag is "prod"), so production silently served the FAKE provider.
+  it("defaults to DISABLED in production (APP_ENV=prod) and fake off-prod", () => {
+    const prevProv = process.env.BILLING_PROVIDER;
+    const prevEnv = process.env.APP_ENV;
+    try {
+      delete process.env.BILLING_PROVIDER;
+      process.env.APP_ENV = "prod";
+      expect(getBillingProvider().enabled).toBe(false);
+      process.env.APP_ENV = "preview";
+      expect(getBillingProvider().enabled).toBe(true);
+      process.env.APP_ENV = "dev";
+      expect(getBillingProvider().enabled).toBe(true);
+    } finally {
+      if (prevProv === undefined) delete process.env.BILLING_PROVIDER;
+      else process.env.BILLING_PROVIDER = prevProv;
+      if (prevEnv === undefined) delete process.env.APP_ENV;
+      else process.env.APP_ENV = prevEnv;
+    }
+  });
 });
