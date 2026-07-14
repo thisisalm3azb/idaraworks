@@ -6,6 +6,17 @@ interruption, and around deploy/cleanup. **Never redo a completed, green, deploy
 cleaned slice.**
 
 ## Current position
+- **Current slice:** S8 — AI Onboarding (S6 DONE, **S7 DONE**)
+- **S7 CLOSED (2026-07-14):** deployed `63bff3d` (code `a5485ab`), CI green (run 29290957958), 18/18 prod smoke,
+  Arabic DoD demo PASS (E-05/06/13 raised, 13/13 questions, narration validated+metered, money wall HELD, share
+  safe+revoke-dead, C-10 divergence). **Baseline RESTORED:** 15 synthetic orgs + 25 users + 2175 rows (incl. 149
+  synthetic outbox events) removed via `tooling/scripts/s7-cleanup.ts --apply` (owner-approved); inventory = 2
+  orgs (Alpha Marine + TESTING), S7 tables 0, S7 exceptions 0, queue unprocessed 0. Migrations 0000-0049 (next 0050).
+- **NEXT (S8 — AI Onboarding):** Layer-A ConfigProposal pipeline + guided imports + manual fallback. Freeze scope
+  from docs (PROJECT/BUILD_BIBLE S8), build, adversarial review, tests, CI, deploy, Arabic prod demo, cleanup.
+  Do NOT begin S9. Old S7 sub-log below retained for history.
+
+## (historical) S7 build task log
 - **Current slice:** S7 — Improve / Intelligence (S6 DONE)
 - **S7 STATUS: CODE COMPLETE + DEPLOYED + DEMOED; one action (synthetic-org cleanup) PENDING owner approval.**
   - Deployed `a5485ab` (prod /api/health commit + 18/18 smoke:prod incl. "deployed commit matches"). CI GREEN

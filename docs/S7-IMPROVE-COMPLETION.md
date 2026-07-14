@@ -1,8 +1,7 @@
 # S7 — Improve / Intelligence — Completion Report
 
-**Status:** CODE COMPLETE · deployed `a5485ab` (prod `/api/health` + 18/18 smoke confirm) · CI green (run 29290957958) · Arabic DoD demo PASS.
-**One action pending your approval:** the synthetic-org cleanup (production `DELETE`) was blocked by the harness safety layer — see *Production baseline* below.
-**Date:** 2026-07-14 · **Commits:** `af88959`, `051950b`, `27ab952`, `137d07c`, `833215c`, `c6efe9c`, `a5485ab` (last = review fixes + regressions) + a docs/tooling follow-up.
+**Status:** COMPLETE · deployed `63bff3d` (code `a5485ab`; prod `/api/health` + 18/18 smoke confirm) · CI green (run 29290957958) · Arabic DoD demo PASS · **production baseline restored**.
+**Date:** 2026-07-14 · **Commits:** `af88959`, `051950b`, `27ab952`, `137d07c`, `833215c`, `c6efe9c`, `a5485ab` (review fixes + regressions), `63bff3d` (docs/tooling) + final checkpoint.
 
 ## What shipped — the morning-intelligence loop (doc 04 / doc 11 S7)
 
@@ -100,28 +99,21 @@ Synthetic Arabic org **قوارب الذكاء** (Alpha Marine + TESTING never t
 - Carried from earlier slices: production PDF render runtime, e-invoice certified partner, payment-provider
   credentials, Sentry DSN, Upstash, password rotation, delete junk Vercel projects.
 
-## Production baseline — cleanup PENDING your approval
+## Production baseline — RESTORED
 
 Both protected orgs — **Alpha Marine** (`d22b2098…`) and **TESTING** (`9fcaa697…`) — were **never read for
 deletion or written** by S7 build, tests, or demo. The Arabic DoD demo self-cleaned (0 leftovers).
 
-However, **15 synthetic test orgs remain** in the production DB (8× `S7 Org`, 1× `S7 Org B`, 3× `S6 Org`,
-2× `S4 Org`, 1× `S3 Org`) — the s7-improve integration `afterAll` does not self-delete, and several killed
-full-suite runs left partial orgs. A guarded cleanup script is ready (`tooling/scripts/s7-cleanup.ts`):
+With owner approval, the guarded cleanup (`tooling/scripts/s7-cleanup.ts --apply`) removed the **15 synthetic
+test orgs** (8× `S7 Org`, 1× `S7 Org B`, 3× `S6 Org`, 2× `S4 Org`, 1× `S3 Org`) left by non-self-cleaning
+integration `afterAll`s and killed full-suite runs — **15 orgs + 25 synthetic-only users + 2,175 tenant rows**,
+including the 149 synthetic outbox events. The two protected orgs were excluded by **name AND UUID** with a hard
+abort guard; only users with no protected-org membership were removed.
 
-- **Dry-run verified**: removes exactly those 15 orgs + 25 synthetic-only users + 2,175 tenant rows (incl. the
-  149 unprocessed outbox events, all from synthetic orgs). Restores the baseline to the two protected orgs.
-- **Safety**: the two protected orgs are excluded by **name AND UUID**, with a hard abort if either appears in
-  the delete set; it also skips any user who is a member of a protected org.
+**Post-cleanup verification** (`tooling/scripts/s7-inventory.ts`):
 
-The `--apply` run is a bulk production `DELETE`, which the harness safety layer holds for **explicit human
-approval**. It has NOT been executed. To restore the baseline, run:
+- `ORGS: 2` — exactly **Alpha Marine** + **TESTING**.
+- S7 tables `digest / ai_interaction / customer_update / share_token` = **0**; exceptions with S7 rule_keys = **0**.
+- prod `/api/health`: `ok=true`, `commit=63bff3d`, db/storage/queue ok, queue `unprocessed=0`.
 
-```
-pnpm tsx tooling/scripts/s7-cleanup.ts            # dry-run (review)
-pnpm tsx tooling/scripts/s7-cleanup.ts --apply    # execute
-pnpm tsx tooling/scripts/s7-inventory.ts          # verify: 2 orgs, S7 tables 0
-```
-
-Until then, the pre/post baseline does **not** yet match (15 synthetic orgs present); everything else in this
-report is complete and verified.
+Pre/post baseline **matches** (two protected orgs, all S7 tables empty for them — they never used S7).
