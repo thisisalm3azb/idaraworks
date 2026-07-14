@@ -130,6 +130,11 @@ export const SEEDERS: Record<string, Seeder> = {
     await o`insert into public.notification_preference (org_id, user_id, channels)
             values (${org}, ${recipient}, '{}'::jsonb) on conflict (org_id, user_id) do nothing`;
   },
+  org_addon: async (o, org) => {
+    await o`insert into public.org_addon (org_id, addon_key, quantity, status)
+            values (${org}, 'addon.quotes_invoices', 1, 'active')
+            on conflict (org_id, addon_key) do nothing`;
+  },
   org_entitlement_override: async (o, org) => {
     await o`insert into public.org_entitlement_override (org_id, entitlement_key, reason)
             values (${org}, 'limit.full_users', 'bleed') on conflict (org_id, entitlement_key) do nothing`;
