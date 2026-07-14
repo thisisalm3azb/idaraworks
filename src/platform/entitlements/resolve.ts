@@ -21,6 +21,7 @@ import {
   type FeatureKey,
   type LimitKey,
 } from "./catalogue";
+import { getAddon } from "./addons";
 
 export type ResolvedEntitlements = {
   planKey: string;
@@ -85,11 +86,32 @@ async function loadResolved(ctx: Ctx): Promise<ResolvedEntitlements> {
       limit_value: string | null;
     }>;
 
+    // Active add-ons (0065): the layer between plan base and org overrides.
+    // removal_scheduled still counts — the org paid through period end; the
+    // lifecycle sweep flips it to 'removed' when remove_at passes.
+    const addonRows = (await tx.execute(sql`
+      select addon_key, quantity from public.org_addon
+      where org_id = ${ctx.orgId} and status in ('active','removal_scheduled')
+    `)) as unknown as Array<{ addon_key: string; quantity: number }>;
+
     const features: Record<string, boolean> = {};
     const limits: Record<string, number | null> = {};
     for (const row of planEnt) {
       if (row.kind === "feature") features[row.key] = row.enabled ?? false;
       else limits[row.key] = row.limit_value === null ? null : Number(row.limit_value);
+    }
+    // Add-on merge: features OR; numeric limit deltas ADD × quantity onto the
+    // plan base (a null/unlimited base stays unlimited; a missing base is 0).
+    for (const row of addonRows) {
+      const def = getAddon(row.addon_key);
+      if (!def) continue; // unknown key in DB (never expected — parity-tested)
+      for (const f of def.features) features[f] = true;
+      const qty = Math.max(1, Number(row.quantity) || 1);
+      for (const [k, delta] of Object.entries(def.limitDeltas)) {
+        const base = limits[k];
+        if (base === null) continue; // unlimited stays unlimited
+        limits[k] = (base ?? 0) + delta * qty;
+      }
     }
     for (const row of overrides) {
       if (row.kind === "feature") features[row.key] = row.enabled ?? false;
@@ -144,6 +166,20 @@ export async function checkLimit(ctx: Ctx, key: LimitKey, current: number): Prom
 
 export function assertKnownKey(key: string): asserts key is EntitlementKey {
   if (!isFeatureKey(key) && !isLimitKey(key)) throw new UnknownEntitlementKeyError(key);
+}
+
+/** A module ADD path was used without its capability (add-on model). Gates
+ * govern ADD/mutate entry points only — reads/exports are never blocked (FR-9). */
+export class CapabilityRequiredError extends Error {
+  constructor(public readonly key: FeatureKey) {
+    super(`this capability requires an add-on (${key})`);
+    this.name = "CapabilityRequiredError";
+  }
+}
+
+/** The standard capability gate for service CREATE/mutate entry points. */
+export async function requireCapability(ctx: Ctx, key: FeatureKey): Promise<void> {
+  if (!(await hasFeature(ctx, key))) throw new CapabilityRequiredError(key);
 }
 
 /**

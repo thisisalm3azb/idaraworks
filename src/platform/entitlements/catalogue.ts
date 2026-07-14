@@ -23,6 +23,16 @@ export const FEATURE_KEYS = [
   "cap.customers",
   "cap.people",
   "cap.customer_updates",
+  // capabilities (add-on model, 0065): finer-grained module gates. The legacy
+  // coarse keys above stay seeded for compatibility; enforcement uses these.
+  "cap.payments",
+  "cap.expenses",
+  "cap.costing",
+  "cap.attendance",
+  "cap.material_requests",
+  "cap.purchase_orders",
+  "cap.goods_receipts",
+  "cap.items",
   // behaviour
   "feat.ai_onboarding",
   "feat.ai_narration",
@@ -30,6 +40,13 @@ export const FEATURE_KEYS = [
   "feat.custom_fields",
   "feat.org_terminology_overrides",
   "feat.audit_export",
+  // behaviour (add-on model, 0065)
+  "feat.quote_vs_actual",
+  "feat.owner_digest",
+  "feat.data_import",
+  "feat.exports_extended",
+  "feat.branding_docs",
+  "feat.branding_app",
 ] as const;
 export type FeatureKey = (typeof FEATURE_KEYS)[number];
 
@@ -59,9 +76,15 @@ export function isLimitKey(key: string): key is LimitKey {
   return LIMIT_SET.has(key);
 }
 
-// ── Plans (doc 09 tier hypotheses — VALUES are placeholders pending OP-2/D3) ──
-export type PlanKey = "starter" | "growth" | "business";
-export const PLAN_KEYS: readonly PlanKey[] = ["starter", "growth", "business"];
+// ── Plans ─────────────────────────────────────────────────────────────────────
+// The add-on model (0065): `free` is the permanent base every org lands on
+// after trial/downgrade — paid capability arrives via ADD-ONS, not tiers. The
+// three legacy tiers stay seeded (existing orgs untouched; internal/override
+// use) but are no longer the customer-facing model.
+export type PlanKey = "free" | "starter" | "growth" | "business";
+export const PLAN_KEYS: readonly PlanKey[] = ["free", "starter", "growth", "business"];
 
-/** New orgs default to a full-featured Growth trial (v1 §13 documented design). */
+/** New orgs still default to a full-featured Growth TRIAL (v1 §13); at trial
+ * end the landing plan is `free` (never suspension — the free base is real). */
 export const DEFAULT_PLAN: PlanKey = "growth";
+export const TRIAL_LANDING_PLAN: PlanKey = "free";

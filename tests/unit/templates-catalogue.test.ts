@@ -101,8 +101,8 @@ describe("template registry (all shipped templates)", () => {
 
       it("terminology is auto-registered for the resolver (en + ar job term resolves)", () => {
         expect(TEMPLATE_TERMS[entry.key]).toBeDefined();
-        const en = resolveTerm("job", { templateKey: entry.key, overrides: {} }, "en");
-        const ar = resolveTerm("job", { templateKey: entry.key, overrides: {} }, "ar");
+        const en = resolveTerm("job", { templateKey: entry.key, overrides: {}, locale: "en" });
+        const ar = resolveTerm("job", { templateKey: entry.key, overrides: {}, locale: "ar" });
         expect(en.singular.length).toBeGreaterThan(0);
         expect(ar.singular.length).toBeGreaterThan(0);
       });
@@ -129,7 +129,11 @@ describe("template registry (all shipped templates)", () => {
   }
 
   it("generic template uses neutral terminology (Project, not any industry noun)", () => {
-    const en = resolveTerm("job", { templateKey: "generic_operations_v1", overrides: {} }, "en");
+    const en = resolveTerm("job", {
+      templateKey: "generic_operations_v1",
+      overrides: {},
+      locale: "en",
+    });
     expect(["Project", "Job"]).toContain(en.singular);
   });
 });
