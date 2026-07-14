@@ -14,9 +14,23 @@
  * 'unverified' and never transitions state.
  */
 import { createHmac, timingSafeEqual } from "node:crypto";
-import type { SubscriptionSignal } from "@/modules/subscription/machine";
 
 export type ProviderName = "fake" | "stripe" | "paddle" | "lemonsqueezy" | "tap" | "moyasar";
+
+/**
+ * The normalized signal vocabulary an adapter maps each processor's raw event onto. Lives in the
+ * platform layer (the adapter produces it) so the subscription module can import it without the
+ * platform ever importing a module (BUILD_BIBLE §3.3). The state machine consumes these.
+ */
+export type SubscriptionSignal =
+  | "activated" // payment succeeded / trial converted / reactivated
+  | "payment_failed" // a charge failed
+  | "payment_recovered" // a retry or manual payment succeeded
+  | "canceled" // customer or provider cancelled the subscription
+  | "trial_ended" // trial window elapsed with no conversion (lifecycle worker or provider)
+  | "grace_elapsed" // dunning/grace window elapsed (lifecycle worker)
+  | "purge_due" // read-only window elapsed → schedule purge (lifecycle worker)
+  | "purged"; // purge executed (purge worker)
 
 /** A normalized provider webhook event — every processor's raw event maps onto this shape. */
 export type NormalizedEvent = {
@@ -48,9 +62,15 @@ export interface BillingProvider {
   /** Start a checkout. Real impls return a redirect URL; the fake returns a sentinel + minted ids. */
   createCheckoutSession(input: CheckoutInput): Promise<CheckoutResult>;
   /** Open the provider's billing portal (manage card / cancel). */
-  createPortalSession(input: { orgId: string; providerCustomerId: string }): Promise<{ url: string }>;
+  createPortalSession(input: {
+    orgId: string;
+    providerCustomerId: string;
+  }): Promise<{ url: string }>;
   /** Request cancellation (at period end). The authoritative state change arrives via webhook. */
-  cancelSubscription(input: { providerSubscriptionId: string; atPeriodEnd: boolean }): Promise<void>;
+  cancelSubscription(input: {
+    providerSubscriptionId: string;
+    atPeriodEnd: boolean;
+  }): Promise<void>;
   /** Verify an inbound webhook signature (HMAC-SHA256 over the raw body). */
   verifySignature(rawBody: string, signature: string): boolean;
   /** Parse a raw (already signature-verified) webhook body into a normalized event. */
@@ -136,7 +156,8 @@ export const disabledBillingProvider: BillingProvider = {
 function NormalizedEventShape(o: unknown): NormalizedEvent {
   const r = (o ?? {}) as Record<string, unknown>;
   const str = (v: unknown): string | null => (typeof v === "string" && v.length > 0 ? v : null);
-  const interval = r.billingInterval === "month" || r.billingInterval === "year" ? r.billingInterval : null;
+  const interval =
+    r.billingInterval === "month" || r.billingInterval === "year" ? r.billingInterval : null;
   return {
     providerEventId: String(r.providerEventId ?? ""),
     eventType: String(r.eventType ?? ""),

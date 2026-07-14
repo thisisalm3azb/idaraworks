@@ -55,16 +55,10 @@ export function canTransition(from: BillingState, to: BillingState): boolean {
   return ALLOWED[from].includes(to);
 }
 
-/** A normalized provider/lifecycle signal — the adapter maps each processor's raw event to one of these. */
-export type SubscriptionSignal =
-  | "activated" // payment succeeded / trial converted / reactivated
-  | "payment_failed" // a charge failed
-  | "payment_recovered" // a retry or manual payment succeeded
-  | "canceled" // customer or provider cancelled the subscription
-  | "trial_ended" // trial window elapsed with no conversion (lifecycle worker or provider)
-  | "grace_elapsed" // dunning/grace window elapsed (lifecycle worker)
-  | "purge_due" // read-only window elapsed → schedule purge (lifecycle worker)
-  | "purged"; // purge executed (purge worker)
+// The normalized signal vocabulary lives in the platform billing adapter (which produces it);
+// re-exported here for the machine's consumers. A module may import platform (BUILD_BIBLE §3.3).
+import type { SubscriptionSignal } from "@/platform/billing/adapter";
+export type { SubscriptionSignal };
 
 export type SignalResolution = { to: BillingState; reason: string } | { to: null; reason: string };
 

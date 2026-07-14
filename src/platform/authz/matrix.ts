@@ -86,7 +86,9 @@ export type Action =
   | "customer_updates.share"
   | "customer_updates.revoke"
   | "onboarding.run"
-  | "imports.manage";
+  | "imports.manage"
+  | "billing.view"
+  | "billing.manage";
 
 type Grantable = Exclude<RoleArchetype, "worker_reserved_p3">;
 
@@ -231,6 +233,9 @@ export const MATRIX: Record<Action, readonly Grantable[]> = {
   "customer_updates.revoke": ["owner", "admin", "manager"],
   // S8 — guided onboarding (config setup) is an owner/admin task (config.manage holders).
   "onboarding.run": ["owner", "admin"],
+  // Commercial/billing (doc 10 #21): manage is OWNER-ONLY; view extends to admin + accounts.
+  "billing.view": ["owner", "admin", "accounts"],
+  "billing.manage": ["owner"],
   // S8 — guided CSV imports of masters (customers/employees/items).
   "imports.manage": ["owner", "admin", "manager"],
 };
