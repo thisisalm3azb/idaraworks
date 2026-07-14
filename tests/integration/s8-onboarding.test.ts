@@ -77,10 +77,14 @@ describe("Layer-A pipeline: cold org → configured workspace", () => {
     expect(res.revisionIds.length).toBeGreaterThan(0);
 
     expect(await getInstalledTemplate(ownerCtx())).not.toBeNull();
+    // Seeded as 'always' rules carrying auto_approve_below_minor (the correct "auto-approve
+    // below X" mechanism — an amount_gte rule would never auto-approve below X).
     const [rules] = (await owner`
       select count(*)::int as n from public.approval_rule where org_id = ${orgId}
-        and condition_kind = 'amount_gte'`) as unknown as Array<{ n: number }>;
-    expect(rules!.n).toBeGreaterThanOrEqual(2);
+        and condition_kind = 'always' and auto_approve_below_minor is not null`) as unknown as Array<{
+      n: number;
+    }>;
+    expect(rules!.n).toBe(2);
     const session = await getOnboardingSession(ownerCtx(), "owner", sessionId);
     expect(session!.status).toBe("applied");
   }, 120_000);

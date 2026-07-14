@@ -81,14 +81,27 @@ describe("validateProposal — F-28 auto-approve cap (reject, never clamp)", () 
 });
 
 describe("validateProposal — proposal-level safety rules", () => {
-  it("rejects a config.roles artifact that grants an action beyond the template presets", () => {
+  it("rejects a config.roles artifact that RAISES cost_privileged above the template baseline", () => {
+    // Foreman is NOT cost-privileged in the template (the labour-cost wall). A schema-VALID
+    // config.roles artifact that flips foreman.cost_privileged=true must be rejected by rule (b)
+    // — onboarding cannot widen the labour-cost wall.
     const p = buildGroundedProposal(baseIntake);
     const bad = {
       ...p,
       artifacts: [
         {
           key: "config.roles",
-          value: { roles: [{ key: "manager", actions: ["members.deactivate"] }] },
+          value: {
+            roles: [
+              {
+                key: "foreman",
+                archetype: "foreman",
+                labels: { en: "Foreman", ar: "مشرف" },
+                cost_privileged: true,
+                price_privileged: false,
+              },
+            ],
+          },
           rationale_en: "x",
           rationale_ar: "س",
         },
@@ -96,7 +109,7 @@ describe("validateProposal — proposal-level safety rules", () => {
     };
     const v = validateProposal(bad);
     expect(v.ok).toBe(false);
-    expect(v.errors.join(" ")).toMatch(/beyond the template preset bounds/);
+    expect(v.errors.join(" ")).toMatch(/raises cost_privileged/);
   });
 
   it("rejects a duplicate artifact key", () => {

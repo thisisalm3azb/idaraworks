@@ -173,6 +173,17 @@ export async function applyImport(
   let applied = 0;
   let failed = 0;
   for (const row of pending) {
+    // Atomic claim (review): flip valid→applied with a guarded UPDATE BEFORE creating, so two
+    // concurrent applyImport calls on the same batch can never double-create a masters row —
+    // the loser's UPDATE matches 0 rows and skips. On create failure the row is corrected to
+    // 'invalid'; the brief applied-without-entity window is not re-claimable.
+    const claimed = (await withCtx(ctx, (tx) =>
+      tx.execute(sql`
+        update public.import_row set status = 'applied', updated_at = now()
+        where org_id = ${ctx.orgId} and id = ${row.id} and status = 'valid'
+        returning id::text as id`),
+    )) as unknown as Array<{ id: string }>;
+    if (claimed.length === 0) continue; // another apply already took this row
     try {
       const created =
         kind === "customers"
@@ -182,7 +193,7 @@ export async function applyImport(
             : await createItem(ctx, archetype, row.mapped);
       await withCtx(ctx, (tx) =>
         tx.execute(sql`
-          update public.import_row set status = 'applied', created_entity_id = ${created.id}, updated_at = now()
+          update public.import_row set created_entity_id = ${created.id}, updated_at = now()
           where org_id = ${ctx.orgId} and id = ${row.id}`),
       );
       applied++;

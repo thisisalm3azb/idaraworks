@@ -6,12 +6,17 @@
  * validation:
  *   (a) F-28 — an AI/operator-proposed `auto_approve_below` is capped at 2× the template
  *       default; a value above the cap is REJECTED (never silently clamped).
- *   (b) no permission grants beyond preset bounds — a `config.roles` artifact may only assign
- *       actions the template's role presets already contain (onboarding cannot widen authz).
+ *   (b) no privilege grants beyond preset bounds — a `config.roles` artifact may KEEP or LOWER
+ *       each role's cost_privileged / price_privileged flag vs the template preset, never RAISE
+ *       it (onboarding cannot widen the labour-cost / price walls). The role's `archetype` — and
+ *       thus its ACTION set (derived from the static MATRIX) — is already frozen by the config
+ *       pipeline's rolesHandler guard, so the flags are the only widenable grant to bound here.
  *   (c) referential closure — an override artifact validates against its own schema; cross-
  *       artifact references (preset→stage, category kinds) are enforced by those schemas.
- * Entitlement closure (a capability outside the plan → requires_upgrade, never applied) needs
- * the org's resolved plan and is enforced in the service (assertEntitlementClosure).
+ * Entitlement closure is INFORMATIONAL, not a validator rule: onboarding never applies a
+ * feature/capability (features are not config artifacts), so a requested feature outside the
+ * plan is surfaced as `requires_upgrade` (provider.ts) and never granted; plan LIMITS that bite
+ * during install (presets, custom fields) are enforced by the config pipeline's own guards.
  */
 import type { z } from "zod";
 import {
@@ -45,13 +50,18 @@ const ARTIFACT_SCHEMAS: Record<string, z.ZodTypeAny> = {
   "config.fields.customer": FieldDefinitionSetSchema,
 };
 
-/** The union of every action any template role preset grants — the authz ceiling (rule b). */
-function templateAllowedActions(): Set<string> {
-  const allowed = new Set<string>();
-  const roles = (TEMPLATE_BOATBUILDING.role_presets as { roles?: Array<{ actions?: string[] }> })
-    .roles;
-  for (const r of roles ?? []) for (const a of r.actions ?? []) allowed.add(a);
-  return allowed;
+/** The template's per-role privilege baseline (rule b): a role may not RAISE either flag above
+ * these. A role key absent from the template has a `false` baseline — it may not grant either. */
+function templatePrivilegeBaseline(): Map<string, { cost: boolean; price: boolean }> {
+  const m = new Map<string, { cost: boolean; price: boolean }>();
+  const roles = (
+    TEMPLATE_BOATBUILDING.role_presets as {
+      roles?: Array<{ key?: string; cost_privileged?: boolean; price_privileged?: boolean }>;
+    }
+  ).roles;
+  for (const r of roles ?? [])
+    if (r.key) m.set(r.key, { cost: !!r.cost_privileged, price: !!r.price_privileged });
+  return m;
 }
 
 export type ProposalValidation = { ok: boolean; errors: string[] };
@@ -93,18 +103,27 @@ export function validateProposal(raw: unknown): ProposalValidation {
     }
   }
 
-  // Rule (b): no permission grants beyond preset bounds.
+  // Rule (b): no privilege grants beyond preset bounds — a config.roles artifact may not RAISE
+  // a role's cost_privileged / price_privileged above the template baseline.
   const rolesArt = proposal.artifacts.find((a) => a.key === "config.roles");
   if (rolesArt) {
-    const allowed = templateAllowedActions();
-    const roles = (rolesArt.value as { roles?: Array<{ key?: string; actions?: string[] }> }).roles;
+    const base = templatePrivilegeBaseline();
+    const roles = (
+      rolesArt.value as {
+        roles?: Array<{ key?: string; cost_privileged?: boolean; price_privileged?: boolean }>;
+      }
+    ).roles;
     for (const role of roles ?? []) {
-      for (const action of role.actions ?? []) {
-        if (!allowed.has(action)) {
-          errors.push(
-            `config.roles: role "${role.key}" grants "${action}" beyond the template preset bounds (F-preset)`,
-          );
-        }
+      const b = role.key ? base.get(role.key) : undefined;
+      if (role.cost_privileged && !b?.cost) {
+        errors.push(
+          `config.roles: role "${role.key}" raises cost_privileged above the template preset baseline`,
+        );
+      }
+      if (role.price_privileged && !b?.price) {
+        errors.push(
+          `config.roles: role "${role.key}" raises price_privileged above the template preset baseline`,
+        );
       }
     }
   }

@@ -16,6 +16,13 @@ cleaned slice.**
   from docs (PROJECT/BUILD_BIBLE S8), build, adversarial review, tests, CI, deploy, Arabic prod demo, cleanup.
   Do NOT begin S9. Old S7 sub-log below retained for history.
 
+## S8 — BUILD STATE (updated live)
+- **DONE:** migration **0050** (onboarding_session, import_batch/import_row, ai_interaction feature widen, limit.ai_onboarding_calls) applied to hosted. Modules: onboarding (proposal/validate/provider/service — Layer-A pipeline propose→validate→apply→undo, F-28 cap, cap+breaker) + imports (stage→validate→apply via masters). Platform: authz onboarding.run(owner/admin)+imports.manage(owner/admin/manager) both matrices; AUDIT_ENTITY_TYPES; entitlement catalogue. UI: onboarding intake + preview screen + import wizard + first-run checklist + nav + en/ar i18n. Bleed seeders for the 3 tables. Tests: **unit 282/282** (9 S8), **s8 hosted integration 5/5** (cold→configured, PARITY 290000/395000, guided import, call-cap, guard-respecting undo). Gates: format/lint(0)/typecheck/build green. s8-prod-demo.ts written.
+- **2 bugs fixed during hosted run:** drizzle array-inlining (`()` empty-array syntax error) → jsonb→array bind; undo tripped D-9.2 field-removal guard → best-effort undo catches ConfigGuardError (install marker still reverts).
+- **Commits (unpushed):** af…e94edb8 (0050+services, UI, tests+demo). HEAD e94edb8.
+- **NOW:** 3-lens adversarial review running (config-safety, tenancy/authz/imports, approval-semantics/undo/cap). NEXT: fix confirmed materials → push → CI → deploy → prod smoke → Arabic s8-prod-demo → remove S8 synthetic (incl. the "S8 Org" integration leftover) → report. Do NOT begin S9.
+- **Known review item to confirm:** approval-rule seeding maps intake `auto_approve_below X` → approval_rule amount_gte=X; verify this yields "auto-approve BELOW X" given the S4 engine's no-rule-match behavior + whether the template seeds an 'always' rule.
+
 ## S8 — AI Onboarding & Imports — FROZEN SCOPE (doc 11 S8; doc 09 #12/F-28; doc 10 #32; doc 08 parity gate)
 **Objective:** "how does your business operate?" → configured workspace in ≤30 min, template #1 only, WITHOUT the builder present. The pipeline is a **validator around templates, not an agent** (doc 11 risk note).
 1. **Layer-A ConfigProposal artifact** — `{ intake_summary, template_key, artifacts:[subset of config artifacts 1–11 as full docs], rationale_per_artifact, requires_upgrade: feature_keys[] }`; Zod schema.

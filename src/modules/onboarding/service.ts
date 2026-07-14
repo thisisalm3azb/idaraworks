@@ -38,16 +38,17 @@ export class OnboardingValidationError extends OnboardingError {
   }
 }
 
-/** Platform daily AI-spend circuit breaker (doc 10 #32): sum today's metered spend across ALL
- * orgs (a platform read, no tenant context) and refuse new metered calls above the cap. The
- * deterministic onboarding provider spends 0, so this is a guard for a future real provider. */
+/** Platform daily AI-spend circuit breaker (doc 10 #32): today's metered spend across ALL orgs
+ * vs a cap. The cross-org aggregate MUST go through a SECURITY DEFINER helper — a bare app_user
+ * (NOBYPASSRLS) read is silently zeroed by RLS and fails OPEN (review). The deterministic
+ * onboarding provider spends 0, so this is a live guard for a future real provider. */
 const DAILY_SPEND_CAP_MICROS = BigInt(process.env.AI_DAILY_SPEND_CAP_MICROS ?? "100000000000");
 async function assertSpendBreaker(): Promise<void> {
   const { db, end } = createAppDb({ max: 1 });
   try {
-    const rows = (await db.execute(sql`
-      select coalesce(sum(cost_micros), 0)::bigint as spent from public.ai_interaction
-      where created_at >= date_trunc('day', now())`)) as unknown as Array<{ spent: string }>;
+    const rows = (await db.execute(
+      sql`select app.platform_daily_ai_spend() as spent`,
+    )) as unknown as Array<{ spent: string }>;
     if (BigInt(rows[0]?.spent ?? "0") >= DAILY_SPEND_CAP_MICROS) {
       throw new OnboardingCapError("platform daily AI-spend cap reached");
     }
@@ -213,13 +214,17 @@ export async function applyOnboarding(
     });
     revisionIds.push(revisionId);
   }
-  // Seed F-28-capped approval defaults as approval rules (governed service).
+  // Seed F-28-capped approval defaults as approval rules (governed service). The intake asks
+  // "auto-approve BELOW X" — the S4 engine implements that with an `always` rule carrying
+  // auto_approve_below_minor = X (review): a submitted subject ALWAYS matches, and the engine
+  // auto-approves when amount < X, else routes to the manager. (An `amount_gte X` rule does the
+  // OPPOSITE — it never auto-approves below-X and only matches at/above X — so it is wrong here.)
   let rulesCreated = 0;
   for (const d of proposal.approval_defaults) {
     await createApprovalRule(ctx, archetype, {
       subjectType: d.subject_type,
-      conditionKind: "amount_gte",
-      amountGteMinor: d.auto_approve_below_minor,
+      conditionKind: "always",
+      autoApproveBelowMinor: d.auto_approve_below_minor,
       assignedRole: "manager",
     });
     rulesCreated++;
