@@ -126,6 +126,20 @@ export async function processSubscriptionWebhook(
     if (!verified) return { status: "unverified" };
     if (!org) return { status: "unresolved" };
 
+    // A plan change is NOT a state transition (v1 §13): upgrade applies immediately, downgrade is
+    // scheduled to period end. Handle it before the state machine and keep billing_state unchanged.
+    if (evt.signal === "plan_changed" && evt.planKey) {
+      await applyPlanChange(
+        db,
+        org.org_id,
+        org.billing_state,
+        evt.planKey,
+        evt.planChangeMode ?? "immediate",
+      );
+      await markProcessed(db, provider.id, evt.providerEventId, "processed", null);
+      return { status: "processed", from: org.billing_state, to: org.billing_state };
+    }
+
     // Run the state machine. A no-op signal is recorded as 'ignored' (still idempotent).
     const res = nextForEvent(org.billing_state, evt.signal);
     if (res.to === null) {
@@ -196,6 +210,41 @@ export async function applyTransition(
   );
 }
 
+/**
+ * Apply a plan change WITHOUT moving billing_state. Upgrade ('immediate') sets plan_key now and
+ * clears any scheduled downgrade; downgrade ('scheduled') records scheduled_plan_key (applied at
+ * period end by a later immediate plan_changed event). Never deletes data — an org that exceeds the
+ * new plan's limits simply loses the ability to ADD (checkLimit), never to read (FR-9).
+ */
+async function applyPlanChange(
+  db: ReturnType<typeof createAppDb>["db"],
+  orgId: string,
+  state: string,
+  newPlanKey: string,
+  mode: "immediate" | "scheduled",
+): Promise<void> {
+  if (mode === "scheduled") {
+    // Downgrade intent: state + plan unchanged; record the scheduled plan.
+    await db.execute(sql`
+      select app.advance_subscription(${orgId}::uuid, ${state}, null, null, null, null, null, null,
+        null, null, null, null, null, null, null, ${newPlanKey})`);
+    await db.execute(sql`
+      select app.record_platform_audit(${orgId}::uuid, null, 'subscription.downgrade_scheduled',
+        'subscription', ${orgId}::uuid, ${`Downgrade to ${newPlanKey} scheduled for period end`},
+        ${JSON.stringify({ scheduledPlan: newPlanKey })}::jsonb)`);
+  } else {
+    // Immediate (upgrade / period-end application): set plan_key now, clear the scheduled marker ('').
+    await db.execute(sql`
+      select app.advance_subscription(${orgId}::uuid, ${state}, ${newPlanKey}, null, null, null, null,
+        null, null, null, null, null, null, null, null, '')`);
+    await db.execute(sql`
+      select app.record_platform_audit(${orgId}::uuid, null, 'subscription.plan_changed',
+        'subscription', ${orgId}::uuid, ${`Plan changed to ${newPlanKey}`},
+        ${JSON.stringify({ plan: newPlanKey })}::jsonb)`);
+  }
+  invalidateEntitlements(orgId);
+}
+
 async function markProcessed(
   db: ReturnType<typeof createAppDb>["db"],
   provider: string,
@@ -250,6 +299,39 @@ export async function cancelSubscription(ctx: Ctx, archetype: RoleArchetype): Pr
   await provider.cancelSubscription({ providerSubscriptionId: sub, atPeriodEnd: true });
 }
 
+/**
+ * Owner changes plan. Upgrade (a higher-sorted plan) applies immediately; downgrade is scheduled to
+ * period end (never deletes data). The change is driven through the provider→webhook round-trip
+ * (with the fake provider, modelled by emitFakeSignal). Returns the resolved mode.
+ */
+export async function changePlan(
+  ctx: Ctx,
+  archetype: RoleArchetype,
+  newPlanKey: "starter" | "growth" | "business",
+): Promise<{ mode: "immediate" | "scheduled" }> {
+  assertCan(archetype, "billing.manage");
+  const provider = getBillingProvider();
+  if (!provider.enabled) throw new BillingProviderDisabledError("changePlan");
+  const sort = await withCtx(ctx, async (tx) => {
+    const rows = (await tx.execute(sql`
+      select (select sort_order from public.plan where key = ops.plan_key) as cur,
+             (select sort_order from public.plan where key = ${newPlanKey}) as nxt,
+             ops.plan_key as current_plan
+      from public.org_plan_state ops where ops.org_id = ${ctx.orgId}`)) as unknown as Array<{
+      cur: number;
+      nxt: number;
+      current_plan: string;
+    }>;
+    return rows[0]!;
+  });
+  if (sort.current_plan === newPlanKey) throw new SubscriptionActionError("already on that plan");
+  const mode: "immediate" | "scheduled" = sort.nxt > sort.cur ? "immediate" : "scheduled";
+  // Fake provider (dev/test): model provider → webhook. A real provider is told via its API and
+  // emits the webhook that this same processor applies (no different code path at activation).
+  await emitFakeSignal(ctx.orgId, "plan_changed", { planKey: newPlanKey, planChangeMode: mode });
+  return { mode };
+}
+
 export type SubscriptionView = {
   planKey: string;
   billingState: string;
@@ -257,6 +339,7 @@ export type SubscriptionView = {
   periodEnd: string | null;
   trialEnd: string | null;
   cancelAtPeriodEnd: boolean;
+  scheduledPlanKey: string | null;
   providerEnabled: boolean;
   prices: Array<{
     planKey: string;
@@ -276,13 +359,14 @@ export async function readSubscription(
   return withCtx(ctx, async (tx) => {
     const rows = (await tx.execute(sql`
       select plan_key, billing_state, period_end::text as period_end, trial_end::text as trial_end,
-             cancel_at_period_end
+             cancel_at_period_end, scheduled_plan_key
       from public.org_plan_state where org_id = ${ctx.orgId}`)) as unknown as Array<{
       plan_key: string;
       billing_state: string;
       period_end: string | null;
       trial_end: string | null;
       cancel_at_period_end: boolean;
+      scheduled_plan_key: string | null;
     }>;
     const s = rows[0]!;
     const prices = (await tx.execute(sql`
@@ -301,6 +385,7 @@ export async function readSubscription(
       periodEnd: s.period_end,
       trialEnd: s.trial_end,
       cancelAtPeriodEnd: s.cancel_at_period_end,
+      scheduledPlanKey: s.scheduled_plan_key,
       providerEnabled: getBillingProvider().enabled,
       prices: prices.map((p) => ({
         planKey: p.plan_key,

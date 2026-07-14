@@ -27,6 +27,7 @@ export type SubscriptionSignal =
   | "payment_failed" // a charge failed
   | "payment_recovered" // a retry or manual payment succeeded
   | "canceled" // customer or provider cancelled the subscription
+  | "plan_changed" // upgrade (immediate) or downgrade (scheduled/applied at period end)
   | "trial_ended" // trial window elapsed with no conversion (lifecycle worker or provider)
   | "grace_elapsed" // dunning/grace window elapsed (lifecycle worker)
   | "purge_due" // read-only window elapsed → schedule purge (lifecycle worker)
@@ -42,6 +43,9 @@ export type NormalizedEvent = {
   planKey: string | null;
   billingInterval: "month" | "year" | null;
   billingCurrency: string | null;
+  /** For a plan_changed event: 'immediate' (upgrade / period-end application) vs 'scheduled'
+   * (downgrade intent recorded, applied at period end). Ignored for other signals. */
+  planChangeMode?: "immediate" | "scheduled";
 };
 
 export type CheckoutInput = {
@@ -185,6 +189,10 @@ function NormalizedEventShape(o: unknown): NormalizedEvent {
     planKey: str(r.planKey),
     billingInterval: interval,
     billingCurrency: str(r.billingCurrency),
+    planChangeMode:
+      r.planChangeMode === "immediate" || r.planChangeMode === "scheduled"
+        ? r.planChangeMode
+        : undefined,
   };
 }
 

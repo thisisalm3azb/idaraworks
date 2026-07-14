@@ -90,6 +90,9 @@ export function nextForEvent(from: BillingState, signal: SubscriptionSignal): Si
       if (from === "cancelled" || from === "purged" || from === "purge_pending")
         return { to: null, reason: `cancel no-op from ${from}` };
       return { to: "cancelled", reason: "subscription cancelled" };
+    case "plan_changed":
+      // A plan change never moves billing_state — the service handles it (plan_key / scheduled_plan_key).
+      return { to: null, reason: "plan change is not a state transition" };
     case "trial_ended":
       // A trial that never converted becomes read-only (not deleted). If already converted (active), no-op.
       return from === "trialing"
