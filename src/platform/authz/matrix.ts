@@ -239,7 +239,8 @@ export const MATRIX: Record<Action, readonly Grantable[]> = {
   "billing.manage": ["owner"],
   // S8 — guided CSV imports of masters (customers/employees/items).
   "imports.manage": ["owner", "admin", "manager"],
-  // S10 (doc 10 #42): full self-service data export — owner/admin/accounts (a fully money-
-  // privileged set, so the exported CSVs carry the same data the reader already sees on screen).
+  // S10 (doc 10 #42): full self-service data export — owner/admin/accounts. Money columns in the
+  // CSVs are redacted per the caller's cost/price privilege at the export boundary (F-23), so a
+  // non-money-privileged holder exports operational data without seeing cost/selling figures.
   "data.export": ["owner", "admin", "accounts"],
 };

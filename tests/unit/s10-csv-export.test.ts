@@ -5,6 +5,7 @@
  */
 import { describe, it, expect } from "vitest";
 import { csvEscape, toCsv } from "@/platform/export/csv";
+import { applyMoneyRedaction } from "@/platform/export/service";
 
 describe("csvEscape (formula-injection guard)", () => {
   it("prefixes a leading formula trigger with a single quote", () => {
@@ -27,5 +28,41 @@ describe("csvEscape (formula-injection guard)", () => {
   it("builds a guarded CSV document with CRLF rows", () => {
     const csv = toCsv(["name", "note"], [["=danger", "ok"]]);
     expect(csv).toBe(`"name","note"\r\n"'=danger","ok"\r\n`);
+  });
+});
+
+describe("applyMoneyRedaction (F-23 export wall — review fix)", () => {
+  // jobs headers: [reference, name, status_category, current_stage, selling_price_minor(4), created_at]
+  it("nulls the selling-price column for a non-price-privileged exporter", () => {
+    const rows = () => [["24C-001", "Boat", "active", "s1", "5000", "d"]];
+    const priced = applyMoneyRedaction("jobs", rows(), {
+      pricePrivileged: true,
+      costPrivileged: true,
+    });
+    expect(priced[0]![4]).toBe("5000");
+    const redacted = applyMoneyRedaction("jobs", rows(), {
+      pricePrivileged: false,
+      costPrivileged: true,
+    });
+    expect(redacted[0]![4]).toBeNull();
+    expect(redacted[0]![1]).toBe("Boat"); // non-money columns untouched
+  });
+
+  it("nulls the expense cost column for a non-cost-privileged exporter", () => {
+    // expenses headers: [reference, category_key, description, amount_minor(3), expense_date, payment_status]
+    const rows = [["EXP-1", "materials", "steel", "900", "2026-01-01", "unpaid"]];
+    const out = applyMoneyRedaction("expenses", rows, {
+      pricePrivileged: true,
+      costPrivileged: false,
+    });
+    expect(out[0]![3]).toBeNull();
+    expect(out[0]![2]).toBe("steel");
+  });
+
+  it("leaves entities with no money columns untouched", () => {
+    const rows = [["a", "b", "c"]];
+    expect(
+      applyMoneyRedaction("customers", rows, { pricePrivileged: false, costPrivileged: false }),
+    ).toEqual([["a", "b", "c"]]);
   });
 });

@@ -3,8 +3,9 @@
  * operational + financial data — the data-portability + account-closure prerequisite. Every read
  * goes through withCtx (RLS second wall), is PAGED (never the silent 1,000-row cap), and every cell
  * passes the formula-injection guard (csvEscape, doc 10 #25). Gated by `data.export` — owner / admin
- * / accounts, a fully money-privileged set, so the export carries exactly what the reader already
- * sees (no extra redaction layer needed; a foreman/viewer can't export at all).
+ * / accounts — and money columns are REDACTED at this boundary per the caller's cost/price privilege
+ * (F-23): a non-money-privileged exporter gets operational data with cost/selling figures nulled.
+ * A foreman/viewer can't export at all.
  *
  * The ENTITY set is a closed registry so a completeness test can enumerate it (doc 10 #42 "the
  * completeness test enumerates the entity catalogue").
@@ -21,6 +22,36 @@ type EntityDef = {
   // Returns one page of rows (already projected to the header order) at the given offset.
   page: (tx: TenantTx, ctx: Ctx, limit: number, offset: number) => Promise<Array<Array<unknown>>>;
 };
+
+// Review fix (F-23): export is a serialization boundary. Column indices (into each entity's header
+// order) carrying SELLING-price money (nulled unless ctx.pricePrivileged) and COST money (nulled
+// unless ctx.costPrivileged). data.export includes `accounts`, who is NOT necessarily cost/price-
+// privileged, so the wall must be consulted here — never assumed from holding the authz action.
+const PRICE_COLS: Partial<Record<string, readonly number[]>> = {
+  jobs: [4], // selling_price_minor
+  invoices: [4, 5], // total_minor, vat_amount_minor
+  payments: [4], // amount_minor (money in)
+};
+const COST_COLS: Partial<Record<string, readonly number[]>> = {
+  expenses: [3], // amount_minor (job/overhead cost)
+};
+
+/** Null out money columns the caller isn't privileged to see. Pure — mutates + returns `rows`. */
+export function applyMoneyRedaction(
+  entity: string,
+  rows: Array<Array<unknown>>,
+  priv: { pricePrivileged: boolean; costPrivileged: boolean },
+): Array<Array<unknown>> {
+  const price = !priv.pricePrivileged ? (PRICE_COLS[entity] ?? []) : [];
+  const cost = !priv.costPrivileged ? (COST_COLS[entity] ?? []) : [];
+  if (price.length || cost.length) {
+    for (const row of rows) {
+      for (const i of price) row[i] = null;
+      for (const i of cost) row[i] = null;
+    }
+  }
+  return rows;
+}
 
 // A closed catalogue of exportable entities. Ordered, keyed, enumerable.
 export const EXPORT_ENTITIES = {
@@ -223,6 +254,11 @@ export async function exportEntityCsv(
       all.push(...batch);
       if (batch.length < PAGE) break; // last page
     }
+    // Redact money columns the caller isn't privileged to see (export IS a serialization boundary).
+    applyMoneyRedaction(entity, all, {
+      pricePrivileged: ctx.pricePrivileged,
+      costPrivileged: ctx.costPrivileged,
+    });
     return toCsv(def.headers, all);
   });
 }

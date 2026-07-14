@@ -86,4 +86,5 @@ export const workerFunctions = [
   invoiceOnIssued,
   paymentReconcileOnDecision,
   subscriptionLifecycleCron,
+  retentionPruneCron,
 ];

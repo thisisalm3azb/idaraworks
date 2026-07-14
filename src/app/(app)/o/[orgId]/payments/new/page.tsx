@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { redirect } from "next/navigation";
 import { Badge, Button, Card, CardHeader } from "@/platform/ui";
 import { getT } from "@/platform/i18n/server";
@@ -33,6 +34,9 @@ export default async function NewPaymentPage({
       <Card>
         <CardHeader title={t("payments.form.title")} />
         <form action={recordPaymentAction.bind(null, orgId)} className="flex flex-col gap-3">
+          {/* S10 idempotency: a fresh key per render — a double-tap of THIS form replays it (one
+              payment); a new page load mints a new key = a deliberate second payment (0063). */}
+          <input type="hidden" name="idempotency_key" value={`pmt-${randomUUID()}`} />
           <label className={field}>
             {t("payments.form.invoice")}
             <select name="invoice_id" className={input}>

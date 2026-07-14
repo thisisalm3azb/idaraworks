@@ -22,6 +22,7 @@ export async function recordPaymentAction(orgId: string, formData: FormData): Pr
       amountMinor: toMinorUnits(String(formData.get("amount") ?? "0"), currency),
       currency,
       externalReference: String(formData.get("external_reference") ?? "") || undefined,
+      idempotencyKey: String(formData.get("idempotency_key") ?? "") || undefined,
     });
     revalidatePath(`/o/${orgId}/payments`);
     redirect(`/o/${orgId}/payments?ok=recorded`);

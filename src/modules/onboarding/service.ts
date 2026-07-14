@@ -203,10 +203,16 @@ export async function applyOnboarding(
   // double-tapped Apply or two admin devices can't both run the install + revisions + rule seeds
   // (which produced duplicate revisions and raced the approval-rule ambiguity guard). Only one
   // claimant wins the guarded UPDATE; the loser sees 0 rows and bails.
+  // Claim 'draft'/'proposed' OR RECLAIM a STALE 'applying' (review fix): a serverless kill/timeout
+  // between the claim commit and the final 'applied' write can strand a session in 'applying' with
+  // no in-app recovery. A row stuck there for >10 min is presumed abandoned and reclaimable, so a
+  // retry can complete (config revisions are convergent — preset ids reuse; rules are 23505-guarded).
   const claimed = await withCtx(ctx, async (tx) => {
     const rows = (await tx.execute(sql`
       update public.onboarding_session set status = 'applying', updated_at = now()
-      where org_id = ${ctx.orgId} and id = ${sessionId} and status in ('draft', 'proposed')
+      where org_id = ${ctx.orgId} and id = ${sessionId}
+        and (status in ('draft', 'proposed')
+             or (status = 'applying' and updated_at < now() - interval '10 minutes'))
       returning id`)) as unknown as Array<{ id: string }>;
     return rows.length > 0;
   });

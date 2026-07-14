@@ -29,7 +29,11 @@ export async function POST(request: Request): Promise<NextResponse> {
   if (declared > MAX_BODY_BYTES) return NextResponse.json({ ok: false }, { status: 413 });
 
   const rawBody = await request.text();
-  if (rawBody.length > MAX_BODY_BYTES) return NextResponse.json({ ok: false }, { status: 413 });
+  // Measure BYTES, not UTF-16 code units — a multi-byte body could exceed the cap while .length
+  // stays under it. The Content-Length pre-check is advisory (a client can omit it); this is the
+  // real guard, after the body is read.
+  if (Buffer.byteLength(rawBody, "utf8") > MAX_BODY_BYTES)
+    return NextResponse.json({ ok: false }, { status: 413 });
   const signature = request.headers.get(SIGNATURE_HEADER) ?? "";
   try {
     const outcome = await processSubscriptionWebhook(rawBody, signature);

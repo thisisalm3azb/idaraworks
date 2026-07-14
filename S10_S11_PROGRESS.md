@@ -42,7 +42,27 @@ cleanup: pause ONLY at that approval point with dry-run evidence; never bypass.
 **F. Owner actions surfaced by the freeze (report at S10 close):** Arabic native reviewer; pen-test booking confirmation (was due S6 — escalation); OAuth provider credentials; second-provider backup credentials; Supabase PITR plan confirmation; AI-provider no-training contract terms evidence; carried set (Inngest keys, PDF runtime, Sentry, Upstash, rotation, junk Vercel projects, D1/D3/tax/KSA/DPA, PB-3/OP-5, OP-4 name check, pilot cohort).
 
 ## Current position
-- **Current stage:** S10 — scope FROZEN (above). Next: Phase 1 audits.
+- **Current stage:** S10 — implementation DONE across waves A–F (committed, NOT pushed). Hosted
+  migrations 0000-0064. HEAD e11a9ab. Adversarial review of the S10 diff running (wf_343c7f19).
+  Next: triage review → fix confirmed → full gates → push → CI → deploy → prod smoke → Arabic
+  demo → cleanup (+ batched 7-row purge) → S10 completion report → then S11.
+- **Waves committed:** A 30e8e6d (prod-guard/indexes/DEFINER/concurrency/worker-isolation/aria),
+  B 64836fd (Arabic switcher MATERIAL + redaction/GRN/withdraw guards + webhook cap + Arabic sev-1),
+  C 86002c4 (perf CI gate + retention pruning 0064 + egress cache + malware seam), D e8a6928
+  (redaction per-subject + nightly perf windows + test-hygiene deflake + wipeOrgs), E eb0316f
+  (4 runbooks + self-service export #42 + CSV guard #25), F e11a9ab (OAuth seam + auth i18n).
+- **Gates so far:** typecheck/lint(0)/unit 307/307; hosted tenancy+bleed 17/17; s8 5/5; events-outbox
+  10/10; export column probe 8/8. Migrations 0061-0064 applied+verified on hosted.
+- **DEFERRED with rationale (for the report):** cross-instance entitlement cache push-invalidation
+  (Upstash-gated; 60s TTL is the shipped backstop); advance_subscription compare-and-set (latent,
+  D1-gated; FOR UPDATE serializes); approval rule_id composite FK (cross-org rule_id unreachable via
+  app); dedicated platform DB role (assert_platform_task guards it); terminology.overrides onboarding
+  handler (benign — marine terms match intake default); recycle-bin unvoid UI (30-day window +
+  legal-hold exist; closure runbook covers the path); paused billing state (deferred, "if offered");
+  partitions (frozen, volume-triggered); backup-monitor CODE (owner-provisioned PITR/mgmt-token —
+  runbook + seam documented); OAuth provider config + notification email i18n at send time.
+
+## S10 — scope FROZEN (reference)
 - **S9 CLOSED:** code deployed+verified `7e56bca` (CI green, 18/18 prod smoke incl.
   deployed-commit match); docs commit `17bcfd8` CI green + prod serves it. Baseline =
   [Alpha Marine, TESTING]; S9 org-scoped tables 0. Report: docs/S9-COMMERCIAL-COMPLETION.md.

@@ -20,9 +20,16 @@ export type PruneResult = {
 export async function pruneRetention(nowIso?: string): Promise<PruneResult> {
   const { db, end } = createAppDb({ max: 1 });
   try {
-    const rows = (await db.execute(sql`
-      select notifications_pruned, exceptions_pruned, ai_interactions_pruned, digests_pruned
-      from app.prune_retention(${nowIso ?? null}::timestamptz)`)) as unknown as Array<{
+    // Review fix: passing NULL::timestamptz OVERRIDES the SQL `default now()` (an explicit NULL is
+    // still an argument), which makes every `col < NULL` window false → a silent no-op. Call with
+    // NO argument for the live cron (default now() applies); only pass a timestamp in tests.
+    const rows = (await db.execute(
+      nowIso
+        ? sql`select notifications_pruned, exceptions_pruned, ai_interactions_pruned, digests_pruned
+               from app.prune_retention(${nowIso}::timestamptz)`
+        : sql`select notifications_pruned, exceptions_pruned, ai_interactions_pruned, digests_pruned
+               from app.prune_retention()`,
+    )) as unknown as Array<{
       notifications_pruned: string;
       exceptions_pruned: string;
       ai_interactions_pruned: string;
