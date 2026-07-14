@@ -10,6 +10,11 @@ import { afterEach, describe, expect, it } from "vitest";
 import { getBillingProvider } from "@/platform/billing/adapter";
 import { getEInvoiceProvider } from "@/platform/einvoice/adapter";
 import { getNarrationProvider } from "@/platform/ai/adapter";
+import {
+  getDocumentScanner,
+  assertDocumentClean,
+  DocumentRejectedError,
+} from "@/platform/files/scan";
 
 const saved = { ...process.env };
 afterEach(() => {
@@ -46,5 +51,19 @@ describe("S10 production provider guards (APP_ENV=prod → all seams disabled)",
     process.env.APP_ENV = "prod";
     process.env.BILLING_PROVIDER = "fake"; // stands in for a future real provider name
     expect(getBillingProvider().enabled).toBe(true);
+  });
+});
+
+describe("S10 document-scan seam (doc 10 #27)", () => {
+  it("refuses documents in prod until a scanner is provisioned, passes them off-prod", async () => {
+    delete process.env.SCAN_PROVIDER;
+    process.env.APP_ENV = "prod";
+    expect(getDocumentScanner().name).toBe("disabled");
+    await expect(assertDocumentClean(Buffer.from("x"), "application/pdf")).rejects.toBeInstanceOf(
+      DocumentRejectedError,
+    );
+    process.env.APP_ENV = "dev";
+    expect(getDocumentScanner().name).toBe("passthrough");
+    await expect(assertDocumentClean(Buffer.from("x"), "application/pdf")).resolves.toBeUndefined();
   });
 });

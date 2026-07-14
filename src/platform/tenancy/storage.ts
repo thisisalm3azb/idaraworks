@@ -92,10 +92,16 @@ export function objectStore() {
     path: string,
     body: Buffer,
     contentType: string,
+    // S10 (audit F-37): image derivatives are immutable content-addressed objects — persist a
+    // private Cache-Control so a re-fetched thumbnail is served from cache, not re-egressed from
+    // storage (per-org egress cost). Private: signed-URL responses must never be shared-cached.
+    cacheControl?: string,
   ): Promise<void> {
+    const headers: Record<string, string> = { "Content-Type": contentType };
+    if (cacheControl) headers["Cache-Control"] = cacheControl;
     const res = await client.fetch(`${endpoint}/${bucket}/${encodePath(path)}`, {
       method: "PUT",
-      headers: { "Content-Type": contentType },
+      headers,
       body: new Uint8Array(body),
     });
     if (!res.ok) throw new Error(`storage put failed (${res.status}) for ${bucket}/${path}`);

@@ -17,7 +17,8 @@
     "vc1": "tsx tooling/scripts/vc1-spike.ts",
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "storage:setup": "tsx tooling/scripts/setup-storage.ts",
-    "smoke:prod": "tsx tooling/scripts/smoke-prod.ts"
+    "smoke:prod": "tsx tooling/scripts/smoke-prod.ts",
+    "perf": "tsx tooling/scripts/s5-perf-harness.ts"
   },
   "dependencies": {
     "@sentry/nextjs": "^10.65.0",

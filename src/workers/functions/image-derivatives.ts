@@ -121,9 +121,11 @@ export async function deriveImageVariants(
   const mediumPath = buildObjectPath({ ...base, ext: "jpg", variant: "medium" });
   const thumbPath = buildObjectPath({ ...base, ext: "jpg", variant: "thumb" });
 
-  await store.put(row.bucket, mainPath, processed.main.buffer, "image/jpeg");
-  await store.put(row.bucket, mediumPath, processed.medium.buffer, "image/jpeg");
-  await store.put(row.bucket, thumbPath, processed.thumb.buffer, "image/jpeg");
+  // Derivatives are immutable — cache them privately for an hour to bound per-org egress (F-37).
+  const CACHE = "private, max-age=3600";
+  await store.put(row.bucket, mainPath, processed.main.buffer, "image/jpeg", CACHE);
+  await store.put(row.bucket, mediumPath, processed.medium.buffer, "image/jpeg", CACHE);
+  await store.put(row.bucket, thumbPath, processed.thumb.buffer, "image/jpeg", CACHE);
 
   const variants: FileVariants = {
     main: {

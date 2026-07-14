@@ -152,3 +152,9 @@ jobs:
 
       - name: Integration tests (tenancy + identity + entitlements + audit + files/storage + events + bleed)
         run: pnpm test:integration
+
+      # S10 perf pass (doc 11 S10 DoD — "budgets met at synthetic volume"): the local Supabase
+      # stack is co-located, so the per-request budgets are ENFORCED (PERF_COLOCATED=1). Runs at a
+      # heavier-than-default volume; the per-commit unit/e2e wall (VC-5 ≤12 min) is the quality job.
+      - name: Perf budgets (Today p95<1.5s, costing<1.5s, report submit<10s, nightly<5min)
+        run: PERF_COLOCATED=1 PERF_JOBS=60 PERF_REPORTS_PER_JOB=20 pnpm perf

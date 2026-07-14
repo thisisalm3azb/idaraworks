@@ -61,6 +61,7 @@ import {
 } from "./functions/exception-engine";
 import { invoiceOnIssued, paymentReconcileOnDecision } from "./functions/invoice-billing";
 import { subscriptionLifecycleCron } from "./functions/subscription-worker";
+import { retentionPruneCron } from "./functions/retention-prune";
 
 export const workerFunctions = [
   imageDerivatives,

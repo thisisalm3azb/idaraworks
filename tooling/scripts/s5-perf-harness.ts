@@ -22,6 +22,7 @@ import { installTemplate, TEMPLATE_BOATBUILDING } from "@/platform/config";
 import { composeToday } from "@/modules/today/service";
 import { getJobCosting, reconcileOrgRollups } from "@/modules/costing/service";
 import { evaluateNightly } from "@/modules/exceptions/service";
+import { submitDailyReport } from "@/modules/reports/service";
 
 const owner = postgres(process.env.DIRECT_URL!, { max: 4, onnotice: () => {} });
 
@@ -115,6 +116,24 @@ async function measure() {
     await getJobCosting(ctx(true), "owner", jr.id, "AED");
     costMs.push(performance.now() - s);
   }
+  // S10 (doc 11 S10 DoD): the report-submit round-trip budget is < 10s (incl. one photo on 3G;
+  // we measure the SERVER portion — the round-trip's dominant cost is compute + the freeze/derive
+  // tx). Submit a fresh report on a seeded job for a future date so idempotency doesn't collide.
+  const submitMs: number[] = [];
+  for (let i = 0; i < Math.min(10, jobRows.length); i++) {
+    const jr = jobRows[i]!;
+    const s = performance.now();
+    await submitDailyReport(ctx(false), "owner", {
+      jobId: jr.id,
+      reportDate: `2027-01-${String((i % 28) + 1).padStart(2, "0")}`,
+      summary: "perf submit",
+      idempotencyKey: `perf-submit-${jr.id}-${i}`,
+      workLines: [{ description: "work" }],
+      materialLines: [{ freeText: "material", qty: 1 }],
+    });
+    submitMs.push(performance.now() - s);
+  }
+  const submitP95 = p95(submitMs);
   const nightlyStart = performance.now();
   const ex = await evaluateNightly(ctx(true), { asOf: "2026-07-13", nowMs: Date.now() });
   await reconcileOrgRollups(ctx(true));
@@ -140,10 +159,15 @@ async function measure() {
     `Job costing  p95  : ${Math.round(costP95)}ms  (budget < 1500ms)  ${costP95 < 1500 ? "PASS" : "FAIL"}`,
   );
   console.log(
+    `Report submit p95 : ${Math.round(submitP95)}ms  (budget < 10000ms)  ${submitP95 < 10000 ? "PASS" : "FAIL"}`,
+  );
+  console.log(
     `Nightly+reconcile : ${Math.round(nightlyMs)}ms  (budget < 300000ms/org)  ${nightlyMs < 300000 ? "PASS" : "FAIL"} (raised ${ex.missing + ex.overdue + ex.blockers})`,
   );
   const perRequestOk = todayP95 < 1500 && costP95 < 1500;
-  const ok = nightlyMs < 300000 && (!colocated || perRequestOk);
+  // Report submit is enforced everywhere: even over the remote link the server portion is far
+  // under 10s, and the budget explicitly includes 3G upload latency the harness doesn't incur.
+  const ok = nightlyMs < 300000 && submitP95 < 10000 && (!colocated || perRequestOk);
   return ok;
 }
 
