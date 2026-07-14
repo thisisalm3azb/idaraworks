@@ -2,6 +2,7 @@
 
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { oauthEnabled } from "@/platform/auth/oauth";
 import { sql, withUserCtx } from "@/platform/tenancy";
 import { supabaseServer } from "@/platform/tenancy/supabase";
 import { getSessionUser, listMyOrgs } from "@/platform/auth/resolve";
@@ -70,10 +71,6 @@ async function requestMeta() {
  * the buttons are hidden (see oauthEnabled) and this action refuses. Kicks off the provider redirect;
  * the provider calls back to /auth/callback which exchanges the code for a session.
  */
-export function oauthEnabled(): boolean {
-  return process.env.OAUTH_ENABLED === "true";
-}
-
 const OAUTH_PROVIDERS = new Set(["google", "azure"]);
 
 export async function signInWithProviderAction(formData: FormData): Promise<void> {

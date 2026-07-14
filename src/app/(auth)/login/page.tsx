@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { AppShell, Button, Card, Field } from "@/platform/ui";
 import { getT } from "@/platform/i18n/server";
-import { loginAction, signInWithProviderAction, oauthEnabled } from "../actions";
+import { loginAction, signInWithProviderAction } from "../actions";
+import { oauthEnabled } from "@/platform/auth/oauth";
 
 export default async function LoginPage({
   searchParams,
