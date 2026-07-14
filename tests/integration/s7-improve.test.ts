@@ -32,7 +32,7 @@ import {
   revokeShare,
   resolvePublicShare,
 } from "@/modules/customer-updates/service";
-import { ownerSql } from "./helpers";
+import { ownerSql, wipeOrgs } from "./helpers";
 
 const owner = ownerSql();
 const run = randomUUID().slice(0, 8);
@@ -82,6 +82,9 @@ beforeAll(async () => {
 }, 120_000);
 
 afterAll(async () => {
+  // S10 hygiene: self-clean this file's synthetic org so it leaves no leaked org / outbox backlog.
+  await wipeOrgs(owner, [orgId], [ownerUser]).catch(() => {});
+  await owner.end({ timeout: 5 });
   await closeAppDb();
 });
 

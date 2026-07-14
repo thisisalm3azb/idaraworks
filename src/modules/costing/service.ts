@@ -218,9 +218,14 @@ export async function getJobCosting(
 export async function reconcileOrgRollups(ctx: Ctx): Promise<{ jobs: number; drifted: number }> {
   const basis = await resolveVatBasis(ctx);
   const jobIds = await withCtx(ctx, async (tx) => {
+    // S10 perf: a 'done' job's cost inputs are frozen, so its rollup can't drift after a settling
+    // period — reconcile 'active'/'on_hold' always, but only RECENTLY-touched 'done' jobs. This
+    // keeps the nightly per-job transaction count bounded instead of growing with lifetime jobs.
     const rows = (await tx.execute(sql`
       select id::text as id from public.job
-      where org_id = ${ctx.orgId} and status_category in ('active', 'on_hold', 'done')
+      where org_id = ${ctx.orgId}
+        and (status_category in ('active', 'on_hold')
+             or (status_category = 'done' and updated_at > now() - interval '30 days'))
     `)) as unknown as Array<{ id: string }>;
     return rows.map((r) => r.id);
   });

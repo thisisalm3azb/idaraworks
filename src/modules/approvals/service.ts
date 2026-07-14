@@ -771,16 +771,23 @@ export async function listInbox(ctx: Ctx, archetype: RoleArchetype): Promise<Inb
     assigned_role: string;
     created_at: string;
   }>;
-  // Amount visibility rides "po.view" (the purchasing/finance roles) — a manager
-  // decides MR approvals and must see the amount, though they aren't
-  // cost-privileged; a foreman/viewer never sees supply money (F-23).
-  const seesAmount = can(archetype, "po.view");
+  // Amount visibility is PER SUBJECT TYPE (S10 F-23 fix): supply money (MR/PO/expense) rides
+  // "po.view" (a manager decides MR approvals and must see the amount); a quote_send amount is
+  // a SELLING price behind the price wall (pricePrivileged); a payment amount rides payments.view.
+  // A foreman/viewer never sees any of it.
+  const seesPo = can(archetype, "po.view");
+  const seesPayments = can(archetype, "payments.view");
+  const amountFor = (subjectType: string, amount: string | null): string | null => {
+    if (subjectType === "quote_send") return ctx.pricePrivileged ? amount : null;
+    if (subjectType === "payment") return seesPayments ? amount : null;
+    return seesPo ? amount : null; // material_request, purchase_order, expense
+  };
   return rows.map((r) => ({
     id: r.id,
     subjectType: r.subject_type,
     subjectId: r.subject_id,
     title: r.title,
-    amountMinor: seesAmount ? r.amount_minor : null,
+    amountMinor: amountFor(r.subject_type, r.amount_minor),
     jobRef: r.job_ref,
     assignedRole: r.assigned_role,
     createdAt: r.created_at,

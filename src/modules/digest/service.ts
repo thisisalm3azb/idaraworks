@@ -293,10 +293,15 @@ export async function getOwnerDigest(
     if (!rows[0]) return null;
     const r = rows[0];
     const payload = r.payload as DigestPayload;
-    // Redact money for a non-price-privileged reader (F-23 backstop at the read boundary).
+    // S10 F-23/scope: the owner digest is an ORG-WIDE surface. Money is redacted for a
+    // non-price-privileged reader; and the drill-down items[] (which carry all-org job/exception
+    // refs, NOT F-6 scoped) are stripped for any reader who isn't owner/admin — they keep the
+    // headline counts + redacted money (the universal digest surface), never the org-wide item list.
+    const orgWideReader = archetype === "owner" || archetype === "admin";
     const sections = payload.sections.map((s) => ({
       ...s,
       moneyMinor: ctx.pricePrivileged ? s.moneyMinor : null,
+      items: orgWideReader ? s.items : [],
     }));
     return {
       id: r.id as string,

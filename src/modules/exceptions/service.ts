@@ -710,12 +710,17 @@ async function evaluateMissingReports(ctx: Ctx, cal: Calendar, asOf: string) {
   return withCtx(ctx, async (tx) => {
     // Active jobs with an assignment (a real production job): last report date, or
     // the job start_date if none, drives the working-day gap.
+    // S10 perf: bound the report join to a trailing window (E-01's gap threshold is a few working
+    // days). A job that reported inside the window gets its accurate last_date; one that didn't
+    // falls back to start_date and correctly still flags — so the outcome is identical, but the
+    // nightly query stops scanning the org's ENTIRE daily_report history as reports accumulate.
     const jobs = (await tx.execute(sql`
       select j.id::text as job_id,
              coalesce(max(r.report_date), j.start_date)::text as last_date
       from public.job j
       left join public.daily_report r
         on r.job_id = j.id and r.org_id = ${ctx.orgId} and r.status in ('submitted','reviewed')
+        and r.report_date >= (${asOf}::date - 45)
       where j.org_id = ${ctx.orgId} and j.status_category = 'active' and j.archived = false
       group by j.id, j.start_date
     `)) as unknown as Array<{ job_id: string; last_date: string | null }>;

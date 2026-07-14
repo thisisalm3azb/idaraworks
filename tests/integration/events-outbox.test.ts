@@ -38,7 +38,14 @@ beforeAll(async () => {
   await seedAuthUser(userB, `evt-b-${run}@example.com`);
   orgA = await createOrgForUser(userA, { name: "Evt A", country: "AE", baseCurrency: "AED" });
   orgB = await createOrgForUser(userB, { name: "Evt B", country: "SA", baseCurrency: "SAR" });
-}, 90_000);
+  // S10 deflake: the relay processes the GLOBAL outbox, so backlog left by earlier (sequential —
+  // fileParallelism:false) test files made this file's claimed-count / second-pass-claimed==0
+  // assertions backlog-dependent. Drain to empty first so the assertions are deterministic.
+  let guard = 0;
+  while ((await relayOutbox(async () => {}, "drain")).claimed > 0 && guard++ < 100) {
+    /* keep draining */
+  }
+}, 120_000);
 
 afterAll(async () => {
   for (const org of [orgA, orgB].filter(Boolean)) {

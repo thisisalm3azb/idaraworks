@@ -246,10 +246,23 @@ export async function listImportRows(
       select row_number, status, error, mapped from public.import_row
       where org_id = ${ctx.orgId} and batch_id = ${batchId} order by row_number limit 5000`),
   )) as unknown as Array<Record<string, unknown>>;
+  // S10 F-23: staged item rows can carry unit COST (cost-walled) and SELLING price (price-walled).
+  // imports.manage is held by a non-cost/-price-privileged manager, so redact those fields from the
+  // mapped payload unless the caller holds the matching privilege. Reads are never blocked, only
+  // the money fields are nulled.
+  const redactMapped = (mapped: Record<string, unknown> | null): Record<string, unknown> | null => {
+    if (!mapped) return null;
+    const out = { ...mapped };
+    if (!ctx.costPrivileged)
+      for (const k of ["unitCostMinor", "unit_cost_minor", "costMinor"]) delete out[k];
+    if (!ctx.pricePrivileged)
+      for (const k of ["sellingPriceMinor", "selling_price_minor", "priceMinor"]) delete out[k];
+    return out;
+  };
   return rows.map((r) => ({
     rowNumber: r.row_number as number,
     status: r.status as string,
     error: (r.error as string | null) ?? null,
-    mapped: (r.mapped as Record<string, unknown> | null) ?? null,
+    mapped: redactMapped((r.mapped as Record<string, unknown> | null) ?? null),
   }));
 }
