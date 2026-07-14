@@ -1,8 +1,10 @@
 # S11 — Pilot Readiness — Completion Report
 
 **Status:** COMPLETE — external-validation + documentation + simulation slice. No new product features.
-Deployed + CI-green at `<FINAL_COMMIT>`; production baseline = [Alpha Marine, TESTING]. Opens the P2
-pilot phase (subject to the owner completing the external/legal items in the owner-action checklist).
+S11 code + the full S0–S11 regression are **CI-green at `562db75`** (prod-smoke-verified); this report
+finalization lands in a trailing docs commit (re-verified CI + deploy). Production baseline =
+[Alpha Marine, TESTING]. Opens the P2 pilot phase (subject to the owner completing the external/legal
+items in the owner-action checklist).
 
 ## What shipped
 
