@@ -75,7 +75,12 @@ export interface BillingProvider {
   verifySignature(rawBody: string, signature: string): boolean;
   /** Parse a raw (already signature-verified) webhook body into a normalized event. */
   parseEvent(rawBody: string): NormalizedEvent;
+  /** The provider's current view of a customer's subscription (for reconciliation). Null when the
+   * provider has no record of the customer. */
+  fetchProviderState(providerCustomerId: string): Promise<ProviderStateView | null>;
 }
+
+export type ProviderStateView = { billingState: string; planKey: string | null };
 
 export class BillingProviderDisabledError extends Error {
   constructor(op: string) {
@@ -125,11 +130,21 @@ export const fakeBillingProvider: BillingProvider & {
   parseEvent(rawBody) {
     return NormalizedEventShape(JSON.parse(rawBody));
   },
+  async fetchProviderState(customerId) {
+    return _fakeProviderState.get(customerId) ?? null;
+  },
   signEvent(e) {
     const body = JSON.stringify(e);
     return { body, signature: hmac(body, FAKE_SECRET) };
   },
 };
+
+/** Test/demo injection point for the fake provider's "remote" state (reconciliation exercises). */
+const _fakeProviderState = new Map<string, ProviderStateView>();
+export function setFakeProviderState(customerId: string, state: ProviderStateView | null): void {
+  if (state === null) _fakeProviderState.delete(customerId);
+  else _fakeProviderState.set(customerId, state);
+}
 
 /** The production default until D1: every outbound op refuses; no webhook ever verifies. */
 export const disabledBillingProvider: BillingProvider = {
@@ -149,6 +164,9 @@ export const disabledBillingProvider: BillingProvider = {
   },
   parseEvent() {
     throw new BillingProviderDisabledError("parseEvent");
+  },
+  async fetchProviderState() {
+    return null; // nothing to reconcile against while disabled
   },
 };
 

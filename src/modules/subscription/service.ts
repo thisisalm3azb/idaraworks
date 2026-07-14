@@ -25,9 +25,14 @@ import {
   type NormalizedEvent,
 } from "@/platform/billing/adapter";
 import { nextForEvent, type BillingState } from "./machine";
+import { computeWindows } from "./windows";
 import { logger } from "@/platform/logger";
 
 export { BillingProviderDisabledError };
+// Re-export the pure machine/windows surface the lifecycle worker needs, so it imports the
+// subscription module ONLY via this service.ts (BUILD_BIBLE §3.3 — no cross-module internal imports).
+export { nextForEvent } from "./machine";
+export { dueSignal, LIFECYCLE_WINDOWS, type LifecycleRow } from "./windows";
 
 const READ_ONLY_STATES: ReadonlySet<string> = new Set([
   "suspended",
@@ -128,28 +133,67 @@ export async function processSubscriptionWebhook(
       return { status: "ignored", from: org.billing_state };
     }
 
-    await db.execute(sql`
-      select app.advance_subscription(
-        ${org.org_id}::uuid, ${res.to}, ${evt.planKey}, ${provider.id},
-        ${evt.providerCustomerId}, ${evt.providerSubscriptionId}, ${evt.billingInterval},
-        ${evt.billingCurrency}, null, null, null, null, null, null, null, null)`);
-
-    await db.execute(sql`
-      select app.record_platform_audit(
-        ${org.org_id}::uuid, null, ${"subscription." + res.to}, 'subscription', ${org.org_id}::uuid,
-        ${`subscription ${org.billing_state} → ${res.to} (${res.reason})`},
-        ${JSON.stringify({ from: org.billing_state, to: res.to, event: evt.eventType })}::jsonb)`);
-
+    await applyTransition(db, org.org_id, org.billing_state, res.to, res.reason, Date.now(), {
+      planKey: evt.planKey,
+      provider: provider.id,
+      providerCustomerId: evt.providerCustomerId,
+      providerSubscriptionId: evt.providerSubscriptionId,
+      billingInterval: evt.billingInterval,
+      billingCurrency: evt.billingCurrency,
+      eventType: evt.eventType,
+    });
     await markProcessed(db, provider.id, evt.providerEventId, "processed", null);
-    invalidateEntitlements(org.org_id); // same-process cache; cross-instance self-heals within TTL
-    logger.info(
-      { orgId: org.org_id, from: org.billing_state, to: res.to, event: evt.eventType },
-      "subscription state advanced",
-    );
     return { status: "processed", from: org.billing_state, to: res.to };
   } finally {
     await end();
   }
+}
+
+type TransitionOpts = {
+  planKey?: string | null;
+  provider?: string | null;
+  providerCustomerId?: string | null;
+  providerSubscriptionId?: string | null;
+  billingInterval?: string | null;
+  billingCurrency?: string | null;
+  eventType?: string;
+};
+
+/**
+ * Persist ONE state transition on a platform client: set the target's lifecycle windows (so the
+ * sweep knows the next deadline), call the DB sole-writer `advance_subscription`, write the tenant-
+ * visible audit row, and invalidate the same-process entitlement cache. Shared by the webhook
+ * processor and the lifecycle sweep. Cross-instance freshness = the resolver's 60s TTL self-heal
+ * (serverless-appropriate; a LISTEN/NOTIFY push channel is the documented scaling step).
+ */
+export async function applyTransition(
+  db: ReturnType<typeof createAppDb>["db"],
+  orgId: string,
+  from: string,
+  to: BillingState,
+  reason: string,
+  nowMs: number,
+  opts: TransitionOpts = {},
+): Promise<void> {
+  const w = computeWindows(to, nowMs);
+  await db.execute(sql`
+    select app.advance_subscription(
+      ${orgId}::uuid, ${to}, ${opts.planKey ?? null}, ${opts.provider ?? null},
+      ${opts.providerCustomerId ?? null}, ${opts.providerSubscriptionId ?? null},
+      ${opts.billingInterval ?? null}, ${opts.billingCurrency ?? null},
+      null, null,
+      ${w.trialEnd ?? null}, ${w.graceUntil ?? null}, ${w.suspendAt ?? null}, ${w.purgeAt ?? null},
+      null, null)`);
+  await db.execute(sql`
+    select app.record_platform_audit(
+      ${orgId}::uuid, null, ${"subscription." + to}, 'subscription', ${orgId}::uuid,
+      ${`subscription ${from} → ${to} (${reason})`},
+      ${JSON.stringify({ from, to, event: opts.eventType ?? "lifecycle" })}::jsonb)`);
+  invalidateEntitlements(orgId);
+  logger.info(
+    { orgId, from, to, event: opts.eventType ?? "lifecycle" },
+    "subscription state advanced",
+  );
 }
 
 async function markProcessed(

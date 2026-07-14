@@ -60,6 +60,7 @@ import {
   nightlyOrgRun,
 } from "./functions/exception-engine";
 import { invoiceOnIssued, paymentReconcileOnDecision } from "./functions/invoice-billing";
+import { subscriptionLifecycleCron } from "./functions/subscription-worker";
 
 export const workerFunctions = [
   imageDerivatives,
@@ -83,4 +84,5 @@ export const workerFunctions = [
   nightlyOrgRun,
   invoiceOnIssued,
   paymentReconcileOnDecision,
+  subscriptionLifecycleCron,
 ];
