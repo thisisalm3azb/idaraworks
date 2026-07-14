@@ -6,6 +6,10 @@ interruption, and around deploy/cleanup. **Never redo a completed, green, deploy
 cleaned slice.**
 
 ## Current position
+- **Current slice:** — (S6 DONE, S7 DONE, **S8 DONE**). Autonomous S6→S9 run STOPS here per directive: **do NOT begin S9.**
+- **S8 CLOSED (2026-07-14):** deployed `6760e6e`, CI green, 18/18 prod smoke, Arabic DoD demo PASS (cold→configured, 20 revisions + 2 always-rules, first job, **PARITY 290000/395000**, guided import, call-cap, undo). 3-lens adversarial review → 5 findings fixed (approval-rule inverted, circuit-breaker fail-open→0051 DEFINER, validator rule-b dead→privilege check, applyImport race→atomic claim, stale comment). Baseline RESTORED: 5 synthetic orgs + 5 users + 495 rows removed; inventory = 2 orgs (Alpha Marine + TESTING), S7+S8 tables 0. Migrations **0000-0051** (next 0052). Report: docs/S8-ONBOARDING-COMPLETION.md.
+
+## (historical) S8 build detail
 - **Current slice:** S8 — AI Onboarding (S6 DONE, **S7 DONE**)
 - **S7 CLOSED (2026-07-14):** deployed `63bff3d` (code `a5485ab`), CI green (run 29290957958), 18/18 prod smoke,
   Arabic DoD demo PASS (E-05/06/13 raised, 13/13 questions, narration validated+metered, money wall HELD, share
@@ -19,9 +23,10 @@ cleaned slice.**
 ## S8 — BUILD STATE (updated live)
 - **DONE:** migration **0050** (onboarding_session, import_batch/import_row, ai_interaction feature widen, limit.ai_onboarding_calls) applied to hosted. Modules: onboarding (proposal/validate/provider/service — Layer-A pipeline propose→validate→apply→undo, F-28 cap, cap+breaker) + imports (stage→validate→apply via masters). Platform: authz onboarding.run(owner/admin)+imports.manage(owner/admin/manager) both matrices; AUDIT_ENTITY_TYPES; entitlement catalogue. UI: onboarding intake + preview screen + import wizard + first-run checklist + nav + en/ar i18n. Bleed seeders for the 3 tables. Tests: **unit 282/282** (9 S8), **s8 hosted integration 5/5** (cold→configured, PARITY 290000/395000, guided import, call-cap, guard-respecting undo). Gates: format/lint(0)/typecheck/build green. s8-prod-demo.ts written.
 - **2 bugs fixed during hosted run:** drizzle array-inlining (`()` empty-array syntax error) → jsonb→array bind; undo tripped D-9.2 field-removal guard → best-effort undo catches ConfigGuardError (install marker still reverts).
-- **Commits (unpushed):** af…e94edb8 (0050+services, UI, tests+demo). HEAD e94edb8.
-- **NOW:** 3-lens adversarial review running (config-safety, tenancy/authz/imports, approval-semantics/undo/cap). NEXT: fix confirmed materials → push → CI → deploy → prod smoke → Arabic s8-prod-demo → remove S8 synthetic (incl. the "S8 Org" integration leftover) → report. Do NOT begin S9.
-- **Known review item to confirm:** approval-rule seeding maps intake `auto_approve_below X` → approval_rule amount_gte=X; verify this yields "auto-approve BELOW X" given the S4 engine's no-rule-match behavior + whether the template seeds an 'always' rule.
+- **REVIEW DONE (3-lens) + fixes applied.** 5 findings: (MATERIAL) approval-rule inverted → `always`+auto_approve_below; (MATERIAL latent) circuit breaker fail-open → migration **0051** SECURITY DEFINER; (false-assurance) validator rule-b dead code → cost/price-privilege check; (MINOR) applyImport race → atomic claim; (stale) entitlement comment. Terminology-override gap documented (non-blocking). Migrations hosted **0000-0051** (next 0052).
+- **Commits PUSHED:** e94edb8 (tests+demo) + **6760e6e** (review fixes). HEAD 6760e6e on origin/main.
+- **NOW:** CI running on 6760e6e (monitor blf0rzr8c) + deploy-wait (bqwtjt6op). Gates green: format/lint(0)/typecheck/unit 282/build/s8-integ 5/5 (PARITY 290000/395000). Report drafted docs/S8-ONBOARDING-COMPLETION.md.
+- **NEXT:** CI green → prod smoke → Arabic s8-prod-demo → remove S8 synthetic (demo org + "S8 Org" integ leftover; baseline=[Alpha Marine,TESTING]) → finalize report + memory → STOP. Do NOT begin S9.
 
 ## S8 — AI Onboarding & Imports — FROZEN SCOPE (doc 11 S8; doc 09 #12/F-28; doc 10 #32; doc 08 parity gate)
 **Objective:** "how does your business operate?" → configured workspace in ≤30 min, template #1 only, WITHOUT the builder present. The pipeline is a **validator around templates, not an agent** (doc 11 risk note).

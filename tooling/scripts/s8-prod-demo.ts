@@ -66,10 +66,10 @@ const TABLES = [
   "org_holiday_calendar",
   "job_preset",
   "reference_sequence",
+  "membership", // must precede role_definition (membership.role_key → role_definition(org,key))
   "role_definition",
   "org_plan_state",
   "org_entitlement_override",
-  "membership",
   "audit_log",
   "activity",
   "company",
