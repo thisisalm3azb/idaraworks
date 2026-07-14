@@ -20,6 +20,18 @@ export const APPROVAL_SUBJECTS = ["purchase_order", "material_request"] as const
 export const OnboardingIntakeSchema = z
   .object({
     business_name: z.string().trim().min(1).max(120),
+    // Free-text business description — drives the deterministic template
+    // classification (classify.ts). Optional: without it (and without an
+    // explicit template_key) the recommendation falls back to Generic Operations.
+    business_description: z.string().trim().max(600).default(""),
+    // Explicit template selection (manual choice / override of a previous
+    // recommendation). Must name a REAL registry template — validated by
+    // validateProposal against TEMPLATES; when present it wins over the
+    // classifier. Absent = classify business_description.
+    template_key: z
+      .string()
+      .regex(/^[a-z][a-z0-9_]{0,49}$/)
+      .optional(),
     country: z.enum(SUPPORTED_COUNTRIES),
     base_currency: z.string().regex(/^[A-Z]{3}$/),
     languages: z.array(z.enum(["en", "ar"])).min(1),
@@ -65,11 +77,32 @@ export const ApprovalDefaultSchema = z
   .strict();
 export type ApprovalDefault = z.infer<typeof ApprovalDefaultSchema>;
 
+/** A non-recommended template shown as an alternative (chooser row on preview). */
+export const TemplateAlternativeSchema = z
+  .object({
+    key: z.string().min(1).max(80),
+    score: z.number().min(0),
+    name_en: z.string().min(1).max(80),
+    name_ar: z.string().min(1).max(80),
+  })
+  .strict();
+export type TemplateAlternative = z.infer<typeof TemplateAlternativeSchema>;
+
 export const ConfigProposalSchema = z
   .object({
     intake_summary_en: z.string().min(1).max(1000),
     intake_summary_ar: z.string().min(1).max(1000),
     template_key: z.string().min(1).max(80),
+    // WHY this template was recommended (matched signals or "you selected it") —
+    // rendered verbatim on the preview screen. Honest by construction: built
+    // from the classifier's matched keywords/phrases, never free-claims.
+    template_reason_en: z.string().min(1).max(400),
+    template_reason_ar: z.string().min(1).max(400),
+    // Every OTHER catalogue template with its score — the founder can always
+    // choose one of these instead (a new proposal is generated for the choice).
+    template_alternatives: z.array(TemplateAlternativeSchema).default([]),
+    /** false = ambiguous match or generic fallback — UI emphasises manual choice. */
+    template_confident: z.boolean().default(true),
     install_template: z.boolean(),
     artifacts: z.array(ProposalArtifactSchema),
     approval_defaults: z.array(ApprovalDefaultSchema).default([]),

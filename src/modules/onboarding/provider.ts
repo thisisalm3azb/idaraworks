@@ -1,19 +1,30 @@
 /**
- * S8 grounded proposal builder + provider seam (doc 11 S8; mirrors S7 getNarrationProvider).
+ * Grounded proposal builder + provider seam (S8, extended by the post-MVP
+ * template catalogue; mirrors S7 getNarrationProvider).
  *
- * The proposal's CONFIG is produced DETERMINISTICALLY from the structured intake grounded on
- * template #1 — this path needs no AI provider at all, so onboarding always works (the manual
- * fallback, doc 11 "a validator around templates, not an agent"). An optional AI provider may
- * only enrich the human-readable summary/rationale prose; it can never change the config, the
- * approval defaults, or requires_upgrade — those come from the deterministic grounding and are
- * re-checked by validateProposal. `disabled` (prod default, no creds) === the deterministic
- * build. This makes `feat.ai_onboarding` genuinely free + always-on.
+ * The proposal's CONFIG is produced DETERMINISTICALLY: the founder's free-text
+ * business description is scored by the transparent classifier (classify.ts)
+ * against the template catalogue — or an explicit intake.template_key wins —
+ * and the proposal grounds on THAT template, carrying the recommendation
+ * reason, the scored alternatives, and (when the founder renamed the core job
+ * term) a terminology.overrides artifact so the chosen words are actually
+ * APPLIED, not just echoed. This path needs no AI provider at all (the manual
+ * fallback IS the shipped path). An optional AI provider may only enrich the
+ * human-readable prose; it can never change the config, the approval defaults,
+ * or requires_upgrade — everything is re-checked by validateProposal.
  */
-import { TEMPLATE_BOATBUILDING } from "@/platform/config";
-import { type OnboardingIntake, type ConfigProposal, APPROVAL_SUBJECTS } from "./proposal";
+import { TEMPLATES, getCatalogueEntry } from "@/platform/config";
+import { classifyBusiness, GENERIC_TEMPLATE_KEY } from "./classify";
+import {
+  type OnboardingIntake,
+  type ConfigProposal,
+  type ProposalArtifact,
+  APPROVAL_SUBJECTS,
+} from "./proposal";
 
 // Features available on every tier at this stage (release-gated, not tier-gated) — anything
 // an operator requests outside this set is surfaced as requires_upgrade, never applied.
+// (The add-on model refines this into entitlement-aware computation at apply time.)
 const ALWAYS_ON_FEATURES = new Set([
   "feat.ai_onboarding",
   "feat.ai_narration",
@@ -29,16 +40,90 @@ const COUNTRY_LABEL: Record<string, { en: string; ar: string }> = {
   KW: { en: "Kuwait", ar: "الكويت" },
   BH: { en: "Bahrain", ar: "البحرين" },
   OM: { en: "Oman", ar: "عُمان" },
-  QA: { en: "Qatar", ar: "قطر" },
+  QA: { en: "قطر" === "قطر" ? "Qatar" : "Qatar", ar: "قطر" },
 };
 
-/** Deterministic grounding: structured intake → a ConfigProposal over template #1. Pure. */
+/** Naive english pluralisation for a founder-typed job term (editable later in Settings). */
+function pluralizeEn(term: string): string {
+  if (/(s|x|z|ch|sh)$/i.test(term)) return `${term}es`;
+  if (/[^aeiou]y$/i.test(term)) return `${term.slice(0, -1)}ies`;
+  return `${term}s`;
+}
+
+/**
+ * Template selection: explicit intake.template_key wins (manual choice);
+ * otherwise the deterministic classifier over business_description (+ name).
+ */
+export function selectTemplate(intake: OnboardingIntake): {
+  key: string;
+  reasonEn: string;
+  reasonAr: string;
+  alternatives: ConfigProposal["template_alternatives"];
+  confident: boolean;
+} {
+  const text = `${intake.business_description} ${intake.business_name}`.trim();
+  const result = classifyBusiness(text);
+
+  const manual = intake.template_key && intake.template_key in TEMPLATES;
+  const key = manual ? intake.template_key! : result.recommendedKey;
+
+  const alternatives = result.ranked
+    .filter((m) => m.key !== key)
+    .map((m) => {
+      const e = getCatalogueEntry(m.key);
+      return {
+        key: m.key,
+        score: m.score,
+        name_en: e?.names.en ?? m.key,
+        name_ar: e?.names.ar ?? m.key,
+      };
+    });
+
+  if (manual) {
+    return {
+      key,
+      reasonEn: "You selected this template yourself.",
+      reasonAr: "اخترت هذا القالب بنفسك.",
+      alternatives,
+      confident: true,
+    };
+  }
+
+  const top = result.ranked.find((m) => m.key === key);
+  const signals = [...(top?.matchedKeywords ?? []), ...(top?.matchedPhrases ?? [])].slice(0, 5);
+  if (key === GENERIC_TEMPLATE_KEY || !top || signals.length === 0) {
+    return {
+      key: GENERIC_TEMPLATE_KEY,
+      reasonEn:
+        "No specific industry template clearly matched your description, so the neutral Generic Operations template is recommended. You can pick any template below.",
+      reasonAr:
+        "لم يتطابق وصف نشاطك بوضوح مع قالب صناعي محدد، لذلك نُرشّح قالب العمليات العامة المحايد. يمكنك اختيار أي قالب آخر أدناه.",
+      alternatives,
+      confident: false,
+    };
+  }
+  return {
+    key,
+    reasonEn: `Your description matched this template's signals: ${signals.join(", ")}.`,
+    reasonAr: `تطابق وصف نشاطك مع مؤشرات هذا القالب: ${signals.join("، ")}.`,
+    alternatives,
+    confident: result.confident,
+  };
+}
+
+/** Deterministic grounding: structured intake → a ConfigProposal over the selected template. Pure. */
 export function buildGroundedProposal(intake: OnboardingIntake): ConfigProposal {
   const c = COUNTRY_LABEL[intake.country] ?? { en: intake.country, ar: intake.country };
   const vatEn = intake.vat_registered ? "VAT-registered" : "not VAT-registered";
   const vatAr = intake.vat_registered ? "مسجّلة ضريبياً" : "غير مسجّلة ضريبياً";
   const week = intake.six_day_week ? "6-day" : "5-day";
   const weekAr = intake.six_day_week ? "٦ أيام" : "٥ أيام";
+
+  const selected = selectTemplate(intake);
+  const manifest = TEMPLATES[selected.key];
+  const entry = getCatalogueEntry(selected.key);
+  const templateNameEn = entry?.names.en ?? selected.key;
+  const templateNameAr = entry?.names.ar ?? selected.key;
 
   // Approval defaults come straight from intake — if a value exceeds the F-28 cap the
   // validator REJECTS the proposal (the rejection-loop), it is never clamped here.
@@ -51,18 +136,44 @@ export function buildGroundedProposal(intake: OnboardingIntake): ConfigProposal 
     (f) => !ALWAYS_ON_FEATURES.has(f),
   );
 
+  // Terminology: if the founder's job term differs from the template's own,
+  // propose a terminology.overrides artifact so the chosen words are APPLIED
+  // (review finding: intake terms were previously echoed but silently dropped).
+  const artifacts: ProposalArtifact[] = [];
+  const templateJobEn = manifest?.terminology?.job?.en?.singular;
+  const templateJobAr = manifest?.terminology?.job?.ar?.singular;
+  if (
+    manifest &&
+    (intake.job_term_en !== (templateJobEn ?? "Job") ||
+      intake.job_term_ar !== (templateJobAr ?? "مهمة"))
+  ) {
+    artifacts.push({
+      key: "terminology.overrides",
+      value: {
+        job: {
+          en: { singular: intake.job_term_en, plural: pluralizeEn(intake.job_term_en) },
+          // Arabic plurals are irregular — reuse the founder's term and let them
+          // refine the plural in Settings → Configuration (editable any time).
+          ar: { singular: intake.job_term_ar, plural: intake.job_term_ar, gender: "m" as const },
+        },
+      },
+      rationale_en: `You chose to call your work items "${intake.job_term_en}" — this applies that name across the app (plural forms are editable in Settings).`,
+      rationale_ar: `اخترت تسمية وحدات العمل "${intake.job_term_ar}" — يعتمد هذا الاسم في التطبيق كاملاً (يمكن تعديل صيغة الجمع من الإعدادات).`,
+    });
+  }
+
   return {
-    template_key: TEMPLATE_BOATBUILDING.key,
+    template_key: selected.key,
+    template_reason_en: selected.reasonEn,
+    template_reason_ar: selected.reasonAr,
+    template_alternatives: selected.alternatives,
+    template_confident: selected.confident,
     install_template: true,
-    // The marine template already carries the full artifact bundle grounded on the org's
-    // country/currency at install; onboarding adds approval defaults + a first job + the
-    // checklist. No config-artifact OVERRIDE is proposed for the on-template marine case
-    // (an operator edit could add one; the validator bounds it).
-    artifacts: [],
+    artifacts,
     approval_defaults,
     requires_upgrade,
-    intake_summary_en: `${intake.business_name} — a ${c.en} ${vatEn} marine/fabrication workshop on a ${week} working week, base currency ${intake.base_currency}, work items called "${intake.job_term_en}". Grounded on the boat-building template.`,
-    intake_summary_ar: `${intake.business_name} — ورشة بحرية/تصنيع في ${c.ar}، ${vatAr}، أسبوع عمل ${weekAr}، العملة ${intake.base_currency}، تُسمّى وحدات العمل "${intake.job_term_ar}". مبنية على قالب بناء القوارب.`,
+    intake_summary_en: `${intake.business_name} — a ${c.en} ${vatEn} business on a ${week} working week, base currency ${intake.base_currency}, work items called "${intake.job_term_en}". Grounded on the ${templateNameEn} template.`,
+    intake_summary_ar: `${intake.business_name} — منشأة في ${c.ar}، ${vatAr}، أسبوع عمل ${weekAr}، العملة ${intake.base_currency}، تُسمّى وحدات العمل "${intake.job_term_ar}". مبنية على قالب ${templateNameAr}.`,
   };
 }
 
@@ -82,10 +193,10 @@ const deterministicProvider: OnboardingProvider = {
 /**
  * Provider selection mirrors the narration seam: in production, without an AI onboarding
  * provider configured, onboarding runs on the deterministic grounding (which is the shipped
- * product). AI_ONBOARDING_PROVIDER may name a future enrichment provider off-prod.
+ * product). A future AI provider may enrich prose/questions but must return the SAME
+ * validated ConfigProposal shape — it can never emit arbitrary configuration.
  */
 export function getOnboardingProvider(): OnboardingProvider {
   // No real LLM provider is wired yet; the deterministic build is the shipped path either way.
-  // Kept as a seam so a future provider can enrich prose without touching config generation.
   return deterministicProvider;
 }

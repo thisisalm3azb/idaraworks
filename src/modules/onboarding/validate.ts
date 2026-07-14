@@ -27,7 +27,8 @@ import {
   RolePresetSetSchema,
   HolidayCalendarSchema,
   FieldDefinitionSetSchema,
-  TEMPLATE_BOATBUILDING,
+  TerminologyOverrideSchema,
+  TEMPLATES,
 } from "@/platform/config";
 import {
   ConfigProposalSchema,
@@ -38,6 +39,7 @@ import {
 
 // Per-artifact-key schema map (mirrors the config pipeline's FIXED_HANDLERS).
 const ARTIFACT_SCHEMAS: Record<string, z.ZodTypeAny> = {
+  "terminology.overrides": TerminologyOverrideSchema,
   "config.stage_template": StageTemplateSchema,
   "config.status_set.job": StatusSetSchema,
   "config.categories.item": CategorySetSchema,
@@ -50,15 +52,20 @@ const ARTIFACT_SCHEMAS: Record<string, z.ZodTypeAny> = {
   "config.fields.customer": FieldDefinitionSetSchema,
 };
 
-/** The template's per-role privilege baseline (rule b): a role may not RAISE either flag above
- * these. A role key absent from the template has a `false` baseline — it may not grant either. */
-function templatePrivilegeBaseline(): Map<string, { cost: boolean; price: boolean }> {
+/** The SELECTED template's per-role privilege baseline (rule b): a role may not RAISE either
+ * flag above these. A role key absent from the template has a `false` baseline — it may not
+ * grant either. Keyed by proposal.template_key (multi-template): the baseline must come from
+ * the template actually being installed, never a fixed one. */
+function templatePrivilegeBaseline(
+  templateKey: string,
+): Map<string, { cost: boolean; price: boolean }> {
   const m = new Map<string, { cost: boolean; price: boolean }>();
+  const manifest = TEMPLATES[templateKey];
   const roles = (
-    TEMPLATE_BOATBUILDING.role_presets as {
-      roles?: Array<{ key?: string; cost_privileged?: boolean; price_privileged?: boolean }>;
-    }
-  ).roles;
+    manifest?.role_presets as
+      | { roles?: Array<{ key?: string; cost_privileged?: boolean; price_privileged?: boolean }> }
+      | undefined
+  )?.roles;
   for (const r of roles ?? [])
     if (r.key) m.set(r.key, { cost: !!r.cost_privileged, price: !!r.price_privileged });
   return m;
@@ -78,6 +85,18 @@ export function validateProposal(raw: unknown): ProposalValidation {
   }
   const proposal: ConfigProposal = parsed.data;
   const errors: string[] = [];
+
+  // Registry membership — a proposal may only name templates that actually
+  // exist (multi-template rule): a bogus key must fail HERE at validation,
+  // never mid-apply after the session is claimed.
+  if (!(proposal.template_key in TEMPLATES)) {
+    errors.push(`template_key "${proposal.template_key}" is not a registered template`);
+  }
+  for (const alt of proposal.template_alternatives) {
+    if (!(alt.key in TEMPLATES)) {
+      errors.push(`template_alternatives: "${alt.key}" is not a registered template`);
+    }
+  }
 
   // Per-artifact schema validation.
   const seenKeys = new Set<string>();
@@ -107,7 +126,7 @@ export function validateProposal(raw: unknown): ProposalValidation {
   // a role's cost_privileged / price_privileged above the template baseline.
   const rolesArt = proposal.artifacts.find((a) => a.key === "config.roles");
   if (rolesArt) {
-    const base = templatePrivilegeBaseline();
+    const base = templatePrivilegeBaseline(proposal.template_key);
     const roles = (
       rolesArt.value as {
         roles?: Array<{ key?: string; cost_privileged?: boolean; price_privileged?: boolean }>;

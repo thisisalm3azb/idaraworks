@@ -45,34 +45,42 @@ catalogue (tax-exclusive USD/month), not a commitment.
 
 | # | Phase | Status |
 | --- | --- | --- |
-| P-TA0 | Baseline verification + this tracker | ✅ done (this doc) |
-| P-TA1 | Market research (17 products, official 2026 pages) + pricing rationale | 🔄 running (background research workflow `wf_d5674a04`) |
-| P-TA2 | Composable template architecture + 7 new templates + docs | 🔄 design started (code-map workflow `wf_dbc9b329` feeding it) |
-| P-TA3 | AI + deterministic template selection in onboarding | ⏳ |
-| P-TA4 | Add-on catalogue + bundles + free base + entitlement extension (migrations 0065+) | ⏳ |
+| P-TA0 | Baseline verification + this tracker | ✅ |
+| P-TA1 | Market research (17 products, official 2026 pages) + pricing rationale | 🔄 data COLLECTED (23 agents, output on disk); docs pending |
+| P-TA2 | Composable template architecture + 7 new templates | ✅ CODE (blocks + catalogue + 8 manifests + registry + terminology auto-derive); docs pending |
+| P-TA3 | AI + deterministic template selection in onboarding | ✅ CORE (classify.ts + selectTemplate + proposal schema + validator; 8/8 scenarios green); UI pending |
+| P-TA4 | Add-on catalogue + bundles + free base + entitlement extension (migrations 0065+) | ⏳ next |
 | P-TA5 | UX (template chooser/preview/compare, pricing page, EN/AR/RTL/375px) | ⏳ |
-| P-TA6 | Tests + full gates + CI | ⏳ |
+| P-TA6 | Tests + full gates + CI | 🔄 unit green 410/410; integration/e2e at gate time |
 | P-TA7 | Adversarial review + fixes | ⏳ |
 | P-TA8 | Deploy + production demo + cleanup + final report | ⏳ |
 
 ## Current work
 
-Reading maps of billing/entitlement/config/test surfaces (4 parallel agents) + market research
-(17 products + 3 thematic lenses + completeness critic) — both in background. Next: design doc for
-the addon entitlement architecture + template shared-blocks library, then implement templates.
+P-TA2/3 code milestone committed. Templates: boatbuilding preserved verbatim + 7 new manifests
+(manufacturing, service, construction, food_beverage, online_store, agriculture, generic) built on
+shared blocks; registry `templates/index.ts` drives pipeline/installer/terminology automatically.
+Classifier: transparent scoring (keywords +3, phrase-overlap +2×ratio, MIN_SCORE 3 → generic
+fallback, MIN_LEAD 2 → ambiguous), manual template_key override wins, alternatives + reasons carried
+in the proposal, terminology.overrides artifact now APPLIES the founder's job term (fixes the
+verified founder-test defect). Validator: registry membership + per-template privilege baseline.
 
 ## Ledger
 
-- Local HEAD: `f3d9380` · Deployed: `97985e1` · Highest migration: `0064` · Next: `0065`
-- Test counts: (baseline from S11) full S0–S11 regression green in CI; exact counts re-recorded at P-TA6
-- CI: green on `f3d9380`
+- Local HEAD: (this commit) · Deployed: `97985e1` · Highest migration: `0064` · Next: `0065`
+- Tests: unit 28 files / 410 passed; typecheck clean; lint pre-existing warnings only
+- CI: green on `f3d9380` (pre-milestone); push deferred to next milestone
 - Review findings: none yet (P-TA7 pending)
-- Cleanup status: prod = 2 protected orgs only; no synthetic residue (ai_interaction=2 rows belong to protected orgs)
+- Cleanup status: prod = 2 protected orgs only; no synthetic residue
 
 ## Exact next task
 
-Consume the code-map workflow results → write `docs/commercial/ADDON_ENTITLEMENT_ARCHITECTURE.md`
-(design) → implement template shared blocks + 7 manifests (P-TA2).
+(1) Write docs: TEMPLATE_CATALOGUE.md, TEMPLATE_CONFIGURATION_REFERENCE.md,
+AI_TEMPLATE_SELECTION_RULES.md, ADDON_MARKET_RESEARCH.md, ADDON_PRICING_RATIONALE.md (research data
+in scratchpad task w7xycupwv.output). (2) P-TA4: migration 0065 (addon_def/addon_price/org_addon/
+bundle_def/bundle_addon/bundle_price + free plan + app.set_org_addon DEFINER), addons.ts code
+catalogue, resolver extension, seat-limit enforcement, capability gates, period-end sweep fix.
+(3) P-TA5 UI. (4) Gates → review → deploy → demo → cleanup → report.
 
 ## Resume instruction
 

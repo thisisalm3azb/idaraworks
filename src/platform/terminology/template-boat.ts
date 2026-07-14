@@ -1,10 +1,12 @@
 /**
- * Template #1 (boat-building) terminology overrides (doc 08). A boat-building
- * org sees "Boat/قارب" for `job` and Najolatech's house term "LPO" for
- * `purchase_order` — exactly the override-style terms doc 07 calls out. Only the
- * keys that differ from the platform default are listed; the rest fall through.
+ * Template terminology registry. Historically hand-maintained for template #1
+ * (boat-building); now DERIVED from the platform template registry so every
+ * shipped manifest's terminology is auto-registered — a new template cannot be
+ * forgotten here (the old failure mode: falling back to "Job" silently). The
+ * legacy "boat-building" alias predates S1 and stays for stored settings.
  */
 import type { TerminologyMap } from "./catalogue";
+import { TEMPLATE_CATALOGUE } from "@/platform/config/templates";
 
 export const TEMPLATE_BOAT_TERMS: TerminologyMap = {
   job: {
@@ -18,12 +20,10 @@ export const TEMPLATE_BOAT_TERMS: TerminologyMap = {
   },
 };
 
-import { TEMPLATE_BOATBUILDING } from "@/platform/config/templates/boatbuilding";
-
-/** Registered templates by key (the S1 config pipeline selects one per org).
- * The shipped manifest's terminology is the source of truth for its key; the
- * legacy "boat-building" alias predates S1 and stays for stored settings. */
+/** Registered template terminologies by key — derived from the catalogue. */
 export const TEMPLATE_TERMS: Record<string, TerminologyMap> = {
-  "boat-building": TEMPLATE_BOAT_TERMS,
-  [TEMPLATE_BOATBUILDING.key]: TEMPLATE_BOATBUILDING.terminology as TerminologyMap,
+  "boat-building": TEMPLATE_BOAT_TERMS, // legacy alias (pre-S1 stored settings)
+  ...Object.fromEntries(
+    TEMPLATE_CATALOGUE.map((e) => [e.manifest.key, e.manifest.terminology as TerminologyMap]),
+  ),
 };

@@ -10,7 +10,7 @@ import { sql, withCtx, type Ctx } from "@/platform/tenancy";
 import { getLimit } from "@/platform/entitlements";
 import { applyConfigChange, ConfigGuardError } from "./pipeline";
 import { TemplateManifestSchema, type TemplateManifest } from "./schemas/manifest";
-import { TEMPLATES } from "./templates/boatbuilding";
+import { TEMPLATES } from "./templates";
 
 export class TemplateInstallError extends Error {
   constructor(message: string) {

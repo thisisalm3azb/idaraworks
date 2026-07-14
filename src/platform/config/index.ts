@@ -22,7 +22,14 @@ export {
   type ConfigPreview,
 } from "./pipeline";
 export { installTemplate, getTemplate, TemplateInstallError, type InstallResult } from "./install";
-export { TEMPLATES, TEMPLATE_BOATBUILDING } from "./templates/boatbuilding";
+export {
+  TEMPLATES,
+  TEMPLATE_CATALOGUE,
+  TEMPLATE_BOATBUILDING,
+  getCatalogueEntry,
+  entryIsCoherent,
+  type TemplateCatalogueEntry,
+} from "./templates";
 export { TemplateManifestSchema, type TemplateManifest } from "./schemas/manifest";
 export {
   FieldDefinitionSchema,

@@ -23,7 +23,7 @@ import { diffConfig, type DiffEntry } from "./diff";
 import { insertConfigRevisionIn } from "./revision";
 import { z as zx } from "zod";
 import { TerminologyOverrideSchema } from "./schemas/terminology";
-import { TEMPLATES } from "./templates/boatbuilding";
+import { TEMPLATES } from "./templates";
 import {
   CategorySetSchema,
   FieldDefinitionSetSchema,

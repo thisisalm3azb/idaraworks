@@ -8,6 +8,7 @@
  * production-proven values (Σ=100).
  */
 import type { TemplateManifest } from "../schemas/manifest";
+import type { TemplateCatalogueEntry } from "./catalogue";
 
 const L = (en: string, ar: string) => ({ en, ar });
 
@@ -473,7 +474,76 @@ export const TEMPLATE_BOATBUILDING: TemplateManifest = {
   },
 };
 
-/** Shipped templates by key — the closed platform template registry. */
-export const TEMPLATES: Record<string, TemplateManifest> = {
-  [TEMPLATE_BOATBUILDING.key]: TEMPLATE_BOATBUILDING,
+/** Catalogue entry (selection metadata) — boat-building is the MARINE
+ * SPECIALISATION of the broader manufacturing/workshop pattern: same operational
+ * spine (stages → daily reports → purchasing → costing → billing), with the
+ * production-proven 11 marine stages and the 9 boat-model presets preserved. */
+export const TEMPLATE_BOATBUILDING_ENTRY: TemplateCatalogueEntry = {
+  key: TEMPLATE_BOATBUILDING.key,
+  names: L("Boatbuilding / Marine", "بناء القوارب والصناعات البحرية"),
+  description: L(
+    "For boatyards and marine fabricators building or refitting hulls to order. Configures the 11 production-proven marine stages, 9 boat-model presets with 60/40 billing, marine material and quote categories, hull-number references and workshop roles — the marine specialisation of the manufacturing pattern.",
+    "لأحواض بناء القوارب وورش التصنيع البحري التي تبني الهياكل أو تعيد تجهيزها حسب الطلب. يهيئ 11 مرحلة إنتاج بحرية مجرّبة، و9 طرازات قوارب جاهزة بفوترة 60/40، وفئات مواد وعروض أسعار بحرية، وأرقام هياكل تسلسلية وأدوار الورشة — التخصيص البحري لنمط التصنيع.",
+  ),
+  targetBusinesses: [
+    L("Boat builders and boatyards", "أحواض ومصانع بناء القوارب"),
+    L("Marine fabrication and composites workshops", "ورش التصنيع البحري والمواد المركبة"),
+    L("Boat refit and repair yards", "أحواض تجديد وإصلاح القوارب"),
+    L("Marine outfitting contractors", "مقاولو التجهيزات البحرية"),
+  ],
+  classificationPhrases: [
+    "we build fiberglass boats to order",
+    "boatyard building skiffs and catamarans",
+    "marine fabrication workshop",
+    "we refit and repair boats",
+    "hull lamination and assembly yard",
+    "boat manufacturer in the gulf",
+    "مصنع قوارب في الإمارات",
+    "حوض بناء قوارب صيد",
+    "ورشة تصنيع بحري وألياف زجاجية",
+    "نبني قوارب نزهة وصيد حسب الطلب",
+  ],
+  classificationKeywords: [
+    "boat",
+    "boats",
+    "boatyard",
+    "marine",
+    "hull",
+    "skiff",
+    "catamaran",
+    "lamination",
+    "fiberglass",
+    "yacht",
+    "قارب",
+    "قوارب",
+    "بحري",
+    "يخت",
+    "ألياف زجاجية",
+  ],
+  enabledModules: [
+    "cap.jobs",
+    "cap.daily_reports",
+    "cap.people",
+    "cap.issues",
+    "cap.approvals",
+    "cap.procurement",
+    "cap.expenses_costing",
+    "cap.quoting",
+    "cap.invoicing",
+    "cap.customers",
+  ],
+  optionalModules: ["cap.customer_updates"],
+  dashboardDefaults: ["jobs_active", "reports_today", "approvals_pending", "exceptions"],
+  limitations: [
+    L(
+      "No naval-architecture/CAD or engineering design tools",
+      "لا يشمل أدوات التصميم الهندسي أو الرسم البحري",
+    ),
+    L("No marina, berth or charter management", "لا يشمل إدارة المراسي أو الأرصفة أو التأجير"),
+    L(
+      "Stock is category-level operational tracking, not serial/lot traceability",
+      "تتبع المخزون تشغيلي على مستوى الفئات، وليس تتبعاً تسلسلياً للدفعات",
+    ),
+  ],
+  manifest: TEMPLATE_BOATBUILDING,
 };
