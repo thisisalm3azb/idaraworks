@@ -118,18 +118,20 @@ async function measure() {
   }
   // S10 (doc 11 S10 DoD): the report-submit round-trip budget is < 10s (incl. one photo on 3G;
   // we measure the SERVER portion — the round-trip's dominant cost is compute + the freeze/derive
-  // tx). Submit a fresh report on a seeded job for a future date so idempotency doesn't collide.
+  // tx). Submit on a RECENT past date (not future — the S3 guard rejects those) that doesn't
+  // collide with the Jan-2026 seeded reports; one report per distinct job so (job,date) is unique.
   const submitMs: number[] = [];
   for (let i = 0; i < Math.min(10, jobRows.length); i++) {
     const jr = jobRows[i]!;
+    const reportDate = new Date(Date.UTC(2026, 6, 4 + i)).toISOString().slice(0, 10); // Jul 4..13 2026
     const s = performance.now();
     await submitDailyReport(ctx(false), "owner", {
       jobId: jr.id,
-      reportDate: `2027-01-${String((i % 28) + 1).padStart(2, "0")}`,
+      reportDate,
       summary: "perf submit",
       idempotencyKey: `perf-submit-${jr.id}-${i}`,
       workLines: [{ description: "work" }],
-      materialLines: [{ freeText: "material", qty: 1 }],
+      materialLines: [{ itemName: "material", qty: 1, unit: "pcs" }],
     });
     submitMs.push(performance.now() - s);
   }
@@ -173,35 +175,22 @@ async function measure() {
 
 async function cleanup() {
   if (!orgId) return;
-  const TABLES = [
-    "cost_rollup_labour",
-    "cost_rollup",
-    "exception",
-    "expense",
-    "report_labour_cost",
-    "report_material_line",
-    "daily_report",
-    "job",
-    "employee",
-    "notification",
-    "domain_event",
-    "audit_log",
-    "activity",
-    "app_settings",
-    "org_holiday_calendar",
-    "config_revision",
-    "job_preset",
-    "reference_sequence",
-    "org_plan_state",
-    "membership",
-    "role_definition",
-    "company",
-  ];
-  await owner`update public.job set current_stage_id = null where org_id = ${orgId}`;
-  for (const t of TABLES) await owner.unsafe(`delete from public.${t} where org_id = $1`, [orgId]);
-  await owner`delete from public.org where id = ${orgId}`;
-  await owner`delete from public.user_profile where id = ${ownerUser}`;
-  await owner`delete from auth.users where id = ${ownerUser}`;
+  // Order-independent wipe: the submit step now writes report_work_line / attendance children the
+  // old hand-ordered list didn't cover, so use session_replication_role=replica (owner/superuser)
+  // to disable FK triggers and delete every org_id-bearing table regardless of FK topology.
+  const tbls = (await owner`select table_name from information_schema.columns
+    where table_schema='public' and column_name='org_id'`) as unknown as Array<{
+    table_name: string;
+  }>;
+  await owner.begin(async (tx) => {
+    await tx.unsafe("set local session_replication_role = replica");
+    for (const t of tbls)
+      await tx.unsafe(`delete from public.${t.table_name} where org_id = $1`, [orgId]);
+    await tx.unsafe(`delete from public.org where id = $1`, [orgId]);
+    await tx.unsafe(`delete from public.user_profile where id = $1`, [ownerUser]);
+    await tx.unsafe(`delete from auth.users where id = $1`, [ownerUser]);
+    await tx.unsafe("set local session_replication_role = default");
+  });
 }
 
 async function run() {
