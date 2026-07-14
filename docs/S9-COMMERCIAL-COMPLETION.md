@@ -47,7 +47,19 @@ secrets never in a public payload.
 
 ## Adversarial review (5-lens + per-finding verification)
 
-<REVIEW_SUMMARY>
+An independent 5-lens review (tenancy/RLS/platform-vs-org · state/webhook/provider · money/
+entitlement/usage · D1/reconciliation/cleanup · UI/i18n/authz/pagination) raised **23 findings; 9
+material; 2 CONFIRMED** after each material was adversarially re-verified against the real code:
+
+| # | Sev | Defect | Fix | Regression |
+|---|-----|--------|-----|-----------|
+| 1 | MATERIAL | FR-9 read-only enforcement was wired to nothing — `assertTenantWritable` existed but no production write path called it, so a suspended/cancelled org could still create jobs/reports/uploads ("read-only" was a cosmetic badge; the demo passed only because it called the guard by hand) | enforce centrally at the **`command()` chokepoint** (every audited tenant mutation) + `signUpload` (which bypasses command); read-only concept moved to the platform entitlement layer; reads/exports never blocked | `s9-readonly-enforcement` — a real `createCustomer` via `command()` is rejected when suspended, a read still works, recovery restores writes |
+| 2 | MATERIAL | a FAILED billing action (`notice=error`) rendered in the GREEN success banner | whitelist notices + branch tone (`error`→danger, `role=alert`) | i18n parity + tone map |
+
+The other 7 "material"-claimed findings were **REFUTED** on verification (already handled by RLS /
+`assert_platform_task` / the disabled-in-prod provider / FR-9). 9 **MINOR** findings (e.g. the
+`checkMeteredLimit` TOCTOU is a soft trial-abuse counter not a hard security gate; per-tenant
+telemetry dashboards deferred) are non-blocking and noted here + in the checkpoint.
 
 ## Gates
 
