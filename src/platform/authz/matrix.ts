@@ -87,6 +87,7 @@ export type Action =
   | "customer_updates.revoke"
   | "onboarding.run"
   | "imports.manage"
+  | "data.export"
   | "billing.view"
   | "billing.manage";
 
@@ -238,4 +239,7 @@ export const MATRIX: Record<Action, readonly Grantable[]> = {
   "billing.manage": ["owner"],
   // S8 — guided CSV imports of masters (customers/employees/items).
   "imports.manage": ["owner", "admin", "manager"],
+  // S10 (doc 10 #42): full self-service data export — owner/admin/accounts (a fully money-
+  // privileged set, so the exported CSVs carry the same data the reader already sees on screen).
+  "data.export": ["owner", "admin", "accounts"],
 };

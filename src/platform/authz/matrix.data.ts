@@ -81,6 +81,7 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
     "customer_updates.revoke",
     "onboarding.run",
     "imports.manage",
+    "data.export",
     "billing.view",
     "billing.manage",
   ],
@@ -151,6 +152,7 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
     "customer_updates.revoke",
     "onboarding.run",
     "imports.manage",
+    "data.export",
     "billing.view",
   ],
   // Manager (doc 08: the Workshop Manager variant): masters M, jobs/reports, NO
@@ -296,6 +298,8 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
     "digest.view",
     // S9 Commercial: accounts sees the subscription/plan status (view only; manage is owner-only).
     "billing.view",
+    // S10: accounts can run the self-service data export (doc 10 #42).
+    "data.export",
   ],
   // Viewer (doc 06): jobs v (redacted) + week view + attendance V — other rows −.
   viewer: ["members.view", "jobs.view", "week.view", "attendance.view"],

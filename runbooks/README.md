@@ -10,7 +10,9 @@ values — secrets live only in the platform stores named in `secret-rotation.md
 | [incident-response.md](incident-response.md) | Severity ladder, tenant-scoped triage, notification, post-mortem | phase2/10 #50; Bible §15.7 |
 | [dead-letter-recovery.md](dead-letter-recovery.md) | Diagnosing and redriving dead-lettered domain events | Bible §8.7/§15.4 |
 | [secret-rotation.md](secret-rotation.md) | Where every secret lives; quarterly + emergency rotation | phase2/10 #37; checklist §12 |
-| [restore-drill.md](restore-drill.md) | Quarterly DB + storage restore drill (stub until first drill) | phase2/10 #47 (+ #45 break-glass note) |
+| [restore-drill.md](restore-drill.md) | Quarterly DB + storage restore drill (plain PG17 + plain S3); vendor-exit rehearsal; measured RPO/RTO | phase2/10 #47 & #48 |
+| [break-glass.md](break-glass.md) | Two-party emergency data access; DIRECT_URL-only; post-hoc tenant notice | phase2/10 #45 |
+| [backup-monitoring.md](backup-monitoring.md) | Backup stack (PITR / logical / bucket replication) + monitors; owner actions | phase2/10 #46 |
 | [inngest-provisioning.md](inngest-provisioning.md) | Owner action: provision Inngest Cloud, install keys, verify | OA-4; Phase G/I |
 | [sentry-provisioning.md](sentry-provisioning.md) | Owner action: provision Sentry, install DSN, verify seeded error | OA-4; checklist §15 |
 
