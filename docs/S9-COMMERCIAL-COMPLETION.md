@@ -1,6 +1,6 @@
 # S9 — Commercial Wiring — Completion Report
 
-**Status:** COMPLETE (pre-D1 activation boundary) · deployed `<FINAL_COMMIT>` · CI green · Arabic DoD demo PASS · production baseline restored.
+**Status:** COMPLETE (pre-D1 activation boundary) · S9 code deployed + verified at `7e56bca` (18/18 prod smoke, incl. deployed-commit assertion) · CI green · Arabic DoD demo PASS · production baseline restored to the two protected orgs. This report + checkpoint land in a trailing docs commit (re-verified CI + deploy green after push).
 **Date:** 2026-07-14 · **Objective (verbatim):** "the business can charge money and support customers governably."
 
 ## D1 verdict — activation gate, not an implementation gate
@@ -37,13 +37,15 @@ schema or logic change**.
 - **Platform wiring**: `billing.view` (owner/admin/accounts) + `billing.manage` (owner-only) in both matrix
   transcriptions; the lifecycle cron registered in the worker fleet; bleed seeders for the 5 new org-scoped tables.
 
-## Migrations (hosted Seoul DB now at 0000–0059)
+## Migrations (hosted Seoul DB now at 0000–0060)
 
 `0052` subscription lifecycle fields + `plan_price` · `0053` webhook inbox + DEFINER sole-writer path ·
 `0054` `usage_event` + `record_platform_audit` · `0055` `resolve_subscription_org` · `0056` `platform_staff`
 + impersonation · `0057` dunning + reconciliation · `0058` platform scans + `set_plan_price` · `0059`
-legal-hold purge guard. **No DELETE grants** (D-1.7); every tenant table has RLS in-file; provider ids /
-secrets never in a public payload.
+legal-hold purge guard · `0060` deny-all-tenant SELECT policies on the three platform-only tables
+(`subscription_event`, `reconciliation`, `platform_staff`) so a policy-less RLS-enabled table can't trip the
+tenancy harness (they carry no tenant grant, so a tenant read still hits 42501 before RLS). **No DELETE
+grants** (D-1.7); every tenant table has RLS in-file; provider ids / secrets never in a public payload.
 
 ## Adversarial review (5-lens + per-finding verification)
 
@@ -64,8 +66,10 @@ telemetry dashboards deferred) are non-blocking and noted here + in the checkpoi
 ## Gates
 
 format ✓ · lint 0 errors ✓ · typecheck ✓ · **unit 299/299** (machine 12 + adapter 5 + …) · build ✓ ·
-**S9 hosted integration 20/20** (subscription 7 · impersonation 4 · lifecycle-worker 5 · plan-change 4) ·
-**bleed 2/2** (5 new tables isolated) · **full integration + e2e green on GitHub CI** · deployed commit confirmed by prod health.
+**S9 hosted integration 21/21** (subscription 7 · impersonation 4 · lifecycle-worker 5 · plan-change 4 ·
+read-only-enforcement 1) · **tenancy-harness + bleed 17/17** (5 new tables isolated; the three platform-only
+tables carry the 0060 deny policy) · **full integration + e2e green on GitHub CI (`7e56bca`)** · deployed
+commit confirmed by prod health + **18/18 prod smoke** (`deployed=7e56bca expected=7e56bca`).
 
 ## Production DoD demo (Arabic, `tooling/scripts/s9-prod-demo.ts`)
 
@@ -95,7 +99,23 @@ redacted email/push notifications ride the **existing disabled notification seam
 uses the existing `/api/health` per-dependency observability + the audit trail; per-tenant metric **dashboards**
 are sequenced into **S10 Hardening** (not a pre-D1 blocker).
 
+## Baseline restoration & residue
+
+`tooling/scripts/s7-cleanup.ts --apply` (owner-approved; dry-run verified first) removed **24 synthetic orgs
++ 1,252 tenant rows + 22 synthetic-only users** (Bleed A/B, S6/S7/S8 leftovers, and every S9 family —
+Imp/Org/PC/RO/Wk; the Arabic DoD org self-cleaned). `s7-inventory.ts` then confirms the org baseline is
+**exactly [Alpha Marine `d22b2098…`, TESTING `9fcaa697…`]**, both `[PROTECTED]`, and every S9 org-scoped
+table (`usage_event`, `dunning_attempt`, `impersonation_session`, `reconciliation`) at **0**. `plan_price`
+retains its **12 placeholder** rows (global reference); `platform_staff` = 0.
+
+**Known inert residue (documented, not a leak):** 7 rows remain in `subscription_event`, all `org_id = NULL`
++ `provider = 'fake'` — orphan webhook-inbox events from S9 integration tests (activate / payment_failed ×3 /
+cancel + one deliberate bad-signature row) that never resolved to an org, so the org-scoped sweep can't reach
+them. They are **inert**: the fake provider is disabled in prod, they reference no org, and the `0060` deny
+policy + absent tenant grant make them unreadable by any tenant. A targeted purge (`delete … where provider =
+'fake'`) is out of the specifically-approved 24-org cleanup scope and is left as a one-command owner action.
+
 ## Alpha Marine & TESTING
 
-Never read for deletion or written by S9 build, tests, or demo. Only S9 synthetic data is removed at close;
-pre/post baseline = [Alpha Marine, TESTING].
+Never read for deletion or written by S9 build, tests, or demo. Pre/post org baseline = [Alpha Marine,
+TESTING]; both retain their pre-S9 `org_plan_state` (plan=growth, state=trialing, provider=null) untouched.

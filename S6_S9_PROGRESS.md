@@ -6,7 +6,8 @@ interruption, and around deploy/cleanup. **Never redo a completed, green, deploy
 cleaned slice.**
 
 ## Current position
-- **Current slice:** **S9 — Commercial Wiring IN PROGRESS** (S6/S7/S8 DONE). Baseline verified e6b4306, migrations 0000-0051, orgs=[Alpha Marine,TESTING], health green. **Do NOT begin S10/S11.**
+- **Current slice:** **S9 — Commercial Wiring COMPLETE & DEPLOYED** (S6/S7/S8/S9 all DONE). S9 code+CI-fix deployed + verified at **7e56bca** (CI green, prod health serves 7e56bca, **18/18 prod smoke** incl. deployed-commit match). Hosted migrations **0000-0060**. Baseline restored: orgs=[Alpha Marine `d22b2098…`, TESTING `9fcaa697…`], S9 org-scoped tables 0 (7 inert org-NULL fake-provider `subscription_event` rows documented in the report — out-of-approved-scope purge, left as owner one-command action). Report: docs/S9-COMMERCIAL-COMPLETION.md. **STOP — do NOT begin S10/S11 without explicit owner approval.**
+- **Next migration:** 0061. **Highest applied:** 0060.
 
 ## S9 — Commercial Wiring — FROZEN SCOPE + D1 ANALYSIS (full: docs/S9-SCOPE-FREEZE.md)
 **Objective (verbatim):** "the business can charge money and support customers governably." Only slice hard-blocked by legal paperwork (D1/OA-5).
@@ -36,7 +37,12 @@ cleaned slice.**
 - **Arabic prod demo (s9-prod-demo.ts) DoD PASS** (trial→active→past_due→grace→suspended→recovery, usage+hard-limit, upgrade/downgrade, dunning, reconciliation, cancel+sweep→purge_pending, SUPPORT SESSION IN TENANT AUDIT, platform/org separation, provider disabled). Self-cleans.
 - Gates: format, lint(0), typecheck, unit 299/299, build ✓. s9 integ 20/20 (7+4+5+4).
 - **NOW:** adversarial review workflow RUNNING (wv5k8ilh0, 5 lenses + verify).
-**REMAINING (resume here):**
+**REVIEW + CI FIXES DONE (HEAD 7e56bca, hosted 0000-0060):**
+- Adversarial review (5-lens + verify, wf_b583ff85): 23 findings, 9 material, **2 CONFIRMED + FIXED**: (1) FR-9 read-only enforcement was wired to nothing → enforce at command() chokepoint + signUpload (BillingReadOnlyError in platform entitlements; s9-readonly-enforcement regression); (2) failed billing action shown in green success banner → whitelist notices + danger tone. 7 material REFUTED, 9 MINOR noted.
+- **CI FAILURE FOUND + FIXED**: tenancy-harness failed — subscription_event/reconciliation/platform_staff had RLS on but NO policy → **0060** adds `for select using(false)` deny policies (harness-valid platform-only shape). (Lesson: run tenancy-harness on hosted too, not just bleed-harness.) tenancy+bleed 17/17.
+- Gates: format/lint(0)/typecheck/unit 299/299/build. s9 integ 21/21 (7+4+5+4+1). CI re-running on 7e56bca (monitor b2432xz28).
+**REMAINING (resume here):** confirm CI green on 7e56bca → deploy → prod /api/health commit + 18/18 smoke → **cleanup** (s7-cleanup --apply sweeps the 13 S9 synthetic orgs [S9 Org/Imp/Wk/PC/RO + Bleed A/B]; verify baseline=[Alpha Marine,TESTING], S9 tables 0) → finalize docs/S9-COMMERCIAL-COMPLETION.md (<FINAL_COMMIT>) → STOP (no S10/S11).
+**(historical) earlier REMAINING list:**
 - Fix confirmed review findings + regression coverage.
 - Notifications: DOCUMENTED — subscription changes write tenant audit+activity (done); dunning worker records+audits reminders; redacted email/push ride the existing disabled notification seam (D1-gated). Telemetry: DOCUMENTED — audit/activity + existing /api/health observability; per-tenant metric dashboards deferred to S10 hardening (noted in report).
 - Full gates (format/lint/typecheck/unit/**full hosted integration via CI**/build/e2e) → push all S9 commits → CI green → deploy → prod /api/health commit + 18/18 smoke → cleanup (s7-cleanup sweeps S9 synthetic orgs incl. S9 Org/S9 Wk/S9 PC/S9 Imp + demo leftovers; verify baseline=[Alpha Marine,TESTING], S9 tables 0) → completion report docs/S9-COMMERCIAL-COMPLETION.md (distinguish prod-operational / D1-gated / credential-gated / owner-actions) → STOP (no S10/S11).
