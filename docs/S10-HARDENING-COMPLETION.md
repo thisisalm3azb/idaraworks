@@ -1,8 +1,9 @@
 # S10 — Hardening — Completion Report
 
-**Status:** COMPLETE — production-quality pass over the feature-complete S0–S9 system. S10 code
-deployed + verified at `2416c1d` (prod health + 18/18 smoke); CI green on the trailing perf-gate-fix
-commit; production baseline restored to [Alpha Marine, TESTING].
+**Status:** COMPLETE — production-quality pass over the feature-complete S0–S9 system. Deployed +
+CI-green at `8951c21` (prod health + 18/18 smoke, incl. the deployed-commit assertion; the full
+integration suite + the new perf gate pass). Arabic DoD demo PASS; production baseline restored to
+[Alpha Marine, TESTING].
 **Objective (verbatim, doc 11 §S10):** "production-quality, not feature-complete-quality." No new
 features except OAuth; the AC is the enumerated launch-criteria evidence, not demo polish.
 

@@ -69,6 +69,45 @@ cleanup: pause ONLY at that approval point with dry-run evidence; never bypass.
   partitions (frozen, volume-triggered); backup-monitor CODE (owner-provisioned PITR/mgmt-token —
   runbook + seam documented); OAuth provider config + notification email i18n at send time.
 
+## S11 — Pilot Readiness — FROZEN SCOPE (from phase2/11 §S11 + doc 10 DRILL/REV/PEN + 5-reader wf_d6972fb1)
+
+**Objective:** external validation before external customers. NO new features — a validation +
+documentation + simulation + sign-off slice. Opens the P2 pilot phase.
+
+**A. Deliverables (doc 11 §S11):** (1) full regression across money/tenancy/offline/RTL suites (the
+S0–S11 regression — CI runs it); (2) external pen-test window (booked S6 — OWNER; criticals→0 blocks,
+mediums get dated fixes); (3) founder-watched pilot-onboarding rehearsal; (4) launch-criteria checklist
+walked + signed = v2 §12 + thirteen-questions live pass + template-#1 parity test + restore-drill evidence.
+
+**B. Docs to WRITE (all MISSING per the reader — the bulk of S11):**
+- Runbooks: migration, data-cleanup, credential-disabled-ops, support+escalation, impersonation-history,
+  access-revocation, exports, cancellation, retention, legal-hold.
+- Guides/checklists: pilot-org setup workflow, onboarding+template checklist, roles/invitations,
+  initial-imports, approval+reporting config, operational billing-readiness, pilot success/exit criteria
+  + the launch-criteria checklist, admin guide, role guides, EN + AR quick-starts, final owner-action
+  checklist (consolidated).
+- EXISTING (from S10/earlier, reuse): deploy-and-rollback, incident-response, restore-drill, backup-
+  monitoring, dead-letter-recovery, secret-rotation, break-glass, inngest/sentry-provisioning.
+
+**C. Two-org synthetic pilot SIMULATION (23 coverage points, never Alpha Marine/TESTING, self-clean):**
+tenant isolation · en/ar/RTL/mobile · role boundaries · financial+labour redaction · onboarding ·
+job creation+planning · daily reporting · purchasing+approvals · receiving+costing · quoting+conversion ·
+invoicing+payments+AR · owner digest · customer-update share+revoke · quote-vs-actual · subscription+usage ·
+read-only commercial states · support-impersonation audit · exports · AI-disabled op · provider-disabled op ·
+failure recovery · final cleanup.
+
+**D. Launch criteria (doc 10 DRILL/REV/PEN green-state, verify): ~41 items** — RLS wall, matrix, redaction,
+sanitiser/CSV, share surface, EXIF, immutability, sole-writers, FK/no-hard-delete, headers, calendar,
+money goldens, session mgmt, IDOR, DEFINER search_path, retention floor, legal hold, export, MFA, audit
+append-only, quota, staff-access drill, restore drill RPO≤1h/RTO≤4h, incident tabletop, backup monitors.
+
+**E. Owner actions (external, non-blocking-to-build, in the final checklist):** pen-test booking+execution;
+Arabic native reviewer; DPA/PDPL + KSA lawful-transfer; D1 merchant/entity; D3 pricing+tiers; tax mechanism;
+provider/Inngest/Sentry/Upstash creds; PDF runtime; PB-3 VAT sign-off; OP-4 name check; pilot cohort;
+password rotation; delete 4 junk Vercel projects.
+
+**F. MUST NOT:** add features, activate real payments/D1, migrate region, change frozen decisions.
+
 ## S10 — scope FROZEN (reference)
 - **S9 CLOSED:** code deployed+verified `7e56bca` (CI green, 18/18 prod smoke incl.
   deployed-commit match); docs commit `17bcfd8` CI green + prod serves it. Baseline =
