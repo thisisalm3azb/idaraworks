@@ -17,6 +17,9 @@ export {
   getLimit,
   checkLimit,
   assertKnownKey,
+  isReadOnlyBillingState,
+  BillingReadOnlyError,
+  READ_ONLY_BILLING_STATES,
   type ResolvedEntitlements,
   type LimitCheck,
 } from "./resolve";

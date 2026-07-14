@@ -25,7 +25,22 @@ cleaned slice.**
 - 25db1f8 — **IMPERSONATION MILESTONE (DoD AC#2 proven, 4/4).** migration **0056** (platform_staff allow-list + impersonation_session consent-or-break-glass CHECK, tenant-readable; DEFINER app.start_impersonation/end_impersonation dual-log to tenant audit). `src/modules/support/service.ts` (startImpersonation/endImpersonation platform, listImpersonations/hasActiveImpersonation tenant read). **Hosted 0000-0056, next 0057.** HEAD 25db1f8.
   - Both DoD ACs now PROVEN: (1) trial→paid→past_due→recovery lifecycle [s9-subscription 7/7]; (2) support session in tenant audit log [s9-impersonation 4/4]. + s9 unit 17/17 (machine 12 + adapter 5).
   - s9-impersonation.test.ts leaves an "S9 Imp Org" in hosted (afterAll deletes platform_staff but not org) — final cleanup sweeps it.
-**BUILT SO FAR (S9):** subscription lifecycle (machine+adapter+service+webhook+0052-0055), impersonation (0056), billing authz. **STILL TO BUILD (resume here):**
+**BUILT + TESTED + COMMITTED (S9) — as of HEAD 65b4d65, hosted 0000-0059:**
+- Subscription lifecycle: machine+windows+adapter+service+webhook route (0052-0055). s9-subscription integ 7/7.
+- Impersonation (0056) + platform_staff. s9-impersonation 4/4. DoD AC#2 ✓.
+- Lifecycle/dunning/purge/reconciliation workers (0057-0059) + fetchProviderState. s9-lifecycle-worker 5/5.
+- Upgrade/downgrade (plan_changed). s9-plan-change 4/4.
+- Usage metering (usage.ts, recordUsage/getUsage/checkMeteredLimit).
+- Customer subscription UI (settings/subscription page+actions) + impersonation banner + disabled-checkout + nav + 34 en/ar i18n keys. Build ✓ (route present).
+- Bleed seeders for 5 new tables (bleed 2/2).
+- **Arabic prod demo (s9-prod-demo.ts) DoD PASS** (trial→active→past_due→grace→suspended→recovery, usage+hard-limit, upgrade/downgrade, dunning, reconciliation, cancel+sweep→purge_pending, SUPPORT SESSION IN TENANT AUDIT, platform/org separation, provider disabled). Self-cleans.
+- Gates: format, lint(0), typecheck, unit 299/299, build ✓. s9 integ 20/20 (7+4+5+4).
+- **NOW:** adversarial review workflow RUNNING (wv5k8ilh0, 5 lenses + verify).
+**REMAINING (resume here):**
+- Fix confirmed review findings + regression coverage.
+- Notifications: DOCUMENTED — subscription changes write tenant audit+activity (done); dunning worker records+audits reminders; redacted email/push ride the existing disabled notification seam (D1-gated). Telemetry: DOCUMENTED — audit/activity + existing /api/health observability; per-tenant metric dashboards deferred to S10 hardening (noted in report).
+- Full gates (format/lint/typecheck/unit/**full hosted integration via CI**/build/e2e) → push all S9 commits → CI green → deploy → prod /api/health commit + 18/18 smoke → cleanup (s7-cleanup sweeps S9 synthetic orgs incl. S9 Org/S9 Wk/S9 PC/S9 Imp + demo leftovers; verify baseline=[Alpha Marine,TESTING], S9 tables 0) → completion report docs/S9-COMMERCIAL-COMPLETION.md (distinguish prod-operational / D1-gated / credential-gated / owner-actions) → STOP (no S10/S11).
+**(historical) STILL TO BUILD list (superseded by BUILT above):**
 - Upgrade/downgrade: changePlan owner action (upgrade=immediate plan_key; downgrade=scheduled_plan_key applied at period end); never-delete-on-downgrade; a 'plan_changed' handling path (state unchanged, plan updated).
 - Dunning worker + purge worker (legal_hold-checked, 2 warnings) + reconciliation (local vs provider drift) + lifecycle deadline sweep (trial_end/grace/suspend/purge windows → emit signals). Migrations: dunning_attempt, reconciliation. defineOrgFunction + events registry + inngest (disabled in prod).
 - Cross-instance entitlement cache invalidation (only same-process invalidateEntitlements exists) — the resolve.ts header flags this as an S9 task.

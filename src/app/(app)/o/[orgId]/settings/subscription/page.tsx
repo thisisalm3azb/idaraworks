@@ -20,6 +20,14 @@ const STATE_TONE: Record<string, "success" | "brand" | "warning" | "danger" | "n
   purged: "danger",
 };
 const PLAN_ORDER = ["starter", "growth", "business"] as const;
+// Whitelisted notices + their tone — 'error' MUST render in the danger tone, never the green
+// success banner (review): a failed cancel/plan-change must not look like it succeeded.
+const NOTICE_TONE: Record<string, "success" | "danger"> = {
+  upgrade: "success",
+  downgrade: "success",
+  cancel_requested: "success",
+  error: "danger",
+};
 
 export default async function SubscriptionPage({
   params,
@@ -58,8 +66,15 @@ export default async function SubscriptionPage({
         </div>
       ) : null}
 
-      {notice ? (
-        <p className="rounded-md bg-success-soft p-3 text-sm text-success">
+      {notice && NOTICE_TONE[notice] ? (
+        <p
+          role={NOTICE_TONE[notice] === "danger" ? "alert" : "status"}
+          className={`rounded-md p-3 text-sm ${
+            NOTICE_TONE[notice] === "danger"
+              ? "bg-danger-soft text-danger"
+              : "bg-success-soft text-success"
+          }`}
+        >
           {t(`subscription.notice.${notice}`)}
         </p>
       ) : null}

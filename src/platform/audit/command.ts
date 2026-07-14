@@ -17,6 +17,7 @@
 import { sql, withCtx, type Ctx, type TenantTx } from "@/platform/tenancy";
 import type { AttachableType, AuditEntityType } from "@/platform/registries";
 import { emitEvent, type EventSpec } from "@/platform/events/outbox";
+import { isReadOnlyBillingState, BillingReadOnlyError } from "@/platform/entitlements/resolve";
 
 export type AuditSpec = {
   action: string; // e.g. 'membership.deactivate'
@@ -70,6 +71,18 @@ export async function command<T>(
   fn: (tx: TenantTx) => Promise<T>,
 ): Promise<T> {
   return withCtx(ctx, async (tx) => {
+    // FR-9 (v1 §13): a read-only billing state (suspended / cancelled / purge_pending / purged)
+    // blocks every audited MUTATION — the tenant may still READ and EXPORT, but not ADD/change.
+    // command() is the single chokepoint for tenant mutations, so enforcing here covers every
+    // add path (jobs, reports, supply, expenses, invoices, config, …) without per-service drift.
+    // Read within the same tx so a just-suspended org is blocked immediately (no cache staleness).
+    const ps = (await tx.execute(sql`
+      select billing_state from public.org_plan_state where org_id = ${ctx.orgId}`)) as unknown as Array<{
+      billing_state: string;
+    }>;
+    if (ps[0] && isReadOnlyBillingState(ps[0].billing_state)) {
+      throw new BillingReadOnlyError(ps[0].billing_state);
+    }
     const result = await fn(tx);
     const audit = typeof spec.audit === "function" ? spec.audit(result) : spec.audit;
     await writeAudit(tx, ctx, audit);

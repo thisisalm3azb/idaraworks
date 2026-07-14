@@ -145,3 +145,28 @@ export async function checkLimit(ctx: Ctx, key: LimitKey, current: number): Prom
 export function assertKnownKey(key: string): asserts key is EntitlementKey {
   if (!isFeatureKey(key) && !isLimitKey(key)) throw new UnknownEntitlementKeyError(key);
 }
+
+/**
+ * Billing states in which a tenant workspace is READ-ONLY (v1 §13 / FR-9): a non-paying or
+ * cancelled org may still SEE and EXPORT everything, but cannot ADD/mutate. Lives in the platform
+ * entitlement layer so the audited-mutation chokepoint (command()) can enforce it without importing
+ * a module (BUILD_BIBLE §3.3). suspended/cancelled = failed-payment/cancel read-only; purge_pending/
+ * purged = post-cancellation removal window.
+ */
+export const READ_ONLY_BILLING_STATES: ReadonlySet<string> = new Set([
+  "suspended",
+  "cancelled",
+  "purge_pending",
+  "purged",
+]);
+
+export function isReadOnlyBillingState(state: string): boolean {
+  return READ_ONLY_BILLING_STATES.has(state);
+}
+
+export class BillingReadOnlyError extends Error {
+  constructor(public readonly state: string) {
+    super(`workspace is read-only (billing state: ${state})`);
+    this.name = "BillingReadOnlyError";
+  }
+}

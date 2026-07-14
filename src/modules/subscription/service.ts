@@ -17,7 +17,11 @@
 import { createAppDb, sql, withCtx, type Ctx } from "@/platform/tenancy";
 import { assertCan } from "@/platform/authz";
 import type { RoleArchetype } from "@/platform/registries";
-import { invalidateEntitlements } from "@/platform/entitlements/resolve";
+import {
+  invalidateEntitlements,
+  isReadOnlyBillingState,
+  BillingReadOnlyError,
+} from "@/platform/entitlements/resolve";
 import {
   getBillingProvider,
   fakeBillingProvider,
@@ -33,25 +37,10 @@ export { BillingProviderDisabledError };
 // subscription module ONLY via this service.ts (BUILD_BIBLE §3.3 — no cross-module internal imports).
 export { nextForEvent } from "./machine";
 export { dueSignal, LIFECYCLE_WINDOWS, type LifecycleRow } from "./windows";
-
-const READ_ONLY_STATES: ReadonlySet<string> = new Set([
-  "suspended",
-  "cancelled",
-  "purge_pending",
-  "purged",
-]);
-
-/** FR-9: a read-only billing state blocks the ability to ADD, never the ability to see/export. */
-export function isReadOnlyBillingState(state: string): boolean {
-  return READ_ONLY_STATES.has(state);
-}
-
-export class SubscriptionReadOnlyError extends Error {
-  constructor(state: string) {
-    super(`workspace is read-only (billing state: ${state})`);
-    this.name = "SubscriptionReadOnlyError";
-  }
-}
+// The read-only concept + error live in the platform entitlement layer (the command() chokepoint
+// enforces FR-9 there). Re-export the error under the S9 name for callers/tests.
+export { isReadOnlyBillingState } from "@/platform/entitlements/resolve";
+export { BillingReadOnlyError as SubscriptionReadOnlyError } from "@/platform/entitlements/resolve";
 
 export class SubscriptionActionError extends Error {
   constructor(message: string) {
@@ -69,7 +58,7 @@ export async function assertTenantWritable(ctx: Ctx): Promise<void> {
     }>;
     return rows[0]?.billing_state ?? "active";
   });
-  if (isReadOnlyBillingState(state)) throw new SubscriptionReadOnlyError(state);
+  if (isReadOnlyBillingState(state)) throw new BillingReadOnlyError(state);
 }
 
 export type WebhookOutcome = {

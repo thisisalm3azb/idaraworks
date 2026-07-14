@@ -10,7 +10,12 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { sql, userStorage, withCtx, type Ctx, type TenantTx } from "@/platform/tenancy";
 import { assertCan } from "@/platform/authz";
-import { getLimit } from "@/platform/entitlements";
+import {
+  getLimit,
+  resolveEntitlements,
+  isReadOnlyBillingState,
+  BillingReadOnlyError,
+} from "@/platform/entitlements";
 import { command } from "@/platform/audit";
 import { publishEvent, type PublishableEvent } from "@/platform/events";
 import { ATTACHABLE_TYPES, type FileAccessClass, type RoleArchetype } from "@/platform/registries";
@@ -241,6 +246,11 @@ export async function signUpload(
 
   const limitGb = await getLimit(ctx, "limit.storage_gb");
   const limitBytes = limitGb === null ? null : limitGb * GIB;
+
+  // FR-9: a read-only billing state blocks new uploads (an ADD). Uses the same resolved entitlements
+  // getLimit just loaded (cache hit). signUpload does not go through command(), so it needs its own gate.
+  const ent = await resolveEntitlements(ctx);
+  if (isReadOnlyBillingState(ent.billingState)) throw new BillingReadOnlyError(ent.billingState);
 
   const fileId = randomUUID();
   const objectPath = buildObjectPath({
