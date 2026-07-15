@@ -11,16 +11,15 @@ Hard rules: never modify Alpha Marine (`d22b2098-2e09-436d-ab9e-ee26c8719cd5`) o
 from `0065`; deferred capabilities never shown purchasable; prices are a recommended launch
 catalogue (tax-exclusive USD/month), not a commitment.
 
-## Verified baseline (2026-07-15) — updated at the integration milestone
+## Verified final state (2026-07-15, project close)
 
 | Check | Result |
 | --- | --- |
-| Local HEAD | `04ae304` + working tree (integration tests + 2 source fixes + 0067, to commit) |
-| origin/main | `f3d9380` (push happens at the deploy milestone) |
-| Production health | ✅ ok; deployed commit still `97985e1`; inngest unconfigured (known) |
-| Migration ledger | **hosted 0000–0067 applied** (0065 addon model, 0066 lifecycle scans, 0067 scheduled-plan anchor) → next `0068` |
-| Production orgs | ✅ exactly [Alpha Marine, TESTING] — both growth/trialing/`trial_end NULL` (sweep provably can't touch them; integration-asserted) |
-| Hosted seeds (0065) | 4 plans (free@0), 31 addon_def (5 deferred, 0 priced), 104 addon_price rows, 6 bundles, 40 free plan_entitlement rows |
+| Deployed + CI-green commit | `49ddb03` (health commit match; smoke 17/17; this docs update trails it) |
+| origin/main | = local HEAD (all milestones pushed) |
+| Migration ledger | **hosted 0000–0070 applied** (0065 addon · 0066 scans · 0067 sched-anchor · 0068 explicit trial_end · 0069 invite peek · 0070 honesty reclass) → next `0071` |
+| Production orgs | ✅ exactly [Alpha Marine, TESTING] — untouched, byte-identical through every sweep + cleanup; `trial_end NULL` = no deadline **by 0068 contract** (regression-pinned) |
+| Catalogue | 8 templates · 31 add-ons (19 purchasable, owner-ratified count for launch) · 6 bundles · free base plan |
 
 ## Work plan + status
 
@@ -32,9 +31,9 @@ catalogue (tax-exclusive USD/month), not a commitment.
 | P-TA3 | AI + deterministic template selection + onboarding UI | ✅ (`6b81974` core + `04ae304` UI: description, manual chooser, recommendation card, alternatives, limitations) |
 | P-TA4 | Add-on catalogue + bundles + free base + entitlement extension | ✅ (`261b7ae` + `9194c23` + `04ae304`; migrations 0065–0067 applied hosted) |
 | P-TA5 | UX (pricing page, EN/AR/RTL/375px) | ✅ (`04ae304` — subscription page rebuilt modular; honesty states; no payment buttons while disabled) |
-| P-TA6 | Tests + full gates + CI | 🔄 unit 425/425 · addon-model integration **18/18** · affected suites 37/37 · FULL integration suite running (bg `bw8anfq2s`) · CI at push |
-| P-TA7 | Adversarial review + fixes | 🔄 running (workflow `wf_9309768c`, 5 lenses + refutation) |
-| P-TA8 | Deploy + production demo + cleanup + final report | ⏳ |
+| P-TA6 | Tests + full gates + CI | ✅ (unit 437/437 · integration 273/273 effective · CI green on 49ddb03) |
+| P-TA7 | Adversarial review + fixes | ✅ (1 critical + 8 material fixed w/ regressions; 0069/0070) |
+| P-TA8 | Deploy + demo + cleanup + report | ✅ (smoke 17/17 · demo 42/42 · baseline = 2 protected orgs; 1 pending approval) |
 
 ## Integration-test findings (both REAL source bugs — fixed with regression coverage)
 
@@ -68,21 +67,16 @@ downgrade deletes NOTHING (customer row survives; org_addon rows only flip statu
 
 ## Exact next task
 
-1. Read full-integration-suite result (bg `bw8anfq2s`) — fix any failure.
-2. Read adversarial-review result (workflow `wf_9309768c`) — fix every confirmed material finding
-   with regression coverage.
-3. Commit fixes → full local gates (format/lint/typecheck/unit/build) → push → CI green on exact
-   commit → Vercel serves it → production smoke.
-4. Demo (fake-provider prod-backed script + deployed UI EN/AR/375px): 8 templates visible,
-   deterministic recommendation per business type, manual override, explicit confirm before apply,
-   ≥3 templates applied to separate synthetic orgs, free/add-ons/bundles/total, upgrade + scheduled
-   downgrade, seat limit, provider-disabled checkout.
-5. Guarded cleanup: dry-run first → pause for explicit approval if destructive → verify exactly
-   [Alpha Marine, TESTING] remain → final report + evening onboarding-test instructions.
+PROJECT COMPLETE. Final report: docs/POST_MVP_TEMPLATE_ADDON_COMPLETION.md. Deployed+CI-green
+commit: 49ddb03 (this docs update lands as a trailing commit). Hosted migrations 0000-0070 (next
+0071). Production baseline verified: exactly [Alpha Marine, TESTING], untouched. ONE PENDING
+OWNER APPROVAL: deletion of 22 orphaned synthetic auth users (s5-/s6demo-/s9imp-/bleed-*
+@example.com, zero org data; the real abdulla.alojan@gmail.com is excluded) — the destructive-
+cleanup classifier paused it. Owner's evening testing instructions are in the completion report
+§16. No further engineering until owner feedback.
 
 ## Resume instruction
 
-If interrupted: re-read this file; check bg task `bw8anfq2s` (full integration) and workflow
-`wf_9309768c` (adversarial review) outputs under the session task/workflow dirs; continue from
-"Exact next task". Branch `main` of Desktop/idaraworks; hosted migrations 0000–0067; never touch
-the two protected orgs.
+Read docs/POST_MVP_TEMPLATE_ADDON_COMPLETION.md. If the owner approves the orphan-user deletion,
+re-run the guarded removal (dry-run list is in the session transcript; filter: @example.com with
+s5-/s6demo-/s9imp-/bleed- prefixes AND no membership). Never touch Alpha Marine / TESTING.
