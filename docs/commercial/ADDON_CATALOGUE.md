@@ -108,8 +108,10 @@ unpurchasable (`bundleIsPurchasable`). No bundle contains one.
 | `addon.branding_app` | Full in-app branding / علامتك داخل التطبيق | Reclassified deferred (0070) — no in-app branding capability exists; the owner's **$1 / AED 4** anchor is retained here for when it ships |
 
 **Purchasable count after 0070: 19** (17 `available` + 2 `manual_process`) — one below the
-20-add-on directive minimum. Flagged for the owner: the honest fix is to ship one of the deferred
-capabilities (branding_docs is the cheapest to build), never to re-list a no-op.
+original 20-add-on target. **Owner decision (2026-07-15): the catalogue stays at 19 for launch.**
+Additional add-ons will be reviewed **after founder testing** — informed by what founders actually
+ask for — never by re-listing a no-op. The cheapest honest expansion remains shipping one of the
+deferred capabilities (branding_docs first).
 
 ## Yearly prices
 

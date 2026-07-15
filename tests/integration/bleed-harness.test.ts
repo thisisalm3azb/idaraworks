@@ -182,5 +182,8 @@ describe("two-org bleed sweep (every org-scoped table is org-pure)", () => {
         `Org A cannot see its OWN rows in ${table} — RLS may be broken-closed`,
       ).toBeGreaterThan(0);
     }
-  }, 120_000);
+    // 240s: the sweep grew with the add-on model (org_addon seeder + tables) and runs at the tail
+    // of the full hosted suite where pooler latency stacks — 120s flaked there while passing in
+    // isolation. The cap only bounds a hang; the assertions carry the correctness.
+  }, 240_000);
 });

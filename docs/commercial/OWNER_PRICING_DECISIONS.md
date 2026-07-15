@@ -94,3 +94,8 @@
    sustainable at pilot scale.
 10. ☐ **Legal review** of pricing-page copy (placeholder/indicative labels, ex-VAT notice,
     availability-honesty notes) in both EN and AR.
+11. ☑ **Catalogue size stays at 19 purchasable add-ons for launch** (owner decision 2026-07-15,
+    after the 0070 honesty reclassification removed three no-op add-ons). Additional add-ons are
+    reviewed **after founder testing**, driven by real founder demand — a capability is never
+    listed purchasable to hit a count. First candidates: the deferred branding_docs ($2 anchor
+    retained), branding_app ($1), exports_extended.

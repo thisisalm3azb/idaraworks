@@ -371,7 +371,9 @@ describe("S6 review regressions", () => {
     await evaluateNightly(ownerCtx(), NIGHTLY);
     const after = await listOpenExceptions(ownerCtx(), "owner", { limit: 300 });
     expect(after.some((e) => e.ruleKey === "overdue_invoice" && e.subjectId === z)).toBe(false);
-  });
+    // 90s: two full nightly evaluations against the hosted pooler flaked the 30s default at the
+    // tail of the full suite while passing in isolation — the cap only bounds a hang.
+  }, 90_000);
 
   it("#3 submitEInvoice is gated on invoices.manage (a non-manager is refused)", async () => {
     const inv = await issuedInvoice({ unitPriceMinor: 100000 });
