@@ -75,7 +75,11 @@ export function LogoPicker({
 
   return (
     <div className="flex flex-col gap-3">
-      {error ? <p className="rounded-md bg-danger-soft p-3 text-sm text-danger">{error}</p> : null}
+      {error ? (
+        <p role="alert" className="rounded-md bg-danger-soft p-3 text-sm text-danger">
+          {error}
+        </p>
+      ) : null}
       <div
         role="button"
         tabIndex={0}

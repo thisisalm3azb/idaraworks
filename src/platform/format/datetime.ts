@@ -43,6 +43,13 @@ export function formatDateTime(instant: Date | string, options: DateFormatOption
 }
 
 /** Format a plain number with Latin digits (F-44). */
-export function formatNumber(value: number, locale: Locale = "en"): string {
-  return new Intl.NumberFormat(intlLocale(locale), { numberingSystem: "latn" }).format(value);
+export function formatNumber(
+  value: number,
+  locale: Locale = "en",
+  options?: Intl.NumberFormatOptions,
+): string {
+  return new Intl.NumberFormat(intlLocale(locale), {
+    numberingSystem: "latn",
+    ...options,
+  }).format(value);
 }

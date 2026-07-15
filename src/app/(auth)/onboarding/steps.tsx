@@ -67,7 +67,7 @@ const input =
   "min-h-11 rounded-md border border-line-strong bg-card px-3 py-2 text-base font-normal text-ink";
 const help = "text-xs font-normal text-ink-muted";
 const chipCls =
-  "flex min-h-11 cursor-pointer items-center gap-2 rounded-full border border-line bg-card px-4 text-sm text-ink has-[:checked]:border-brand has-[:checked]:bg-brand-soft";
+  "flex min-h-11 cursor-pointer items-center gap-2 rounded-full border border-line bg-card px-4 text-sm text-ink has-[:checked]:border-brand has-[:checked]:bg-brand-soft has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-brand";
 const backLinkCls =
   "inline-flex min-h-11 items-center rounded-md border border-line-strong bg-card px-4 text-sm font-medium text-ink hover:bg-sunken";
 
@@ -953,6 +953,8 @@ export function PlanStep({ t, locale, data, view }: StepProps & { view: Selectio
             quantity: t("subscription.addon.quantity"),
             notAvailable: t("onboarding.flow.plan.not_available"),
             submit: t("onboarding.flow.plan.custom_cta"),
+            increase: t("subscription.addon.increase"),
+            decrease: t("subscription.addon.decrease"),
           }}
           initial={mode === "custom" ? (data.tier?.quantities ?? {}) : {}}
           action={selectCustomAction}
@@ -1043,11 +1045,12 @@ export function BrandingStep({ t, data }: StepProps) {
                   type="radio"
                   name="accent_swatch"
                   value={c}
+                  aria-label={c}
                   defaultChecked={b.accent_color?.toLowerCase() === c}
                   className="peer sr-only"
                 />
                 <span
-                  aria-label={c}
+                  aria-hidden
                   className="block h-11 w-11 rounded-md border-2 border-line peer-checked:border-ink peer-focus-visible:outline-2"
                   style={{ backgroundColor: c }}
                 />
@@ -1277,7 +1280,7 @@ export function ReviewStep({ t, locale, data, view }: StepProps & { view: Select
               // eslint-disable-next-line @next/next/no-img-element -- draft data URI preview
               <img
                 src={`data:image/png;base64,${data.branding.logo_base64}`}
-                alt=""
+                alt={t("onboarding.flow.branding.logo")}
                 className="h-12 w-12 rounded-md border border-line object-contain"
               />
             ) : null}

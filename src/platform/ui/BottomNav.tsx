@@ -18,10 +18,10 @@ export type BottomNavItem = {
  * Items are role-scoped by the caller; this component renders at most 5.
  * Touch targets ≥ 44px (BUILD_BIBLE §9.2).
  */
-export function BottomNav({ items }: { items: BottomNavItem[] }) {
+export function BottomNav({ items, ariaLabel }: { items: BottomNavItem[]; ariaLabel?: string }) {
   return (
     <nav
-      aria-label="Primary"
+      aria-label={ariaLabel ?? "Primary"}
       className="fixed inset-x-0 bottom-0 z-20 border-t border-line bg-card pb-[env(safe-area-inset-bottom)] md:hidden"
     >
       <ul className="mx-auto flex max-w-md items-stretch justify-around">

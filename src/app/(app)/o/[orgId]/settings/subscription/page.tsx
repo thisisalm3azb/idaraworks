@@ -11,7 +11,7 @@ import {
   currentSelectionLabel,
 } from "@/modules/subscription/service";
 import { listImpersonations } from "@/modules/support/service";
-import { formatMoney } from "@/platform/format";
+import { formatMoney, formatNumber } from "@/platform/format";
 import { sql, withCtx } from "@/platform/tenancy";
 import {
   ADDONS,
@@ -272,8 +272,13 @@ export default async function SubscriptionPage({
           <div className="flex items-center justify-between">
             <span className="text-ink-muted">{t("subscription.usage.storage")}</span>
             {usageFigure(
-              `${(storage.bytesUsed / GIB).toFixed(2)} GB`,
-              storage.limitBytes === null ? null : `${storage.limitBytes / GIB} GB`,
+              `${formatNumber(storage.bytesUsed / GIB, locale, {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })} GB`,
+              storage.limitBytes === null
+                ? null
+                : `${formatNumber(storage.limitBytes / GIB, locale, { maximumFractionDigits: 0 })} GB`,
             )}
           </div>
           <div className="flex items-center justify-between">
@@ -541,8 +546,13 @@ export default async function SubscriptionPage({
           <div className="flex items-center justify-between">
             <span className="text-ink-muted">{t("subscription.usage.storage")}</span>
             {usageFigure(
-              `${(storage.bytesUsed / GIB).toFixed(2)} GB`,
-              storage.limitBytes === null ? null : `${storage.limitBytes / GIB} GB`,
+              `${formatNumber(storage.bytesUsed / GIB, locale, {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })} GB`,
+              storage.limitBytes === null
+                ? null
+                : `${formatNumber(storage.limitBytes / GIB, locale, { maximumFractionDigits: 0 })} GB`,
             )}
           </div>
           <div className="flex items-center justify-between">

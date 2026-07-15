@@ -126,7 +126,17 @@ export default async function OnboardingFlowPage({
                 {pct}%
               </span>
             </div>
-            <div className="h-1.5 w-full overflow-hidden rounded-full bg-sunken">
+            <div
+              role="progressbar"
+              aria-valuenow={pct}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label={t("onboarding.flow.progress", {
+                current: idx,
+                total: FLOW_STEPS.length - 1,
+              })}
+              className="h-1.5 w-full overflow-hidden rounded-full bg-sunken"
+            >
               <div
                 className="h-full rounded-full bg-brand transition-all"
                 style={{ width: `${pct}%` }}

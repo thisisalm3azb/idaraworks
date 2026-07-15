@@ -44,6 +44,9 @@ export type CustomBuilderLabels = {
   quantity: string;
   notAvailable: string;
   submit?: string;
+  /** Stepper aria-labels: "<increase> <add-on name>" (translated verbs). */
+  increase?: string;
+  decrease?: string;
 };
 
 export type CustomBuilderProps = {
@@ -119,22 +122,22 @@ export function CustomBuilder({
                       <span className="text-xs text-ink-muted">{labels.quantity}</span>
                       <Button
                         variant="secondary"
-                        aria-label={`- ${item.name}`}
+                        aria-label={`${labels.decrease ?? "−"} ${item.name}`}
                         onClick={() => set(item.key, n - 1)}
                         disabled={n === 0}
                       >
-                        −
+                        <span aria-hidden>−</span>
                       </Button>
                       <span dir="ltr" className="w-8 text-center font-mono text-sm text-ink">
                         {n}
                       </span>
                       <Button
                         variant="secondary"
-                        aria-label={`+ ${item.name}`}
+                        aria-label={`${labels.increase ?? "+"} ${item.name}`}
                         onClick={() => set(item.key, n + 1)}
                         disabled={n >= MAX_QTY}
                       >
-                        +
+                        <span aria-hidden>+</span>
                       </Button>
                     </div>
                   ) : (

@@ -131,9 +131,15 @@ export function BrandingForm({
 
   return (
     <div className="flex flex-col gap-4">
-      {error ? <p className="rounded-md bg-danger-soft p-3 text-sm text-danger">{error}</p> : null}
+      {error ? (
+        <p role="alert" className="rounded-md bg-danger-soft p-3 text-sm text-danger">
+          {error}
+        </p>
+      ) : null}
       {saved ? (
-        <p className="rounded-md bg-success-soft p-3 text-sm text-success">{dict.saved}</p>
+        <p role="status" className="rounded-md bg-success-soft p-3 text-sm text-success">
+          {dict.saved}
+        </p>
       ) : null}
 
       <Card>

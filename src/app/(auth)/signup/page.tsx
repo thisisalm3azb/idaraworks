@@ -16,7 +16,7 @@ export default async function SignupPage({
         <Card>
           <h1 className="mb-4 text-lg font-semibold text-ink">{t("auth.signup.title")}</h1>
           {error ? (
-            <p className="mb-3 rounded-md bg-danger-soft p-3 text-sm text-danger">
+            <p role="alert" className="mb-3 rounded-md bg-danger-soft p-3 text-sm text-danger">
               {error === "rate_limited" ? t("auth.login.rate_limited") : t("auth.signup.error")}
             </p>
           ) : null}
@@ -36,7 +36,7 @@ export default async function SignupPage({
               autoComplete="new-password"
               required
               minLength={10}
-              hint="At least 10 characters."
+              hint={t("auth.signup.password_hint")}
             />
             <Button type="submit">{t("auth.signup.submit")}</Button>
           </form>

@@ -35,7 +35,7 @@ export default async function LoginPage({
             </p>
           ) : null}
           {error ? (
-            <p className="mb-3 rounded-md bg-danger-soft p-3 text-sm text-danger">
+            <p role="alert" className="mb-3 rounded-md bg-danger-soft p-3 text-sm text-danger">
               {t(ERROR_KEYS[error] ?? "auth.login.error")}
             </p>
           ) : null}

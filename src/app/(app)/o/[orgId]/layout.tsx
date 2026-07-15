@@ -105,7 +105,12 @@ export default async function OrgLayout({
 
   return (
     <div style={accentStyle} className="min-h-dvh md:flex">
-      <SidebarNav groups={groups} brand={brand} lockedHint={t("nav.locked_hint")} />
+      <SidebarNav
+        groups={groups}
+        brand={brand}
+        lockedHint={t("nav.locked_hint")}
+        navLabel={t("nav.primary")}
+      />
 
       <div className="flex min-h-dvh min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-30 border-b border-line bg-card">
@@ -118,6 +123,7 @@ export default async function OrgLayout({
               closeLabel={t("nav.close_menu")}
               lockedHint={t("nav.locked_hint")}
               accountLabel={t("auth.account.title")}
+              navLabel={t("nav.primary")}
             />
             {/* Page-context slot: the brand on mobile (the sidebar owns it on md+). */}
             <div className="min-w-0 flex-1 md:hidden">{brand}</div>

@@ -22,6 +22,7 @@ export function MobileNav({
   closeLabel,
   lockedHint,
   accountLabel,
+  navLabel,
 }: {
   groups: NavGroupVM[];
   bottomItems: BottomItemVM[];
@@ -30,6 +31,8 @@ export function MobileNav({
   closeLabel: string;
   lockedHint: string;
   accountLabel: string;
+  /** Translated landmark label (never hardcoded — ar renders Arabic). */
+  navLabel: string;
 }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
@@ -80,7 +83,7 @@ export function MobileNav({
                 <Icon name="close" size={20} />
               </button>
             </div>
-            <nav aria-label="Primary" className="min-h-0 flex-1 overflow-y-auto px-2 py-3">
+            <nav aria-label={navLabel} className="min-h-0 flex-1 overflow-y-auto px-2 py-3">
               {groups.map((group) => (
                 <section key={group.key} className="mb-2">
                   {group.items.length === 1 && group.items[0]!.key === group.key ? null : (
@@ -140,6 +143,7 @@ export function MobileNav({
       ) : null}
 
       <BottomNav
+        ariaLabel={navLabel}
         items={bottomItems.map((item) => ({
           key: item.key,
           label: item.label,

@@ -18,10 +18,13 @@ export function SidebarNav({
   groups,
   brand,
   lockedHint,
+  navLabel,
 }: {
   groups: NavGroupVM[];
   brand: ReactNode;
   lockedHint: string;
+  /** Translated landmark label (never hardcoded — ar renders Arabic). */
+  navLabel: string;
 }) {
   const pathname = usePathname();
   const allItems = groups.flatMap((g) => g.items);
@@ -31,7 +34,7 @@ export function SidebarNav({
   return (
     <aside className="sticky top-0 hidden h-dvh w-60 shrink-0 flex-col border-e border-line bg-card md:flex lg:w-64">
       <div className="border-b border-line px-4 py-3">{brand}</div>
-      <nav aria-label="Primary" className="min-h-0 flex-1 overflow-y-auto px-2 py-3">
+      <nav aria-label={navLabel} className="min-h-0 flex-1 overflow-y-auto px-2 py-3">
         {groups.map((group) => {
           const isCollapsed = collapsed[group.key] ?? false;
           const single = group.items.length === 1 && group.items[0]!.key === group.key;

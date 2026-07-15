@@ -39,7 +39,7 @@ import {
 } from "@/platform/entitlements";
 import { getOwnerDigest, type DigestSection } from "@/modules/digest/service";
 import { getInstalledTemplate } from "@/platform/config";
-import { formatDate, formatMoney } from "@/platform/format";
+import { formatDate, formatMoney, formatNumber } from "@/platform/format";
 import { getStorageUsage } from "@/platform/files";
 import type { CurrencyCode, Locale } from "@/platform/registries";
 import { dismissExceptionAction } from "./actions";
@@ -392,15 +392,17 @@ function DeadlinesCard({ s }: { s: ScreenCtx }) {
 async function SubscriptionStrip({ s }: { s: ScreenCtx }) {
   const { t, orgId, extras, ent } = s;
   const seats = extras.seats;
+  const gb = (bytes: number, digits: number) =>
+    formatNumber(bytes / 1024 ** 3, s.locale, {
+      minimumFractionDigits: digits,
+      maximumFractionDigits: digits,
+    });
   let storageLabel: string | null = null;
   try {
     // Wave-1 helper — reads never throw on entitlement; guard IO failures only.
     const q = await getStorageUsage(s.ctx);
-    const used = (q.bytesUsed / 1024 ** 3).toFixed(2);
-    storageLabel =
-      q.limitBytes === null
-        ? `${used} GB`
-        : `${used} / ${(q.limitBytes / 1024 ** 3).toFixed(0)} GB`;
+    const used = gb(q.bytesUsed, 2);
+    storageLabel = q.limitBytes === null ? `${used} GB` : `${used} / ${gb(q.limitBytes, 0)} GB`;
   } catch {
     storageLabel = null;
   }
