@@ -13,6 +13,9 @@ type Rule = { limit: number; windowSeconds: number };
 export const RATE_RULES = {
   login: { limit: 10, windowSeconds: 300 },
   signup: { limit: 5, windowSeconds: 3600 },
+  // U1 follow-up: the forgot-password action — same budget as signup (it also
+  // sends an email per call and must not become an enumeration/spam vector).
+  password_reset: { limit: 5, windowSeconds: 3600 },
   otp_send: { limit: 5, windowSeconds: 600 },
   invite_send: { limit: 20, windowSeconds: 3600 },
   invite_accept: { limit: 10, windowSeconds: 600 },

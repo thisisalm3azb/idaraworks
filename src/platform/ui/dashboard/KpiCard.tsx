@@ -44,15 +44,22 @@ export function KpiCard({
           </span>
         ) : null}
       </div>
-      <div className="mt-1 flex items-baseline gap-2">
-        <span dir="ltr" className={cn("font-mono text-2xl font-semibold leading-tight", toneText)}>
+      <div className="mt-1 flex min-w-0 items-baseline gap-2">
+        <span
+          dir="ltr"
+          title={value}
+          className={cn(
+            "min-w-0 truncate font-mono text-2xl font-semibold leading-tight tabular-nums",
+            toneText,
+          )}
+        >
           {value}
         </span>
         {delta ? (
           <span
             dir="ltr"
             className={cn(
-              "rounded-sm px-1.5 py-0.5 font-mono text-[11px] font-medium",
+              "shrink-0 rounded-sm px-1.5 py-0.5 font-mono text-[11px] font-medium",
               delta.direction === "up" && "bg-success-soft text-success",
               delta.direction === "down" && "bg-danger-soft text-danger",
               delta.direction === "flat" && "bg-sunken text-ink-muted",
@@ -65,7 +72,7 @@ export function KpiCard({
       {sub ? <p className="mt-0.5 truncate text-xs text-ink-muted">{sub}</p> : null}
     </>
   );
-  const frame = "block min-h-11 rounded-lg border border-line bg-card p-3 shadow-card";
+  const frame = "block min-h-11 min-w-0 rounded-lg border border-line bg-card p-3 shadow-card";
   if (href) {
     return (
       <Link

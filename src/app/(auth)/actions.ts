@@ -4,6 +4,7 @@ import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { oauthEnabled } from "@/platform/auth/oauth";
 import { requestOrigin } from "@/platform/auth/callback";
+import { validateNewPassword } from "@/platform/auth/password";
 import { sql, withUserCtx } from "@/platform/tenancy";
 import { supabaseServer } from "@/platform/tenancy/supabase";
 import { getSessionUser, listMyOrgs } from "@/platform/auth/resolve";
@@ -140,6 +141,58 @@ export async function signupAction(formData: FormData): Promise<void> {
   // Local/CI: confirmations off => session exists => straight to onboarding.
   // Hosted: confirmations on => the confirm link lands on /auth/callback.
   redirect(data.session ? "/onboarding" : "/login?notice=confirm_email");
+}
+
+/**
+ * Forgot-password (U1 follow-up — there was NO recovery path): sends the
+ * standard Supabase reset email. The link lands on /auth/callback (the same
+ * code-exchange the confirmation flow uses — a recovery code exchanges into a
+ * session identically) with next=/reset-password. ALWAYS neutral on success:
+ * whether or not the account exists, the user sees "if the account exists, an
+ * email was sent" — no account enumeration. Rate-limited like signup.
+ */
+export async function forgotPasswordAction(formData: FormData): Promise<void> {
+  const email = String(formData.get("email") ?? "")
+    .trim()
+    .toLowerCase();
+  const meta = await requestMeta();
+  const rl = await rateLimit("password_reset", meta.ip ?? email);
+  if (!rl.allowed) {
+    redirect("/forgot?error=rate_limited");
+  }
+  if (email) {
+    const redirectTo = `${requestOrigin(await headers())}/auth/callback?next=/reset-password`;
+    const supabase = supabaseServer(await cookies());
+    // The result is intentionally NOT surfaced — a failure here (unknown email,
+    // provider hiccup) must be indistinguishable from success to the caller.
+    await supabase.auth.resetPasswordForEmail(email, { redirectTo }).catch(() => undefined);
+  }
+  redirect("/forgot?notice=sent");
+}
+
+/**
+ * Set the new password (session-required: the recovery-code exchange in
+ * /auth/callback established it). Validation is the shared pure helper
+ * (≥10 chars, entered twice); success lands on "/" where resolveLanding routes
+ * to the first workspace or onboarding.
+ */
+export async function resetPasswordAction(formData: FormData): Promise<void> {
+  const user = await getSessionUser();
+  if (!user) {
+    redirect("/login?error=recovery_expired");
+  }
+  const password = String(formData.get("password") ?? "");
+  const confirm = String(formData.get("confirm_password") ?? "");
+  const invalid = validateNewPassword(password, confirm);
+  if (invalid) {
+    redirect(`/reset-password?error=${invalid}`);
+  }
+  const supabase = supabaseServer(await cookies());
+  const { error } = await supabase.auth.updateUser({ password });
+  if (error) {
+    redirect("/reset-password?error=failed");
+  }
+  redirect("/");
 }
 
 export async function logoutAction(): Promise<void> {

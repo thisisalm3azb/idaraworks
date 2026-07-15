@@ -3,7 +3,7 @@
  * exponents (KWD/BHD/OMR = 3-dp); numerals stay LATIN under `ar`.
  */
 import { describe, expect, it } from "vitest";
-import { formatMoney, toMinorUnits, formatDate, formatNumber } from "@/platform/format";
+import { formatMoney, toMinorUnits, formatDate, formatNumber, formatTime } from "@/platform/format";
 
 const ARABIC_INDIC = /[٠-٩]/; // ٠-٩ must NOT appear (latn pin)
 
@@ -52,5 +52,20 @@ describe("date + number formatters pin Latin numerals", () => {
     const s = formatNumber(1234567, "ar");
     expect(ARABIC_INDIC.test(s)).toBe(false);
     expect(s).toMatch(/1[,.]?234[,.]?567/);
+  });
+
+  it("formatTime renders HH:MM in the given org timezone", () => {
+    // 09:00Z is 13:00 in Asia/Dubai (UTC+4, no DST).
+    const s = formatTime("2026-07-12T09:00:00Z", { locale: "en", timeZone: "Asia/Dubai" });
+    expect(s).toBe("13:00");
+  });
+
+  it("formatTime without a timezone falls back to UTC with an honest suffix", () => {
+    expect(formatTime("2026-07-12T09:07:00Z", { locale: "en" })).toBe("09:07 UTC");
+  });
+
+  it("formatTime under ar keeps Latin digits", () => {
+    const s = formatTime("2026-07-12T09:00:00Z", { locale: "ar", timeZone: "Asia/Dubai" });
+    expect(ARABIC_INDIC.test(s)).toBe(false);
   });
 });

@@ -172,7 +172,9 @@ describe("S5 permission matrix (doc 06 rows 58-59 + Today/exception surfaces)", 
       "expenses.create": false,
       "expenses.void": false,
       "costing.view": false,
-      "today.view": false,
+      // Adversarial-review fix: the viewer now gets a minimal READ-ONLY Today
+      // (jobs/week reads it already holds — never money, never queues).
+      "today.view": true,
       "exceptions.view": false,
       "exceptions.dismiss": false,
     },

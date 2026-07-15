@@ -2,6 +2,7 @@ import Link from "next/link";
 import { AppShell, Button, Card, Field } from "@/platform/ui";
 import { getT } from "@/platform/i18n/server";
 import { signupAction } from "../actions";
+import { LanguageToggle } from "../LanguageToggle";
 
 export default async function SignupPage({
   searchParams,
@@ -11,7 +12,7 @@ export default async function SignupPage({
   const t = await getT();
   const { error } = await searchParams;
   return (
-    <AppShell brand={<span>IdaraWorks</span>}>
+    <AppShell brand={<span>IdaraWorks</span>} actions={<LanguageToggle />}>
       <div className="mx-auto w-full max-w-sm">
         <Card>
           <h1 className="mb-4 text-lg font-semibold text-ink">{t("auth.signup.title")}</h1>

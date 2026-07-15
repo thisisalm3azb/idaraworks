@@ -30,6 +30,18 @@ export type TierCardsProps = {
   current: "free" | "medium" | "high" | "custom" | null;
   /** Server action posting { bundle: <bundleKey> }; omitted = read-only compare. */
   selectTierAction?: (formData: FormData) => Promise<void>;
+  /**
+   * Server action selecting the FREE path (onboarding wizard) — gives the Free
+   * card the same in-card select slot as the tiers, so the plan step never
+   * needs a second Free card below the grid.
+   */
+  selectFreeAction?: (formData: FormData) => Promise<void>;
+  /**
+   * Two-step confirm for tier selection (settings surface): the select button
+   * opens an inline details/summary confirm; the server action is unchanged.
+   * The onboarding wizard omits it — its explicit review step is the confirm.
+   */
+  confirmSelect?: boolean;
   /** Where the Custom path leads (the add-on catalogue / builder). */
   customHref: string;
   canManage: boolean;
@@ -65,6 +77,7 @@ function TierCard({
   t,
   isCurrent,
   selectTierAction,
+  confirmSelect,
   canManage,
   providerEnabled,
 }: {
@@ -75,6 +88,7 @@ function TierCard({
   t: SelectionTranslator;
   isCurrent: boolean;
   selectTierAction?: (formData: FormData) => Promise<void>;
+  confirmSelect?: boolean;
   canManage: boolean;
   providerEnabled: boolean;
 }) {
@@ -134,12 +148,30 @@ function TierCard({
         </ul>
       </details>
       {canManage && providerEnabled && selectTierAction && !isCurrent ? (
-        <form action={selectTierAction} className="mt-auto">
-          <input type="hidden" name="bundle" value={tier.bundleKey} />
-          <Button type="submit" variant={tier.tier === "medium" ? "primary" : "secondary"}>
-            {t("subscription.tier.select", { tier: tier.names[locale] })}
-          </Button>
-        </form>
+        confirmSelect ? (
+          // Two-step confirm (settings): no-JS details/summary; action unchanged.
+          <details className="mt-auto">
+            <summary className="inline-flex min-h-11 cursor-pointer list-none items-center justify-center gap-2 rounded-md border border-line-strong bg-card px-4 text-sm font-medium text-ink transition-colors hover:bg-sunken [&::-webkit-details-marker]:hidden">
+              {t("subscription.tier.select", { tier: tier.names[locale] })}
+            </summary>
+            <div className="mt-2 flex flex-col items-start gap-2 rounded-md border border-line bg-sunken p-3">
+              <p className="text-sm text-ink">{t("subscription.confirm.body")}</p>
+              <form action={selectTierAction}>
+                <input type="hidden" name="bundle" value={tier.bundleKey} />
+                <Button type="submit" variant={tier.tier === "medium" ? "primary" : "secondary"}>
+                  {t("subscription.confirm.apply")}
+                </Button>
+              </form>
+            </div>
+          </details>
+        ) : (
+          <form action={selectTierAction} className="mt-auto">
+            <input type="hidden" name="bundle" value={tier.bundleKey} />
+            <Button type="submit" variant={tier.tier === "medium" ? "primary" : "secondary"}>
+              {t("subscription.tier.select", { tier: tier.names[locale] })}
+            </Button>
+          </form>
+        )
       ) : null}
     </Card>
   );
@@ -153,6 +185,8 @@ export function TierCards({
   jobsNoun,
   current,
   selectTierAction,
+  selectFreeAction,
+  confirmSelect,
   customHref,
   canManage,
   providerEnabled,
@@ -182,6 +216,14 @@ export function TierCards({
             <li>{t("subscription.tier.free_storage", { count: free.limits.storageGb })}</li>
           </ul>
           <p className="mt-auto text-xs text-ink-muted">{t("subscription.tier.free_note")}</p>
+          {/* The wizard's Free select lives IN the card — one Free path, one place. */}
+          {canManage && selectFreeAction && current !== "free" ? (
+            <form action={selectFreeAction}>
+              <Button type="submit" variant="secondary">
+                {t("subscription.tier.select", { tier: t("subscription.plan.free") })}
+              </Button>
+            </form>
+          ) : null}
         </Card>
 
         <TierCard
@@ -192,6 +234,7 @@ export function TierCards({
           t={t}
           isCurrent={current === "medium"}
           selectTierAction={selectTierAction}
+          confirmSelect={confirmSelect}
           canManage={canManage}
           providerEnabled={providerEnabled}
         />
@@ -203,6 +246,7 @@ export function TierCards({
           t={t}
           isCurrent={current === "high"}
           selectTierAction={selectTierAction}
+          confirmSelect={confirmSelect}
           canManage={canManage}
           providerEnabled={providerEnabled}
         />

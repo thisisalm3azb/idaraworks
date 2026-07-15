@@ -86,26 +86,48 @@ export async function getDashboardExtras(
   // Manager + foreman operate on their assigned scope (mirrors composeToday).
   const scoped = archetype === "manager" || foreman;
 
-  return withCtx(ctx, async (tx) => {
-    const scope = () => (scoped ? sql`and ${assignedJobCondition(ctx)}` : sql``);
+  const canJobs = can(archetype, "jobs.view");
+  const canWeek = can(archetype, "week.view");
+  const canReports = can(archetype, "reports.review") || can(archetype, "reports.create");
+  const canApprovals = can(archetype, "approvals.decide");
+  const canIssues = can(archetype, "issues.raise");
+  const canQuotes = can(archetype, "quotes.view");
+  const canExpenses = can(archetype, "expenses.view");
+  const canPayments = can(archetype, "payments.view");
+  const canPo = can(archetype, "po.view");
+  const canBilling = can(archetype, "billing.view");
 
-    const jobs = can(archetype, "jobs.view") ? await jobCounts(tx, ctx, opts.asOf, scoped) : null;
-    const stageDist =
-      can(archetype, "jobs.view") && !foreman ? await stageDistribution(tx, ctx, scoped) : null;
+  // Perf (adversarial review): these aggregates are independent reads, so they
+  // run as a few CONCURRENT withCtx groups instead of ~11 serial round-trips
+  // in one transaction. Each group is its own pooled transaction (withCtx sets
+  // transaction-local GUCs; Supavisor transaction mode pins per-transaction),
+  // and related reads stay batched inside a group to bound pool pressure.
+  // Every can()/redaction gate is unchanged.
 
+  const jobsGroup =
+    canJobs || canWeek
+      ? withCtx(ctx, async (tx) => ({
+          jobs: canJobs ? await jobCounts(tx, ctx, opts.asOf, scoped) : null,
+          stageDist: canJobs && !foreman ? await stageDistribution(tx, ctx, scoped) : null,
+          deadlines: canWeek ? await nearestDeadlines(tx, ctx, opts.asOf, scoped) : null,
+        }))
+      : Promise.resolve({ jobs: null, stageDist: null, deadlines: null });
+
+  const reportsGroup = withCtx(ctx, async (tx) => {
     // Reports trend: reviewers see the org (their scope); the foreman sees own.
     let reportTrend: TrendSeriesData | null = null;
     let reportsThisWeek = 0;
     let reportsPrevWeek = 0;
-    if (can(archetype, "reports.review") || can(archetype, "reports.create")) {
+    if (canReports) {
       const own = !can(archetype, "reports.review");
+      const scope = scoped ? sql`and ${assignedJobCondition(ctx)}` : sql``;
       const rows = (await tx.execute(sql`
         select r.report_date::text as d, count(*)::int as n
         from public.daily_report r
         join public.job j on j.id = r.job_id
         where r.org_id = ${ctx.orgId} and r.status in ('submitted','reviewed')
           and r.report_date >= (${opts.asOf}::date - 13)
-          ${own ? sql`and r.submitted_by = ${ctx.userId}` : scope()}
+          ${own ? sql`and r.submitted_by = ${ctx.userId}` : scope}
         group by 1
       `)) as unknown as Array<{ d: string; n: number }>;
       const byDate = new Map(rows.map((r) => [r.d, Number(r.n)]));
@@ -114,142 +136,159 @@ export async function getDashboardExtras(
       reportsThisWeek = points.slice(7).reduce((s, p) => s + p.value, 0);
       reportsPrevWeek = points.slice(0, 7).reduce((s, p) => s + p.value, 0);
     }
-
-    const deadlines = can(archetype, "week.view")
-      ? await nearestDeadlines(tx, ctx, opts.asOf, scoped)
-      : null;
-
     const activity = await recentActivity(tx, ctx, foreman);
-
-    let approvalsPending: number | null = null;
-    if (can(archetype, "approvals.decide")) {
-      const rows = (await tx.execute(sql`
-        select count(*)::int as n from public.approval
-        where org_id = ${ctx.orgId} and state = 'pending'
-      `)) as unknown as Array<{ n: number }>;
-      approvalsPending = Number(rows[0]?.n ?? 0);
-    }
-
-    let openIssues: number | null = null;
-    if (can(archetype, "issues.raise")) {
-      const rows = (await tx.execute(sql`
-        select count(*)::int as n from public.issue i
-        where i.org_id = ${ctx.orgId} and i.status not in ('resolved','closed')
-          ${
-            foreman
-              ? sql`and i.job_id in (select j.id from public.job j
-                    where j.org_id = ${ctx.orgId} and ${assignedJobCondition(ctx)})`
-              : sql``
-          }
-      `)) as unknown as Array<{ n: number }>;
-      openIssues = Number(rows[0]?.n ?? 0);
-    }
-
-    // ── Money blocks (never for the foreman — no money action passes can()) ──
-    let paymentsTrend: TrendSeriesData | null = null;
-    let paymentsWeekMinor: number | null = null;
-    if (can(archetype, "payments.view")) {
-      const money = ctx.pricePrivileged;
-      const rows = (await tx.execute(sql`
-        select payment_date::text as d, count(*)::int as n,
-               coalesce(sum(base_amount_minor),0)::bigint as total
-        from public.payment
-        where org_id = ${ctx.orgId} and status in ('recorded','confirmed')
-          and payment_date >= (${opts.asOf}::date - 29)
-        group by 1
-      `)) as unknown as Array<{ d: string; n: number; total: string }>;
-      const byDate = new Map(
-        rows.map((r) => [r.d, money ? Number(r.total) : Number(r.n)] as const),
-      );
-      paymentsTrend = { unit: money ? "money" : "count", points: denseDays(byDate, opts.asOf, 30) };
-      if (money) {
-        paymentsWeekMinor = paymentsTrend.points.slice(-7).reduce((s, p) => s + p.value, 0);
-      }
-    }
-
-    let quotesAwaiting: number | null = null;
-    if (can(archetype, "quotes.view")) {
-      const rows = (await tx.execute(sql`
-        select count(*)::int as n from public.quote
-        where org_id = ${ctx.orgId} and status in ('draft','pending_approval')
-      `)) as unknown as Array<{ n: number }>;
-      quotesAwaiting = Number(rows[0]?.n ?? 0);
-    }
-
-    let unpaidExpenses: number | null = null;
-    if (can(archetype, "expenses.view")) {
-      const rows = (await tx.execute(sql`
-        select count(*)::int as n from public.expense
-        where org_id = ${ctx.orgId} and voided_at is null and payment_status = 'unpaid'
-      `)) as unknown as Array<{ n: number }>;
-      unpaidExpenses = Number(rows[0]?.n ?? 0);
-    }
-
-    let poStatus: DashboardExtras["poStatus"] = null;
-    let mrOpen: DashboardExtras["mrOpen"] = null;
-    if (can(archetype, "po.view")) {
-      const pos = (await tx.execute(sql`
-        select
-          count(*) filter (where status = 'approved')::int as approved,
-          count(*) filter (where status = 'sent')::int as sent,
-          count(*) filter (where status = 'partially_received')::int as partial
-        from public.purchase_order where org_id = ${ctx.orgId}
-      `)) as unknown as Array<{ approved: number; sent: number; partial: number }>;
-      poStatus = {
-        approved: Number(pos[0]?.approved ?? 0),
-        sent: Number(pos[0]?.sent ?? 0),
-        partial: Number(pos[0]?.partial ?? 0),
-      };
-      const mrs = (await tx.execute(sql`
-        select
-          count(*) filter (where status = 'submitted')::int as submitted,
-          count(*) filter (where status = 'approved')::int as approved
-        from public.material_request where org_id = ${ctx.orgId}
-      `)) as unknown as Array<{ submitted: number; approved: number }>;
-      mrOpen = {
-        submitted: Number(mrs[0]?.submitted ?? 0),
-        approved: Number(mrs[0]?.approved ?? 0),
-      };
-    }
-
-    let seats: DashboardExtras["seats"] = null;
-    if (can(archetype, "billing.view")) {
-      // Seat classes mirror identity.ts / the subscription page (office
-      // archetypes are limited; field seats are free by product law).
-      const rows = (await tx.execute(sql`
-        select
-          count(*) filter (where r.archetype in ('owner','admin','manager','procurement','accounts'))::int as office,
-          count(*) filter (where r.archetype = 'viewer')::int as viewer
-        from public.membership m
-        join public.role_definition r on r.org_id = m.org_id and r.key = m.role_key
-        where m.org_id = ${ctx.orgId} and m.deactivated_at is null
-      `)) as unknown as Array<{ office: number; viewer: number }>;
-      seats = {
-        office: Number(rows[0]?.office ?? 0),
-        viewer: Number(rows[0]?.viewer ?? 0),
-      };
-    }
-
-    return {
-      computedAt: opts.computedAt,
-      jobs,
-      stageDist,
-      reportTrend,
-      reportsThisWeek,
-      reportsPrevWeek,
-      deadlines,
-      activity,
-      approvalsPending,
-      openIssues,
-      paymentsTrend,
-      paymentsWeekMinor,
-      quotesAwaiting,
-      unpaidExpenses,
-      poStatus,
-      mrOpen,
-      seats,
-    };
+    return { reportTrend, reportsThisWeek, reportsPrevWeek, activity };
   });
+
+  const countsGroup =
+    canApprovals || canIssues || canQuotes || canExpenses
+      ? withCtx(ctx, async (tx) => {
+          let approvalsPending: number | null = null;
+          if (canApprovals) {
+            const rows = (await tx.execute(sql`
+              select count(*)::int as n from public.approval
+              where org_id = ${ctx.orgId} and state = 'pending'
+            `)) as unknown as Array<{ n: number }>;
+            approvalsPending = Number(rows[0]?.n ?? 0);
+          }
+
+          let openIssues: number | null = null;
+          if (canIssues) {
+            const rows = (await tx.execute(sql`
+              select count(*)::int as n from public.issue i
+              where i.org_id = ${ctx.orgId} and i.status not in ('resolved','closed')
+                ${
+                  foreman
+                    ? sql`and i.job_id in (select j.id from public.job j
+                          where j.org_id = ${ctx.orgId} and ${assignedJobCondition(ctx)})`
+                    : sql``
+                }
+            `)) as unknown as Array<{ n: number }>;
+            openIssues = Number(rows[0]?.n ?? 0);
+          }
+
+          let quotesAwaiting: number | null = null;
+          if (canQuotes) {
+            const rows = (await tx.execute(sql`
+              select count(*)::int as n from public.quote
+              where org_id = ${ctx.orgId} and status in ('draft','pending_approval')
+            `)) as unknown as Array<{ n: number }>;
+            quotesAwaiting = Number(rows[0]?.n ?? 0);
+          }
+
+          let unpaidExpenses: number | null = null;
+          if (canExpenses) {
+            const rows = (await tx.execute(sql`
+              select count(*)::int as n from public.expense
+              where org_id = ${ctx.orgId} and voided_at is null and payment_status = 'unpaid'
+            `)) as unknown as Array<{ n: number }>;
+            unpaidExpenses = Number(rows[0]?.n ?? 0);
+          }
+          return { approvalsPending, openIssues, quotesAwaiting, unpaidExpenses };
+        })
+      : Promise.resolve({
+          approvalsPending: null,
+          openIssues: null,
+          quotesAwaiting: null,
+          unpaidExpenses: null,
+        });
+
+  // ── Money blocks (never for the foreman — no money action passes can()) ──
+  const moneyGroup =
+    canPayments || canPo || canBilling
+      ? withCtx(ctx, async (tx) => {
+          let paymentsTrend: TrendSeriesData | null = null;
+          let paymentsWeekMinor: number | null = null;
+          if (canPayments) {
+            const money = ctx.pricePrivileged;
+            const rows = (await tx.execute(sql`
+              select payment_date::text as d, count(*)::int as n,
+                     coalesce(sum(base_amount_minor),0)::bigint as total
+              from public.payment
+              where org_id = ${ctx.orgId} and status in ('recorded','confirmed')
+                and payment_date >= (${opts.asOf}::date - 29)
+              group by 1
+            `)) as unknown as Array<{ d: string; n: number; total: string }>;
+            const byDate = new Map(
+              rows.map((r) => [r.d, money ? Number(r.total) : Number(r.n)] as const),
+            );
+            paymentsTrend = {
+              unit: money ? "money" : "count",
+              points: denseDays(byDate, opts.asOf, 30),
+            };
+            if (money) {
+              paymentsWeekMinor = paymentsTrend.points.slice(-7).reduce((s, p) => s + p.value, 0);
+            }
+          }
+
+          let poStatus: DashboardExtras["poStatus"] = null;
+          let mrOpen: DashboardExtras["mrOpen"] = null;
+          if (canPo) {
+            const pos = (await tx.execute(sql`
+              select
+                count(*) filter (where status = 'approved')::int as approved,
+                count(*) filter (where status = 'sent')::int as sent,
+                count(*) filter (where status = 'partially_received')::int as partial
+              from public.purchase_order where org_id = ${ctx.orgId}
+            `)) as unknown as Array<{ approved: number; sent: number; partial: number }>;
+            poStatus = {
+              approved: Number(pos[0]?.approved ?? 0),
+              sent: Number(pos[0]?.sent ?? 0),
+              partial: Number(pos[0]?.partial ?? 0),
+            };
+            const mrs = (await tx.execute(sql`
+              select
+                count(*) filter (where status = 'submitted')::int as submitted,
+                count(*) filter (where status = 'approved')::int as approved
+              from public.material_request where org_id = ${ctx.orgId}
+            `)) as unknown as Array<{ submitted: number; approved: number }>;
+            mrOpen = {
+              submitted: Number(mrs[0]?.submitted ?? 0),
+              approved: Number(mrs[0]?.approved ?? 0),
+            };
+          }
+
+          let seats: DashboardExtras["seats"] = null;
+          if (canBilling) {
+            // Seat classes mirror identity.ts / the subscription page (office
+            // archetypes are limited; field seats are free by product law).
+            const rows = (await tx.execute(sql`
+              select
+                count(*) filter (where r.archetype in ('owner','admin','manager','procurement','accounts'))::int as office,
+                count(*) filter (where r.archetype = 'viewer')::int as viewer
+              from public.membership m
+              join public.role_definition r on r.org_id = m.org_id and r.key = m.role_key
+              where m.org_id = ${ctx.orgId} and m.deactivated_at is null
+            `)) as unknown as Array<{ office: number; viewer: number }>;
+            seats = {
+              office: Number(rows[0]?.office ?? 0),
+              viewer: Number(rows[0]?.viewer ?? 0),
+            };
+          }
+          return { paymentsTrend, paymentsWeekMinor, poStatus, mrOpen, seats };
+        })
+      : Promise.resolve({
+          paymentsTrend: null,
+          paymentsWeekMinor: null,
+          poStatus: null,
+          mrOpen: null,
+          seats: null,
+        });
+
+  const [jobsRes, reportsRes, countsRes, moneyRes] = await Promise.all([
+    jobsGroup,
+    reportsGroup,
+    countsGroup,
+    moneyGroup,
+  ]);
+
+  return {
+    computedAt: opts.computedAt,
+    ...jobsRes,
+    ...reportsRes,
+    ...countsRes,
+    ...moneyRes,
+  };
 }
 
 async function jobCounts(

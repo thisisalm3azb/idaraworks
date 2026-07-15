@@ -217,12 +217,13 @@ test.describe("founder onboarding journey (U6)", () => {
       page.getByText("No payment is collected now", { exact: false }).first(),
     ).toBeVisible();
     await shot(page, "03-tiers");
-    await page.getByRole("button", { name: "Start with Free" }).click();
+    // Free selects INSIDE its comparison card (the duplicate below-grid card was removed).
+    await page.getByRole("button", { name: "Choose Free" }).click();
 
     // Free selection advances to branding; going back shows the recorded choice + Continue.
     await expect(page.getByRole("heading", { name: "Make it yours" })).toBeVisible();
     await page.getByRole("link", { name: "Back" }).click();
-    await expect(page.getByText("Your choice").first()).toBeVisible();
+    await expect(page.getByText("Current").first()).toBeVisible();
     await expect(page.getByRole("link", { name: "Continue" })).toBeVisible();
     await page.getByRole("link", { name: "Continue" }).click();
 

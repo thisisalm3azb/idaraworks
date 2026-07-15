@@ -36,7 +36,7 @@ describe("buildNavGroups — role matrix (all features on)", () => {
       "money",
       "customers",
       "people",
-      "insights",
+      "data",
       "settings",
     ]);
   });

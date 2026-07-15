@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import type { ReactNode } from "react";
 import { Badge, Button, Card, CardHeader } from "@/platform/ui";
 import { TierCards } from "@/platform/ui/subscription";
 import { getT, getServerLocale } from "@/platform/i18n/server";
@@ -91,6 +92,50 @@ type OrgAddonRow = {
 
 const GIB = 1024 ** 3;
 
+/**
+ * Two-step confirm (adversarial review): every subscription mutation was a
+ * one-click immediate post. Same no-JS pattern the wizard uses (native
+ * details/summary): the first click opens an inline honest-confirm panel and
+ * only the inner submit posts the UNCHANGED server action. Cancel gets the
+ * distinct danger treatment.
+ */
+function ConfirmAction({
+  label,
+  body,
+  danger,
+  children,
+}: {
+  /** The visible trigger — renders like the button it replaces. */
+  label: string;
+  /** Honest one-line explanation of what confirming does. */
+  body: string;
+  danger?: boolean;
+  /** The real form (server action unchanged) carrying the confirm submit. */
+  children: ReactNode;
+}) {
+  return (
+    <details>
+      <summary
+        className={`inline-flex min-h-11 cursor-pointer list-none items-center justify-center gap-2 rounded-md px-4 text-sm font-medium transition-colors [&::-webkit-details-marker]:hidden ${
+          danger
+            ? "text-danger hover:bg-danger-soft"
+            : "border border-line-strong bg-card text-ink hover:bg-sunken"
+        }`}
+      >
+        {label}
+      </summary>
+      <div
+        className={`mt-2 flex flex-col items-start gap-2 rounded-md border p-3 ${
+          danger ? "border-danger bg-danger-soft" : "border-line bg-sunken"
+        }`}
+      >
+        <p className={`text-sm ${danger ? "text-danger" : "text-ink"}`}>{body}</p>
+        {children}
+      </div>
+    </details>
+  );
+}
+
 export default async function SubscriptionPage({
   params,
   searchParams,
@@ -106,12 +151,15 @@ export default async function SubscriptionPage({
   if (typeof resolved === "string") redirect("/");
   if (!can(resolved.archetype, "billing.view")) redirect(`/o/${orgId}`);
 
-  const view = await readSubscription(resolved.ctx, resolved.archetype);
-  const active = await listImpersonations(resolved.ctx, resolved.archetype, true);
-  const ent = await resolveEntitlements(resolved.ctx);
-  const storage = await getStorageUsage(resolved.ctx);
-  // Domain nouns arrive as ICU variables (doc 07 #1 — never baked into a catalog string).
-  const terms = await loadOrgTerminology(resolved.ctx, locale);
+  // Independent reads run concurrently (perf review) — domain nouns arrive as
+  // ICU variables (doc 07 #1 — never baked into a catalog string).
+  const [view, active, ent, storage, terms] = await Promise.all([
+    readSubscription(resolved.ctx, resolved.archetype),
+    listImpersonations(resolved.ctx, resolved.archetype, true),
+    resolveEntitlements(resolved.ctx),
+    getStorageUsage(resolved.ctx),
+    loadOrgTerminology(resolved.ctx, locale),
+  ]);
   const jobsNoun = term("job", terms, "plural");
   const canManage = can(resolved.archetype, "billing.manage");
   const addWithOrg = addAddonAction.bind(null, orgId);
@@ -177,6 +225,15 @@ export default async function SubscriptionPage({
   const tierLabel = currentSelectionLabel(addonRows);
   const currentPath =
     tierLabel ?? (view.planKey === "free" && view.billingState !== "trialing" ? "free" : null);
+
+  // The onboarding-recorded choice (honesty review: a founder who picked Medium must be
+  // able to SEE that choice somewhere). Display-only — never replayed into entitlements.
+  const recordedRows = (await withCtx(resolved.ctx, (tx) =>
+    tx.execute(sql`
+      select value from public.app_settings
+      where org_id = ${orgId} and key = 'subscription.selected_tier'`),
+  )) as unknown as Array<{ value: { mode?: string } | null }>;
+  const recordedMode = recordedRows[0]?.value?.mode ?? null;
 
   const addonState = new Map(addonRows.map((r) => [r.addon_key, r]));
   const bundleActive = (b: BundleDef) => addonRows.some((r) => r.source === b.key);
@@ -256,6 +313,21 @@ export default async function SubscriptionPage({
                 {tierLabel === "custom"
                   ? t("subscription.tier.custom")
                   : (getTierBundle(tierLabel)?.names[locale] ?? tierLabel)}
+              </span>
+            </div>
+          ) : recordedMode ? (
+            <div className="flex items-center justify-between">
+              <span className="text-ink-muted">{t("subscription.strip.recorded")}</span>
+              <span className="font-medium">
+                {recordedMode === "custom"
+                  ? t("subscription.tier.custom")
+                  : recordedMode === "free"
+                    ? t("subscription.plan.free")
+                    : recordedMode === "tier_medium" || recordedMode === "tier_high"
+                      ? (getTierBundle(recordedMode === "tier_medium" ? "medium" : "high")?.names[
+                          locale
+                        ] ?? recordedMode)
+                      : recordedMode}
               </span>
             </div>
           ) : null}
@@ -340,6 +412,7 @@ export default async function SubscriptionPage({
         jobsNoun={jobsNoun}
         current={currentPath}
         selectTierAction={selectWithOrg}
+        confirmSelect
         customHref="#custom-addons"
         canManage={canManage}
         providerEnabled={view.providerEnabled}
@@ -396,27 +469,35 @@ export default async function SubscriptionPage({
                     ))}
                   </div>
                   {canManage && view.providerEnabled ? (
-                    <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex flex-wrap items-start gap-2">
                       {bundleIsPurchasable(b) ? (
-                        <form action={selectWithOrg}>
-                          <input type="hidden" name="bundle" value={b.key} />
-                          <Button type="submit" variant="secondary">
-                            {t("subscription.bundle.select")}
-                          </Button>
-                        </form>
+                        <ConfirmAction
+                          label={t("subscription.bundle.select")}
+                          body={t("subscription.confirm.body")}
+                        >
+                          <form action={selectWithOrg}>
+                            <input type="hidden" name="bundle" value={b.key} />
+                            <Button type="submit" variant="secondary">
+                              {t("subscription.confirm.apply")}
+                            </Button>
+                          </form>
+                        </ConfirmAction>
                       ) : null}
                       {bundleRemovable(b) ? (
-                        <form action={removeBundleWithOrg}>
-                          <input type="hidden" name="bundle" value={b.key} />
-                          <Button type="submit" variant="ghost" className="text-danger">
-                            {t("subscription.bundle.remove")}
-                          </Button>
-                        </form>
+                        <ConfirmAction
+                          label={t("subscription.bundle.remove")}
+                          body={t("subscription.addon.remove_note")}
+                          danger
+                        >
+                          <form action={removeBundleWithOrg}>
+                            <input type="hidden" name="bundle" value={b.key} />
+                            <Button type="submit" variant="danger">
+                              {t("subscription.confirm.apply")}
+                            </Button>
+                          </form>
+                        </ConfirmAction>
                       ) : null}
                     </div>
-                  ) : null}
-                  {canManage && view.providerEnabled && bundleRemovable(b) ? (
-                    <p className="text-xs text-ink-muted">{t("subscription.addon.remove_note")}</p>
                   ) : null}
                 </li>
               );
@@ -481,41 +562,52 @@ export default async function SubscriptionPage({
                           <p className="text-xs text-warning">{a.availabilityNote[locale]}</p>
                         ) : null}
                         {canManage && view.providerEnabled && purchasable ? (
-                          <div className="flex flex-wrap items-center gap-2">
-                            <form action={addWithOrg} className="flex flex-wrap items-center gap-2">
-                              <input type="hidden" name="addon" value={a.key} />
-                              {a.stackable ? (
-                                <label className="flex items-center gap-2 text-xs text-ink-muted">
-                                  {t("subscription.addon.quantity")}
-                                  <input
-                                    type="number"
-                                    name="quantity"
-                                    min={1}
-                                    defaultValue={state?.quantity ?? 1}
-                                    className="min-h-11 w-20 rounded-md border border-line bg-card px-2 text-sm text-ink"
-                                  />
-                                </label>
-                              ) : null}
-                              <Button type="submit" variant="secondary">
-                                {state?.status === "active" && a.stackable
+                          <div className="flex flex-wrap items-start gap-2">
+                            <ConfirmAction
+                              label={
+                                state?.status === "active" && a.stackable
                                   ? t("subscription.addon.update_quantity")
-                                  : t("subscription.addon.add")}
-                              </Button>
-                            </form>
-                            {state ? (
-                              <form action={removeWithOrg}>
+                                  : t("subscription.addon.add")
+                              }
+                              body={t("subscription.confirm.body")}
+                            >
+                              <form
+                                action={addWithOrg}
+                                className="flex flex-wrap items-center gap-2"
+                              >
                                 <input type="hidden" name="addon" value={a.key} />
-                                <Button type="submit" variant="ghost" className="text-danger">
-                                  {t("subscription.addon.remove")}
+                                {a.stackable ? (
+                                  <label className="flex items-center gap-2 text-xs text-ink-muted">
+                                    {t("subscription.addon.quantity")}
+                                    <input
+                                      type="number"
+                                      name="quantity"
+                                      min={1}
+                                      defaultValue={state?.quantity ?? 1}
+                                      className="min-h-11 w-20 rounded-md border border-line bg-card px-2 text-sm text-ink"
+                                    />
+                                  </label>
+                                ) : null}
+                                <Button type="submit" variant="secondary">
+                                  {t("subscription.confirm.apply")}
                                 </Button>
                               </form>
+                            </ConfirmAction>
+                            {state ? (
+                              <ConfirmAction
+                                label={t("subscription.addon.remove")}
+                                body={t("subscription.addon.remove_note")}
+                                danger
+                              >
+                                <form action={removeWithOrg}>
+                                  <input type="hidden" name="addon" value={a.key} />
+                                  <Button type="submit" variant="danger">
+                                    {t("subscription.confirm.apply")}
+                                  </Button>
+                                </form>
+                              </ConfirmAction>
                             ) : null}
                           </div>
-                        ) : null}
-                        {canManage && view.providerEnabled && purchasable && state ? (
-                          <p className="text-xs text-ink-muted">
-                            {t("subscription.addon.remove_note")}
-                          </p>
                         ) : null}
                       </li>
                     );
@@ -568,11 +660,19 @@ export default async function SubscriptionPage({
         <Card>
           <CardHeader title={t("subscription.cancel_title")} />
           <p className="mb-3 text-sm text-ink-muted">{t("subscription.cancel_help")}</p>
-          <form action={cancelWithOrg}>
-            <Button type="submit" variant="ghost" className="text-danger">
-              {t("subscription.cancel")}
-            </Button>
-          </form>
+          {/* Distinct warning treatment (review): cancelling is the one action
+              that ends the whole subscription — danger confirm, never one click. */}
+          <ConfirmAction
+            label={t("subscription.cancel")}
+            body={t("subscription.confirm.cancel_body")}
+            danger
+          >
+            <form action={cancelWithOrg}>
+              <Button type="submit" variant="danger">
+                {t("subscription.confirm.cancel_apply")}
+              </Button>
+            </form>
+          </ConfirmAction>
         </Card>
       ) : null}
     </div>

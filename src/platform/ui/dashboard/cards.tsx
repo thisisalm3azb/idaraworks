@@ -18,6 +18,7 @@ export function SectionCard({
   viewAllLabel,
   children,
   className,
+  id,
 }: {
   title: string;
   meta?: ReactNode;
@@ -25,9 +26,11 @@ export function SectionCard({
   viewAllLabel?: string;
   children: ReactNode;
   className?: string;
+  /** In-page anchor target (e.g. a KPI linking to its own list below). */
+  id?: string;
 }) {
   return (
-    <Card className={cn("flex flex-col", className)}>
+    <Card id={id} className={cn("flex flex-col", className)}>
       <CardHeader
         title={title}
         meta={

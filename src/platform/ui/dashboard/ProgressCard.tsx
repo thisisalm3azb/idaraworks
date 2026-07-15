@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { formatNumber } from "@/platform/format";
 import { stackSegments } from "./geometry";
 import { seriesColor } from "./palette";
 
@@ -47,7 +48,7 @@ export function DistributionBar({ data, title }: { data: DistributionDatum[]; ti
                 <span className="truncate text-ink">{d.label}</span>
               </span>
               <span dir="ltr" className="font-mono text-ink-secondary">
-                {d.value.toLocaleString("en-US")}
+                {formatNumber(d.value)}
               </span>
             </span>
           );

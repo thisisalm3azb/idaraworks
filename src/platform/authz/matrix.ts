@@ -200,7 +200,9 @@ export const MATRIX: Record<Action, readonly Grantable[]> = {
   "costing.view": ["owner", "admin", "manager", "accounts"],
   // Today screens: S5 shipped foreman+manager; S6 adds the Accounts + Procurement
   // compositions (owner/admin see the owner/management view). doc 03 §5 roles.
-  "today.view": ["owner", "admin", "manager", "foreman", "accounts", "procurement"],
+  // Viewer added (adversarial review): a minimal READ-ONLY Today built solely
+  // from reads the viewer already holds (jobs/week views — never money).
+  "today.view": ["owner", "admin", "manager", "foreman", "accounts", "procurement", "viewer"],
   // Exceptions: view is audience-scoped — the grant is broad, the SERVICE narrows
   // to (archetype ∈ audience_roles) ∧ job-scope (foreman sees only own-relevant).
   // Viewer excluded.

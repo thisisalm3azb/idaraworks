@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { formatNumber } from "@/platform/format";
 import { donutSegments } from "./geometry";
 import { seriesColor } from "./palette";
 
@@ -76,7 +77,7 @@ export function StatusDonut({
                 <span className="truncate text-ink">{d.label}</span>
               </span>
               <span dir="ltr" className="font-mono text-ink-secondary">
-                {d.value.toLocaleString("en-US")}
+                {formatNumber(d.value)}
                 {total > 0 ? (
                   <span className="ms-1 text-xs text-ink-muted">
                     {Math.round((Math.max(0, d.value) / total) * 100)}%

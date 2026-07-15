@@ -623,7 +623,6 @@ export function TemplateStep({ t, locale, data }: StepProps) {
   const rec = recommendationForDraft(data);
   const selected = data.template.selected_key;
   const recEntry = getCatalogueEntry(rec.recommendedKey);
-  const topScore = rec.ranked.find((m) => m.key === rec.recommendedKey)?.score ?? 0;
   const alternatives = rec.ranked.filter((m) => m.key !== rec.recommendedKey);
   const topAlternatives = alternatives.slice(0, 3);
   const restAlternatives = alternatives.slice(3);
@@ -643,14 +642,11 @@ export function TemplateStep({ t, locale, data }: StepProps) {
         />
         {recEntry ? (
           <div className="flex flex-col gap-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <h2 className="text-base font-semibold text-ink">
-                {ar ? recEntry.names.ar : recEntry.names.en}
-              </h2>
-              <span dir="ltr" className="font-mono text-xs text-ink-muted">
-                {t("onboarding.flow.template.score", { score: topScore })}
-              </span>
-            </div>
+            {/* Raw match score dropped (review): the confidence badge above is
+                the honest signal — an internal number reads as false precision. */}
+            <h2 className="text-base font-semibold text-ink">
+              {ar ? recEntry.names.ar : recEntry.names.en}
+            </h2>
             <p className="rounded-md bg-sunken p-3 text-sm text-ink">
               <span className="font-medium">{t("onboarding.flow.template.why_label")}:</span>{" "}
               {ar ? rec.reasonAr : rec.reasonEn}
@@ -681,14 +677,9 @@ export function TemplateStep({ t, locale, data }: StepProps) {
             if (!entry) return null;
             return (
               <li key={m.key} className="flex flex-col gap-2 rounded-md border border-line p-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="text-sm font-semibold text-ink">
-                    {ar ? entry.names.ar : entry.names.en}
-                  </span>
-                  <span dir="ltr" className="font-mono text-xs text-ink-muted">
-                    {t("onboarding.flow.template.score", { score: m.score })}
-                  </span>
-                </div>
+                <span className="text-sm font-semibold text-ink">
+                  {ar ? entry.names.ar : entry.names.en}
+                </span>
                 <details>
                   <summary className="min-h-11 cursor-pointer text-sm leading-[44px] text-brand">
                     {t("onboarding.flow.template.preview")}
@@ -718,14 +709,9 @@ export function TemplateStep({ t, locale, data }: StepProps) {
                 if (!entry) return null;
                 return (
                   <li key={m.key} className="flex flex-col gap-2 rounded-md border border-line p-3">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <span className="text-sm font-semibold text-ink">
-                        {ar ? entry.names.ar : entry.names.en}
-                      </span>
-                      <span dir="ltr" className="font-mono text-xs text-ink-muted">
-                        {t("onboarding.flow.template.score", { score: m.score })}
-                      </span>
-                    </div>
+                    <span className="text-sm font-semibold text-ink">
+                      {ar ? entry.names.ar : entry.names.en}
+                    </span>
                     <TemplatePreview t={t} locale={locale} entry={entry} />
                     <ChooseTemplateForm
                       t={t}
@@ -904,6 +890,8 @@ export function PlanStep({ t, locale, data, view }: StepProps & { view: Selectio
         </p>
       </Card>
 
+      {/* Free is one honest click — selected INSIDE its comparison card (the
+          same slot the tiers use), never a duplicate card below the grid. */}
       <TierCards
         view={view}
         locale={locale}
@@ -912,29 +900,11 @@ export function PlanStep({ t, locale, data, view }: StepProps & { view: Selectio
         jobsNoun={jobsNoun}
         current={current}
         selectTierAction={selectTierFlowAction}
+        selectFreeAction={selectFreeAction}
         customHref="#custom-builder"
         canManage
         providerEnabled
       />
-
-      {/* Free is one honest click — its own explicit choice, never a default. */}
-      <Card>
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h3 className="text-base font-semibold text-ink">{t("subscription.plan.free")}</h3>
-            <p className="text-xs text-ink-muted">{t("onboarding.flow.plan.free_note")}</p>
-          </div>
-          {mode === "free" ? (
-            <Badge tone="success">{t("onboarding.flow.plan.chosen")}</Badge>
-          ) : (
-            <form action={selectFreeAction}>
-              <Button type="submit" variant="secondary">
-                {t("onboarding.flow.plan.free_cta")}
-              </Button>
-            </form>
-          )}
-        </div>
-      </Card>
 
       <div id="custom-builder" className="flex flex-col gap-2">
         <h3 className="text-base font-semibold text-ink">
@@ -1015,6 +985,9 @@ export function BrandingStep({ t, data }: StepProps) {
       <Card>
         <CardHeader title={t("onboarding.flow.branding.title")} />
         <p className="text-xs text-ink-muted">{t("onboarding.flow.branding.note")}</p>
+        {/* Honesty (review): logo DISPLAY is gated by the branding add-ons after the
+            trial — the wizard must not set a false expectation for Free founders. */}
+        <p className="mt-1 text-xs text-ink-muted">{t("onboarding.flow.branding.trial_note")}</p>
       </Card>
 
       <Card>

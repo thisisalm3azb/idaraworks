@@ -1,6 +1,7 @@
 "use client";
 
 import { useId, useState } from "react";
+import { formatNumber } from "@/platform/format";
 import { areaPath, linePath, niceMax, scaleSeries, ticks } from "./geometry";
 
 export type TrendPoint = {
@@ -155,7 +156,7 @@ export function TrendChart({
         >
           <span className="text-ink-muted">{activePoint.label}</span>{" "}
           <span className="font-mono font-semibold text-ink">
-            {activePoint.display ?? activePoint.value.toLocaleString("en-US")}
+            {activePoint.display ?? formatNumber(activePoint.value)}
           </span>
         </div>
       ) : null}

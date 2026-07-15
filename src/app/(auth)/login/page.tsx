@@ -3,6 +3,7 @@ import { AppShell, Button, Card, Field } from "@/platform/ui";
 import { getT } from "@/platform/i18n/server";
 import { loginAction, signInWithProviderAction } from "../actions";
 import { oauthEnabled } from "@/platform/auth/oauth";
+import { LanguageToggle } from "../LanguageToggle";
 
 // Whitelisted query-param → i18n-key maps (params are attacker-controlled; only
 // known values render, and only as translated copy). Unknown notices render
@@ -15,6 +16,7 @@ const ERROR_KEYS: Record<string, string> = {
   rate_limited: "auth.login.rate_limited",
   confirm_missing: "auth.login.confirm_missing",
   confirm_invalid: "auth.login.confirm_invalid",
+  recovery_expired: "auth.reset.expired",
 };
 
 export default async function LoginPage({
@@ -25,7 +27,7 @@ export default async function LoginPage({
   const t = await getT();
   const { error, notice } = await searchParams;
   return (
-    <AppShell brand={<span>IdaraWorks</span>}>
+    <AppShell brand={<span>IdaraWorks</span>} actions={<LanguageToggle />}>
       <div className="mx-auto w-full max-w-sm">
         <Card>
           <h1 className="mb-4 text-lg font-semibold text-ink">{t("auth.login.title")}</h1>
@@ -56,6 +58,11 @@ export default async function LoginPage({
             />
             <Button type="submit">{t("auth.login.submit")}</Button>
           </form>
+          <p className="mt-3 text-sm">
+            <Link className="text-brand hover:underline" href="/forgot">
+              {t("auth.login.forgot_link")}
+            </Link>
+          </p>
           {oauthEnabled() ? (
             <div className="mt-4 flex flex-col gap-2">
               <p className="text-center text-xs text-ink-muted">

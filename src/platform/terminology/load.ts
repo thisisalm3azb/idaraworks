@@ -4,6 +4,7 @@
  * (key `terminology.template`), validate defensively, and hand the resolver a
  * ready context. Reads only — the S1 config pipeline writes these.
  */
+import { cache } from "react";
 import { sql, withCtx, type Ctx } from "@/platform/tenancy";
 import type { Locale } from "@/platform/registries";
 import { parseTerminologyOverride } from "@/platform/config/schemas/terminology";
@@ -12,7 +13,10 @@ import type { TermContext } from "./resolve";
 const OVERRIDES_KEY = "terminology.overrides";
 const TEMPLATE_KEY = "terminology.template";
 
-export async function loadOrgTerminology(ctx: Ctx, locale: Locale): Promise<TermContext> {
+/** Per-request memoized (React cache()): layout + page share one read. The
+ * cache keys on the ctx OBJECT identity — resolveCtx is itself cache()d, so
+ * every caller in a request passes the same reference. */
+export const loadOrgTerminology = cache(async (ctx: Ctx, locale: Locale): Promise<TermContext> => {
   const rows = (await withCtx(ctx, (tx) =>
     tx.execute(sql`
       select key, value from public.app_settings
@@ -26,4 +30,4 @@ export async function loadOrgTerminology(ctx: Ctx, locale: Locale): Promise<Term
   const templateKey = typeof templateRaw === "string" ? templateRaw : undefined;
 
   return { locale, overrides, templateKey };
-}
+});

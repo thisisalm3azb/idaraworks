@@ -149,7 +149,7 @@ export function quoteHtml(data: QuoteTemplateData, opts: QuoteTemplateOptions): 
     <tr class="grand"><td>الإجمالي / Grand total</td><td class="e">${money(data.totalMinor, opts.currency)}</td></tr>
   </table>
   ${data.terms ? `<div class="terms"><div class="label">الشروط / Terms</div>${esc(data.terms)}</div>` : ""}
-  ${opts.footerDetails ? `<div class="foot-details">${esc(opts.footerDetails)}</div>` : ""}
+  ${opts.footerDetails ? `<div class="foot-details" dir="auto">${esc(opts.footerDetails)}</div>` : ""}
   <div class="foot">${esc(opts.orgName)} — ${ltr(data.reference)}</div>
 </body>
 </html>`;

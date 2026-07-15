@@ -14,6 +14,7 @@
 import { redirect } from "next/navigation";
 import { AppShell, Badge } from "@/platform/ui";
 import { getT, getServerLocale } from "@/platform/i18n/server";
+import { LanguageToggle } from "../LanguageToggle";
 import { getSessionUser, listMyOrgs } from "@/platform/auth/resolve";
 import { buildSelectionView } from "@/modules/subscription/service";
 import {
@@ -111,7 +112,7 @@ export default async function OnboardingFlowPage({
   })();
 
   return (
-    <AppShell brand={<span>IdaraWorks</span>}>
+    <AppShell brand={<span>IdaraWorks</span>} actions={<LanguageToggle />}>
       <div className="mx-auto flex w-full max-w-2xl flex-col gap-4">
         {effectiveStep !== "welcome" ? (
           <div className="flex flex-col gap-1.5">

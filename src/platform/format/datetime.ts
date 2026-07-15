@@ -42,6 +42,25 @@ export function formatDateTime(instant: Date | string, options: DateFormatOption
   }).format(d);
 }
 
+/**
+ * Format an instant as a wall-clock time (HH:MM) in the ORG's timezone.
+ * When no timezone is known the value renders in UTC with an explicit "UTC"
+ * suffix — an honest label beats silently pretending UTC is local time.
+ */
+export function formatTime(instant: Date | string, options: DateFormatOptions = {}): string {
+  const { locale = "en", timeZone } = options;
+  const d = typeof instant === "string" ? new Date(instant) : instant;
+  const render = (tz: string) =>
+    new Intl.DateTimeFormat(intlLocale(locale), {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+      timeZone: tz,
+      numberingSystem: "latn",
+    }).format(d);
+  return timeZone ? render(timeZone) : `${render("UTC")} UTC`;
+}
+
 /** Format a plain number with Latin digits (F-44). */
 export function formatNumber(
   value: number,

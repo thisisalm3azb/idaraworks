@@ -44,7 +44,8 @@ function esc(v: unknown): string {
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 /** Isolate a Latin token (serial, amount) inside RTL text so bidi doesn't reorder it. */
 function ltr(v: unknown): string {
@@ -116,7 +117,7 @@ export function invoiceHtml(data: InvoiceTemplateData): string {
   </table>
   ${
     data.footerDetails
-      ? `<div style="margin-top:24px;color:#666;font-size:11px;text-align:center;white-space:pre-line">${esc(data.footerDetails)}</div>`
+      ? `<div dir="auto" style="margin-top:24px;color:#666;font-size:11px;text-align:center;white-space:pre-line">${esc(data.footerDetails)}</div>`
       : ""
   }
   <div class="en" style="margin-top:16px">${esc(data.orgName)} — ${ltr(data.reference)}</div>

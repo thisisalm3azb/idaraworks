@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { cn } from "@/lib/cn";
 import type { ReactNode } from "react";
 
@@ -50,13 +51,13 @@ export function BottomNav({ items, ariaLabel }: { items: BottomNavItem[]; ariaLa
                   {inner}
                 </button>
               ) : (
-                <a
+                <Link
                   href={item.href}
                   aria-current={item.active ? "page" : undefined}
                   className={className}
                 >
                   {inner}
-                </a>
+                </Link>
               )}
             </li>
           );

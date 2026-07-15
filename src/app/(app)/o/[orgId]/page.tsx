@@ -39,7 +39,7 @@ import {
 } from "@/platform/entitlements";
 import { getOwnerDigest, type DigestSection } from "@/modules/digest/service";
 import { getInstalledTemplate } from "@/platform/config";
-import { formatDate, formatMoney, formatNumber } from "@/platform/format";
+import { formatDate, formatMoney, formatNumber, formatTime } from "@/platform/format";
 import { getStorageUsage } from "@/platform/files";
 import type { CurrencyCode, Locale } from "@/platform/registries";
 import { dismissExceptionAction } from "./actions";
@@ -68,6 +68,8 @@ type ScreenCtx = {
   jobVars: Record<string, string>;
   seesPrice: boolean;
   canBilling: boolean;
+  /** Org IANA timezone (null → freshness times render as UTC, labelled). */
+  timezone: string | null;
 };
 
 export default async function OrgHome({
@@ -104,22 +106,31 @@ export default async function OrgHome({
   const now = new Date();
   const asOf = now.toISOString().slice(0, 10);
   const opts = { asOf, computedAt: now.toISOString() };
-  const [payload, extras, ent] = await Promise.all([
-    composeToday(resolved.ctx, a, opts),
+  // Viewer (adversarial review): no composeToday screen exists for the role —
+  // its read-only Today is assembled from getDashboardExtras alone (every
+  // block in there is gated by the viewer's own can() grants; never money).
+  const isViewer = a === "viewer";
+  // S7 digest gating — unchanged semantics (display-only add-on gate, FR-9).
+  const canViewDigest = can(a, "digest.view");
+  // Perf (adversarial review): the previously-serial tail (inbox → digest gate
+  // → installed template) is folded into ONE concurrent fan-out. Only
+  // getOwnerDigest stays behind — it depends on the entitlement gate.
+  const [payload, extras, ent, inbox, installedTemplate, digestFeatureOn] = await Promise.all([
+    isViewer ? null : composeToday(resolved.ctx, a, opts),
     getDashboardExtras(resolved.ctx, a, opts),
     resolveEntitlements(resolved.ctx),
+    can(a, "approvals.decide") ? listInbox(resolved.ctx, a) : ([] as InboxRow[]),
+    can(a, "onboarding.run") ? getInstalledTemplate(resolved.ctx) : null,
+    canViewDigest ? hasFeature(resolved.ctx, "feat.owner_digest") : false,
   ]);
-  const inbox = can(a, "approvals.decide") ? await listInbox(resolved.ctx, a) : [];
   const canDismiss = can(a, "exceptions.dismiss");
   const currency = resolved.baseCurrency as CurrencyCode;
 
-  // S7 digest gating — unchanged semantics (display-only add-on gate, FR-9).
-  const canViewDigest = can(a, "digest.view");
-  const digestEntitled = canViewDigest && (await hasFeature(resolved.ctx, "feat.owner_digest"));
+  const digestEntitled = canViewDigest && digestFeatureOn;
   const digest = digestEntitled ? await getOwnerDigest(resolved.ctx, a) : null;
 
   // First-run: owner/admin without an installed template gets setup guidance.
-  const needsSetup = can(a, "onboarding.run") ? !(await getInstalledTemplate(resolved.ctx)) : false;
+  const needsSetup = can(a, "onboarding.run") ? !installedTemplate : false;
 
   const s: ScreenCtx = {
     t,
@@ -128,7 +139,7 @@ export default async function OrgHome({
     currency,
     ctx: resolved.ctx,
     archetype: a,
-    cards: payload.cards,
+    cards: payload?.cards ?? [],
     extras,
     inbox,
     ent,
@@ -136,6 +147,7 @@ export default async function OrgHome({
     jobVars,
     seesPrice: resolved.ctx.pricePrivileged,
     canBilling: can(a, "billing.view"),
+    timezone: resolved.timezone,
   };
 
   // Role-aware quick actions (same pure builder as the top-bar + New menu).
@@ -164,7 +176,7 @@ export default async function OrgHome({
             {`${t("today.card_as_of")} ${formatDate(now, { locale })}`}
           </p>
         </div>
-        <Badge tone="neutral">{t(`today.screen.${payload.screen}`)}</Badge>
+        <Badge tone="neutral">{t(`today.screen.${payload?.screen ?? "viewer"}`)}</Badge>
       </div>
 
       {sp.welcome === "1" ? (
@@ -212,7 +224,15 @@ export default async function OrgHome({
           <CardHeader
             title={t("digest.title")}
             meta={
-              <span className="text-xs text-ink-muted">{`${t("today.card_as_of")} ${digest.computedAt.slice(11, 16)}`}</span>
+              <span className="text-xs text-ink-muted">
+                {t("today.card_as_of")}{" "}
+                <span dir="ltr">
+                  {formatTime(digest.computedAt, {
+                    locale,
+                    timeZone: resolved.timezone ?? undefined,
+                  })}
+                </span>
+              </span>
             }
           />
           {digest.narration ? (
@@ -237,11 +257,12 @@ export default async function OrgHome({
         </Card>
       ) : null}
 
-      {payload.screen === "owner" ? <OwnerScreen s={s} /> : null}
-      {payload.screen === "manager" ? <ManagerScreen s={s} /> : null}
-      {payload.screen === "foreman" ? <ForemanScreen s={s} /> : null}
-      {payload.screen === "accounts" ? <AccountsScreen s={s} /> : null}
-      {payload.screen === "procurement" ? <ProcurementScreen s={s} /> : null}
+      {payload?.screen === "owner" ? <OwnerScreen s={s} /> : null}
+      {payload?.screen === "manager" ? <ManagerScreen s={s} /> : null}
+      {payload?.screen === "foreman" ? <ForemanScreen s={s} /> : null}
+      {payload?.screen === "accounts" ? <AccountsScreen s={s} /> : null}
+      {payload?.screen === "procurement" ? <ProcurementScreen s={s} /> : null}
+      {isViewer ? <ViewerScreen s={s} /> : null}
 
       {quickActions.length > 0 ? (
         <SectionCard title={t("dashboard.quick_actions")}>
@@ -264,7 +285,7 @@ export default async function OrgHome({
         </SectionCard>
       </div>
 
-      {payload.screen === "owner" && s.canBilling ? <SubscriptionStrip s={s} /> : null}
+      {payload?.screen === "owner" && s.canBilling ? <SubscriptionStrip s={s} /> : null}
     </div>
   );
 }
@@ -704,6 +725,34 @@ async function AttendanceCard({ s }: { s: ScreenCtx }) {
   );
 }
 
+/** Viewer (adversarial review): a minimal READ-ONLY Today assembled purely
+ * from reads the viewer already holds (jobs/week — doc 06 row) — status
+ * distribution + this-week completions. NO queues, NO money; the shared
+ * deadlines + activity grid below covers the rest. */
+function ViewerScreen({ s }: { s: ScreenCtx }) {
+  const { t, orgId, extras } = s;
+  return (
+    <>
+      <div className="grid grid-cols-2 gap-3">
+        <KpiCard
+          label={t("dashboard.kpi.active_jobs", s.jobVars)}
+          value={String(extras.jobs?.active ?? 0)}
+          icon="briefcase"
+          href={`/o/${orgId}/jobs`}
+        />
+        <KpiCard
+          label={t("dashboard.kpi.done_week", s.jobVars)}
+          value={String(extras.jobs?.doneThisWeek ?? 0)}
+          icon="check"
+          tone={(extras.jobs?.doneThisWeek ?? 0) > 0 ? "success" : "neutral"}
+          href={`/o/${orgId}/jobs`}
+        />
+      </div>
+      <StageCard s={s} />
+    </>
+  );
+}
+
 function ManagerScreen({ s }: { s: ScreenCtx }) {
   const { t, orgId, extras, cards } = s;
   const toReview = cardOf(cards, "reports_to_review");
@@ -808,7 +857,10 @@ function ForemanScreen({ s }: { s: ScreenCtx }) {
           value={String(returned?.count ?? 0)}
           icon="alert"
           tone={(returned?.count ?? 0) > 0 ? "warning" : "neutral"}
-          href={`/o/${orgId}/reports/new`}
+          // No org-wide reports list exists — the honest target is the
+          // returned-reports list on this page (each row deep-links its
+          // report), never the NEW-report composer.
+          href="#waiting-on-me"
         />
         <KpiCard
           label={t("nav.issues")}
@@ -832,7 +884,11 @@ function ForemanScreen({ s }: { s: ScreenCtx }) {
             <RowList rows={myJobRows} emptyLabel={t("today.card_empty")} />
           )}
         </SectionCard>
-        <SectionCard title={t("today.card.waiting_on_me")}>
+        <SectionCard
+          id="waiting-on-me"
+          className="scroll-mt-20"
+          title={t("today.card.waiting_on_me")}
+        >
           <RowList rows={returnedRows} emptyLabel={t("today.card_empty")} />
           <div className="mt-3">
             <ReportTrendMini s={s} />
@@ -859,6 +915,7 @@ function ReportTrendMini({ s }: { s: ScreenCtx }) {
 
 function AccountsScreen({ s }: { s: ScreenCtx }) {
   const { t, locale, orgId, extras, cards, currency } = s;
+  // 6 KPIs — 3-up on lg (2×3) instead of the ragged 4+2 of lg:grid-cols-4.
   const ar = cardOf(cards, "ar_summary");
   const arRow = (ar?.items[0] ?? {}) as Record<string, unknown>;
   const outstanding = (arRow.outstandingMinor ?? null) as number | null;
@@ -903,7 +960,7 @@ function AccountsScreen({ s }: { s: ScreenCtx }) {
   ];
   return (
     <>
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
         <KpiCard
           label={t("today.card.ar_summary")}
           value={
@@ -1102,6 +1159,10 @@ function AttentionCards({ s, keys }: { s: ScreenCtx; keys: string[] }) {
             canDismiss={s.canDismiss && EXCEPTION_CARDS.has(card.key)}
             dismissLabel={t("today.dismiss")}
             asOfLabel={t("today.card_as_of")}
+            asOfDisplay={formatTime(card.freshness.computedAt, {
+              locale: s.locale,
+              timeZone: s.timezone ?? undefined,
+            })}
             severityLabel={(sev: string) => t(`exceptions.severity.${sev}`)}
           />
         ))}
@@ -1154,6 +1215,7 @@ function TodayCardView({
   canDismiss,
   dismissLabel,
   asOfLabel,
+  asOfDisplay,
   severityLabel,
 }: {
   card: TodayCard;
@@ -1163,9 +1225,10 @@ function TodayCardView({
   canDismiss: boolean;
   dismissLabel: string;
   asOfLabel: string;
+  /** Pre-formatted freshness time — org timezone (or labelled UTC fallback). */
+  asOfDisplay: string;
   severityLabel: (s: string) => string;
 }) {
-  const asOf = new Date(card.freshness.computedAt).toISOString().slice(11, 16);
   return (
     <Card>
       <CardHeader
@@ -1173,7 +1236,9 @@ function TodayCardView({
         meta={
           <span className="flex items-center gap-2 text-xs text-ink-muted">
             <Badge tone={card.count > 0 ? "brand" : "neutral"}>{card.count}</Badge>
-            <span dir="ltr">{`${asOfLabel} ${asOf}`}</span>
+            <span>
+              {asOfLabel} <span dir="ltr">{asOfDisplay}</span>
+            </span>
           </span>
         }
       />

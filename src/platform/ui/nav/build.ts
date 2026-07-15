@@ -240,8 +240,10 @@ const GROUPS: GroupSpec[] = [
     ],
   },
   {
-    key: "insights",
-    labelKey: "nav.group.insights",
+    // Renamed from "insights" (adversarial review): the group holds imports +
+    // exports — plain data plumbing. "Data" is the honest label.
+    key: "data",
+    labelKey: "nav.group.data",
     icon: "trendUp",
     items: [
       {

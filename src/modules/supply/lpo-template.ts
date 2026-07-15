@@ -152,7 +152,7 @@ export function lpoHtml(data: LpoData, opts: LpoOptions): string {
     <tr class="grand"><td>الإجمالي / Grand total</td><td class="e">${money(data.totalMinor, opts.currency)}</td></tr>
   </table>
   ${data.notes ? `<div class="notes"><div class="label">ملاحظات / Notes</div>${esc(data.notes)}</div>` : ""}
-  ${opts.footerDetails ? `<div class="foot-details">${esc(opts.footerDetails)}</div>` : ""}
+  ${opts.footerDetails ? `<div class="foot-details" dir="auto">${esc(opts.footerDetails)}</div>` : ""}
   <div class="foot">${esc(opts.orgName)} — ${ltr(data.reference)}</div>
 </body>
 </html>`;

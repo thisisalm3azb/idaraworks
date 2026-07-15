@@ -302,5 +302,7 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
     "data.export",
   ],
   // Viewer (doc 06): jobs v (redacted) + week view + attendance V — other rows −.
-  viewer: ["members.view", "jobs.view", "week.view", "attendance.view"],
+  // today.view added (adversarial review): read-only Today composed ONLY from
+  // the viewer's own read grants above (no money, no queues).
+  viewer: ["members.view", "jobs.view", "week.view", "attendance.view", "today.view"],
 };

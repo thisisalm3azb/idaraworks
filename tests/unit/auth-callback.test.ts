@@ -172,6 +172,15 @@ describe("GET /auth/callback", () => {
     expect(res.headers.get("location")).toBe("https://app.test/");
   });
 
+  it("recovery flow: reset-link code exchanges like any code and lands on /reset-password", async () => {
+    // resetPasswordForEmail links carry ?next=/reset-password — the exchange is
+    // identical to confirmation (Supabase PKCE recovery codes go through the
+    // same exchangeCodeForSession), so the callback needs no type branch.
+    exchangeMock.mockResolvedValue({ error: null });
+    const res = await GET(callbackRequest("?code=recovery&next=/reset-password"));
+    expect(res.headers.get("location")).toBe("https://app.test/reset-password");
+  });
+
   it("malicious next values fall back to / (no open redirect)", async () => {
     exchangeMock.mockResolvedValue({ error: null });
     for (const evil of [

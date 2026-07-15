@@ -16,6 +16,7 @@
  * storage.objects) or embedded as a data URI at document render time.
  */
 import { randomUUID } from "node:crypto";
+import { cache } from "react";
 import { z } from "zod";
 import { sql, withCtx, objectStore, type Ctx } from "@/platform/tenancy";
 import { assertCan } from "@/platform/authz";
@@ -312,14 +313,16 @@ export type AppBranding = {
 
 /** In-APP placements read: the header/dashboard render the logo only when
  * feat.branding_app resolves true (growth-trial plans grant it); otherwise the
- * caller falls back to the initials avatar. */
-export async function getAppBranding(ctx: Ctx): Promise<AppBranding> {
+ * caller falls back to the initials avatar. Per-request memoized (React
+ * cache()): the org layout and OrgLogo share one read per request — keyed on
+ * the ctx object identity, which resolveCtx (itself cache()d) keeps stable. */
+export const getAppBranding = cache(async (ctx: Ctx): Promise<AppBranding> => {
   const [enabled, branding] = await Promise.all([
     hasFeature(ctx, "feat.branding_app"),
     getBranding(ctx),
   ]);
   return { enabled, branding };
-}
+});
 
 export type DocBranding = {
   /** Embedded at render time from tenant-scoped storage — never a URL. */
