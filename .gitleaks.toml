@@ -1,0 +1,14 @@
+# Gitleaks config — extends the default ruleset (CI: gitleaks-action@v2 picks this up at repo root).
+#
+# The ONLY deviation from defaults is a narrow allowlist for template-registry keys:
+# `key: "agriculture_v1"` (src/platform/config/templates/*.ts) trips the generic-api-key
+# entropy heuristic, but a lowercase slug ending in a _v<N> version suffix is a config
+# registry identifier, never a credential. Scoped to that exact literal shape — real
+# secrets (random case-mixed/base64/hex strings) cannot match it.
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Template/config registry keys (lowercase slug + _v<N> version suffix) are identifiers, not secrets"
+regexes = ['''key: "[a-z0-9_]+_v[0-9]+"''']
