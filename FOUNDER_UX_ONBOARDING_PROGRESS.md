@@ -31,15 +31,15 @@ migrations from **0071**; no raw i18n keys user-visible; EN/AR/RTL/375px everywh
 | # | Phase | Status |
 | --- | --- | --- |
 | U0 | Baseline + tracker | ✅ |
-| U1 | Auth-callback fix (code + tests + docs; dashboard config documented) | 🔄 wave 1 |
-| U2 | Branding platform (0071, upload, enforcement, UI+PDF placements) | 🔄 wave 1 |
-| U3 | Tier catalogue mapping + subscription-selection components + locked-feature UX + raw-key fixes | 🔄 wave 1 |
-| U4 | Pre-org onboarding flow (draft/autosave, questionnaire, recommendation, proposal, subscription, branding, review, confirm) | wave 2 |
-| U5 | Dashboard + navigation redesign (role-aware) | wave 3 |
-| U6 | Quality sweep + e2e founder journey + screenshots | wave 3 |
-| U7 | Full gates + CI | after waves |
-| U8 | Adversarial review + fixes | after gates |
-| U9 | Deploy + production demo + cleanup + final report | last |
+| U1 | Auth-callback fix | ✅ (21 tests; prod origin never trusts headers; owner dashboard values documented) |
+| U2 | Branding platform (0071) | ✅ (upload+enforcement+3 PDF templates; 19 unit + 12 integration) |
+| U3 | Tier model (0072) + pricing components | ✅ (Medium $15 / High $39; zero missing i18n keys) |
+| U4 | Pre-org onboarding flow (0073) | ✅ (19 questions, autosave/resume, explicit-confirm chain; 38+6 tests) |
+| U5 | Dashboard + nav redesign | ✅ (sidebar/bottom-nav, 5 role screens, charts; 49 tests) |
+| U6 | Quality sweep + founder e2e | ✅ (Arabic fixes, a11y, 3-profile Playwright spec, owner checklist) |
+| U7 | Full gates + CI | ✅ (CI green on 78c6cae; smoke 17/17) |
+| U8 | Adversarial review + fixes | ✅ (3 lenses: 1 security material + 15 design findings + honesty items — ALL fixed w/ regressions; password recovery shipped) |
+| U9 | Deploy + demo + cleanup + report | ✅ (deployed 78c6cae; before/after evidence; targeted cleanup applied; report docs/ux/FOUNDER_UX_COMPLETION_REPORT.md) |
 
 ## Ledger
 
@@ -48,9 +48,11 @@ migrations from **0071**; no raw i18n keys user-visible; EN/AR/RTL/375px everywh
 
 ## Exact next task
 
-Wave 1 running (3 parallel agents): U1 callback, U2 branding, U3 tiers/pricing components.
-Then wave 2 (onboarding flow integrates U2+U3 pieces), wave 3 (dashboard + e2e), gates, review,
-deploy, demo, cleanup, report.
+PROJECT COMPLETE. Final report: docs/ux/FOUNDER_UX_COMPLETION_REPORT.md. Deployed+CI-green:
+78c6cae (this docs commit trails it). Hosted migrations 0000-0073 (next 0074). Production orgs:
+[Alpha Marine, TESTING, Alhaash(REAL user org — untouched)]. Owner actions: (1) Supabase Site URL
+(docs/ux/AUTH_CALLBACK_FIX.md); (2) optional: approve deletion of the 22 older orphaned test users.
+Founder testing: docs/ux/FOUNDERS_TESTING_CHECKLIST.md.
 
 ## Resume instruction
 
