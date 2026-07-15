@@ -406,6 +406,20 @@ describe("lifecycle sweeps (period-end removal, scheduled downgrade, trial landi
     expect(st.billing_state).toBe("active");
   });
 
+  it("trial_end NULL means NO deadline — the sweep never touches such an org (0068 contract)", async () => {
+    // Regression for the CRITICAL review finding: the old period_start+14d fallback manufactured
+    // a deadline for trial_end-NULL orgs (the protected production orgs' exact shape).
+    await owner`update public.org_plan_state
+      set plan_key = 'growth', billing_state = 'trialing', trial_end = null,
+          period_start = now() - interval '400 days'
+      where org_id = ${orgId}`;
+    invalidateEntitlements(orgId);
+    await sweepLifecycle(Date.now());
+    const st = await planState();
+    expect(st.plan_key).toBe("growth");
+    expect(st.billing_state).toBe("trialing");
+  });
+
   it("every sweep left the protected production orgs untouched", async () => {
     const rows = (await owner`
       select org_id::text as id, plan_key, billing_state, trial_end, scheduled_plan_key
@@ -418,11 +432,20 @@ describe("lifecycle sweeps (period-end removal, scheduled downgrade, trial landi
       trial_end: string | null;
       scheduled_plan_key: string | null;
     }>;
+    if (rows.length === 0) {
+      // Ephemeral stack (CI local supabase): the hosted production orgs don't exist here.
+      // The invariant itself is pinned by the trial_end-NULL regression test above.
+      console.info("protected-org assertion skipped: hosted rows absent (local stack)");
+      return;
+    }
     expect(rows.length).toBe(2);
     for (const r of rows) {
       expect(r.plan_key).toBe("growth");
       expect(r.billing_state).toBe("trialing");
-      expect(r.trial_end).toBeNull(); // no deadline → dueSignal can never fire for them
+      // trial_end NULL = NO deadline by the 0068 contract (explicit deadlines only; the old
+      // period_start fallback was removed) — so the sweep is a no-op for them BY INVARIANT,
+      // not by timing.
+      expect(r.trial_end).toBeNull();
       expect(r.scheduled_plan_key).toBeNull();
     }
     const addons = (await owner`

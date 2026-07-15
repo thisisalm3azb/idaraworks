@@ -104,14 +104,13 @@ export type LifecycleRow = {
   purge_at: string | null;
 };
 
-/** Effective trial end: the explicit trial_end, or period_start + trialDays (orgs created by the
- * unchanged 0005 bootstrap have trial_end NULL, so the trial length is derived from when it began). */
+/** Effective trial end: the EXPLICIT trial_end only. NULL means NO DEADLINE — never derived.
+ * (0068: org creation stamps trial_end explicitly, so every real org expires as designed. The
+ * pre-0068 period_start+trialDays fallback was a confirmed CRITICAL defect: it manufactured a
+ * deadline for the two protected production orgs, which are 'trialing' with trial_end NULL and
+ * must never be transitioned by the sweep. Deliberately exempt — do not reintroduce a fallback.) */
 export function effectiveTrialEnd(row: LifecycleRow): string | null {
-  if (row.trial_end) return row.trial_end;
-  if (!row.period_start) return null;
-  return new Date(
-    Date.parse(row.period_start) + LIFECYCLE_WINDOWS.trialDays * 86_400_000,
-  ).toISOString();
+  return row.trial_end;
 }
 
 /**

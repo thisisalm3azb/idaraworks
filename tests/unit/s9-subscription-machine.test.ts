@@ -97,3 +97,34 @@ describe("nextForEvent (signal → target)", () => {
     }
   });
 });
+
+// 0068 contract (adversarial-review CRITICAL regression): a trial deadline is EXPLICIT ONLY.
+// trial_end NULL = no deadline — dueSignal must never derive one from period_start, no matter
+// how old the org is. This is what makes the protected production orgs (trialing, trial_end
+// NULL) permanently exempt from the sweep.
+import { dueSignal, effectiveTrialEnd } from "@/modules/subscription/windows";
+
+describe("trial deadlines are explicit only (0068)", () => {
+  const base = {
+    billing_state: "trialing" as const,
+    grace_until: null,
+    suspend_at: null,
+    purge_at: null,
+  };
+
+  it("trial_end NULL yields NO deadline and NO due signal, even for a very old org", () => {
+    const row = { ...base, period_start: "2020-01-01T00:00:00.000Z", trial_end: null };
+    expect(effectiveTrialEnd(row)).toBeNull();
+    expect(dueSignal(row, Date.now())).toBeNull();
+  });
+
+  it("an explicit passed trial_end still fires trial_ended", () => {
+    const row = {
+      ...base,
+      period_start: "2020-01-01T00:00:00.000Z",
+      trial_end: "2020-01-15T00:00:00.000Z",
+    };
+    expect(dueSignal(row, Date.parse("2020-01-16T00:00:00.000Z"))).toBe("trial_ended");
+    expect(dueSignal(row, Date.parse("2020-01-14T00:00:00.000Z"))).toBeNull();
+  });
+});
