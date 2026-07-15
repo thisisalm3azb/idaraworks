@@ -15,6 +15,8 @@ import { requireCapability } from "@/platform/entitlements";
 import { allocateReference, formatRef } from "@/platform/reference/sequence";
 import { submitForApproval } from "@/modules/approvals/service";
 import { createJobFromPreset } from "@/modules/jobs/service";
+import { getDocBranding } from "@/modules/branding/service";
+import { quoteHtml } from "./quote-template";
 import { QUOTE_ACCEPTED } from "@/platform/events";
 import type { CurrencyCode, RoleArchetype } from "@/platform/registries";
 import { CURRENCY_CODES } from "@/platform/registries";
@@ -489,5 +491,69 @@ export async function getQuote(
         lineTotalMinor: seesPrice ? Number(l.line_total_minor) : null,
       })),
     };
+  });
+}
+
+/**
+ * Build the bilingual quote HTML — INTERNAL (called by the quote PDF worker
+ * with a verified ctx; no assertCan, org-scoped RLS is the wall — mirrors
+ * buildLpoHtmlForPo). U2 branding: getDocBranding gates the logo/footer embed
+ * on feat.branding_docs and never throws; the org-name text header is the
+ * fallback. Returns null if the quote is not visible in the org context.
+ */
+export async function buildQuoteHtmlForQuote(ctx: Ctx, quoteId: string): Promise<string | null> {
+  const branding = await getDocBranding(ctx);
+  return withCtx(ctx, async (tx) => {
+    const rows = (await tx.execute(sql`
+      select q.reference, q.customer_name, q.created_at::text as created_at,
+             q.valid_until::text as valid_until, q.terms, q.currency,
+             q.subtotal_minor::text as subtotal_minor,
+             q.vat_amount_minor::text as vat_amount_minor,
+             q.total_minor::text as total_minor,
+             o.name as org_name
+      from public.quote q
+      join public.org o on o.id = q.org_id
+      where q.id = ${quoteId} and q.org_id = ${ctx.orgId}
+    `)) as unknown as Array<Record<string, unknown>>;
+    const h = rows[0];
+    if (!h) return null;
+    const lines = (await tx.execute(sql`
+      select description, qty::text as qty, unit, unit_price_minor::text as unit_price_minor,
+             line_total_minor::text as line_total_minor
+      from public.quote_line
+      where quote_id = ${quoteId} and org_id = ${ctx.orgId}
+      order by sort asc
+    `)) as unknown as Array<{
+      description: string;
+      qty: string;
+      unit: string;
+      unit_price_minor: string;
+      line_total_minor: string;
+    }>;
+    return quoteHtml(
+      {
+        reference: h.reference as string,
+        customerName: (h.customer_name as string | null) ?? null,
+        issueDate: (h.created_at as string).slice(0, 10),
+        validUntil: (h.valid_until as string | null)?.slice(0, 10) ?? null,
+        subtotalMinor: h.subtotal_minor as string,
+        vatMinor: h.vat_amount_minor as string,
+        totalMinor: h.total_minor as string,
+        terms: (h.terms as string | null) ?? null,
+        lines: lines.map((l) => ({
+          description: l.description,
+          qty: l.qty,
+          unit: l.unit,
+          unitPriceMinor: l.unit_price_minor,
+          lineTotalMinor: l.line_total_minor,
+        })),
+      },
+      {
+        orgName: branding.displayName ?? (h.org_name as string),
+        currency: h.currency as CurrencyCode,
+        logoDataUri: branding.logoDataUri,
+        footerDetails: branding.footerDetails,
+      },
+    );
   });
 }

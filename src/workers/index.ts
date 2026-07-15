@@ -8,6 +8,8 @@ export { outboxRelay, outboxRetention } from "./functions/outbox-relay";
 export { demoHeartbeat } from "./functions/demo-heartbeat";
 export { approvalStuckEvaluator, sweepStuckApprovals } from "./functions/approval-stuck";
 export { lpoPdfRenderer, buildLpoForPo } from "./functions/lpo-pdf";
+// U2 branding: the quote print template's render seam (mirrors lpo-pdf).
+export { quotePdfRenderer, buildQuoteForAccept } from "./functions/quote-pdf";
 // S5 "Measure": cost-rollup invalidation + the exception engine.
 export {
   costRollupOnReportSubmit,
@@ -43,6 +45,7 @@ import { outboxRelay, outboxRetention } from "./functions/outbox-relay";
 import { demoHeartbeat } from "./functions/demo-heartbeat";
 import { approvalStuckEvaluator } from "./functions/approval-stuck";
 import { lpoPdfRenderer } from "./functions/lpo-pdf";
+import { quotePdfRenderer } from "./functions/quote-pdf";
 import {
   costRollupOnReportSubmit,
   costRollupOnReportReturn,
@@ -71,6 +74,7 @@ export const workerFunctions = [
   demoHeartbeat,
   approvalStuckEvaluator,
   lpoPdfRenderer,
+  quotePdfRenderer,
   costRollupOnReportSubmit,
   costRollupOnReportReturn,
   costRollupOnExpenseCreate,

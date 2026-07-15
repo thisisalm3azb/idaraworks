@@ -61,6 +61,18 @@ const nextConfig: NextConfig = {
       "./node_modules/@img/sharp-linux-x64/**/*",
       "./node_modules/@img/sharp-libvips-linux-x64/**/*",
     ],
+    // U2 branding: the logo upload server action re-encodes through sharp
+    // (lazily imported) — the settings/branding route needs the same libs.
+    "/o/[orgId]/settings/branding": [
+      "./node_modules/@img/sharp-linux-x64/**/*",
+      "./node_modules/@img/sharp-libvips-linux-x64/**/*",
+    ],
+  },
+  // U2 branding: the logo upload server action carries up to a 2 MB image
+  // (size/MIME/magic-byte/dimension validated server-side); the Next default
+  // action body cap is 1 MB.
+  experimental: {
+    serverActions: { bodySizeLimit: "3mb" },
   },
   async headers() {
     return [{ source: "/(.*)", headers: securityHeaders }];

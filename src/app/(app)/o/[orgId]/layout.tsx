@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { AppShell, Badge } from "@/platform/ui";
+import { AppShell } from "@/platform/ui";
 import { getT, getServerLocale } from "@/platform/i18n/server";
 import { getSessionUser, listMyOrgs, resolveCtx } from "@/platform/auth/resolve";
 import { loadOrgTerminology, term } from "@/platform/terminology";
 import { can } from "@/platform/authz";
 import { resolveEntitlements } from "@/platform/entitlements";
+import { OrgLogo } from "./OrgLogo";
 
 /**
  * The org-scoped guard (S0 checklist §5): every /o/[orgId] route resolves the
@@ -112,6 +113,14 @@ export default async function OrgLayout({
     ...(can(a, "config.view")
       ? [{ href: `/o/${orgId}/settings/configuration`, label: t("nav.configuration") }]
       : []),
+    ...(can(a, "config.manage")
+      ? [{ href: `/o/${orgId}/settings/branding`, label: t("nav.branding") }]
+      : []),
+    // U3 subscription visibility: the plan/add-on surface is reachable from the
+    // org nav too, not only the account-menu area in the header.
+    ...(can(a, "billing.view")
+      ? [{ href: `/o/${orgId}/settings/subscription`, label: t("nav.subscription") }]
+      : []),
   ];
 
   return (
@@ -119,7 +128,10 @@ export default async function OrgLayout({
       brand={
         <div className="flex items-center gap-3">
           <Link href={`/o/${orgId}`}>IdaraWorks</Link>
-          <Badge tone="neutral">{resolved.orgName}</Badge>
+          {/* U2 branding: tenant logo (feat.branding_app) or initials fallback. */}
+          <Link href={`/o/${orgId}`} className="text-ink-secondary">
+            <OrgLogo ctx={resolved.ctx} archetype={a} orgName={resolved.orgName} />
+          </Link>
         </div>
       }
       actions={

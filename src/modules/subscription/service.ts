@@ -48,6 +48,18 @@ export { dueSignal, LIFECYCLE_WINDOWS, monthlyPeriodEnd, type LifecycleRow } fro
 // enforces FR-9 there). Re-export the error under the S9 name for callers/tests.
 export { isReadOnlyBillingState } from "@/platform/entitlements/resolve";
 export { BillingReadOnlyError as SubscriptionReadOnlyError } from "@/platform/entitlements/resolve";
+// U3 selection surface (pure view assembly) — re-exported here because service.ts is the module's
+// only public surface (BUILD_BIBLE §3.2): app pages + the wave-2 onboarding flow import from here.
+export {
+  buildSelectionView,
+  computeMonthlyTotalMinor,
+  currentSelectionLabel,
+  type SelectionView,
+  type SelectionTier,
+  type SelectionCurrency,
+  type SelectionCustomGroup,
+  type OrgAddonStateRow,
+} from "./selection";
 
 export class SubscriptionActionError extends Error {
   constructor(message: string) {

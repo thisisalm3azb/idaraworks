@@ -3,6 +3,7 @@
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { oauthEnabled } from "@/platform/auth/oauth";
+import { requestOrigin } from "@/platform/auth/callback";
 import { sql, withUserCtx } from "@/platform/tenancy";
 import { supabaseServer } from "@/platform/tenancy/supabase";
 import { getSessionUser, listMyOrgs } from "@/platform/auth/resolve";
@@ -77,13 +78,11 @@ export async function signInWithProviderAction(formData: FormData): Promise<void
   if (!oauthEnabled()) redirect("/login?error=oauth_disabled");
   const provider = String(formData.get("provider") ?? "");
   if (!OAUTH_PROVIDERS.has(provider)) redirect("/login?error=invalid");
-  const h = await headers();
-  const proto = h.get("x-forwarded-proto") ?? "https";
-  const host = h.get("host") ?? "";
+  const origin = requestOrigin(await headers());
   const supabase = supabaseServer(await cookies());
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: provider as "google" | "azure",
-    options: { redirectTo: `${proto}://${host}/auth/callback` },
+    options: { redirectTo: `${origin}/auth/callback` },
   });
   if (error || !data.url) redirect("/login?error=oauth_failed");
   redirect(data.url);
@@ -121,18 +120,24 @@ export async function signupAction(formData: FormData): Promise<void> {
     redirect("/signup?error=rate_limited");
   }
 
+  // Confirmation links must return to THIS deployment (prod/preview/local each
+  // return to their own origin), not the Supabase project Site URL — an
+  // unset emailRedirectTo once sent prod users to localhost:3000 (see
+  // docs/ux/AUTH_CALLBACK_FIX.md). /auth/callback exchanges the code, then
+  // forwards to the sanitized `next`.
+  const emailRedirectTo = `${requestOrigin(await headers())}/auth/callback?next=/onboarding`;
   const supabase = supabaseServer(await cookies());
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
-    options: { data: { full_name: fullName } },
+    options: { data: { full_name: fullName }, emailRedirectTo },
   });
   if (error || !data.user) {
     redirect("/signup?error=failed");
   }
   await logAuthEvent({ userId: data.user.id, event: "signup", ...meta });
   // Local/CI: confirmations off => session exists => straight to onboarding.
-  // Hosted: confirmations on => the confirm link returns the user to "/".
+  // Hosted: confirmations on => the confirm link lands on /auth/callback.
   redirect(data.session ? "/onboarding" : "/login?notice=confirm_email");
 }
 

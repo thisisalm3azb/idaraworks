@@ -2,14 +2,16 @@
  * The ADD-ON catalogue — code-owned source of truth for the modular monthly
  * add-on model (post-MVP; extends catalogue.ts with the same registry
  * discipline: migration 0065 seeds addon_def/bundle_def from exactly these
- * keys, 0070 applies the enforcement-honesty reclassification; an integration
- * test asserts DB ⇔ code parity).
+ * keys, 0070 applies the enforcement-honesty reclassification, 0071 reverses
+ * it for the two branding add-ons now that the capability ships; an
+ * integration test asserts DB ⇔ code parity).
  *
  * ENFORCEMENT PARITY (tested in tests/unit/addon-enforcement-parity.test.ts):
  * every feature key granted by a purchasable add-on must be enforced at a real
  * hasFeature()/requireCapability() call site in src/ — an add-on may never
  * charge for a key the product does not check anywhere (0070 reclassified
- * exports_extended / branding_docs / branding_app to deferred for this reason).
+ * exports_extended / branding_docs / branding_app to deferred for this reason;
+ * 0071 restored the two branding add-ons WITH their enforcement call sites).
  *
  * HONESTY LAW (tested): every add-on carries an `availability` class and ONLY
  * `available` / `manual_process` items are purchasable; `credential_gated` and
@@ -67,6 +69,13 @@ export type BundleDef = {
   usdMonthlyMinor: number;
   aedMonthlyMinor: number;
   sort: number;
+  /**
+   * Tier marker (U3 four-path model): a TIER is still just a governed bundle of
+   * the SAME add-on keys — this flag only lets the UI present tier bundles as
+   * the Medium/High paths (large comparison cards) instead of listing them among
+   * the regular themed bundles. Absent for every non-tier bundle.
+   */
+  tier?: "medium" | "high";
 };
 
 const L = (en: string, ar: string) => ({ en, ar });
@@ -378,25 +387,22 @@ export const ADDONS: readonly AddonDef[] = [
     stackable: false,
     sort: 190,
   },
-  // 0070 honesty reclass: no logo/branding capability (upload, PDF logo slot or
-  // theming) exists anywhere in the platform — these were sold with zero
-  // deliverable. Deferred; the owner's $2/$1 anchors are kept in the docs for
-  // when branding actually ships.
+  // 0071 honesty REVERSAL of the 0070 reclass: the branding capability now
+  // exists (validated + re-encoded logo upload, in-app header placement, PDF
+  // logo slots on LPO/quote/invoice templates), so both branding add-ons are
+  // honestly sellable again at the owner's $2/$1 anchors. Enforcement call
+  // sites live in src/modules/branding/service.ts (parity-tested).
   {
     key: "addon.branding_docs",
     names: L("Your logo on documents", "شعارك على المستندات"),
     description: L(
-      "Your logo on published quotes, invoices and purchase orders. Not built yet — shown for roadmap honesty only.",
-      "شعارك على عروض الأسعار والفواتير وأوامر الشراء الصادرة. غير متوفر بعد — يُعرض للشفافية فقط.",
+      "Your logo and footer details on printed quotes, invoices and purchase orders.",
+      "شعارك وبيانات التذييل على عروض الأسعار والفواتير وأوامر الشراء المطبوعة.",
     ),
-    usdMonthlyMinor: 0,
-    aedMonthlyMinor: 0,
-    availability: "deferred",
-    availabilityNote: L(
-      "Document branding is not built yet and cannot be purchased.",
-      "العلامة على المستندات غير متوفرة بعد ولا يمكن شراؤها.",
-    ),
-    features: [],
+    usdMonthlyMinor: 200,
+    aedMonthlyMinor: 800,
+    availability: "available",
+    features: ["feat.branding_docs"],
     limitDeltas: {},
     stackable: false,
     sort: 200,
@@ -405,17 +411,13 @@ export const ADDONS: readonly AddonDef[] = [
     key: "addon.branding_app",
     names: L("Full in-app branding", "علامتك داخل التطبيق"),
     description: L(
-      "Your logo across the dashboard and application header. Not built yet — shown for roadmap honesty only.",
-      "شعارك في لوحة التحكم وواجهة التطبيق. غير متوفر بعد — يُعرض للشفافية فقط.",
+      "Your logo across the application header and dashboard, with your accent colour.",
+      "شعارك في ترويسة التطبيق ولوحة المعلومات مع لونك المميز.",
     ),
-    usdMonthlyMinor: 0,
-    aedMonthlyMinor: 0,
-    availability: "deferred",
-    availabilityNote: L(
-      "In-app branding is not built yet and cannot be purchased.",
-      "العلامة داخل التطبيق غير متوفرة بعد ولا يمكن شراؤها.",
-    ),
-    features: [],
+    usdMonthlyMinor: 100,
+    aedMonthlyMinor: 400,
+    availability: "available",
+    features: ["feat.branding_app"],
     limitDeltas: {},
     stackable: false,
     sort: 210,
@@ -707,6 +709,82 @@ export const BUNDLES: readonly BundleDef[] = [
     aedMonthlyMinor: 10900,
     sort: 60,
   },
+
+  // ── Tier bundles (U3 four-path model; seeded by 0072) ───────────────────────
+  // Free / Medium / High / Custom: Medium and High are GOVERNED BUNDLES of the
+  // same add-on keys — never a second entitlement system. They may include the
+  // stackable seat/storage packs at quantity 1 (changeAddons expands every
+  // bundle member at quantity 1; extra packs are then bought individually).
+  {
+    key: "bundle.tier_medium",
+    names: L("Medium", "المتوسطة"),
+    description: L(
+      "The balanced small-business set: billing, money management, purchasing and 10 extra office seats.",
+      "الباقة المتوازنة للأعمال الصغيرة: الفوترة وإدارة المال والمشتريات و10 مقاعد مكتبية إضافية.",
+    ),
+    // Members sum $28 / AED 106 (members_10 5 + quotes_invoices 5 +
+    // payments_ar 5 + expenses_cashbook 4 + purchase_requests 4 +
+    // purchase_orders 5). Priced $15 (−46%) / AED 55 (−48%): a 6-member tier
+    // sits between the 5-member suites (−37…−40%) and full_ops (−54%) on the
+    // size-deepens-discount curve (ADDON_PRICING_RATIONALE.md §6); no cheaper
+    // combination of existing bundles+add-ons covers this set (cheapest is
+    // $28 via bundle.finance + singles). is_placeholder — owner ratifies.
+    addonKeys: [
+      "addon.members_10",
+      "addon.quotes_invoices",
+      "addon.payments_ar",
+      "addon.expenses_cashbook",
+      "addon.purchase_requests",
+      "addon.purchase_orders",
+    ],
+    usdMonthlyMinor: 1500,
+    aedMonthlyMinor: 5500,
+    sort: 70,
+    tier: "medium",
+  },
+  {
+    key: "bundle.tier_high",
+    names: L("High", "العليا"),
+    description: L(
+      "Everything that is operational today: every available module plus 10 extra office seats and 25 GB extra storage.",
+      "كل ما هو متاح تشغيلياً اليوم: جميع الوحدات المتوفرة مع 10 مقاعد مكتبية إضافية و25 جيجابايت تخزين إضافي.",
+    ),
+    // ALL currently production-operational purchasable modules: the full_ops
+    // fifteen ($63 / AED 236) + members_10 ($5/19) + storage_25gb ($4/15) +
+    // the two 0071-reactivated branding add-ons ($2/8 + $1/4) = $75 / AED 282
+    // individually. Priced $39 (−48%) / AED 143 (−49%) — inside the $25–45
+    // "everything" market band, and still strictly cheaper than the cheapest
+    // combination path shown on the same page (bundle.full_ops $29 + packs $9
+    // + branding $3 = $41 / AED 155), so the tier is never a dominated
+    // sticker (the 0070 starter_ops honesty precedent). is_placeholder —
+    // owner ratifies. manual_process add-ons (extra_org, priority_support)
+    // and credential/d1-gated/deferred items are NOT tier members.
+    addonKeys: [
+      "addon.quotes_invoices",
+      "addon.payments_ar",
+      "addon.expenses_cashbook",
+      "addon.purchase_requests",
+      "addon.purchase_orders",
+      "addon.goods_receiving",
+      "addon.items_catalogue",
+      "addon.approval_workflows",
+      "addon.job_costing",
+      "addon.labour_timesheets",
+      "addon.quote_vs_actual",
+      "addon.owner_digest",
+      "addon.customer_updates",
+      "addon.data_import",
+      "addon.audit_history",
+      "addon.branding_docs",
+      "addon.branding_app",
+      "addon.members_10",
+      "addon.storage_25gb",
+    ],
+    usdMonthlyMinor: 3900,
+    aedMonthlyMinor: 14300,
+    sort: 80,
+    tier: "high",
+  },
 ] as const;
 
 // ── Lookup + guards ───────────────────────────────────────────────────────────
@@ -740,4 +818,26 @@ export function bundleMemberTotalMinor(bundle: BundleDef, currency: "USD" | "AED
     const a = getAddon(k);
     return s + (a ? (currency === "USD" ? a.usdMonthlyMinor : a.aedMonthlyMinor) : 0);
   }, 0);
+}
+
+/** The tier bundles (U3): Medium/High presentation of the same add-on keys. */
+export function getTierBundle(tier: "medium" | "high"): BundleDef | undefined {
+  return BUNDLES.find((b) => b.tier === tier);
+}
+
+/**
+ * Which PURCHASABLE add-ons / bundles unlock a feature key (the LockedFeature
+ * resolution map): the honest answer to "this is off — what turns it on?".
+ * Bundles qualify when any member grants the key (tiers are bundles too).
+ */
+export function purchasableUnlocksFor(key: FeatureKey): {
+  addons: AddonDef[];
+  bundles: BundleDef[];
+} {
+  const addons = ADDONS.filter((a) => isPurchasable(a) && a.features.includes(key));
+  const granting = new Set(addons.map((a) => a.key));
+  const bundles = BUNDLES.filter(
+    (b) => bundleIsPurchasable(b) && b.addonKeys.some((k) => granting.has(k)),
+  );
+  return { addons, bundles };
 }

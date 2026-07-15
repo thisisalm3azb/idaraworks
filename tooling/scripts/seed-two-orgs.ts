@@ -135,6 +135,11 @@ export const SEEDERS: Record<string, Seeder> = {
             values (${org}, 'addon.quotes_invoices', 1, 'active')
             on conflict (org_id, addon_key) do nothing`;
   },
+  org_branding: async (o, org) => {
+    await o`insert into public.org_branding (org_id, display_name, accent_color)
+            values (${org}, 'Bleed Brand', '#1a2b3c')
+            on conflict (org_id) do nothing`;
+  },
   org_entitlement_override: async (o, org) => {
     await o`insert into public.org_entitlement_override (org_id, entitlement_key, reason)
             values (${org}, 'limit.full_users', 'bleed') on conflict (org_id, entitlement_key) do nothing`;

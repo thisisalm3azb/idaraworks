@@ -21,6 +21,7 @@ import { allocateReference, formatRef } from "@/platform/reference/sequence";
 import { sql, withCtx, type Ctx, type TenantTx } from "@/platform/tenancy";
 import { isAssignedIn } from "@/modules/jobs/service";
 import { submitForApproval } from "@/modules/approvals/service";
+import { getDocBranding } from "@/modules/branding/service";
 import type { CurrencyCode, RoleArchetype } from "@/platform/registries";
 import { lpoHtml } from "./lpo-template";
 
@@ -947,6 +948,9 @@ export async function getPurchaseOrder(
  * null if the PO is not visible in the org context.
  */
 export async function buildLpoHtmlForPo(ctx: Ctx, poId: string): Promise<string | null> {
+  // U2 branding: logo + footer embed only when feat.branding_docs is on
+  // (getDocBranding is the gate and never throws — text fallback otherwise).
+  const branding = await getDocBranding(ctx);
   return withCtx(ctx, async (tx) => {
     const rows = (await tx.execute(sql`
       select po.reference, po.vat_minor::text as vat_minor, po.total_minor::text as total_minor,
@@ -992,10 +996,12 @@ export async function buildLpoHtmlForPo(ctx: Ctx, poId: string): Promise<string 
         })),
       },
       {
-        orgName: h.org_name as string,
+        orgName: branding.displayName ?? (h.org_name as string),
         currency: h.currency as CurrencyCode,
         poTermEn: "Local Purchase Order",
         poTermAr: "أمر شراء محلي",
+        logoDataUri: branding.logoDataUri,
+        footerDetails: branding.footerDetails,
       },
     );
   });

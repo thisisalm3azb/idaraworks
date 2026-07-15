@@ -63,3 +63,23 @@ AED companion sums for the curious: Starter Ops 26 vs 30 (−13%), Finance 33 vs
 Procurement 45 vs 71 (−37%), Project Control 45 vs 75 (−40%), Growth 70 vs 90 (−22%),
 Full Ops 109 vs 236 (−54%) — AED discounts track USD within rounding of the clean-figure companion
 prices.
+
+## The tier bundles (U3 four-path model — migration 0072)
+
+Two additional GOVERNED bundles present the Medium / High subscription paths
+(`BundleDef.tier` marker; same invariant — nothing but discounted collections of the same add-on
+keys; full flow doc: [SUBSCRIPTION_SELECTION_FLOW](../ux/SUBSCRIPTION_SELECTION_FLOW.md)):
+
+| Tier bundle | Contents | USD/mo | Sum of members | Discount | AED/mo (vs sum) |
+|---|---|---|---|---|---|
+| `bundle.tier_medium` — Medium / المتوسطة | members_10 + quotes_invoices + payments_ar + expenses_cashbook + purchase_requests + purchase_orders | **$15** | $28 | **−46%** | 55 (vs 106, −48%) |
+| `bundle.tier_high` — High / العليا | the full_ops fifteen + branding_docs + branding_app (0071 reactivation) + members_10 + storage_25gb (19 members) | **$39** | $75 | **−48%** | 143 (vs 282, −49%) |
+
+Tier positioning: Medium (6 members, −46%) sits between the functional suites (−37…−40%) and
+Full Ops (−54%) on the size-deepens-discount curve; High ($39) stays inside the $25–45
+"everything" band and **undercuts the cheapest combination path on the same page**
+(full_ops $29 + seat/storage packs $9 + branding singles $3 = $41), so neither tier is ever a
+dominated sticker (unit-tested). Tiers include the seat/storage packs at quantity 1 — the one
+deliberate exception to the "no stackables in bundles" rule (extra packs are bought individually
+on top). `manual_process`, credential/D1-gated and deferred items are never tier members.
+Prices are placeholders pending owner ratification, like every other row.

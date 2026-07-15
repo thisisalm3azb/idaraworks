@@ -1,9 +1,15 @@
 import { redirect } from "next/navigation";
 import { Badge, Button, Card, CardHeader } from "@/platform/ui";
+import { TierCards } from "@/platform/ui/subscription";
 import { getT, getServerLocale } from "@/platform/i18n/server";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { can } from "@/platform/authz";
-import { readSubscription } from "@/modules/subscription/service";
+import {
+  readSubscription,
+  buildSelectionView,
+  computeMonthlyTotalMinor,
+  currentSelectionLabel,
+} from "@/modules/subscription/service";
 import { listImpersonations } from "@/modules/support/service";
 import { formatMoney } from "@/platform/format";
 import { sql, withCtx } from "@/platform/tenancy";
@@ -11,7 +17,7 @@ import {
   ADDONS,
   BUNDLES,
   getAddon,
-  getBundle,
+  getTierBundle,
   isPurchasable,
   bundleIsPurchasable,
   bundleMemberTotalMinor,
@@ -162,20 +168,15 @@ export default async function SubscriptionPage({
   // Current monthly total: bundle-sourced rows charge the BUNDLE price once
   // (that is what the org pays — never the undiscounted member sum); individual
   // rows charge the add-on price × quantity. Labelled tax-exclusive + indicative.
-  const countedBundles = new Set<string>();
-  let monthlyTotalMinor = 0;
-  for (const row of addonRows) {
-    const bundle = row.source !== "individual" ? getBundle(row.source) : undefined;
-    if (bundle) {
-      if (!countedBundles.has(bundle.key)) {
-        countedBundles.add(bundle.key);
-        monthlyTotalMinor += bundleMonthly(bundle);
-      }
-      continue;
-    }
-    const def = getAddon(row.addon_key);
-    if (def) monthlyTotalMinor += addonMonthly(def) * Math.max(1, Number(row.quantity) || 1);
-  }
+  // (Shared with the selection tests — modules/subscription/selection.ts.)
+  const monthlyTotalMinor = computeMonthlyTotalMinor(addonRows, displayCurrency);
+
+  // U3 four-path selection: the comparison cards + the display-only mapping of
+  // the org's current state onto a path (never converts an existing org).
+  const selection = buildSelectionView();
+  const tierLabel = currentSelectionLabel(addonRows);
+  const currentPath =
+    tierLabel ?? (view.planKey === "free" && view.billingState !== "trialing" ? "free" : null);
 
   const addonState = new Map(addonRows.map((r) => [r.addon_key, r]));
   const bundleActive = (b: BundleDef) => addonRows.some((r) => r.source === b.key);
@@ -246,6 +247,35 @@ export default async function SubscriptionPage({
             <span className="text-ink-muted">{t("subscription.current_plan")}</span>
             <span className="font-medium">{t(`subscription.plan.${view.planKey}`)}</span>
           </div>
+          {/* U3 compact current-state strip: display mapping only — which path
+              describes the org's live add-ons (never a conversion). */}
+          {tierLabel ? (
+            <div className="flex items-center justify-between">
+              <span className="text-ink-muted">{t("subscription.strip.selection")}</span>
+              <span className="font-medium">
+                {tierLabel === "custom"
+                  ? t("subscription.tier.custom")
+                  : (getTierBundle(tierLabel)?.names[locale] ?? tierLabel)}
+              </span>
+            </div>
+          ) : null}
+          <div className="flex items-center justify-between">
+            <span className="text-ink-muted">{t("subscription.strip.addons")}</span>
+            <span dir="ltr" className="font-mono">
+              {addonRows.length}
+            </span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-ink-muted">{t("subscription.usage.office_seats")}</span>
+            {usageFigure(officeSeats, ent.limits["limit.full_users"] ?? null)}
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-ink-muted">{t("subscription.usage.storage")}</span>
+            {usageFigure(
+              `${(storage.bytesUsed / GIB).toFixed(2)} GB`,
+              storage.limitBytes === null ? null : `${storage.limitBytes / GIB} GB`,
+            )}
+          </div>
           <div className="flex items-center justify-between">
             <span className="text-ink-muted">{t("subscription.monthly_total")}</span>
             <span dir="ltr" className="font-mono font-medium">
@@ -294,12 +324,30 @@ export default async function SubscriptionPage({
         </div>
       ) : null}
 
-      {/* 3 — recommended bundles FIRST (discounted collections of the same add-ons). */}
+      {/* 3 — the four paths (U3): Free / Medium / High / Custom comparison.
+          Tiers select through the SAME bundle action (a tier is a governed
+          bundle of the same add-on keys — never a second entitlement system). */}
+      <TierCards
+        view={selection}
+        locale={locale}
+        currency={displayCurrency}
+        t={t}
+        jobsNoun={jobsNoun}
+        current={currentPath}
+        selectTierAction={selectWithOrg}
+        customHref="#custom-addons"
+        canManage={canManage}
+        providerEnabled={view.providerEnabled}
+      />
+
+      {/* 4 — themed bundles (discounted collections of the same add-ons); the
+          tier bundles render above as comparison cards, not in this list. */}
       <Card>
         <CardHeader title={t("subscription.bundles_title")} />
         <p className="mb-3 text-xs text-ink-muted">{t("subscription.indicative_pricing")}</p>
         <ul className="flex flex-col gap-2">
           {[...BUNDLES]
+            .filter((b) => b.tier === undefined)
             .sort((a, b) => a.sort - b.sort)
             .map((b) => {
               const price = bundleMonthly(b);
@@ -371,9 +419,9 @@ export default async function SubscriptionPage({
         </ul>
       </Card>
 
-      {/* 4 — individual add-ons, grouped; honesty groups last (gated → note,
-          deferred → plainly not purchasable, no price). */}
-      <Card>
+      {/* 5 — individual add-ons (the Custom path), grouped; honesty groups last
+          (gated → note, deferred → plainly not purchasable, no price). */}
+      <Card id="custom-addons">
         <CardHeader title={t("subscription.addons_title")} />
         <p className="mb-3 text-xs text-ink-muted">{t("subscription.indicative_pricing")}</p>
         <div className="flex flex-col gap-4">

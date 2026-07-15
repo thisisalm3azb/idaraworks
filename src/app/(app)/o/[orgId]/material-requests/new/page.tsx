@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { getT, getServerLocale } from "@/platform/i18n/server";
+import { lockedFeatureGate } from "@/platform/ui/subscription";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { can } from "@/platform/authz";
 import { listJobs } from "@/modules/jobs/service";
@@ -11,6 +12,9 @@ export default async function NewMrPage({ params }: { params: Promise<{ orgId: s
   if (typeof resolved === "string") redirect("/");
   const a = resolved.archetype;
   if (!can(a, "mr.create")) redirect(`/o/${orgId}`);
+  // Locked-feature UX (U3): honest unlock screen when the capability is off.
+  const locked = await lockedFeatureGate(resolved.ctx, a, orgId, "cap.material_requests");
+  if (locked) return locked;
   const t = await getT();
   const locale = await getServerLocale();
   const jobs = (await listJobs(resolved.ctx, a)).map((j) => ({ id: j.id, reference: j.reference }));

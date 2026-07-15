@@ -19,11 +19,7 @@ import type { Ctx } from "@/platform/tenancy";
 import { closeAppDb } from "@/platform/tenancy";
 import { createOrgForUser, inviteMember, SeatLimitError } from "@/platform/auth/identity";
 import { TEMPLATES, TEMPLATE_CATALOGUE } from "@/platform/config";
-import {
-  classifyBusiness,
-  GENERIC_TEMPLATE_KEY,
-  MIN_LEAD,
-} from "@/modules/onboarding/classify";
+import { classifyBusiness, GENERIC_TEMPLATE_KEY, MIN_LEAD } from "@/modules/onboarding/classify";
 import { selectTemplate } from "@/modules/onboarding/provider";
 import { OnboardingIntakeSchema } from "@/modules/onboarding/proposal";
 import {
@@ -134,10 +130,9 @@ const DOMAIN_TABLES = ["job", "customer", "supplier", "invoice", "payment", "exp
 async function domainCounts(orgId: string): Promise<Record<string, number>> {
   const out: Record<string, number> = {};
   for (const t of DOMAIN_TABLES) {
-    const r = (await owner.unsafe(
-      `select count(*)::int as n from public.${t} where org_id = $1`,
-      [orgId],
-    )) as unknown as Array<{ n: number }>;
+    const r = (await owner.unsafe(`select count(*)::int as n from public.${t} where org_id = $1`, [
+      orgId,
+    ])) as unknown as Array<{ n: number }>;
     out[t] = Number(r[0]!.n);
   }
   return out;
@@ -181,10 +176,11 @@ async function protectedSnapshot(): Promise<string> {
 }
 
 async function orgInventory(): Promise<string> {
-  const rows = (await owner`select id::text as id, name from public.org order by id`) as unknown as Array<{
-    id: string;
-    name: string;
-  }>;
+  const rows =
+    (await owner`select id::text as id, name from public.org order by id`) as unknown as Array<{
+      id: string;
+      name: string;
+    }>;
   return rows.map((r) => `${r.id}  ${r.name}`).join("\n");
 }
 
@@ -314,7 +310,9 @@ async function main() {
   const ambSel = selectTemplate(ambIntake);
   assert(
     "mixed description is honestly AMBIGUOUS: confident=false, lead < MIN_LEAD, alternatives surfaced",
-    amb.confident === false && lead < MIN_LEAD && ambSel.confident === false &&
+    amb.confident === false &&
+      lead < MIN_LEAD &&
+      ambSel.confident === false &&
       ambSel.alternatives.length === TEMPLATE_CATALOGUE.length - 1,
     `lead=${lead} (< ${MIN_LEAD}); ${ambSel.alternatives.length} scored alternatives surfaced`,
   );
@@ -342,7 +340,9 @@ async function main() {
   step("STEP 4 — EXPLICIT CONFIRMATION: propose ≠ install; only apply installs (org #1)");
   const org1 = await seedOrg("ORG1-FAB");
   const st1 = await planState(org1.id);
-  console.log(`  org #1 ${org1.name} (${org1.id}) created — plan=${st1.plan_key}/${st1.billing_state}`);
+  console.log(
+    `  org #1 ${org1.name} (${org1.id}) created — plan=${st1.plan_key}/${st1.billing_state}`,
+  );
   assert(
     "org #1 created on the growth trial default",
     st1.plan_key === "growth" && st1.billing_state === "trialing",
@@ -374,7 +374,9 @@ async function main() {
   );
   assert(
     "applyOnboarding is what installs: config.template now manufacturing_workshop_v1, session 'applied'",
-    applied1.installed === true && post1 === "manufacturing_workshop_v1" && sess1b?.status === "applied",
+    applied1.installed === true &&
+      post1 === "manufacturing_workshop_v1" &&
+      sess1b?.status === "applied",
     `installed=${applied1.installed} key=${post1}`,
   );
 
@@ -514,7 +516,8 @@ async function main() {
     if (def) monthlyTotalMinor += def.usdMonthlyMinor * Math.max(1, Number(row.quantity) || 1);
   }
   const expectedMinor =
-    getBundle("bundle.finance")!.usdMonthlyMinor + getAddon("addon.quotes_invoices")!.usdMonthlyMinor;
+    getBundle("bundle.finance")!.usdMonthlyMinor +
+    getAddon("addon.quotes_invoices")!.usdMonthlyMinor;
   console.log(
     `  active rows: ${addonRows.map((r) => `${r.addon_key}(${r.source})`).join(", ")}` +
       `\n  monthly total = $${(monthlyTotalMinor / 100).toFixed(2)} USD/month ` +
@@ -629,7 +632,9 @@ async function main() {
     email: `pta8-demo-m4-${run}@example.com`,
     roleKey: "manager",
   });
-  console.log(`  addon.members_10 → limit.full_users=${lifted.limits["limit.full_users"]}; 4th manager invite ok`);
+  console.log(
+    `  addon.members_10 → limit.full_users=${lifted.limits["limit.full_users"]}; 4th manager invite ok`,
+  );
   assert(
     "addon.members_10 lifts the wall (3 → 13) and the blocked manager invite now succeeds",
     lifted.limits["limit.full_users"] === 13 && Boolean(m4.inviteId),
@@ -671,7 +676,10 @@ async function main() {
     disabledEnabled === false && disabledErr instanceof BillingProviderDisabledError,
   );
   const restored = getBillingProvider().enabled;
-  assert("env restored: the fake provider resolves again for the rest of the run", restored === true);
+  assert(
+    "env restored: the fake provider resolves again for the rest of the run",
+    restored === true,
+  );
 
   // ═══ 13. PROTECTED ORGS (verify half) ═══
   step("STEP 13 — PROTECTED ORGS byte-identical AFTER all steps and sweeps");
@@ -697,7 +705,9 @@ async function cleanup(): Promise<void> {
   console.log("  WOULD DELETE (dry-run):");
   for (const o of orgs) console.log(`    org  ${o.id}  ${o.name}\n    user ${o.user} (auth.users)`);
   console.log(`    + all org_id-scoped rows in every public table, user_profile rows,`);
-  console.log(`    + null-org subscription_event rows with provider_event_id like 'fake_<orgId>_%'`);
+  console.log(
+    `    + null-org subscription_event rows with provider_event_id like 'fake_<orgId>_%'`,
+  );
 
   const ids = orgs.map((o) => o.id);
   const users = orgs.map((o) => o.user);
@@ -780,7 +790,9 @@ main()
     console.error(`\nPTA8 DEMO FAILED: ${(e as Error).message}`);
     await cleanup().catch((c) => console.error("cleanup error:", (c as Error).message));
     // Even on failure, report what the cleanup left behind.
-    await verifyResidue().catch((c) => console.error("residue verify error:", (c as Error).message));
+    await verifyResidue().catch((c) =>
+      console.error("residue verify error:", (c as Error).message),
+    );
     summary();
     await owner.end({ timeout: 5 }).catch(() => {});
     await closeAppDb().catch(() => {});

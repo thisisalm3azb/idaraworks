@@ -60,8 +60,11 @@ describe("addon enforcement parity (src/ scan)", () => {
     }
   });
 
-  it("0070 regression: the unenforced trio stays deferred, priceless and grant-free", () => {
-    for (const key of ["addon.exports_extended", "addon.branding_docs", "addon.branding_app"]) {
+  it("0070 regression: exports_extended stays deferred, priceless and grant-free", () => {
+    // 0071 shipped the branding capability and restored branding_docs/
+    // branding_app (their enforcement sites are covered by the scan above);
+    // exports_extended still has no deliverable and must stay deferred.
+    for (const key of ["addon.exports_extended"]) {
       const addon = getAddon(key)!;
       expect(addon.availability, `${key} must stay deferred until its capability ships`).toBe(
         "deferred",
@@ -69,6 +72,21 @@ describe("addon enforcement parity (src/ scan)", () => {
       expect(addon.usdMonthlyMinor).toBe(0);
       expect(addon.aedMonthlyMinor).toBe(0);
       expect(addon.features.length).toBe(0);
+    }
+  });
+
+  it("0071 reversal: the branding add-ons are purchasable AND their keys are enforced", () => {
+    for (const [key, feature] of [
+      ["addon.branding_docs", "feat.branding_docs"],
+      ["addon.branding_app", "feat.branding_app"],
+    ] as const) {
+      const addon = getAddon(key)!;
+      expect(addon.availability).toBe("available");
+      expect(addon.features).toContain(feature);
+      expect(
+        enforcementSites(feature).length,
+        `${feature} must keep a real enforcement call site (honesty law)`,
+      ).toBeGreaterThan(0);
     }
   });
 });

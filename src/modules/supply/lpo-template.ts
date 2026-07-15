@@ -38,6 +38,11 @@ export type LpoOptions = {
   /** The tenant's term for purchase_order (P8), e.g. "Local Purchase Order". */
   poTermEn: string;
   poTermAr: string;
+  /** U2 branding (feat.branding_docs): logo embedded as a data URI at render
+   * time from tenant-scoped storage; org-name text renders when absent. */
+  logoDataUri?: string | null;
+  /** U2 branding: printed footer details (address / tax reg / contact). */
+  footerDetails?: string | null;
 };
 
 /** Minimal, correct HTML escaping (§6.11 — no React here). */
@@ -86,6 +91,10 @@ export function lpoHtml(data: LpoData, opts: LpoOptions): string {
   .head { display: flex; justify-content: space-between; align-items: flex-start;
           border-bottom: 2px solid #1a1a1a; padding-bottom: 12px; margin-bottom: 16px; }
   .org { font-size: 20px; font-weight: 700; }
+  .org img.logo { display: block; max-height: 64px; max-width: 180px;
+                  width: auto; height: auto; object-fit: contain; margin-bottom: 6px; }
+  .foot-details { margin-top: 24px; color: #666; font-size: 11px;
+                  text-align: center; white-space: pre-line; }
   .title { text-align: end; }
   .title .en { color: #555; font-size: 12px; }
   .meta { display: flex; gap: 24px; margin-bottom: 16px; flex-wrap: wrap; }
@@ -104,7 +113,11 @@ export function lpoHtml(data: LpoData, opts: LpoOptions): string {
 </head>
 <body>
   <div class="head">
-    <div class="org">${esc(opts.orgName)}</div>
+    <div class="org">${
+      opts.logoDataUri
+        ? `<img class="logo" src="${esc(opts.logoDataUri)}" alt="${esc(opts.orgName)}" />`
+        : ""
+    }${esc(opts.orgName)}</div>
     <div class="title">
       <div>${esc(opts.poTermAr)}</div>
       <div class="en">${esc(opts.poTermEn)}</div>
@@ -139,6 +152,7 @@ export function lpoHtml(data: LpoData, opts: LpoOptions): string {
     <tr class="grand"><td>الإجمالي / Grand total</td><td class="e">${money(data.totalMinor, opts.currency)}</td></tr>
   </table>
   ${data.notes ? `<div class="notes"><div class="label">ملاحظات / Notes</div>${esc(data.notes)}</div>` : ""}
+  ${opts.footerDetails ? `<div class="foot-details">${esc(opts.footerDetails)}</div>` : ""}
   <div class="foot">${esc(opts.orgName)} — ${ltr(data.reference)}</div>
 </body>
 </html>`;

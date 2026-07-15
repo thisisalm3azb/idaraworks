@@ -15,6 +15,7 @@ import { assertCan } from "@/platform/authz/can";
 import { requireCapability } from "@/platform/entitlements";
 import { allocateReference, formatRef } from "@/platform/reference/sequence";
 import { getEInvoiceProvider } from "@/platform/einvoice/adapter";
+import { getDocBranding } from "@/modules/branding/service";
 import { INVOICE_ISSUED, INVOICE_VOIDED, CREDIT_NOTE_ISSUED } from "@/platform/events";
 import type { CurrencyCode, RoleArchetype } from "@/platform/registries";
 import { CURRENCY_CODES } from "@/platform/registries";
@@ -551,6 +552,9 @@ export async function buildInvoiceHtmlInternal(
   invoiceId: string,
   qr: string | null,
 ): Promise<string | null> {
+  // U2 branding: logo + footer embed only when feat.branding_docs is on
+  // (getDocBranding is the gate and never throws — text fallback otherwise).
+  const branding = await getDocBranding(ctx);
   return withCtx(ctx, async (tx) => {
     const inv = (await tx.execute(sql`
       select i.reference, i.kind, i.customer_name, i.customer_tax_reg_no, i.is_export, i.currency,
@@ -571,7 +575,9 @@ export async function buildInvoiceHtmlInternal(
       reference: r.reference as string,
       kind: r.kind as "invoice" | "credit_note",
       correctsReference: (r.corrects_ref as string | null) ?? null,
-      orgName: (r.org_name as string) ?? "",
+      orgName: branding.displayName ?? (r.org_name as string) ?? "",
+      logoDataUri: branding.logoDataUri,
+      footerDetails: branding.footerDetails,
       customerName: (r.customer_name as string | null) ?? null,
       customerTaxRegNo: (r.customer_tax_reg_no as string | null) ?? null,
       issuedAt: (r.issued_at as string | null) ?? null,

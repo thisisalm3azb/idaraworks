@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { redirect } from "next/navigation";
 import { Badge, Button, Card, CardHeader } from "@/platform/ui";
+import { lockedFeatureGate } from "@/platform/ui/subscription";
 import { getT } from "@/platform/i18n/server";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { can } from "@/platform/authz";
@@ -23,6 +24,9 @@ export default async function NewPaymentPage({
   const resolved = await resolveCtx(orgId);
   if (typeof resolved === "string") redirect("/");
   if (!can(resolved.archetype, "payments.manage")) redirect(`/o/${orgId}/payments`);
+  // Locked-feature UX (U3): honest unlock screen when the capability is off.
+  const locked = await lockedFeatureGate(resolved.ctx, resolved.archetype, orgId, "cap.payments");
+  if (locked) return locked;
   const t = await getT();
   const invoices = (await listInvoices(resolved.ctx, resolved.archetype)).filter(
     (i) => i.kind === "invoice" && (i.status === "issued" || i.status === "partially_paid"),

@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { Badge, Button, Card, CardHeader } from "@/platform/ui";
+import { lockedFeatureGate } from "@/platform/ui/subscription";
 import { getT } from "@/platform/i18n/server";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { can } from "@/platform/authz";
@@ -25,6 +26,9 @@ export default async function NewInvoicePage({
   const resolved = await resolveCtx(orgId);
   if (typeof resolved === "string") redirect("/");
   if (!can(resolved.archetype, "invoices.manage")) redirect(`/o/${orgId}/invoices`);
+  // Locked-feature UX (U3): honest unlock screen when the capability is off.
+  const locked = await lockedFeatureGate(resolved.ctx, resolved.archetype, orgId, "cap.invoicing");
+  if (locked) return locked;
   const t = await getT();
   const locale = await getServerLocale();
   const terms = await loadOrgTerminology(resolved.ctx, locale);

@@ -32,6 +32,11 @@ export type InvoiceTemplateData = {
   totalMinor: number;
   qr: string | null;
   lines: InvoiceTemplateLine[];
+  /** U2 branding (feat.branding_docs): logo embedded as a data URI at render
+   * time from tenant-scoped storage; org-name text renders when absent. */
+  logoDataUri?: string | null;
+  /** U2 branding: printed footer details (address / tax reg / contact). */
+  footerDetails?: string | null;
 };
 
 function esc(v: unknown): string {
@@ -75,6 +80,11 @@ export function invoiceHtml(data: InvoiceTemplateData): string {
   </style>
   <div class="hd">
     <div>
+      ${
+        data.logoDataUri
+          ? `<img class="logo" src="${esc(data.logoDataUri)}" alt="${esc(data.orgName)}" style="display:block;max-height:64px;max-width:180px;width:auto;height:auto;object-fit:contain;margin-bottom:6px" />`
+          : ""
+      }
       <div style="font-size:20px;font-weight:700">${esc(data.orgName)}</div>
       <div>${titleAr} <span class="en">/ ${titleEn}</span></div>
       <div>الرقم / No.: ${ltr(data.reference)}</div>
@@ -104,6 +114,11 @@ export function invoiceHtml(data: InvoiceTemplateData): string {
     <tr><td>ضريبة القيمة المضافة / VAT</td><td class="n">${money(data.vatMinor, data.currency)}</td></tr>
     <tr class="grand"><td>الإجمالي المستحق / Total due</td><td class="n">${money(data.totalMinor, data.currency)}</td></tr>
   </table>
+  ${
+    data.footerDetails
+      ? `<div style="margin-top:24px;color:#666;font-size:11px;text-align:center;white-space:pre-line">${esc(data.footerDetails)}</div>`
+      : ""
+  }
   <div class="en" style="margin-top:16px">${esc(data.orgName)} — ${ltr(data.reference)}</div>
 </div>`;
 }

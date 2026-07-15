@@ -4,6 +4,19 @@ import { getT } from "@/platform/i18n/server";
 import { loginAction, signInWithProviderAction } from "../actions";
 import { oauthEnabled } from "@/platform/auth/oauth";
 
+// Whitelisted query-param → i18n-key maps (params are attacker-controlled; only
+// known values render, and only as translated copy). Unknown notices render
+// nothing; unknown errors fall back to the generic auth.login.error.
+const NOTICE_KEYS: Record<string, string> = {
+  confirm_email: "auth.login.confirm_email",
+  already_confirmed: "auth.login.already_confirmed",
+};
+const ERROR_KEYS: Record<string, string> = {
+  rate_limited: "auth.login.rate_limited",
+  confirm_missing: "auth.login.confirm_missing",
+  confirm_invalid: "auth.login.confirm_invalid",
+};
+
 export default async function LoginPage({
   searchParams,
 }: {
@@ -16,14 +29,14 @@ export default async function LoginPage({
       <div className="mx-auto w-full max-w-sm">
         <Card>
           <h1 className="mb-4 text-lg font-semibold text-ink">{t("auth.login.title")}</h1>
-          {notice === "confirm_email" ? (
+          {notice && NOTICE_KEYS[notice] ? (
             <p className="mb-3 rounded-md bg-info-soft p-3 text-sm text-info" role="status">
-              {t("auth.login.confirm_email")}
+              {t(NOTICE_KEYS[notice])}
             </p>
           ) : null}
           {error ? (
             <p className="mb-3 rounded-md bg-danger-soft p-3 text-sm text-danger">
-              {error === "rate_limited" ? t("auth.login.rate_limited") : t("auth.login.error")}
+              {t(ERROR_KEYS[error] ?? "auth.login.error")}
             </p>
           ) : null}
           <form action={loginAction} className="flex flex-col gap-4">

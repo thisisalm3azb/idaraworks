@@ -88,3 +88,34 @@ export const PLAN_KEYS: readonly PlanKey[] = ["free", "starter", "growth", "busi
  * end the landing plan is `free` (never suspension — the free base is real). */
 export const DEFAULT_PLAN: PlanKey = "growth";
 export const TRIAL_LANDING_PLAN: PlanKey = "free";
+
+// ── Free plan base (code mirror of the 0065 seeds) ───────────────────────────
+// The subscription-selection surfaces (settings + onboarding wave-2) present the
+// Free path from these constants so buildSelectionView stays a PURE function
+// (unit-testable, embeddable without a DB round-trip). Resolution still reads
+// plan_entitlement — these mirror 0065 exactly, same registry discipline as the
+// key lists above (if the free seeds ever change, change BOTH).
+export const FREE_PLAN_FEATURES: readonly FeatureKey[] = [
+  "cap.jobs",
+  "cap.daily_reports",
+  "cap.issues",
+  "cap.customers",
+  "cap.people",
+  "feat.ai_onboarding",
+  "feat.ai_drafts",
+  "feat.custom_fields",
+  "feat.org_terminology_overrides",
+] as const;
+
+/** null = unlimited (field seats are free and unlimited by product law). */
+export const FREE_PLAN_LIMITS: Readonly<Record<LimitKey, number | null>> = {
+  "limit.full_users": 3,
+  "limit.field_users": null,
+  "limit.viewer_users": 3,
+  "limit.active_jobs": 10,
+  "limit.storage_gb": 1,
+  "limit.ai_credits_month": 0,
+  "limit.ai_onboarding_calls": 30,
+  "limit.custom_fields_per_entity": 5,
+  "limit.presets": 15,
+};

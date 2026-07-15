@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { Badge, Button, Card, CardHeader } from "@/platform/ui";
+import { lockedFeatureGate } from "@/platform/ui/subscription";
 import { getT } from "@/platform/i18n/server";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { can } from "@/platform/authz";
@@ -22,6 +23,10 @@ export default async function NewQuotePage({
   const resolved = await resolveCtx(orgId);
   if (typeof resolved === "string") redirect("/");
   if (!can(resolved.archetype, "quotes.manage")) redirect(`/o/${orgId}/quotes`);
+  // Locked-feature UX (U3): the capability gate renders the honest unlock
+  // screen instead of letting the action throw CapabilityRequiredError.
+  const locked = await lockedFeatureGate(resolved.ctx, resolved.archetype, orgId, "cap.quoting");
+  if (locked) return locked;
   const t = await getT();
   const opts = await listQuoteFormOptions(resolved.ctx);
   return (

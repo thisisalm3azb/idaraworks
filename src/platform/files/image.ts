@@ -61,3 +61,49 @@ export async function processImage(input: Buffer): Promise<ProcessedImage> {
   ]);
   return { main, medium, thumb };
 }
+
+// ── Logo variant (U2 org branding) ───────────────────────────────────────────
+// Same pipeline discipline (sharp re-encode, EXIF orientation applied then all
+// metadata dropped — .withMetadata is never called), but PNG output: a logo
+// with transparency must not be flattened onto a JPEG background. Small edges:
+// logos are chrome, not photography.
+export const LOGO_MAX_EDGE_PX = 512;
+export const LOGO_THUMB_EDGE_PX = 128;
+
+export type ProcessedLogoVariant = {
+  buffer: Buffer;
+  bytes: number;
+  width: number;
+  height: number;
+  mime: "image/png";
+};
+
+export type ProcessedLogo = {
+  main: ProcessedLogoVariant;
+  thumb: ProcessedLogoVariant;
+};
+
+async function encodeLogo(input: Buffer, maxEdge: number): Promise<ProcessedLogoVariant> {
+  const out = await sharp(input, { failOn: "error" })
+    .rotate()
+    .resize(maxEdge, maxEdge, { fit: "inside", withoutEnlargement: true })
+    .png({ compressionLevel: 9 })
+    .toBuffer({ resolveWithObject: true });
+  return {
+    buffer: out.data,
+    bytes: out.info.size,
+    width: out.info.width,
+    height: out.info.height,
+    mime: "image/png",
+  };
+}
+
+/** Re-encode an uploaded logo into clean PNG main + thumb variants. Throws on
+ * undecodable input (the branding service maps it to a helpful upload error). */
+export async function processLogo(input: Buffer): Promise<ProcessedLogo> {
+  const [main, thumb] = await Promise.all([
+    encodeLogo(input, LOGO_MAX_EDGE_PX),
+    encodeLogo(input, LOGO_THUMB_EDGE_PX),
+  ]);
+  return { main, thumb };
+}
