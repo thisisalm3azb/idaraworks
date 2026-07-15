@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import type { CSSProperties } from "react";
-import { Icon, buildBottomNav, buildNavGroups, buildQuickCreate } from "@/platform/ui";
+import { Icon, Menu, buildBottomNav, buildNavGroups, buildQuickCreate } from "@/platform/ui";
+import type { MenuSection } from "@/platform/ui";
 import { getT, getServerLocale } from "@/platform/i18n/server";
 import { getSessionUser, listMyOrgs, resolveCtx } from "@/platform/auth/resolve";
 import { loadOrgTerminology, term } from "@/platform/terminology";
@@ -103,6 +104,55 @@ export default async function OrgLayout({
   );
   const otherLocale = locale === "ar" ? "en" : "ar";
 
+  // DEFECT 4: header menu data is computed server-side and handed to the client
+  // <Menu> as plain view-models (labels already resolved). One section for the
+  // quick-create panel; the account panel groups account links, the workspace
+  // switcher (only with >1 org) and the logout server action.
+  const quickCreateSections: MenuSection[] =
+    quickCreate.length > 0
+      ? [
+          {
+            key: "create",
+            items: quickCreate.map((q) => ({
+              key: q.key,
+              label: q.label,
+              href: q.href,
+              icon: q.icon,
+            })),
+          },
+        ]
+      : [];
+
+  const accountLinks: MenuSection["items"] = [
+    { key: "account", label: t("auth.account.title"), href: "/account" },
+  ];
+  if (can(a, "billing.view")) {
+    accountLinks.push({
+      key: "subscription",
+      label: t("nav.subscription"),
+      href: `/o/${orgId}/settings/subscription`,
+    });
+  }
+  if (can(a, "members.view")) {
+    accountLinks.push({
+      key: "members",
+      label: t("members.title"),
+      href: `/o/${orgId}/settings/members`,
+    });
+  }
+  const accountSections: MenuSection[] = [{ key: "account", items: accountLinks }];
+  if (orgs.length > 1) {
+    accountSections.push({
+      key: "workspace",
+      heading: t("org.switcher.label"),
+      items: orgs.map((o) => ({ key: o.orgId, label: o.orgName, href: `/o/${o.orgId}` })),
+    });
+  }
+  accountSections.push({
+    key: "session",
+    items: [{ key: "logout", label: t("nav.logout"), icon: "logout", formAction: logoutAction }],
+  });
+
   return (
     <div style={accentStyle} className="min-h-dvh md:flex">
       <SidebarNav
@@ -130,36 +180,23 @@ export default async function OrgLayout({
             <div className="hidden min-w-0 flex-1 md:block" />
 
             <nav className="flex items-center gap-0.5" aria-label={t("nav.top_bar")}>
-              {quickCreate.length > 0 ? (
-                <details className="group relative">
-                  <summary
-                    className="flex h-11 min-w-11 cursor-pointer list-none items-center justify-center gap-1 rounded-md px-2 text-sm font-medium text-ink hover:bg-sunken [&::-webkit-details-marker]:hidden"
-                    aria-label={t("nav.create.title")}
-                  >
-                    <span
-                      className="flex h-6 w-6 items-center justify-center rounded-full bg-accent text-ink-inverse"
-                      aria-hidden
-                    >
-                      <Icon name="plus" size={16} />
-                    </span>
-                    <span className="hidden lg:inline">{t("nav.create.title")}</span>
-                  </summary>
-                  <ul className="absolute end-0 z-30 mt-1 w-56 rounded-md border border-line bg-card p-1 shadow-pop">
-                    {quickCreate.map((q) => (
-                      <li key={q.key}>
-                        <Link
-                          href={q.href}
-                          className="flex min-h-11 items-center gap-2.5 rounded-sm px-3 text-sm text-ink hover:bg-sunken"
-                        >
-                          <span className="text-ink-muted" aria-hidden>
-                            <Icon name={q.icon} size={18} />
-                          </span>
-                          {q.label}
-                        </Link>
-                      </li>
-                    ))}
-                  </ul>
-                </details>
+              {quickCreateSections.length > 0 ? (
+                <Menu
+                  triggerLabel={t("nav.create.title")}
+                  triggerClassName="flex h-11 min-w-11 items-center justify-center gap-1 rounded-md px-2 text-sm font-medium text-ink hover:bg-sunken"
+                  trigger={
+                    <>
+                      <span
+                        className="flex h-6 w-6 items-center justify-center rounded-full bg-accent text-ink-inverse"
+                        aria-hidden
+                      >
+                        <Icon name="plus" size={16} />
+                      </span>
+                      <span className="hidden lg:inline">{t("nav.create.title")}</span>
+                    </>
+                  }
+                  sections={quickCreateSections}
+                />
               ) : null}
 
               <Link
@@ -183,74 +220,13 @@ export default async function OrgLayout({
                 </button>
               </form>
 
-              <details className="relative">
-                <summary
-                  className="flex h-11 w-11 cursor-pointer list-none items-center justify-center rounded-md text-ink-secondary hover:bg-sunken hover:text-ink [&::-webkit-details-marker]:hidden"
-                  aria-label={t("auth.account.title")}
-                >
-                  <Icon name="user" size={20} />
-                </summary>
-                <div className="absolute end-0 z-30 mt-1 w-64 rounded-md border border-line bg-card p-1 shadow-pop">
-                  <ul>
-                    <li>
-                      <Link
-                        href="/account"
-                        className="flex min-h-11 items-center rounded-sm px-3 text-sm text-ink hover:bg-sunken"
-                      >
-                        {t("auth.account.title")}
-                      </Link>
-                    </li>
-                    {can(a, "billing.view") ? (
-                      <li>
-                        <Link
-                          href={`/o/${orgId}/settings/subscription`}
-                          className="flex min-h-11 items-center rounded-sm px-3 text-sm text-ink hover:bg-sunken"
-                        >
-                          {t("nav.subscription")}
-                        </Link>
-                      </li>
-                    ) : null}
-                    {can(a, "members.view") ? (
-                      <li>
-                        <Link
-                          href={`/o/${orgId}/settings/members`}
-                          className="flex min-h-11 items-center rounded-sm px-3 text-sm text-ink hover:bg-sunken"
-                        >
-                          {t("members.title")}
-                        </Link>
-                      </li>
-                    ) : null}
-                  </ul>
-                  {orgs.length > 1 ? (
-                    <>
-                      <p className="border-t border-line px-3 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
-                        {t("org.switcher.label")}
-                      </p>
-                      <ul>
-                        {orgs.map((o) => (
-                          <li key={o.orgId}>
-                            <Link
-                              href={`/o/${o.orgId}`}
-                              className="flex min-h-11 items-center rounded-sm px-3 text-sm text-ink hover:bg-sunken"
-                            >
-                              <span className="truncate">{o.orgName}</span>
-                            </Link>
-                          </li>
-                        ))}
-                      </ul>
-                    </>
-                  ) : null}
-                  <form action={logoutAction} className="border-t border-line pt-1">
-                    <button
-                      type="submit"
-                      className="flex min-h-11 w-full items-center gap-2 rounded-sm px-3 text-start text-sm text-ink hover:bg-sunken"
-                    >
-                      <Icon name="logout" size={18} aria-hidden className="text-ink-muted" />
-                      {t("nav.logout")}
-                    </button>
-                  </form>
-                </div>
-              </details>
+              <Menu
+                triggerLabel={t("auth.account.title")}
+                triggerClassName="flex h-11 w-11 items-center justify-center rounded-md text-ink-secondary hover:bg-sunken hover:text-ink"
+                trigger={<Icon name="user" size={20} />}
+                sections={accountSections}
+                panelClassName="w-64"
+              />
             </nav>
           </div>
         </header>

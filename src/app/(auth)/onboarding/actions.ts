@@ -11,6 +11,8 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getSessionUser } from "@/platform/auth/resolve";
 import { LOCALE_COOKIE, normalizeLocale } from "@/platform/i18n";
+import { currentRequestId } from "@/platform/observability";
+import { requestLogger } from "@/platform/logger";
 import { sql, withUserCtx } from "@/platform/tenancy";
 import { TEMPLATES } from "@/platform/config";
 import { getAddon, isPurchasable } from "@/platform/entitlements";
@@ -190,9 +192,18 @@ export async function selectCustomAction(formData: FormData): Promise<void> {
 }
 
 // ── Branding step ─────────────────────────────────────────────────────────────
-export type FlowActionResult = { error: string | null };
+// The client maps `error` to a specific, safe message; `correlationId` is set
+// ONLY for an unexpected server error (error === "server_error"), so the founder
+// can quote a "Reference: <id>" that ties their report to the server log line.
+export type FlowActionResult = { error: string | null; correlationId?: string };
 
-/** Client-invoked logo stash (validated + re-encoded; only the 512px PNG kept). */
+/** Client-invoked logo stash (validated + re-encoded; only the 512px PNG kept).
+ * Failure reasons are DISTINGUISHED: a BrandingError surfaces its own validation
+ * code (bad_type / too_large / bad_signature / too_small_dims / too_large_dims /
+ * bad_image / quota_exceeded / invalid_input — each a specific client message);
+ * anything else (e.g. sharp ERR_DLOPEN_FAILED when the native libs are missing
+ * from the function trace) is logged server-side with a correlation id and
+ * returned as a generic { error: "server_error", correlationId }. */
 export async function uploadFlowLogoAction(formData: FormData): Promise<FlowActionResult> {
   const user = await getSessionUser();
   if (!user) return { error: "session" };
@@ -203,7 +214,17 @@ export async function uploadFlowLogoAction(formData: FormData): Promise<FlowActi
     const bytes = Buffer.from(await file.arrayBuffer());
     await stashDraftLogo(user.id, { mime: file.type, bytes });
   } catch (err) {
-    return { error: err instanceof BrandingError ? err.code : "failed" };
+    // Expected, actionable validation failures carry their own code + message.
+    if (err instanceof BrandingError) return { error: err.code };
+    // Unexpected server fault (sharp dlopen, storage, …): never leak the reason
+    // to the client — log it with a correlation id and hand the id back so a
+    // user-reported failure can be traced in the server logs.
+    const correlationId = await currentRequestId();
+    requestLogger({ requestId: correlationId, userId: user.id }).error(
+      { err: (err as Error)?.message ?? String(err), action: "onboarding.logo_upload" },
+      "onboarding logo upload failed unexpectedly",
+    );
+    return { error: "server_error", correlationId };
   }
   return { error: null };
 }

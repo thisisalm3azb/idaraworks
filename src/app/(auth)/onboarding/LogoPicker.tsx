@@ -17,6 +17,8 @@ export type LogoPickerLabels = {
   remove: string;
   uploading: string;
   hint: string;
+  /** "Reference: {id}" — appended under the message on an unexpected server error. */
+  reference: string;
   errors: Record<string, string>;
 };
 
@@ -38,14 +40,14 @@ export function LogoPicker({
 }: {
   logoDataUri: string | null;
   labels: LogoPickerLabels;
-  uploadAction: (formData: FormData) => Promise<{ error: string | null }>;
-  removeAction: () => Promise<{ error: string | null }>;
+  uploadAction: (formData: FormData) => Promise<{ error: string | null; correlationId?: string }>;
+  removeAction: () => Promise<{ error: string | null; correlationId?: string }>;
 }) {
   const router = useRouter();
   const fileInput = useRef<HTMLInputElement>(null);
   const [pending, startTransition] = useTransition();
   const [dragOver, setDragOver] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<{ msg: string; ref?: string } | null>(null);
 
   function errMsg(code: string): string {
     return labels.errors[code] ?? labels.errors.failed ?? code;
@@ -58,7 +60,7 @@ export function LogoPicker({
     fd.set("logo", file);
     startTransition(async () => {
       const res = await uploadAction(fd);
-      if (res.error) setError(errMsg(res.error));
+      if (res.error) setError({ msg: errMsg(res.error), ref: res.correlationId });
       else router.refresh();
     });
   }
@@ -68,7 +70,7 @@ export function LogoPicker({
     setError(null);
     startTransition(async () => {
       const res = await removeAction();
-      if (res.error) setError(errMsg(res.error));
+      if (res.error) setError({ msg: errMsg(res.error), ref: res.correlationId });
       else router.refresh();
     });
   }
@@ -77,7 +79,15 @@ export function LogoPicker({
     <div className="flex flex-col gap-3">
       {error ? (
         <p role="alert" className="rounded-md bg-danger-soft p-3 text-sm text-danger">
-          {error}
+          {error.msg}
+          {error.ref ? (
+            <span className="mt-1 block text-xs text-danger/80">
+              {labels.reference}{" "}
+              <span dir="ltr" className="font-mono">
+                {error.ref}
+              </span>
+            </span>
+          ) : null}
         </p>
       ) : null}
       <div

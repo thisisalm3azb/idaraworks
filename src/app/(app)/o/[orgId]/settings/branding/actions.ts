@@ -4,6 +4,8 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { resolveCtxForAction } from "@/platform/auth/resolve";
 import { assertCan } from "@/platform/authz";
+import { currentRequestId } from "@/platform/observability";
+import { requestLogger } from "@/platform/logger";
 import {
   BrandingError,
   LOGO_MAX_BYTES,
@@ -20,9 +22,21 @@ async function resolveOr(orgId: string) {
   return resolved;
 }
 
-function errCode(err: unknown): string {
-  if (err instanceof BrandingError) return err.code;
-  return "failed";
+/** Map a caught error to a client result. A BrandingError surfaces its specific
+ * validation code (each mapped to a helpful message); anything unexpected is
+ * logged server-side with a correlation id and returned as a generic
+ * server_error carrying that id ("Reference: <id>" for the user to quote). */
+async function toResult(
+  err: unknown,
+  ctx: { orgId: string; userId: string },
+): Promise<BrandingActionResult> {
+  if (err instanceof BrandingError) return { error: err.code };
+  const correlationId = await currentRequestId();
+  requestLogger({ requestId: correlationId, orgId: ctx.orgId, userId: ctx.userId }).error(
+    { err: (err as Error)?.message ?? String(err), action: "branding.logo_upload" },
+    "branding action failed unexpectedly",
+  );
+  return { error: "server_error", correlationId };
 }
 
 function revalidate(orgId: string): void {
@@ -30,7 +44,7 @@ function revalidate(orgId: string): void {
   revalidatePath(`/o/${orgId}`, "layout"); // the header brand slot changes
 }
 
-export type BrandingActionResult = { error: string | null };
+export type BrandingActionResult = { error: string | null; correlationId?: string };
 
 /** Logo upload (client-invoked with FormData carrying the file). */
 export async function uploadLogoAction(
@@ -50,7 +64,7 @@ export async function uploadLogoAction(
       bytes,
     });
   } catch (err) {
-    return { error: errCode(err) };
+    return toResult(err, resolved.ctx);
   }
   revalidate(orgId);
   return { error: null };
@@ -61,7 +75,7 @@ export async function removeLogoAction(orgId: string): Promise<BrandingActionRes
   try {
     await removeLogo(resolved.ctx, resolved.archetype);
   } catch (err) {
-    return { error: errCode(err) };
+    return toResult(err, resolved.ctx);
   }
   revalidate(orgId);
   return { error: null };
@@ -80,7 +94,7 @@ export async function saveBrandingAction(
       footerDetails: String(formData.get("footer_details") ?? ""),
     });
   } catch (err) {
-    return { error: errCode(err) };
+    return toResult(err, resolved.ctx);
   }
   revalidate(orgId);
   return { error: null };

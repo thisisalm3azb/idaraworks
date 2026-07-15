@@ -74,6 +74,7 @@ export default async function BrandingPage({ params }: { params: Promise<{ orgId
     footer_hint: t("branding.identity.footer_hint"),
     save: t("branding.save"),
     saved: t("branding.saved"),
+    reference: t("branding.logo.reference"),
     errors: {
       too_large: t("branding.error.too_large"),
       bad_type: t("branding.error.bad_type"),
@@ -83,6 +84,7 @@ export default async function BrandingPage({ params }: { params: Promise<{ orgId
       too_large_dims: t("branding.error.too_large_dims"),
       quota_exceeded: t("branding.error.quota_exceeded"),
       invalid_input: t("branding.error.invalid"),
+      server_error: t("branding.error.server_error"),
       failed: t("branding.error.failed"),
     },
   };

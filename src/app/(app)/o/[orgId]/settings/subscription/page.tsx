@@ -1,38 +1,38 @@
 import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 import { Badge, Button, Card, CardHeader } from "@/platform/ui";
-import { TierCards } from "@/platform/ui/subscription";
+import { SubscriptionSelector } from "@/platform/ui/subscription";
 import { getT, getServerLocale } from "@/platform/i18n/server";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { can } from "@/platform/authz";
 import {
   readSubscription,
+  readSubscriptionAuditHistory,
   buildSelectionView,
   computeMonthlyTotalMinor,
   currentSelectionLabel,
+  currentPriceVersion,
 } from "@/modules/subscription/service";
 import { listImpersonations } from "@/modules/support/service";
 import { formatMoney, formatNumber } from "@/platform/format";
 import { sql, withCtx } from "@/platform/tenancy";
 import {
-  ADDONS,
   BUNDLES,
   getAddon,
   getTierBundle,
-  isPurchasable,
   bundleIsPurchasable,
   bundleMemberTotalMinor,
   resolveEntitlements,
-  type AddonDef,
   type BundleDef,
 } from "@/platform/entitlements";
 import { getStorageUsage } from "@/platform/files";
 import { loadOrgTerminology, term } from "@/platform/terminology";
 import {
-  addAddonAction,
-  removeAddonAction,
-  selectBundleAction,
+  selectTierAction,
+  selectFreeAction,
+  manageAddonsAction,
   removeBundleAction,
+  selectBundleAction,
   cancelSubscriptionAction,
 } from "./actions";
 
@@ -47,41 +47,36 @@ const STATE_TONE: Record<string, "success" | "brand" | "warning" | "danger" | "n
   purge_pending: "danger",
   purged: "danger",
 };
-// Whitelisted notices + their tone — 'error' MUST render in the danger tone, never the green
-// success banner (review): a failed add-on/bundle change must not look like it succeeded.
-const NOTICE_TONE: Record<string, "success" | "danger"> = {
+
+// Whitelisted success notices + tone. Errors render in the danger tone with the
+// classified code + correlation id (PART C) — never a green "success" banner.
+const SUCCESS_NOTICE_TONE: Record<string, "success"> = {
   cancel_requested: "success",
-  addon_added: "success",
   addon_removed: "success",
+  addons_changed: "success",
   bundle_selected: "success",
   bundle_removed: "success",
-  error: "danger",
 };
 
-// Display groups for the individual add-on catalogue. Availability decides the
-// honesty groups (gated/later); the rest follow the catalogue's sort bands.
-type GroupKey =
-  "seats" | "money" | "purchasing" | "costing" | "data" | "support" | "gated" | "later";
-const GROUP_ORDER: GroupKey[] = [
-  "seats",
-  "money",
-  "purchasing",
-  "costing",
-  "data",
-  "support",
-  "gated",
-  "later",
-];
-function groupOf(a: AddonDef): GroupKey {
-  if (a.availability === "deferred") return "later";
-  if (a.availability === "credential_gated" || a.availability === "d1_gated") return "gated";
-  if (a.sort <= 30) return "seats";
-  if (a.sort <= 60) return "money";
-  if (a.sort <= 110) return "purchasing";
-  if (a.sort <= 160) return "costing";
-  if (a.sort <= 210) return "data";
-  return "support";
-}
+// The classified error codes the danger banner can name (PART C). Anything else
+// falls back to the generic message. Kept in sync with SubscriptionErrorCode.
+const ERROR_CODES = new Set([
+  "authorization",
+  "read_only",
+  "invalid_quantity",
+  "unavailable_addon",
+  "credential_gated",
+  "d1_gated",
+  "deferred",
+  "unknown_addon",
+  "not_active",
+  "stale_price_version",
+  "concurrent_change",
+  "invalid_transition",
+  "provider_unavailable",
+  "network_retry",
+  "internal",
+]);
 
 type OrgAddonRow = {
   addon_key: string;
@@ -92,25 +87,16 @@ type OrgAddonRow = {
 
 const GIB = 1024 ** 3;
 
-/**
- * Two-step confirm (adversarial review): every subscription mutation was a
- * one-click immediate post. Same no-JS pattern the wizard uses (native
- * details/summary): the first click opens an inline honest-confirm panel and
- * only the inner submit posts the UNCHANGED server action. Cancel gets the
- * distinct danger treatment.
- */
+/** Two-step confirm (no-JS details/summary) for the themed-bundle + cancel controls. */
 function ConfirmAction({
   label,
   body,
   danger,
   children,
 }: {
-  /** The visible trigger — renders like the button it replaces. */
   label: string;
-  /** Honest one-line explanation of what confirming does. */
   body: string;
   danger?: boolean;
-  /** The real form (server action unchanged) carrying the confirm submit. */
   children: ReactNode;
 }) {
   return (
@@ -141,36 +127,36 @@ export default async function SubscriptionPage({
   searchParams,
 }: {
   params: Promise<{ orgId: string }>;
-  searchParams: Promise<{ notice?: string }>;
+  searchParams: Promise<{ notice?: string; code?: string; cid?: string; highlight?: string }>;
 }) {
   const t = await getT();
   const locale = await getServerLocale();
   const { orgId } = await params;
-  const { notice } = await searchParams;
+  const { notice, code, cid, highlight } = await searchParams;
   const resolved = await resolveCtx(orgId);
   if (typeof resolved === "string") redirect("/");
   if (!can(resolved.archetype, "billing.view")) redirect(`/o/${orgId}`);
 
-  // Independent reads run concurrently (perf review) — domain nouns arrive as
-  // ICU variables (doc 07 #1 — never baked into a catalog string).
-  const [view, active, ent, storage, terms] = await Promise.all([
+  const [view, active, ent, storage, terms, auditHistory] = await Promise.all([
     readSubscription(resolved.ctx, resolved.archetype),
     listImpersonations(resolved.ctx, resolved.archetype, true),
     resolveEntitlements(resolved.ctx),
     getStorageUsage(resolved.ctx),
     loadOrgTerminology(resolved.ctx, locale),
+    readSubscriptionAuditHistory(resolved.ctx, resolved.archetype, 40),
   ]);
   const jobsNoun = term("job", terms, "plural");
+  // Management is enabled on canManage ALONE (owner; billing.manage). The provider
+  // being disabled (prod, D1) NO LONGER hides the controls — confirmed changes route
+  // through the governed test/trial path (server-authorized + audited, no charge).
   const canManage = can(resolved.archetype, "billing.manage");
-  const addWithOrg = addAddonAction.bind(null, orgId);
-  const removeWithOrg = removeAddonAction.bind(null, orgId);
-  const selectWithOrg = selectBundleAction.bind(null, orgId);
+  const selectTierWithOrg = selectTierAction.bind(null, orgId);
+  const selectFreeWithOrg = selectFreeAction.bind(null, orgId);
+  const manageWithOrg = manageAddonsAction.bind(null, orgId);
+  const selectBundleWithOrg = selectBundleAction.bind(null, orgId);
   const removeBundleWithOrg = removeBundleAction.bind(null, orgId);
   const cancelWithOrg = cancelSubscriptionAction.bind(null, orgId);
 
-  // Active add-ons (tenant SELECT — org_addon is tenant-read-only) + the cheap
-  // usage counts for the seats card, in one tenant transaction. Seat classes
-  // mirror identity.ts (office archetypes; field/foreman seats are never limited).
   const { addonRows, officeSeats, viewerSeats, activeJobs } = await withCtx(
     resolved.ctx,
     async (tx) => {
@@ -203,54 +189,36 @@ export default async function SubscriptionPage({
     },
   );
 
-  // Display currency: AED when the price book carries it, else USD (the code
-  // catalogue carries exactly these two; real per-currency price IDs land at D1).
   const displayCurrency: "AED" | "USD" = view.prices.some((p) => p.currency === "AED")
     ? "AED"
     : "USD";
-  const addonMonthly = (a: AddonDef) =>
-    displayCurrency === "AED" ? a.aedMonthlyMinor : a.usdMonthlyMinor;
   const bundleMonthly = (b: BundleDef) =>
     displayCurrency === "AED" ? b.aedMonthlyMinor : b.usdMonthlyMinor;
-
-  // Current monthly total: bundle-sourced rows charge the BUNDLE price once
-  // (that is what the org pays — never the undiscounted member sum); individual
-  // rows charge the add-on price × quantity. Labelled tax-exclusive + indicative.
-  // (Shared with the selection tests — modules/subscription/selection.ts.)
   const monthlyTotalMinor = computeMonthlyTotalMinor(addonRows, displayCurrency);
 
-  // U3 four-path selection: the comparison cards + the display-only mapping of
-  // the org's current state onto a path (never converts an existing org).
   const selection = buildSelectionView();
   const tierLabel = currentSelectionLabel(addonRows);
   const currentPath =
     tierLabel ?? (view.planKey === "free" && view.billingState !== "trialing" ? "free" : null);
 
-  // The onboarding-recorded choice (honesty review: a founder who picked Medium must be
-  // able to SEE that choice somewhere). Display-only — never replayed into entitlements.
-  const recordedRows = (await withCtx(resolved.ctx, (tx) =>
-    tx.execute(sql`
-      select value from public.app_settings
-      where org_id = ${orgId} and key = 'subscription.selected_tier'`),
-  )) as unknown as Array<{ value: { mode?: string } | null }>;
-  const recordedMode = recordedRows[0]?.value?.mode ?? null;
+  // Active-add-on split: bundle-derived vs individually-selected (labelled).
+  const individualAddons = addonRows.filter((r) => r.source === "individual");
+  const bundleAddons = addonRows.filter((r) => r.source !== "individual");
+  const initialCustomQuantities = Object.fromEntries(
+    individualAddons
+      .filter((r) => r.status === "active")
+      .map((r) => [r.addon_key, Number(r.quantity)]),
+  );
+  const bundleIncludedKeys = bundleAddons.map((r) => r.addon_key);
+  const scheduledAddons = addonRows.filter((r) => r.status === "removal_scheduled");
 
-  const addonState = new Map(addonRows.map((r) => [r.addon_key, r]));
+  // LockedFeature deep link: ?highlight=addon.<key> opens the builder focused on it.
+  const highlightKey = highlight && getAddon(highlight) ? highlight : undefined;
+
   const bundleActive = (b: BundleDef) => addonRows.some((r) => r.source === b.key);
-  // Removable while ≥1 member row is still 'active' (all-scheduled = nothing left to remove;
-  // the bundle price stays counted once until the rows flip to 'removed' at period end).
   const bundleRemovable = (b: BundleDef) =>
     addonRows.some((r) => r.source === b.key && r.status === "active");
 
-  const grouped = new Map<GroupKey, AddonDef[]>();
-  for (const a of [...ADDONS].sort((x, y) => x.sort - y.sort)) {
-    const g = groupOf(a);
-    grouped.set(g, [...(grouped.get(g) ?? []), a]);
-  }
-
-  // Bidi-safe usage figure (review): dir="ltr" isolates ONLY the numeric tokens — the old wrapper
-  // forced the whole localized "{used} من {limit}" phrase LTR, garbling the Arabic word order.
-  // The translated connective renders in the page direction; numbers keep font-mono.
   const usageFigure = (used: number | string, limit: number | string | null) => (
     <span>
       <span dir="ltr" className="font-mono">
@@ -267,29 +235,36 @@ export default async function SubscriptionPage({
     </span>
   );
 
+  const isError = notice === "error";
+  const errorCode = code && ERROR_CODES.has(code) ? code : "internal";
+
   return (
     <div className="flex flex-col gap-4">
-      {/* Persistent support-impersonation banner (a session is open on this org). */}
       {active.length > 0 ? (
         <div className="rounded-md bg-warning-soft p-3 text-sm text-warning" role="status">
           {t("subscription.impersonation_active")}
         </div>
       ) : null}
 
-      {notice && NOTICE_TONE[notice] ? (
-        <p
-          role={NOTICE_TONE[notice] === "danger" ? "alert" : "status"}
-          className={`rounded-md p-3 text-sm ${
-            NOTICE_TONE[notice] === "danger"
-              ? "bg-danger-soft text-danger"
-              : "bg-success-soft text-success"
-          }`}
-        >
+      {isError ? (
+        <div role="alert" className="rounded-md bg-danger-soft p-3 text-sm text-danger">
+          <p className="font-medium">{t(`subscription.error.${errorCode}`)}</p>
+          {cid ? (
+            <p className="mt-1 text-xs text-danger/80">
+              {t("subscription.error.reference")}{" "}
+              <span dir="ltr" className="font-mono">
+                {cid}
+              </span>
+            </p>
+          ) : null}
+        </div>
+      ) : notice && SUCCESS_NOTICE_TONE[notice] ? (
+        <p role="status" className="rounded-md bg-success-soft p-3 text-sm text-success">
           {t(`subscription.notice.${notice}`)}
         </p>
       ) : null}
 
-      {/* 1 — current state: plan, billing state, trial note, monthly total. */}
+      {/* 1 — current state. */}
       <Card>
         <CardHeader
           title={t("subscription.title")}
@@ -304,33 +279,16 @@ export default async function SubscriptionPage({
             <span className="text-ink-muted">{t("subscription.current_plan")}</span>
             <span className="font-medium">{t(`subscription.plan.${view.planKey}`)}</span>
           </div>
-          {/* U3 compact current-state strip: display mapping only — which path
-              describes the org's live add-ons (never a conversion). */}
-          {tierLabel ? (
-            <div className="flex items-center justify-between">
-              <span className="text-ink-muted">{t("subscription.strip.selection")}</span>
-              <span className="font-medium">
-                {tierLabel === "custom"
-                  ? t("subscription.tier.custom")
-                  : (getTierBundle(tierLabel)?.names[locale] ?? tierLabel)}
-              </span>
-            </div>
-          ) : recordedMode ? (
-            <div className="flex items-center justify-between">
-              <span className="text-ink-muted">{t("subscription.strip.recorded")}</span>
-              <span className="font-medium">
-                {recordedMode === "custom"
-                  ? t("subscription.tier.custom")
-                  : recordedMode === "free"
-                    ? t("subscription.plan.free")
-                    : recordedMode === "tier_medium" || recordedMode === "tier_high"
-                      ? (getTierBundle(recordedMode === "tier_medium" ? "medium" : "high")?.names[
-                          locale
-                        ] ?? recordedMode)
-                      : recordedMode}
-              </span>
-            </div>
-          ) : null}
+          <div className="flex items-center justify-between">
+            <span className="text-ink-muted">{t("subscription.strip.selection")}</span>
+            <span className="font-medium">
+              {tierLabel === "custom"
+                ? t("subscription.tier.custom")
+                : tierLabel
+                  ? (getTierBundle(tierLabel)?.names[locale] ?? tierLabel)
+                  : t("subscription.plan.free")}
+            </span>
+          </div>
           <div className="flex items-center justify-between">
             <span className="text-ink-muted">{t("subscription.strip.addons")}</span>
             <span dir="ltr" className="font-mono">
@@ -383,43 +341,84 @@ export default async function SubscriptionPage({
         </div>
       </Card>
 
-      {/* 2 — the free base: always included, on every workspace, forever. */}
-      <Card>
-        <CardHeader title={t("subscription.free_base.title")} />
-        <ul className="list-inside list-disc text-sm text-ink">
-          <li>{t("subscription.free_base.core", { jobs: jobsNoun })}</li>
-          <li>{t("subscription.free_base.records")}</li>
-          <li>{t("subscription.free_base.seats")}</li>
-          <li>{t("subscription.free_base.storage")}</li>
-        </ul>
-      </Card>
-
-      {/* Provider-disabled (pre-D1) state: no live purchase actions of any kind. */}
+      {/* Governed test/trial honesty notice — the page IS manageable, but no money moves. */}
       {!view.providerEnabled ? (
-        <div className="rounded-md bg-sunken p-3 text-sm text-ink-muted" role="note">
-          {t("subscription.activation_unavailable")}
+        <div className="rounded-md bg-sunken p-3 text-sm text-ink" role="note">
+          {t("subscription.governed_test_notice")}
         </div>
       ) : null}
 
-      {/* 3 — the four paths (U3): Free / Medium / High / Custom comparison.
-          Tiers select through the SAME bundle action (a tier is a governed
-          bundle of the same add-on keys — never a second entitlement system). */}
-      <TierCards
-        view={selection}
-        locale={locale}
-        currency={displayCurrency}
-        t={t}
-        jobsNoun={jobsNoun}
-        current={currentPath}
-        selectTierAction={selectWithOrg}
-        confirmSelect
-        customHref="#custom-addons"
-        canManage={canManage}
-        providerEnabled={view.providerEnabled}
-      />
+      {/* 2 — active add-ons: bundle-derived vs individually-selected (labelled). */}
+      {addonRows.length > 0 ? (
+        <Card>
+          <CardHeader title={t("subscription.active_addons_title")} />
+          <ul className="flex flex-col gap-1.5 text-sm">
+            {addonRows.map((r) => (
+              <li key={r.addon_key} className="flex flex-wrap items-center justify-between gap-2">
+                <span className="text-ink">
+                  {getAddon(r.addon_key)?.names[locale] ?? r.addon_key}
+                </span>
+                <span className="flex items-center gap-2">
+                  {r.source === "individual" ? (
+                    <Badge tone="neutral">{t("subscription.source.individual")}</Badge>
+                  ) : (
+                    <Badge tone="info">
+                      {t("subscription.source.bundle", {
+                        bundle:
+                          getTierBundle("medium")?.key === r.source
+                            ? getTierBundle("medium")!.names[locale]
+                            : getTierBundle("high")?.key === r.source
+                              ? getTierBundle("high")!.names[locale]
+                              : (BUNDLES.find((b) => b.key === r.source)?.names[locale] ??
+                                r.source),
+                      })}
+                    </Badge>
+                  )}
+                  {r.status === "removal_scheduled" ? (
+                    <Badge tone="warning">{t("subscription.addon.removal_scheduled")}</Badge>
+                  ) : getAddon(r.addon_key)?.stackable && Number(r.quantity) > 1 ? (
+                    <span dir="ltr" className="font-mono text-xs text-ink-muted">
+                      ×{r.quantity}
+                    </span>
+                  ) : null}
+                </span>
+              </li>
+            ))}
+          </ul>
+          {scheduledAddons.length > 0 ? (
+            <p className="mt-2 text-xs text-warning">{t("subscription.scheduled_note")}</p>
+          ) : null}
+        </Card>
+      ) : null}
 
-      {/* 4 — themed bundles (discounted collections of the same add-ons); the
-          tier bundles render above as comparison cards, not in this list. */}
+      {/* 3 — the four-path selector: Change plan (tiers) + Manage add-ons (Custom builder).
+          Enabled on canManage ALONE. Custom OPENS the builder in-page (deep links open it
+          focused). The builder shows a change-review before submit. */}
+      <Card>
+        <CardHeader title={t("subscription.manage_title")} />
+        <p className="mb-3 text-sm text-ink-muted">{t("subscription.manage_help")}</p>
+        <SubscriptionSelector
+          view={selection}
+          locale={locale}
+          currency={displayCurrency}
+          jobsNoun={jobsNoun}
+          current={currentPath}
+          canManage={canManage}
+          providerEnabled={view.providerEnabled}
+          selectTierAction={canManage ? selectTierWithOrg : undefined}
+          selectFreeAction={canManage ? selectFreeWithOrg : undefined}
+          customAction={canManage ? manageWithOrg : undefined}
+          confirmSelect
+          reviewBeforeSubmit
+          initialCustomQuantities={initialCustomQuantities}
+          bundleIncludedKeys={bundleIncludedKeys}
+          hiddenFields={{ priceVersion: currentPriceVersion() }}
+          initialPanel={highlightKey ? "custom" : "compare"}
+          highlightKey={highlightKey}
+        />
+      </Card>
+
+      {/* 4 — themed bundles (discounted collections; bundle↔custom switching). */}
       <Card>
         <CardHeader title={t("subscription.bundles_title")} />
         <p className="mb-3 text-xs text-ink-muted">{t("subscription.indicative_pricing")}</p>
@@ -449,14 +448,9 @@ export default async function SubscriptionPage({
                         / {t("subscription.per_month")} · {t("subscription.excl_vat")}
                       </span>
                       {savePct > 0 ? (
-                        <>
-                          <span dir="ltr" className="font-mono text-xs text-ink-muted line-through">
-                            {formatMoney(memberTotal, displayCurrency)}
-                          </span>
-                          <Badge tone="success">
-                            {t("subscription.bundle.save", { percent: savePct })}
-                          </Badge>
-                        </>
+                        <Badge tone="success">
+                          {t("subscription.bundle.save", { percent: savePct })}
+                        </Badge>
                       ) : null}
                     </p>
                   </div>
@@ -468,14 +462,14 @@ export default async function SubscriptionPage({
                       </Badge>
                     ))}
                   </div>
-                  {canManage && view.providerEnabled ? (
+                  {canManage ? (
                     <div className="flex flex-wrap items-start gap-2">
-                      {bundleIsPurchasable(b) ? (
+                      {bundleIsPurchasable(b) && !isActive ? (
                         <ConfirmAction
                           label={t("subscription.bundle.select")}
                           body={t("subscription.confirm.body")}
                         >
-                          <form action={selectWithOrg}>
+                          <form action={selectBundleWithOrg}>
                             <input type="hidden" name="bundle" value={b.key} />
                             <Button type="submit" variant="secondary">
                               {t("subscription.confirm.apply")}
@@ -503,120 +497,6 @@ export default async function SubscriptionPage({
               );
             })}
         </ul>
-      </Card>
-
-      {/* 5 — individual add-ons (the Custom path), grouped; honesty groups last
-          (gated → note, deferred → plainly not purchasable, no price). */}
-      <Card id="custom-addons">
-        <CardHeader title={t("subscription.addons_title")} />
-        <p className="mb-3 text-xs text-ink-muted">{t("subscription.indicative_pricing")}</p>
-        <div className="flex flex-col gap-4">
-          {GROUP_ORDER.map((g) => {
-            const items = grouped.get(g);
-            if (!items || items.length === 0) return null;
-            return (
-              <section key={g}>
-                <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-muted">
-                  {t(`subscription.group.${g}`)}
-                </h3>
-                <ul className="flex flex-col gap-2">
-                  {items.map((a) => {
-                    const state = addonState.get(a.key);
-                    const purchasable = isPurchasable(a);
-                    const deferred = a.availability === "deferred";
-                    return (
-                      <li
-                        key={a.key}
-                        className="flex flex-col gap-2 rounded-md border border-line p-3"
-                      >
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <p className="text-sm font-medium text-ink">
-                            {a.names[locale]}{" "}
-                            {state?.status === "active" ? (
-                              <Badge tone="success">
-                                {t("subscription.addon.active")}
-                                {a.stackable && state.quantity > 1 ? ` ×${state.quantity}` : ""}
-                              </Badge>
-                            ) : null}
-                            {state?.status === "removal_scheduled" ? (
-                              <Badge tone="warning">
-                                {t("subscription.addon.removal_scheduled")}
-                              </Badge>
-                            ) : null}
-                          </p>
-                          {!deferred ? (
-                            <p className="text-sm text-ink">
-                              <span dir="ltr" className="font-mono font-medium">
-                                {formatMoney(addonMonthly(a), displayCurrency)}
-                              </span>{" "}
-                              <span className="text-xs text-ink-muted">
-                                / {t("subscription.per_month")} · {t("subscription.excl_vat")}
-                              </span>
-                            </p>
-                          ) : (
-                            <Badge tone="neutral">{t("subscription.addon.coming_later")}</Badge>
-                          )}
-                        </div>
-                        <p className="text-xs text-ink-muted">{a.description[locale]}</p>
-                        {a.availabilityNote ? (
-                          <p className="text-xs text-warning">{a.availabilityNote[locale]}</p>
-                        ) : null}
-                        {canManage && view.providerEnabled && purchasable ? (
-                          <div className="flex flex-wrap items-start gap-2">
-                            <ConfirmAction
-                              label={
-                                state?.status === "active" && a.stackable
-                                  ? t("subscription.addon.update_quantity")
-                                  : t("subscription.addon.add")
-                              }
-                              body={t("subscription.confirm.body")}
-                            >
-                              <form
-                                action={addWithOrg}
-                                className="flex flex-wrap items-center gap-2"
-                              >
-                                <input type="hidden" name="addon" value={a.key} />
-                                {a.stackable ? (
-                                  <label className="flex items-center gap-2 text-xs text-ink-muted">
-                                    {t("subscription.addon.quantity")}
-                                    <input
-                                      type="number"
-                                      name="quantity"
-                                      min={1}
-                                      defaultValue={state?.quantity ?? 1}
-                                      className="min-h-11 w-20 rounded-md border border-line bg-card px-2 text-sm text-ink"
-                                    />
-                                  </label>
-                                ) : null}
-                                <Button type="submit" variant="secondary">
-                                  {t("subscription.confirm.apply")}
-                                </Button>
-                              </form>
-                            </ConfirmAction>
-                            {state ? (
-                              <ConfirmAction
-                                label={t("subscription.addon.remove")}
-                                body={t("subscription.addon.remove_note")}
-                                danger
-                              >
-                                <form action={removeWithOrg}>
-                                  <input type="hidden" name="addon" value={a.key} />
-                                  <Button type="submit" variant="danger">
-                                    {t("subscription.confirm.apply")}
-                                  </Button>
-                                </form>
-                              </ConfirmAction>
-                            ) : null}
-                          </div>
-                        ) : null}
-                      </li>
-                    );
-                  })}
-                </ul>
-              </section>
-            );
-          })}
-        </div>
       </Card>
 
       {/* 5 — usage & seats (limits govern ADD, never read — FR-9). */}
@@ -656,12 +536,11 @@ export default async function SubscriptionPage({
         </div>
       </Card>
 
-      {canManage && view.providerEnabled && !view.cancelAtPeriodEnd ? (
+      {/* 6 — cancellation (governed; canManage ALONE). */}
+      {canManage && !view.cancelAtPeriodEnd && view.billingState !== "cancelled" ? (
         <Card>
           <CardHeader title={t("subscription.cancel_title")} />
           <p className="mb-3 text-sm text-ink-muted">{t("subscription.cancel_help")}</p>
-          {/* Distinct warning treatment (review): cancelling is the one action
-              that ends the whole subscription — danger confirm, never one click. */}
           <ConfirmAction
             label={t("subscription.cancel")}
             body={t("subscription.confirm.cancel_body")}
@@ -675,6 +554,41 @@ export default async function SubscriptionPage({
           </ConfirmAction>
         </Card>
       ) : null}
+
+      {/* 7 — tenant-visible audit history (this org only; the platform stream stays separate). */}
+      <Card>
+        <CardHeader title={t("subscription.audit_title")} />
+        {auditHistory.length === 0 ? (
+          <p className="text-sm text-ink-muted">{t("subscription.audit_empty")}</p>
+        ) : (
+          <ul className="flex flex-col divide-y divide-line">
+            {auditHistory.map((e) => (
+              <li key={e.id} className="flex flex-col gap-1 py-2 first:pt-0">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-sm text-ink">{e.summary}</span>
+                  <Badge tone={e.status === "scheduled" ? "warning" : "neutral"}>
+                    {t(`subscription.audit.status.${e.status}`)}
+                  </Badge>
+                </div>
+                <div className="flex flex-wrap items-center gap-2 text-xs text-ink-muted">
+                  <Badge tone="neutral">{t(`subscription.audit.source.${e.source}`)}</Badge>
+                  <span dir="ltr" className="font-mono">
+                    {e.createdAt.slice(0, 16).replace("T", " ")}
+                  </span>
+                  {e.effectiveDate ? (
+                    <span>
+                      {t("subscription.audit.effective")}{" "}
+                      <span dir="ltr" className="font-mono">
+                        {e.effectiveDate.slice(0, 10)}
+                      </span>
+                    </span>
+                  ) : null}
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
     </div>
   );
 }

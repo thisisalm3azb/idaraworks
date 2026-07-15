@@ -6,6 +6,7 @@ export { Card, CardHeader } from "./Card";
 export { EmptyState } from "./EmptyState";
 export { OrgAvatar } from "./OrgAvatar";
 export { Field, type FieldProps } from "./Field";
+export { Menu, type MenuItem, type MenuSection } from "./Menu";
 export { Spinner } from "./Spinner";
 export { Icon, ICON_NAMES, type IconName } from "./icons";
 export {

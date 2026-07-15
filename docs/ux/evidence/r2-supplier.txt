@@ -1,0 +1,8 @@
+post-login url=/login
+suppliers url=/login?next=/o/7b87d482-6b14-49b7-97f1-8a4cb1b3a8a4
+headings=[Sign in]
+bodytext=IdaraWorks العربية Sign in Email Password Sign in Forgot password? New here? Create an account
+NO NAME FIELD (form not shown / not canManage)
+
+FAILS:
+[]

@@ -271,8 +271,9 @@ test.describe("founder onboarding journey (U6)", () => {
     await page.getByRole("button", { name: "تغيير اللغة" }).click();
     await expect(page.locator("html")).toHaveAttribute("dir", "ltr");
 
-    // Logout → login resumes INTO the org, not the wizard.
-    await page.locator('summary[aria-label="Account"]').click();
+    // Logout → login resumes INTO the org, not the wizard. (Account menu is now
+    // an accessible <Menu> button popover, not a native <details>/<summary>.)
+    await page.getByRole("button", { name: "Account", exact: true }).click();
     await page.getByRole("button", { name: "Log out" }).click();
     await expect(page).toHaveURL(/\/login/);
     await page.getByLabel("Email").fill(email);

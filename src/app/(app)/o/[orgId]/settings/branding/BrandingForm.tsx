@@ -32,6 +32,8 @@ export type BrandingDict = {
   footer_hint: string;
   save: string;
   saved: string;
+  /** "Reference: {id}" — shown under the message on an unexpected server error. */
+  reference: string;
   errors: Record<string, string>;
 };
 
@@ -84,7 +86,7 @@ export function BrandingForm({
   const fileInput = useRef<HTMLInputElement>(null);
   const [pending, startTransition] = useTransition();
   const [dragOver, setDragOver] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<{ msg: string; ref?: string } | null>(null);
   const [saved, setSaved] = useState(false);
   const [accent, setAccent] = useState(initial.accentColor ?? "");
 
@@ -100,7 +102,7 @@ export function BrandingForm({
     fd.set("logo", file);
     startTransition(async () => {
       const res = await uploadAction(fd);
-      if (res.error) setError(errMsg(res.error));
+      if (res.error) setError({ msg: errMsg(res.error), ref: res.correlationId });
       else router.refresh();
     });
   }
@@ -111,7 +113,7 @@ export function BrandingForm({
     setSaved(false);
     startTransition(async () => {
       const res = await removeAction();
-      if (res.error) setError(errMsg(res.error));
+      if (res.error) setError({ msg: errMsg(res.error), ref: res.correlationId });
       else router.refresh();
     });
   }
@@ -121,7 +123,7 @@ export function BrandingForm({
     setSaved(false);
     startTransition(async () => {
       const res = await saveAction(formData);
-      if (res.error) setError(errMsg(res.error));
+      if (res.error) setError({ msg: errMsg(res.error), ref: res.correlationId });
       else {
         setSaved(true);
         router.refresh();
@@ -133,7 +135,15 @@ export function BrandingForm({
     <div className="flex flex-col gap-4">
       {error ? (
         <p role="alert" className="rounded-md bg-danger-soft p-3 text-sm text-danger">
-          {error}
+          {error.msg}
+          {error.ref ? (
+            <span className="mt-1 block text-xs text-danger/80">
+              {dict.reference}{" "}
+              <span dir="ltr" className="font-mono">
+                {error.ref}
+              </span>
+            </span>
+          ) : null}
         </p>
       ) : null}
       {saved ? (

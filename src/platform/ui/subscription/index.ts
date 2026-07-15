@@ -10,8 +10,9 @@ export {
   type CustomBuilderProps,
   type CustomBuilderGroup,
   type CustomBuilderItem,
-  type CustomBuilderLabels,
 } from "./CustomBuilder";
+export { SubscriptionSelector, type SubscriptionSelectorProps } from "./SubscriptionSelector";
+export { buildChangeReview, type ChangeReview, type ReviewItem, type ReviewDelta } from "./review";
 export { LockedFeature, lockedFeatureGate, type LockedFeatureProps } from "./LockedFeature";
 export type {
   SelectionCurrency,

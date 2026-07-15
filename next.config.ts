@@ -48,14 +48,24 @@ const nextConfig: NextConfig = {
   // pino + transport must not be bundled by Next (review finding #8a);
   // sharp's native binding must stay external for the serverless runtime (Phase E).
   serverExternalPackages: ["pino", "pino-pretty", "sharp"],
-  // Deploy fix: Turbopack + pnpm misses sharp's linux-x64 native libs in the
-  // /api/inngest function trace (libvips-cpp.so → ERR_DLOPEN_FAILED on Vercel;
+  // Deploy fix: Turbopack + pnpm misses sharp's linux-x64 native libs in a
+  // function trace (libvips-cpp.so → ERR_DLOPEN_FAILED on Vercel;
   // vercel/vercel#14001, next.js discussion #83230). Force-include the platform
-  // packages for the one route that loads sharp (image-derivatives worker).
+  // packages for EVERY route whose server code loads sharp (lazily or not).
   // Pairs with vercel.json's hoisted-linker install: the @img dirs must be REAL
   // top-level directories, because Vercel rejects function bundles containing
   // pnpm's symlinked store paths ("invalid deployment package"). Globs that
   // match nothing (e.g. linux dirs on a Windows dev machine) are inert.
+  //
+  // Sharp-caller → route map (grep processLogo/uploadLogo/processImage):
+  //   /api/inngest ............... image-derivatives worker (processImage)
+  //   /o/[orgId]/settings/branding uploadLogoAction → uploadLogo → processLogo
+  //   /onboarding ................ BOTH the wizard logo stash
+  //                                (uploadFlowLogoAction → stashDraftLogo →
+  //                                processLogo) AND the confirm-time upload
+  //                                (confirmFlowAction → runConfirmChain →
+  //                                applyDraftBranding → uploadLogo → processLogo)
+  // (watermarkImage also imports sharp but is not yet wired to any route.)
   outputFileTracingIncludes: {
     "/api/inngest": [
       "./node_modules/@img/sharp-linux-x64/**/*",
@@ -64,6 +74,15 @@ const nextConfig: NextConfig = {
     // U2 branding: the logo upload server action re-encodes through sharp
     // (lazily imported) — the settings/branding route needs the same libs.
     "/o/[orgId]/settings/branding": [
+      "./node_modules/@img/sharp-linux-x64/**/*",
+      "./node_modules/@img/sharp-libvips-linux-x64/**/*",
+    ],
+    // U4 onboarding (DEFECT 2): the (auth)/onboarding route group resolves to
+    // the public path "/onboarding". Its server actions run sharp in TWO places
+    // — the branding-step logo stash and the final confirm-time upload — so this
+    // function needs the native libs too, or the stash catch returns a generic
+    // failure (the deployed-onboarding logo-upload bug).
+    "/onboarding": [
       "./node_modules/@img/sharp-linux-x64/**/*",
       "./node_modules/@img/sharp-libvips-linux-x64/**/*",
     ],

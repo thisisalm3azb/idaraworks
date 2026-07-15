@@ -1,0 +1,16 @@
+LOGIN OK /onboarding
+STEP 0 url=/onboarding head=[] file=0
+STEP 1 url=/onboarding head=[Welcome to IdaraWorks] file=0
+STEP 2 url=/onboarding head=[مرحباً بك في IdaraWorks] file=0
+STEP 3 url=/onboarding head=[Welcome to IdaraWorks] file=0
+STEP 4 url=/onboarding head=[مرحباً بك في IdaraWorks] file=0
+STEP 5 url=/onboarding head=[Welcome to IdaraWorks] file=0
+STEP 6 url=/onboarding head=[مرحباً بك في IdaraWorks] file=0
+STEP 7 url=/onboarding head=[Welcome to IdaraWorks] file=0
+STEP 8 url=/onboarding head=[مرحباً بك في IdaraWorks] file=0
+STEP 9 url=/onboarding head=[Welcome to IdaraWorks] file=0
+STEP 10 url=/onboarding head=[مرحباً بك في IdaraWorks] file=0
+STEP 11 url=/onboarding head=[Welcome to IdaraWorks] file=0
+
+FAILS:
+[]

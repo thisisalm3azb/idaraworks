@@ -8,12 +8,8 @@
  */
 import Link from "next/link";
 import { Badge, Button, Card, CardHeader } from "@/platform/ui";
-import { TierCards, CustomBuilder } from "@/platform/ui/subscription";
-import type {
-  CustomBuilderGroup,
-  SelectionCurrency,
-  SelectionView,
-} from "@/platform/ui/subscription";
+import { SubscriptionSelector } from "@/platform/ui/subscription";
+import type { SelectionCurrency, SelectionView } from "@/platform/ui/subscription";
 import { formatMoney } from "@/platform/format";
 import type { Locale } from "@/platform/registries";
 import type { Translator } from "@/platform/i18n/server";
@@ -866,20 +862,6 @@ export function PlanStep({ t, locale, data, view }: StepProps & { view: Selectio
             ? ("custom" as const)
             : null;
 
-  const groups: CustomBuilderGroup[] = view.custom.groups.map((g) => ({
-    key: g.key,
-    label: t(`subscription.group.${g.key}`),
-    items: g.items.map((i) => ({
-      key: i.addon.key,
-      name: i.addon.names[locale],
-      description: i.addon.description[locale],
-      priceMonthlyMinor: currency === "AED" ? i.addon.aedMonthlyMinor : i.addon.usdMonthlyMinor,
-      stackable: i.addon.stackable,
-      selectable: i.selectable,
-      ...(i.addon.availabilityNote ? { note: i.addon.availabilityNote[locale] } : {}),
-    })),
-  }));
-
   return (
     <div className="flex flex-col gap-4">
       <Card>
@@ -890,46 +872,24 @@ export function PlanStep({ t, locale, data, view }: StepProps & { view: Selectio
         </p>
       </Card>
 
-      {/* Free is one honest click — selected INSIDE its comparison card (the
-          same slot the tiers use), never a duplicate card below the grid. */}
-      <TierCards
+      {/* One four-path selector: the comparison cards, and Custom OPENS the builder
+          in-page (no navigation, no long list dumped below the grid). Free selects
+          inside its own comparison card. The choice persists in the draft. */}
+      <SubscriptionSelector
         view={view}
         locale={locale}
         currency={currency}
-        t={t}
         jobsNoun={jobsNoun}
         current={current}
-        selectTierAction={selectTierFlowAction}
-        selectFreeAction={selectFreeAction}
-        customHref="#custom-builder"
         canManage
         providerEnabled
+        selectTierAction={selectTierFlowAction}
+        selectFreeAction={selectFreeAction}
+        customAction={selectCustomAction}
+        initialCustomQuantities={mode === "custom" ? (data.tier?.quantities ?? {}) : {}}
+        initialPanel={mode === "custom" ? "custom" : "compare"}
+        customSubmitLabel={t("onboarding.flow.plan.custom_cta")}
       />
-
-      <div id="custom-builder" className="flex flex-col gap-2">
-        <h3 className="text-base font-semibold text-ink">
-          {t("onboarding.flow.plan.custom_title")}
-        </h3>
-        <p className="text-xs text-ink-muted">{t("onboarding.flow.plan.custom_help")}</p>
-        <CustomBuilder
-          groups={groups}
-          currency={currency}
-          locale={locale}
-          labels={{
-            total: t("subscription.monthly_total"),
-            perMonth: t("subscription.per_month"),
-            taxNote: t("subscription.indicative_pricing"),
-            overlapNote: t("onboarding.flow.plan.honesty_short"),
-            quantity: t("subscription.addon.quantity"),
-            notAvailable: t("onboarding.flow.plan.not_available"),
-            submit: t("onboarding.flow.plan.custom_cta"),
-            increase: t("subscription.addon.increase"),
-            decrease: t("subscription.addon.decrease"),
-          }}
-          initial={mode === "custom" ? (data.tier?.quantities ?? {}) : {}}
-          action={selectCustomAction}
-        />
-      </div>
 
       <div className="flex items-center justify-between gap-3">
         <Link href={stepHref("proposal")} className={backLinkCls}>
@@ -970,6 +930,7 @@ const LOGO_ERROR_CODES = [
   "quota_exceeded",
   "invalid_input",
   "session",
+  "server_error",
   "failed",
 ] as const;
 
@@ -1001,6 +962,7 @@ export function BrandingStep({ t, data }: StepProps) {
             remove: t("onboarding.flow.branding.logo_remove"),
             uploading: t("onboarding.flow.branding.logo_uploading"),
             hint: t("onboarding.flow.branding.logo_hint"),
+            reference: t("onboarding.flow.branding.logo_reference"),
             errors,
           }}
           uploadAction={uploadFlowLogoAction}
