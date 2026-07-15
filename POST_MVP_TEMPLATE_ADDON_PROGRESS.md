@@ -11,85 +11,78 @@ Hard rules: never modify Alpha Marine (`d22b2098-2e09-436d-ab9e-ee26c8719cd5`) o
 from `0065`; deferred capabilities never shown purchasable; prices are a recommended launch
 catalogue (tax-exclusive USD/month), not a commitment.
 
-## Verified baseline (2026-07-15)
+## Verified baseline (2026-07-15) — updated at the integration milestone
 
 | Check | Result |
 | --- | --- |
-| Local HEAD = origin/main | ✅ `f3d9380` (branch `main`, tree clean except FOUNDER_TEST_GUIDE.md to commit) |
-| CI on HEAD | ✅ green (`CI` success on `f3d9380` and `97985e1`, via GitHub API) |
-| Production health | ✅ ok — db 53ms, storage, queue 0 unprocessed; inngest unconfigured (known) |
-| Deployed commit | `97985e1` (f3d9380 was docs-only and did not roll out; next deploy supersedes) |
-| Migration ledger | `0000–0064` (65 files) → **next `0065`** |
-| Production orgs | ✅ exactly [Alpha Marine, TESTING] (inventory script, read-only) |
-| Template catalogue | 1 template: `boatbuilding_marine_v1` (TemplateManifest zod bundle; registry in `templates/boatbuilding.ts`) |
-| Entitlement catalogue | 17 feature keys (11 `cap.*`, 6 `feat.*`) + 9 `limit.*`; plans starter/growth/business; DEFAULT_PLAN growth trial |
-| Price book | `plan_price` (0052): versioned, per plan×interval×currency, `is_placeholder`, active-unique; AED+USD placeholder seeds |
-| Billing writes | tenant-read-only `org_plan_state`; S9 DEFINER path sole writer; provider seam disabled in prod |
-
-## Key architecture facts (drive the design)
-
-- **Template = data manifest** validated by `TemplateManifestSchema` (terminology, stage_template,
-  status_sets.job, category_sets{item,expense,quote_section}, reference_patterns, role_presets,
-  presets≥1, holiday_calendars, field_definitions?) installed as a sequence of ordinary
-  `applyConfigChange` revisions (each diffable/undoable). Structure-only by design — **no
-  jobs/users/suppliers/transactions are seeded** (presets are *available models*, not created rows).
-- **Entitlements** resolve plan → org overrides (60s TTL cache). `checkLimit` governs ADD only
-  (FR-9: reads/exports never blocked). READ_ONLY_BILLING_STATES enforced at `command()`.
-- **Add-on model direction**: extend with `addon_def` (stable keys) + `addon_price` (versioned, like
-  plan_price) + `org_addon` (active add-ons, period-end scheduling) + `bundle_def`/`bundle_addon`
-  (bundle = discounted collection resolving to the same addon keys — no separate entitlement system).
-  Resolution order: base plan (free) → active add-ons (features OR, limits additive/max per key
-  policy) → org overrides (highest precedence, preserved).
+| Local HEAD | `04ae304` + working tree (integration tests + 2 source fixes + 0067, to commit) |
+| origin/main | `f3d9380` (push happens at the deploy milestone) |
+| Production health | ✅ ok; deployed commit still `97985e1`; inngest unconfigured (known) |
+| Migration ledger | **hosted 0000–0067 applied** (0065 addon model, 0066 lifecycle scans, 0067 scheduled-plan anchor) → next `0068` |
+| Production orgs | ✅ exactly [Alpha Marine, TESTING] — both growth/trialing/`trial_end NULL` (sweep provably can't touch them; integration-asserted) |
+| Hosted seeds (0065) | 4 plans (free@0), 31 addon_def (5 deferred, 0 priced), 104 addon_price rows, 6 bundles, 40 free plan_entitlement rows |
 
 ## Work plan + status
 
 | # | Phase | Status |
 | --- | --- | --- |
 | P-TA0 | Baseline verification + this tracker | ✅ |
-| P-TA1 | Market research (17 products, official 2026 pages) + pricing rationale | 🔄 data COLLECTED (23 agents, output on disk); docs pending |
-| P-TA2 | Composable template architecture + 7 new templates | ✅ CODE (blocks + catalogue + 8 manifests + registry + terminology auto-derive); docs pending |
-| P-TA3 | AI + deterministic template selection in onboarding | ✅ CORE (classify.ts + selectTemplate + proposal schema + validator; 8/8 scenarios green); UI pending |
-| P-TA4 | Add-on catalogue + bundles + free base + entitlement extension (migrations 0065+) | ⏳ next |
-| P-TA5 | UX (template chooser/preview/compare, pricing page, EN/AR/RTL/375px) | ⏳ |
-| P-TA6 | Tests + full gates + CI | 🔄 unit green 410/410; integration/e2e at gate time |
-| P-TA7 | Adversarial review + fixes | ⏳ |
+| P-TA1 | Market research (17 products, official 2026 pages) + pricing rationale | ✅ (docs/commercial/* committed `04ae304`) |
+| P-TA2 | Composable template architecture + 7 new templates | ✅ (`6b81974`; docs in `04ae304`) |
+| P-TA3 | AI + deterministic template selection + onboarding UI | ✅ (`6b81974` core + `04ae304` UI: description, manual chooser, recommendation card, alternatives, limitations) |
+| P-TA4 | Add-on catalogue + bundles + free base + entitlement extension | ✅ (`261b7ae` + `9194c23` + `04ae304`; migrations 0065–0067 applied hosted) |
+| P-TA5 | UX (pricing page, EN/AR/RTL/375px) | ✅ (`04ae304` — subscription page rebuilt modular; honesty states; no payment buttons while disabled) |
+| P-TA6 | Tests + full gates + CI | 🔄 unit 425/425 · addon-model integration **18/18** · affected suites 37/37 · FULL integration suite running (bg `bw8anfq2s`) · CI at push |
+| P-TA7 | Adversarial review + fixes | 🔄 running (workflow `wf_9309768c`, 5 lenses + refutation) |
 | P-TA8 | Deploy + production demo + cleanup + final report | ⏳ |
 
-## Current work
+## Integration-test findings (both REAL source bugs — fixed with regression coverage)
 
-P-TA2/3 code milestone committed. Templates: boatbuilding preserved verbatim + 7 new manifests
-(manufacturing, service, construction, food_beverage, online_store, agriculture, generic) built on
-shared blocks; registry `templates/index.ts` drives pipeline/installer/terminology automatically.
-Classifier: transparent scoring (keywords +3, phrase-overlap +2×ratio, MIN_SCORE 3 → generic
-fallback, MIN_LEAD 2 → ambiguous), manual template_key override wins, alternatives + reasons carried
-in the proposal, terminology.overrides artifact now APPLIES the founder's job term (fixes the
-verified founder-test defect). Validator: registry membership + per-template privilege baseline.
+1. **Seat recount SQL crash** — `any(${cls}::text[])` inlined a JS array as a record; every
+   non-foreman invite under a finite limit threw `PostgresError`. Fixed with the repo's
+   `string_to_array` idiom (`src/platform/auth/identity.ts`). Covered by the seat-limit test.
+2. **Scheduled downgrades could defer forever** — the 0005 `touch_updated_at` trigger bumps
+   `updated_at` on every later write, pushing the period-boundary math forward indefinitely.
+   Fixed by **migration 0067**: immutable `org_plan_state.scheduled_plan_at` (trigger-stamped on
+   the scheduling transition, explicit value wins, auto-cleared), scan + sweep use it
+   (`updated_at` only as legacy fallback). Covered by the scheduled-downgrade sweep test.
+
+Directive verifications all integration-asserted (tests/integration/addon-model.test.ts, 18/18):
+catalogue⇔DB parity · free-plan resolution (3 seats, money caps off) · add-on/bundle resolution +
+overlap never duplicates (one row per key, bundle price wins once) · deferred refused at BOTH the
+service (AddonUnavailableError) and DB (`set_org_addon` raises) layers · webhook = sole org_addon
+writer (idempotent duplicate, unverified never writes, tenant audit rows) · seat limits (foreman
+never limited; seat pack lifts the wall) · FR-9 read-only outranks granted caps (suspended CREATE →
+BillingReadOnlyError; recovery restores) · period-end removal sweep · scheduled-plan sweep ·
+trial → free/active landing (never suspension; s9 lifecycle test updated accordingly) ·
+downgrade deletes NOTHING (customer row survives; org_addon rows only flip status) ·
+**protected orgs untouched by every sweep** (asserted in-suite).
 
 ## Ledger
 
-- Local HEAD: (this commit) · Deployed: `97985e1` · Highest migration: `0064` · Next: `0065`
-- Tests: unit 28 files / 410 passed; typecheck clean; lint pre-existing warnings only
-- CI: green on `f3d9380` (pre-milestone); push deferred to next milestone
-- Review findings: none yet (P-TA7 pending)
-- Cleanup status: prod = 2 protected orgs only; no synthetic residue
+- Local HEAD: `04ae304` + fixes to commit · Deployed: `97985e1` · Highest migration hosted: `0067` · Next: `0068`
+- Tests: unit 29 files / 425 · addon-model 18/18 · s9-lifecycle+s9-subscription+entitlements+bleed+tenancy 37/37 · full integration bg-running
+- CI: green on `f3d9380`; local milestone push pending full-suite green
+- Review findings: adversarial workflow running; integration findings above already fixed
+- Cleanup status: prod = 2 protected orgs only; addon-model test self-cleans (wipeOrgs)
 
 ## Exact next task
 
-Implementation wave `wf_125ca704` running (6 agents): A addon lifecycle (changeAddons/webhook
-addon_changed/sweep incl. scheduled-downgrade fix + trial→free landing), B enforcement (seat limits
-at invite + requireCapability gates on module CREATE paths), C template docs (3), D commercial docs
-(6), then E onboarding UI → F pricing UI (sequential; shared i18n files). DONE so far this phase:
-addons.ts catalogue (32 add-ons/6 bundles, owner anchors kept), migration 0065, resolver add-on
-layer + requireCapability, org_addon bleed seeder, 15 honesty tests (green), commits `261b7ae` +
-`9194c23`. AFTER the wave: fix fallout → full local gates → integration-test agent for the addon
-model → apply 0065 to hosted DB (`pnpm db:migrate`) → integration suite → adversarial review →
-push/deploy/smoke → demo (fake-provider prod-backed script + deployed-UI EN/AR/375px) → guarded
-cleanup (dry-run first) → final report + evening testing instructions.
+1. Read full-integration-suite result (bg `bw8anfq2s`) — fix any failure.
+2. Read adversarial-review result (workflow `wf_9309768c`) — fix every confirmed material finding
+   with regression coverage.
+3. Commit fixes → full local gates (format/lint/typecheck/unit/build) → push → CI green on exact
+   commit → Vercel serves it → production smoke.
+4. Demo (fake-provider prod-backed script + deployed UI EN/AR/375px): 8 templates visible,
+   deterministic recommendation per business type, manual override, explicit confirm before apply,
+   ≥3 templates applied to separate synthetic orgs, free/add-ons/bundles/total, upgrade + scheduled
+   downgrade, seat limit, provider-disabled checkout.
+5. Guarded cleanup: dry-run first → pause for explicit approval if destructive → verify exactly
+   [Alpha Marine, TESTING] remain → final report + evening onboarding-test instructions.
 
 ## Resume instruction
 
-If interrupted: re-read this file; check background workflows `wf_d5674a04` (market research) and
-`wf_dbc9b329` (code map) via their journals under
-`~/.claude/projects/C--Users-abdul-Desktop-Bash/a51e3cf9-.../subagents/workflows/`; continue from
-"Exact next task". All work on branch `main` of Desktop/idaraworks; migrations start at 0065;
-never touch the two protected orgs.
+If interrupted: re-read this file; check bg task `bw8anfq2s` (full integration) and workflow
+`wf_9309768c` (adversarial review) outputs under the session task/workflow dirs; continue from
+"Exact next task". Branch `main` of Desktop/idaraworks; hosted migrations 0000–0067; never touch
+the two protected orgs.

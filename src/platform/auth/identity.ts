@@ -218,7 +218,7 @@ export async function inviteMember(
           await tx.execute(
             sql`select pg_advisory_xact_lock(hashtextextended(${ctx.orgId + ":members.invite"}, 0))`,
           );
-          const cls = isViewer ? ["viewer"] : [...FULL_SEAT_ARCHETYPES];
+          const cls = (isViewer ? ["viewer"] : [...FULL_SEAT_ARCHETYPES]).join(",");
           // Occupied seats = active memberships + pending (unaccepted, unrevoked,
           // unexpired) invites of the same seat class.
           const counted = (await tx.execute(sql`
@@ -226,13 +226,13 @@ export async function inviteMember(
               (select count(*) from public.membership m
                  join public.role_definition r on r.org_id = m.org_id and r.key = m.role_key
                where m.org_id = ${ctx.orgId} and m.deactivated_at is null
-                 and r.archetype = any(${cls}::text[]))
+                 and r.archetype = any(string_to_array(${cls}, ',')))
               +
               (select count(*) from public.membership_invite i
                  join public.role_definition r on r.org_id = i.org_id and r.key = i.role_key
                where i.org_id = ${ctx.orgId} and i.accepted_at is null
                  and i.revoked_at is null and i.expires_at > now()
-                 and r.archetype = any(${cls}::text[]))
+                 and r.archetype = any(string_to_array(${cls}, ',')))
               as n
           `)) as unknown as Array<{ n: number }>;
           if (Number(counted[0]?.n ?? 0) >= seatLimit) {

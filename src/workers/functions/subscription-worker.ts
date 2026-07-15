@@ -153,9 +153,11 @@ async function sweepAddonRemovals(
 /** Apply scheduled plan downgrades whose period ended (closes the gap where a scheduled_plan_key
  * was recorded but nothing ever applied it). The deadline is the first monthly anniversary of the
  * org's period_start (the deterministic no-provider anchor, set at org creation) after the
- * scheduling write (org_plan_state.updated_at — bumped by that write; a later billing write can
- * only DEFER application to the next boundary, never apply early). Routes through the existing
- * applyPlanChange immediate path, which sets plan_key, clears the sentinel, audits and invalidates. */
+ * IMMUTABLE scheduling anchor scheduled_plan_at (0067 — stamped by trigger on the scheduling
+ * write; updated_at is only the legacy fallback for rows scheduled before 0067, since the 0005
+ * touch trigger bumps it on every later write and would defer the downgrade forever). Routes
+ * through the existing applyPlanChange immediate path, which sets plan_key, clears the sentinel,
+ * audits and invalidates. */
 async function sweepScheduledPlans(
   db: ReturnType<typeof createAppDb>["db"],
   nowMs: number,
@@ -166,12 +168,14 @@ async function sweepScheduledPlans(
     billing_state: string;
     scheduled_plan_key: string;
     period_start: string;
+    scheduled_plan_at: string | null;
     updated_at: string;
   }>;
   try {
     rows = (await db.execute(sql`
       select org_id::text as org_id, billing_state, scheduled_plan_key,
-             period_start::text as period_start, updated_at::text as updated_at
+             period_start::text as period_start,
+             scheduled_plan_at::text as scheduled_plan_at, updated_at::text as updated_at
       from app.scheduled_plan_scan()`)) as unknown as typeof rows;
   } catch (err) {
     logger.warn({ err: (err as Error).message }, "scheduled-plan scan skipped");
@@ -179,7 +183,8 @@ async function sweepScheduledPlans(
   }
   for (const row of rows) {
     try {
-      const dueAt = monthlyPeriodEnd(new Date(row.period_start), new Date(row.updated_at));
+      const anchor = row.scheduled_plan_at ?? row.updated_at;
+      const dueAt = monthlyPeriodEnd(new Date(row.period_start), new Date(anchor));
       if (Date.parse(dueAt) > nowMs) continue;
       await applyPlanChange(db, row.org_id, row.billing_state, row.scheduled_plan_key, "immediate");
       applied++;

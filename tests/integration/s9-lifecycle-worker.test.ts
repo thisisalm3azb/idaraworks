@@ -50,10 +50,13 @@ afterAll(async () => {
 });
 
 describe("lifecycle sweep + dunning + reconciliation", () => {
-  it("expires an over-run trial into read-only suspension", async () => {
+  it("lands an over-run trial on the free base plan, active (add-on model)", async () => {
     await setState("billing_state = 'trialing', trial_end = now() - interval '1 day'");
     await sweepLifecycle(Date.now());
-    expect(await stateOf()).toBe("suspended"); // trial_ended → suspended (not deleted)
+    expect(await stateOf()).toBe("active"); // trial_ended → free base plan, never suspension
+    const p = (await owner`select plan_key from public.org_plan_state
+      where org_id = ${orgId}`) as unknown as Array<{ plan_key: string }>;
+    expect(p[0]!.plan_key).toBe("free");
   });
 
   it("records a dunning reminder while past_due, without transitioning yet", async () => {
