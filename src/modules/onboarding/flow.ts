@@ -161,10 +161,14 @@ export type TierSelection = z.infer<typeof TierSelectionSchema>;
  * stays pure — the branding SERVICE re-validates authoritatively at apply time). */
 const FLOW_ACCENT_COLOR_RE = /^#[0-9a-fA-F]{6}$/;
 
+/** Base64 expansion of the branding byte cap (2 MB × 4/3, review fix: the zod cap
+ * must never admit a stash that uploadLogo's byte cap would reject at confirm). */
+const LOGO_BASE64_MAX = Math.ceil((2 * 1024 * 1024 * 4) / 3);
+
 export const DraftBrandingSchema = z
   .object({
     /** The RE-ENCODED 512px PNG (processLogo main variant), base64 — never raw upload bytes. */
-    logo_base64: z.string().max(2_800_000).optional(),
+    logo_base64: z.string().max(LOGO_BASE64_MAX).optional(),
     accent_color: z.string().regex(FLOW_ACCENT_COLOR_RE).optional(),
     display_name: z.string().trim().min(1).max(120).optional(),
     legal_name: z.string().trim().min(1).max(200).optional(),

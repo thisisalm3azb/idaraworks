@@ -13,6 +13,7 @@ import { getSessionUser } from "@/platform/auth/resolve";
 import { LOCALE_COOKIE, normalizeLocale } from "@/platform/i18n";
 import { sql, withUserCtx } from "@/platform/tenancy";
 import { TEMPLATES } from "@/platform/config";
+import { getAddon, isPurchasable } from "@/platform/entitlements";
 import { BrandingError, LOGO_MAX_BYTES } from "@/modules/branding/service";
 import {
   applyStepAnswers,
@@ -164,15 +165,21 @@ export async function selectTierFlowAction(formData: FormData): Promise<void> {
   await saveTier(userId, { mode });
 }
 
-/** CustomBuilder contract: one `addon:<key>` field per selected add-on, value = quantity. */
+/** CustomBuilder contract: one `addon:<key>` field per selected add-on, value = quantity.
+ * Keys are validated against the REAL catalogue (review fix): a well-formed but
+ * nonexistent or non-purchasable key is rejected, never recorded. */
 export async function selectCustomAction(formData: FormData): Promise<void> {
   const { userId } = await requireFlowUser();
   const quantities: Record<string, number> = {};
   for (const key of new Set(formData.keys())) {
     if (!key.startsWith("addon:")) continue;
     const addonKey = key.slice("addon:".length);
+    const def = getAddon(addonKey);
+    if (!def || !isPurchasable(def)) toStep("plan", "invalid");
     const qty = Math.trunc(Number(formData.get(key) ?? 0));
-    if (Number.isFinite(qty) && qty >= 1) quantities[addonKey] = Math.min(99, qty);
+    if (Number.isFinite(qty) && qty >= 1) {
+      quantities[addonKey] = def.stackable ? Math.min(99, qty) : 1;
+    }
   }
   if (Object.keys(quantities).length === 0) toStep("plan", "custom_empty");
   await saveTier(userId, {

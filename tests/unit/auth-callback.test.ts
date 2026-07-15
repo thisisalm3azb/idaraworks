@@ -210,3 +210,30 @@ describe("middleware forwards a root auth code to /auth/callback", () => {
     expect(res.headers.get("location")).toBeNull();
   });
 });
+
+// Security-review regression: PRODUCTION never derives the origin from request
+// headers — an attacker-influenced x-forwarded-host must not poison confirmation
+// links or callback redirects. APP_URL wins; canonical prod origin is the fallback.
+describe("requestOrigin in production (header trust eliminated)", () => {
+  const h = new Headers({ "x-forwarded-host": "evil.example", host: "evil.example" });
+
+  it("ignores forwarded headers when APP_ENV=prod (APP_URL set)", () => {
+    process.env.APP_ENV = "prod";
+    process.env.APP_URL = "https://idaraworks.vercel.app";
+    try {
+      expect(requestOrigin(h)).toBe("https://idaraworks.vercel.app");
+    } finally {
+      delete process.env.APP_ENV;
+      delete process.env.APP_URL;
+    }
+  });
+
+  it("falls back to the canonical prod origin when APP_URL is unset", () => {
+    process.env.APP_ENV = "prod";
+    try {
+      expect(requestOrigin(h)).toBe("https://idaraworks.vercel.app");
+    } finally {
+      delete process.env.APP_ENV;
+    }
+  });
+});

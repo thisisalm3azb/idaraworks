@@ -9,13 +9,23 @@
  * so the callback can never be used as an open redirect.
  */
 
+/** The canonical production origin — the safe default when APP_URL is not set. */
+const CANONICAL_PROD_ORIGIN = "https://idaraworks.vercel.app";
+
 /**
- * Derive the request's public origin. Prefers the proxy-forwarded host (Vercel sets
- * x-forwarded-host/-proto) over the raw Host header — same header-trust posture as
- * requestMeta/clientIpFromHeaders. Falls back to APP_URL, then localhost, so local
- * dev without env vars still works.
+ * Derive the request's public origin.
+ *
+ * PRODUCTION never trusts request headers (security review: an attacker-influenced
+ * x-forwarded-host would poison signup-confirmation links and the callback's own
+ * redirect origin) — it uses APP_URL, falling back to the canonical prod origin.
+ * Non-prod (previews, local dev) derives from the proxy-forwarded host so each
+ * preview deployment and localhost get their own working links; Vercel's edge sets
+ * x-forwarded-host itself there.
  */
 export function requestOrigin(h: Headers): string {
+  if (process.env.APP_ENV === "prod") {
+    return process.env.APP_URL ?? CANONICAL_PROD_ORIGIN;
+  }
   const host = h.get("x-forwarded-host") ?? h.get("host");
   if (!host) return process.env.APP_URL ?? "http://localhost:3000";
   const proto =
