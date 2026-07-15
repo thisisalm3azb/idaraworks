@@ -352,9 +352,9 @@ describe("FR-9: read-only billing states outrank granted capabilities", () => {
     await owner`update public.org_plan_state set billing_state = 'suspended'
       where org_id = ${orgId}`;
     invalidateEntitlements(orgId);
-    await expect(
-      createCustomer(ctx(), "owner", { name: `Blocked ${run}` }),
-    ).rejects.toThrow(BillingReadOnlyError);
+    await expect(createCustomer(ctx(), "owner", { name: `Blocked ${run}` })).rejects.toThrow(
+      BillingReadOnlyError,
+    );
     await owner`update public.org_plan_state set billing_state = 'active'
       where org_id = ${orgId}`;
     invalidateEntitlements(orgId);

@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { EmptyState } from "@/platform/ui";
+import { Card, CardHeader, EmptyState } from "@/platform/ui";
 import { getT, getServerLocale } from "@/platform/i18n/server";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { can } from "@/platform/authz";
+import { hasFeature } from "@/platform/entitlements";
 import { loadOrgTerminology, term } from "@/platform/terminology";
 import { listActiveJobsBrief } from "@/modules/expenses/service";
 
@@ -15,6 +16,25 @@ export default async function CostingIndexPage({ params }: { params: Promise<{ o
   const t = await getT();
   const terms = await loadOrgTerminology(resolved.ctx, await getServerLocale());
   const jobVars = { job: term("job", terms, "singular"), jobs: term("job", terms, "plural") };
+
+  // Add-on enforcement (0070 honesty pass): cap.costing gates the PAGE content —
+  // the costing service itself stays ungated (other modules consume it).
+  if (!(await hasFeature(resolved.ctx, "cap.costing"))) {
+    return (
+      <Card>
+        <CardHeader title={t("costing.title", jobVars)} />
+        <p className="text-sm text-ink-muted">{t("costing.upsell")}</p>
+        {can(resolved.archetype, "billing.view") ? (
+          <Link
+            href={`/o/${orgId}/settings/subscription`}
+            className="mt-2 inline-block text-sm text-brand hover:underline"
+          >
+            {t("costing.upsell_cta")}
+          </Link>
+        ) : null}
+      </Card>
+    );
+  }
   const jobs = await listActiveJobsBrief(resolved.ctx);
 
   return (

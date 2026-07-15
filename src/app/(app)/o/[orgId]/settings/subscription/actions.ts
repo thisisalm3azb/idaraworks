@@ -2,34 +2,15 @@
 
 import { redirect } from "next/navigation";
 import { resolveCtxForAction } from "@/platform/auth/resolve";
-import { changePlan, cancelSubscription, changeAddons } from "@/modules/subscription/service";
+import { cancelSubscription, changeAddons } from "@/modules/subscription/service";
 import { getAddon, getBundle } from "@/platform/entitlements";
 import { logger } from "@/platform/logger";
 
 const BASE = (orgId: string) => `/o/${orgId}/settings/subscription`;
 
-export async function changePlanAction(orgId: string, formData: FormData): Promise<void> {
-  const resolved = await resolveCtxForAction(orgId);
-  if (resolved === "mfa_required") redirect("/mfa");
-  if (typeof resolved === "string") redirect("/");
-  const plan = String(formData.get("plan") ?? "");
-  const valid = plan === "starter" || plan === "growth" || plan === "business";
-  let mode: string | null = null;
-  try {
-    if (valid) {
-      const r = await changePlan(resolved.ctx, resolved.archetype, plan as never);
-      mode = r.mode;
-    }
-  } catch (err) {
-    // S10: a failed billing mutation must still emit a correlated observability signal (it was
-    // silently swallowed before, so the "error" banner had no trail behind it).
-    logger.error({ orgId, err: (err as Error).message }, "changePlan action failed");
-    mode = null;
-  }
-  redirect(
-    `${BASE(orgId)}?notice=${mode ? (mode === "scheduled" ? "downgrade" : "upgrade") : "error"}`,
-  );
-}
+// changePlanAction was removed: the rebuilt add-on-model page no longer posts a plan switch (plan
+// changes ride the trial→free landing + the add-on catalogue); changePlan in the service stays —
+// the s9 plan-change tests and the prod-demo script still exercise it.
 
 export async function cancelSubscriptionAction(orgId: string): Promise<void> {
   const resolved = await resolveCtxForAction(orgId);
@@ -95,6 +76,30 @@ export async function removeAddonAction(orgId: string, formData: FormData): Prom
     ok = false;
   }
   redirect(`${BASE(orgId)}?notice=${ok ? "addon_removed" : "error"}`);
+}
+
+export async function removeBundleAction(orgId: string, formData: FormData): Promise<void> {
+  const resolved = await resolveCtxForAction(orgId);
+  if (resolved === "mfa_required") redirect("/mfa");
+  if (typeof resolved === "string") redirect("/");
+  const bundleKey = String(formData.get("bundle") ?? "");
+  let ok = false;
+  try {
+    if (getBundle(bundleKey)) {
+      // Schedules period-end removal of EVERY member row sourced from this bundle
+      // — never mid-cycle, never deletes data (same law as single-add-on removal).
+      await changeAddons(resolved.ctx, resolved.archetype, {
+        additions: [],
+        removals: [],
+        removeBundleKey: bundleKey,
+      });
+      ok = true;
+    }
+  } catch (err) {
+    logger.error({ orgId, bundleKey, err: (err as Error).message }, "removeBundle action failed");
+    ok = false;
+  }
+  redirect(`${BASE(orgId)}?notice=${ok ? "bundle_removed" : "error"}`);
 }
 
 export async function selectBundleAction(orgId: string, formData: FormData): Promise<void> {

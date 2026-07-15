@@ -7,7 +7,6 @@ import { assertCan } from "@/platform/authz";
 import { isTermKey } from "@/platform/registries";
 import {
   applyConfigChange,
-  installTemplate,
   undoRevision,
   ConfigGuardError,
   ConfigValidationError,
@@ -27,19 +26,9 @@ function errCode(err: unknown): string {
   return "failed";
 }
 
-export async function installTemplateAction(orgId: string, formData: FormData): Promise<void> {
-  const resolved = await resolveOr(orgId);
-  const base = `/o/${orgId}/settings/configuration`;
-  try {
-    await installTemplate(resolved.ctx, String(formData.get("template_key") ?? ""));
-  } catch (err) {
-    if ((err as { digest?: string }).digest?.startsWith("NEXT_REDIRECT")) throw err;
-    redirect(`${base}?error=${errCode(err)}`);
-  }
-  revalidatePath(base);
-  revalidatePath(`/o/${orgId}`, "layout"); // install changes nav terms/labels
-  redirect(`${base}?notice=installed`);
-}
+// installTemplateAction was removed (review fix): the configuration page no longer offers a
+// direct one-click install of a hardcoded template — installs go through the onboarding
+// wizard (template catalogue + disclosure), which calls the governed installTemplate itself.
 
 export async function saveTermAction(orgId: string, formData: FormData): Promise<void> {
   const resolved = await resolveOr(orgId);

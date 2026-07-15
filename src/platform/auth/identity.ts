@@ -264,15 +264,83 @@ export async function inviteMember(
 
 export async function acceptInvite(userId: string, token: string): Promise<string> {
   const tokenHash = hashInviteToken(token);
-  let orgId: string;
+
+  // Seat recount at ACCEPT (0069): a pending invite can outlive a plan downgrade,
+  // so inviteMember's creation-time count is not enough — the cap must also hold
+  // when the seat is actually TAKEN. Peek the pending invite (DEFINER, read-only)
+  // for its org + seat class; no row = invalid/expired/revoked/accepted → fall
+  // through to app.accept_invite so its canonical error surfaces unchanged.
+  let peeked: { org_id: string; archetype: RoleArchetype } | undefined;
   try {
-    orgId = await withUserCtx(userId, async (tx) => {
+    peeked = await withUserCtx(userId, async (tx) => {
       const rows = (await tx.execute(sql`
-        select app.accept_invite(${tokenHash}, ${userId})::text as org_id
-      `)) as unknown as Array<{ org_id: string }>;
-      return rows[0]!.org_id;
+        select org_id::text as org_id, archetype from app.peek_invite(${tokenHash})
+      `)) as unknown as Array<{ org_id: string; archetype: RoleArchetype }>;
+      return rows[0];
     });
   } catch (err) {
+    rethrowDbMessage(err);
+  }
+  const pending = peeked;
+
+  const accept = async (tx: TenantTx): Promise<string> => {
+    const rows = (await tx.execute(sql`
+      select app.accept_invite(${tokenHash}, ${userId})::text as org_id
+    `)) as unknown as Array<{ org_id: string }>;
+    return rows[0]!.org_id;
+  };
+
+  let orgId: string;
+  try {
+    if (pending && pending.archetype !== "foreman") {
+      // Office/viewer seat: resolve the cap in TS BEFORE the accept (add-on limit
+      // deltas live in code — addons.ts — so SQL cannot resolve it). Entitlement
+      // tables are org-GUC-scoped, not membership-scoped, so a ctx for the
+      // not-yet-member invitee reads them fine.
+      const isViewer = pending.archetype === "viewer";
+      const ctx: Ctx = {
+        orgId: pending.org_id,
+        userId,
+        costPrivileged: false,
+        pricePrivileged: false,
+        requestId: "accept-invite",
+      };
+      const seatLimit = await getLimit(ctx, isViewer ? "limit.viewer_users" : "limit.full_users");
+      if (seatLimit === null) {
+        // Unlimited — accept exactly as before.
+        orgId = await withUserCtx(userId, accept);
+      } else {
+        orgId = await withCtx(ctx, async (tx) => {
+          // The SAME per-org mutex as inviteMember: invites and accepts serialize
+          // on one key, so the recount can never race a concurrent invite/accept.
+          await tx.execute(
+            sql`select pg_advisory_xact_lock(hashtextextended(${pending.org_id + ":members.invite"}, 0))`,
+          );
+          // ACTIVE MEMBERSHIPS only — at accept time other pending invites do not
+          // hold seats; this accept is claiming a real one.
+          const cls = (isViewer ? ["viewer"] : [...FULL_SEAT_ARCHETYPES]).join(",");
+          const counted = (await tx.execute(sql`
+            select count(*) as n from public.membership m
+              join public.role_definition r on r.org_id = m.org_id and r.key = m.role_key
+            where m.org_id = ${pending.org_id} and m.deactivated_at is null
+              and r.archetype = any(string_to_array(${cls}, ','))
+          `)) as unknown as Array<{ n: number }>;
+          if (Number(counted[0]?.n ?? 0) >= seatLimit) {
+            throw new SeatLimitError(
+              isViewer ? "limit.viewer_users" : "limit.full_users",
+              seatLimit,
+            );
+          }
+          return accept(tx);
+        });
+      }
+    } else {
+      // Foreman (field seats are FREE — never limited) or no pending row
+      // (app.accept_invite raises the canonical 'invite invalid or expired').
+      orgId = await withUserCtx(userId, accept);
+    }
+  } catch (err) {
+    if (err instanceof SeatLimitError) throw err;
     rethrowDbMessage(err);
   }
   // The 'membership.join' audit row is written INSIDE app.accept_invite (0007),

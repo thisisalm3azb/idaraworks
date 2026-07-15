@@ -33,6 +33,10 @@ export async function startOnboardingAction(orgId: string, formData: FormData): 
   const languages = formData.getAll("languages").map(String).filter(Boolean);
   // Explicit template choice: empty = "recommend for me" (classifier decides) — omit the key.
   const templateKey = String(formData.get("template_key") ?? "").trim();
+  // Job terms: empty = "keep the selected template's own term" — omit the keys so the
+  // proposal never claims a naming choice the founder didn't make (review fix).
+  const jobTermEn = String(formData.get("job_term_en") ?? "").trim();
+  const jobTermAr = String(formData.get("job_term_ar") ?? "").trim();
   try {
     const { sessionId } = await startOnboarding(resolved.ctx, resolved.archetype, {
       business_name: String(formData.get("business_name") ?? ""),
@@ -43,8 +47,8 @@ export async function startOnboardingAction(orgId: string, formData: FormData): 
       languages: languages.length ? languages : ["ar", "en"],
       six_day_week: formData.get("six_day_week") === "on",
       vat_registered: formData.get("vat_registered") === "on",
-      job_term_en: String(formData.get("job_term_en") ?? ""),
-      job_term_ar: String(formData.get("job_term_ar") ?? ""),
+      ...(jobTermEn ? { job_term_en: jobTermEn } : {}),
+      ...(jobTermAr ? { job_term_ar: jobTermAr } : {}),
       approval_auto_approve_below: auto,
       requested_features: [],
     });

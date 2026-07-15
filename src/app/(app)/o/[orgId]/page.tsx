@@ -6,6 +6,7 @@ import { resolveCtx } from "@/platform/auth/resolve";
 import { can } from "@/platform/authz";
 import { loadOrgTerminology, term } from "@/platform/terminology";
 import { composeToday, type TodayCard } from "@/modules/today/service";
+import { hasFeature } from "@/platform/entitlements";
 import { getOwnerDigest, type DigestSection } from "@/modules/digest/service";
 import { getInstalledTemplate } from "@/platform/config";
 import { formatMoney } from "@/platform/format/money";
@@ -57,9 +58,11 @@ export default async function OrgHome({
   const canDismiss = can(resolved.archetype, "exceptions.dismiss");
   // S7: the owner digest card (doc 03 card 6) — the persisted deterministic digest, narrated
   // when AI is enabled, always readable without it. Money redacts per the reader (getOwnerDigest).
-  const digest = can(resolved.archetype, "digest.view")
-    ? await getOwnerDigest(resolved.ctx, resolved.archetype)
-    : null;
+  // Add-on enforcement (0070 honesty pass): feat.owner_digest gates the DISPLAY surface only —
+  // the service read never throws on entitlement (FR-9); feature off → upsell card instead.
+  const canViewDigest = can(resolved.archetype, "digest.view");
+  const digestEntitled = canViewDigest && (await hasFeature(resolved.ctx, "feat.owner_digest"));
+  const digest = digestEntitled ? await getOwnerDigest(resolved.ctx, resolved.archetype) : null;
   const currency = resolved.baseCurrency as CurrencyCode;
   // First-run: an org whose owner/admin can run setup but has no template installed yet
   // lands on Today with a seeded onboarding checklist (doc 11 S8 first-run sequence).
@@ -96,6 +99,21 @@ export default async function OrgHome({
         <Badge tone="danger">{t("common.error")}</Badge>
       ) : null}
 
+      {canViewDigest && !digestEntitled ? (
+        // Honest absent state: the digest is a paid add-on this org doesn't have.
+        <Card>
+          <CardHeader title={t("digest.title")} />
+          <p className="text-sm text-ink-muted">{t("digest.upsell")}</p>
+          {can(resolved.archetype, "billing.view") ? (
+            <Link
+              href={`/o/${orgId}/settings/subscription`}
+              className="mt-2 inline-block text-sm text-brand hover:underline"
+            >
+              {t("digest.upsell_cta")}
+            </Link>
+          ) : null}
+        </Card>
+      ) : null}
       {digest ? (
         <Card>
           <CardHeader

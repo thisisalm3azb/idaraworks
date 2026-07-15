@@ -86,9 +86,8 @@ export default async function OnboardingPage({
               {t("onboarding.intake.job_term_en")}
               <input
                 name="job_term_en"
-                defaultValue="Boat"
-                required
                 maxLength={40}
+                placeholder={t("onboarding.intake.job_term_placeholder")}
                 className={input}
               />
             </label>
@@ -96,14 +95,14 @@ export default async function OnboardingPage({
               {t("onboarding.intake.job_term_ar")}
               <input
                 name="job_term_ar"
-                defaultValue="قارب"
-                required
                 maxLength={40}
+                placeholder={t("onboarding.intake.job_term_placeholder")}
                 className={input}
                 dir="rtl"
               />
             </label>
           </div>
+          <p className="text-xs text-ink-muted">{t("onboarding.intake.job_term_note")}</p>
           <div className="grid grid-cols-2 gap-3">
             <label className={field}>
               {t("onboarding.intake.auto_po")}

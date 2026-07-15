@@ -3,6 +3,7 @@ import { Badge, Card, CardHeader } from "@/platform/ui";
 import { getT, getServerLocale } from "@/platform/i18n/server";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { can, ForbiddenError } from "@/platform/authz";
+import { hasFeature } from "@/platform/entitlements";
 import { loadOrgTerminology, term } from "@/platform/terminology";
 import { formatMoney } from "@/platform/format/money";
 import type { CurrencyCode } from "@/platform/registries";
@@ -17,6 +18,12 @@ export default async function JobCostingPage({
   const resolved = await resolveCtx(orgId);
   if (typeof resolved === "string") redirect("/");
   if (!can(resolved.archetype, "costing.view")) redirect(`/o/${orgId}`);
+  // Add-on enforcement (0070 honesty pass): cap.costing gates the page content —
+  // the index page renders the upsell state; the costing SERVICE stays ungated
+  // (other modules consume it).
+  if (!(await hasFeature(resolved.ctx, "cap.costing"))) redirect(`/o/${orgId}/costing`);
+  // feat.quote_vs_actual gates the quoted-versus-actual margin section only.
+  const quoteVsActual = await hasFeature(resolved.ctx, "feat.quote_vs_actual");
   const t = await getT();
   const terms = await loadOrgTerminology(resolved.ctx, await getServerLocale());
   const jobTerm = { job: term("job", terms, "singular") };
@@ -61,11 +68,18 @@ export default async function JobCostingPage({
         {row(t("costing.labour"), money(view.labourCostMinor), true)}
         {row(t("costing.total"), money(view.totalCostMinor), true)}
       </Card>
-      <Card>
-        <CardHeader title={t("costing.detail.margin")} />
-        {row(t("costing.quoted"), money(view.quotedMinor), true)}
-        {row(t("costing.margin"), money(view.marginMinor), true)}
-      </Card>
+      {quoteVsActual ? (
+        <Card>
+          <CardHeader title={t("costing.detail.margin")} />
+          {row(t("costing.quoted"), money(view.quotedMinor), true)}
+          {row(t("costing.margin"), money(view.marginMinor), true)}
+        </Card>
+      ) : (
+        <Card>
+          <CardHeader title={t("costing.detail.margin")} />
+          <p className="text-sm text-ink-muted">{t("costing.qva_upsell")}</p>
+        </Card>
+      )}
       <p className="text-xs text-ink-muted">
         {view.computedAt
           ? `${t("costing.computed_at")} ${view.computedAt.slice(0, 16).replace("T", " ")}`

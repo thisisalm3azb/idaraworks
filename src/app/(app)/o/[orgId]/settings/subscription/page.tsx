@@ -25,6 +25,7 @@ import {
   addAddonAction,
   removeAddonAction,
   selectBundleAction,
+  removeBundleAction,
   cancelSubscriptionAction,
 } from "./actions";
 
@@ -42,12 +43,11 @@ const STATE_TONE: Record<string, "success" | "brand" | "warning" | "danger" | "n
 // Whitelisted notices + their tone — 'error' MUST render in the danger tone, never the green
 // success banner (review): a failed add-on/bundle change must not look like it succeeded.
 const NOTICE_TONE: Record<string, "success" | "danger"> = {
-  upgrade: "success",
-  downgrade: "success",
   cancel_requested: "success",
   addon_added: "success",
   addon_removed: "success",
   bundle_selected: "success",
+  bundle_removed: "success",
   error: "danger",
 };
 
@@ -111,6 +111,7 @@ export default async function SubscriptionPage({
   const addWithOrg = addAddonAction.bind(null, orgId);
   const removeWithOrg = removeAddonAction.bind(null, orgId);
   const selectWithOrg = selectBundleAction.bind(null, orgId);
+  const removeBundleWithOrg = removeBundleAction.bind(null, orgId);
   const cancelWithOrg = cancelSubscriptionAction.bind(null, orgId);
 
   // Active add-ons (tenant SELECT — org_addon is tenant-read-only) + the cheap
@@ -178,6 +179,10 @@ export default async function SubscriptionPage({
 
   const addonState = new Map(addonRows.map((r) => [r.addon_key, r]));
   const bundleActive = (b: BundleDef) => addonRows.some((r) => r.source === b.key);
+  // Removable while ≥1 member row is still 'active' (all-scheduled = nothing left to remove;
+  // the bundle price stays counted once until the rows flip to 'removed' at period end).
+  const bundleRemovable = (b: BundleDef) =>
+    addonRows.some((r) => r.source === b.key && r.status === "active");
 
   const grouped = new Map<GroupKey, AddonDef[]>();
   for (const a of [...ADDONS].sort((x, y) => x.sort - y.sort)) {
@@ -185,10 +190,24 @@ export default async function SubscriptionPage({
     grouped.set(g, [...(grouped.get(g) ?? []), a]);
   }
 
-  const limitLabel = (used: number | string, limit: number | string | null) =>
-    limit === null
-      ? t("subscription.usage.of_limit", { used, limit: t("subscription.usage.unlimited") })
-      : t("subscription.usage.of_limit", { used, limit });
+  // Bidi-safe usage figure (review): dir="ltr" isolates ONLY the numeric tokens — the old wrapper
+  // forced the whole localized "{used} من {limit}" phrase LTR, garbling the Arabic word order.
+  // The translated connective renders in the page direction; numbers keep font-mono.
+  const usageFigure = (used: number | string, limit: number | string | null) => (
+    <span>
+      <span dir="ltr" className="font-mono">
+        {used}
+      </span>{" "}
+      {t("subscription.usage.of")}{" "}
+      {limit === null ? (
+        t("subscription.usage.unlimited")
+      ) : (
+        <span dir="ltr" className="font-mono">
+          {limit}
+        </span>
+      )}
+    </span>
+  );
 
   return (
     <div className="flex flex-col gap-4">
@@ -323,13 +342,28 @@ export default async function SubscriptionPage({
                       </Badge>
                     ))}
                   </div>
-                  {canManage && view.providerEnabled && bundleIsPurchasable(b) ? (
-                    <form action={selectWithOrg}>
-                      <input type="hidden" name="bundle" value={b.key} />
-                      <Button type="submit" variant="secondary">
-                        {t("subscription.bundle.select")}
-                      </Button>
-                    </form>
+                  {canManage && view.providerEnabled ? (
+                    <div className="flex flex-wrap items-center gap-2">
+                      {bundleIsPurchasable(b) ? (
+                        <form action={selectWithOrg}>
+                          <input type="hidden" name="bundle" value={b.key} />
+                          <Button type="submit" variant="secondary">
+                            {t("subscription.bundle.select")}
+                          </Button>
+                        </form>
+                      ) : null}
+                      {bundleRemovable(b) ? (
+                        <form action={removeBundleWithOrg}>
+                          <input type="hidden" name="bundle" value={b.key} />
+                          <Button type="submit" variant="ghost" className="text-danger">
+                            {t("subscription.bundle.remove")}
+                          </Button>
+                        </form>
+                      ) : null}
+                    </div>
+                  ) : null}
+                  {canManage && view.providerEnabled && bundleRemovable(b) ? (
+                    <p className="text-xs text-ink-muted">{t("subscription.addon.remove_note")}</p>
                   ) : null}
                 </li>
               );
@@ -446,15 +480,11 @@ export default async function SubscriptionPage({
         <div className="flex flex-col gap-1 text-sm text-ink">
           <div className="flex items-center justify-between">
             <span className="text-ink-muted">{t("subscription.usage.office_seats")}</span>
-            <span dir="ltr" className="font-mono">
-              {limitLabel(officeSeats, ent.limits["limit.full_users"] ?? null)}
-            </span>
+            {usageFigure(officeSeats, ent.limits["limit.full_users"] ?? null)}
           </div>
           <div className="flex items-center justify-between">
             <span className="text-ink-muted">{t("subscription.usage.viewer_seats")}</span>
-            <span dir="ltr" className="font-mono">
-              {limitLabel(viewerSeats, ent.limits["limit.viewer_users"] ?? null)}
-            </span>
+            {usageFigure(viewerSeats, ent.limits["limit.viewer_users"] ?? null)}
           </div>
           <div className="flex items-center justify-between">
             <span className="text-ink-muted">{t("subscription.usage.field_seats")}</span>
@@ -462,20 +492,16 @@ export default async function SubscriptionPage({
           </div>
           <div className="flex items-center justify-between">
             <span className="text-ink-muted">{t("subscription.usage.storage")}</span>
-            <span dir="ltr" className="font-mono">
-              {limitLabel(
-                `${(storage.bytesUsed / GIB).toFixed(2)} GB`,
-                storage.limitBytes === null ? null : `${storage.limitBytes / GIB} GB`,
-              )}
-            </span>
+            {usageFigure(
+              `${(storage.bytesUsed / GIB).toFixed(2)} GB`,
+              storage.limitBytes === null ? null : `${storage.limitBytes / GIB} GB`,
+            )}
           </div>
           <div className="flex items-center justify-between">
             <span className="text-ink-muted">
               {t("subscription.usage.active_jobs", { jobs: jobsNoun })}
             </span>
-            <span dir="ltr" className="font-mono">
-              {limitLabel(activeJobs, ent.limits["limit.active_jobs"] ?? null)}
-            </span>
+            {usageFigure(activeJobs, ent.limits["limit.active_jobs"] ?? null)}
           </div>
         </div>
       </Card>

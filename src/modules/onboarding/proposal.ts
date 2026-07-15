@@ -38,8 +38,10 @@ export const OnboardingIntakeSchema = z
     six_day_week: z.boolean(),
     vat_registered: z.boolean(),
     // The single most-visible terminology choice: what the org calls a `job` (EN + AR label).
-    job_term_en: z.string().trim().min(1).max(40),
-    job_term_ar: z.string().trim().min(1).max(40),
+    // OPTIONAL (review fix): left blank, the selected template's own term stands — the
+    // proposal must not fabricate a "choice" the founder never made.
+    job_term_en: z.string().trim().min(1).max(40).optional(),
+    job_term_ar: z.string().trim().min(1).max(40).optional(),
     // Desired auto-approve thresholds (org-currency MINOR units); F-28-capped by the validator.
     approval_auto_approve_below: z
       .object({

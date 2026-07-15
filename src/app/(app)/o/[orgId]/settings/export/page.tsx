@@ -3,6 +3,7 @@ import { Button, Card, CardHeader } from "@/platform/ui";
 import { getT, getServerLocale } from "@/platform/i18n/server";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { can } from "@/platform/authz";
+import { hasFeature } from "@/platform/entitlements";
 import { loadOrgTerminology, term } from "@/platform/terminology";
 import { EXPORT_ENTITY_KEYS } from "@/platform/export/service";
 
@@ -14,6 +15,12 @@ export default async function ExportPage({ params }: { params: Promise<{ orgId: 
   if (!can(resolved.archetype, "data.export")) redirect(`/o/${orgId}`);
   const terms = await loadOrgTerminology(resolved.ctx, await getServerLocale());
   const jobsTerm = term("job", terms, "plural");
+  // Add-on enforcement (0070 honesty pass): the audit-log export belongs to
+  // addon.audit_history (feat.audit_export). The core data-portability set stays
+  // unconditional (FR-9); only the audit_log entity is add-on gated — hidden here
+  // AND refused server-side by the export route (a hidden option must not be GETable).
+  const auditExport = await hasFeature(resolved.ctx, "feat.audit_export");
+  const entities = EXPORT_ENTITY_KEYS.filter((e) => e !== "audit_log" || auditExport);
 
   return (
     <div className="flex flex-col gap-4">
@@ -21,7 +28,7 @@ export default async function ExportPage({ params }: { params: Promise<{ orgId: 
         <CardHeader title={t("export.title")} />
         <p className="mb-3 text-sm text-ink-muted">{t("export.help")}</p>
         <ul className="flex flex-col gap-2">
-          {EXPORT_ENTITY_KEYS.map((entity) => (
+          {entities.map((entity) => (
             <li
               key={entity}
               className="flex items-center justify-between gap-3 rounded-md border border-line p-3"

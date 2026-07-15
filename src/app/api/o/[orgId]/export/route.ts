@@ -6,6 +6,7 @@
 import { NextResponse } from "next/server";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { ForbiddenError } from "@/platform/authz";
+import { hasFeature } from "@/platform/entitlements";
 import { exportEntityCsv, isExportEntity, EXPORT_ENTITY_KEYS } from "@/platform/export/service";
 
 export const dynamic = "force-dynamic";
@@ -24,6 +25,17 @@ export async function GET(
     return NextResponse.json(
       { error: "unknown entity", available: EXPORT_ENTITY_KEYS },
       { status: 400 },
+    );
+  }
+  // Add-on enforcement (0070 honesty pass): the audit-log export is what
+  // addon.audit_history sells (feat.audit_export). The core data-portability
+  // entities stay unconditional (FR-9 — an org can always take its records out);
+  // ONLY the audit_log entity is add-on gated, mirroring the settings/export
+  // page which hides the option. Refusal is explicit, never a silent 404.
+  if (entity === "audit_log" && !(await hasFeature(resolved.ctx, "feat.audit_export"))) {
+    return NextResponse.json(
+      { error: "addon_required", addon: "addon.audit_history", feature: "feat.audit_export" },
+      { status: 403 },
     );
   }
   try {

@@ -2,7 +2,14 @@
  * The ADD-ON catalogue — code-owned source of truth for the modular monthly
  * add-on model (post-MVP; extends catalogue.ts with the same registry
  * discipline: migration 0065 seeds addon_def/bundle_def from exactly these
- * keys; an integration test asserts DB ⇔ code parity).
+ * keys, 0070 applies the enforcement-honesty reclassification; an integration
+ * test asserts DB ⇔ code parity).
+ *
+ * ENFORCEMENT PARITY (tested in tests/unit/addon-enforcement-parity.test.ts):
+ * every feature key granted by a purchasable add-on must be enforced at a real
+ * hasFeature()/requireCapability() call site in src/ — an add-on may never
+ * charge for a key the product does not check anywhere (0070 reclassified
+ * exports_extended / branding_docs / branding_app to deferred for this reason).
  *
  * HONESTY LAW (tested): every add-on carries an `availability` class and ONLY
  * `available` / `manual_process` items are purchasable; `credential_gated` and
@@ -334,17 +341,24 @@ export const ADDONS: readonly AddonDef[] = [
     stackable: false,
     sort: 170,
   },
+  // 0070 honesty reclass: no "extended" export tier exists — the CSV export
+  // catalogue (platform/export/service.ts) IS the always-free core set, so this
+  // add-on had nothing real to sell. Deferred until extra entities actually ship.
   {
     key: "addon.exports_extended",
     names: L("Extended data exports", "تصدير بيانات موسّع"),
     description: L(
-      "Full-entity CSV export pack. Core record exports always remain available on every plan — this extends coverage, it never gates your data.",
-      "باقة تصدير CSV لكل الكيانات. يبقى تصدير السجلات الأساسية متاحاً دائماً في كل الخطط — هذه الباقة توسّع التغطية ولا تحجب بياناتك أبداً.",
+      "Additional full-entity CSV exports beyond the core set. Not built yet — core record exports remain free on every plan.",
+      "تصدير CSV لكيانات إضافية فوق المجموعة الأساسية. غير متوفر بعد — يبقى تصدير السجلات الأساسية مجانياً في كل الخطط.",
     ),
-    usdMonthlyMinor: 300,
-    aedMonthlyMinor: 1100,
-    availability: "available",
-    features: ["feat.exports_extended"],
+    usdMonthlyMinor: 0,
+    aedMonthlyMinor: 0,
+    availability: "deferred",
+    availabilityNote: L(
+      "The extra export coverage does not exist yet — the current export set is included free.",
+      "التغطية الإضافية للتصدير غير موجودة بعد — مجموعة التصدير الحالية مشمولة مجاناً.",
+    ),
+    features: [],
     limitDeltas: {},
     stackable: false,
     sort: 180,
@@ -353,8 +367,8 @@ export const ADDONS: readonly AddonDef[] = [
     key: "addon.audit_history",
     names: L("Audit & compliance history", "سجل التدقيق والامتثال"),
     description: L(
-      "The full audit trail views and audit-log export.",
-      "عروض سجل التدقيق الكامل وتصديره.",
+      "Download your organisation's full audit trail as CSV.",
+      "تنزيل سجل التدقيق الكامل لمنشأتك بصيغة CSV.",
     ),
     usdMonthlyMinor: 400,
     aedMonthlyMinor: 1500,
@@ -364,17 +378,25 @@ export const ADDONS: readonly AddonDef[] = [
     stackable: false,
     sort: 190,
   },
+  // 0070 honesty reclass: no logo/branding capability (upload, PDF logo slot or
+  // theming) exists anywhere in the platform — these were sold with zero
+  // deliverable. Deferred; the owner's $2/$1 anchors are kept in the docs for
+  // when branding actually ships.
   {
     key: "addon.branding_docs",
     names: L("Your logo on documents", "شعارك على المستندات"),
     description: L(
-      "Your logo on published quotes, invoices and purchase orders.",
-      "شعارك على عروض الأسعار والفواتير وأوامر الشراء الصادرة.",
+      "Your logo on published quotes, invoices and purchase orders. Not built yet — shown for roadmap honesty only.",
+      "شعارك على عروض الأسعار والفواتير وأوامر الشراء الصادرة. غير متوفر بعد — يُعرض للشفافية فقط.",
     ),
-    usdMonthlyMinor: 200,
-    aedMonthlyMinor: 800,
-    availability: "available",
-    features: ["feat.branding_docs"],
+    usdMonthlyMinor: 0,
+    aedMonthlyMinor: 0,
+    availability: "deferred",
+    availabilityNote: L(
+      "Document branding is not built yet and cannot be purchased.",
+      "العلامة على المستندات غير متوفرة بعد ولا يمكن شراؤها.",
+    ),
+    features: [],
     limitDeltas: {},
     stackable: false,
     sort: 200,
@@ -383,13 +405,17 @@ export const ADDONS: readonly AddonDef[] = [
     key: "addon.branding_app",
     names: L("Full in-app branding", "علامتك داخل التطبيق"),
     description: L(
-      "Your logo across the dashboard and application header for all your users.",
-      "شعارك في لوحة التحكم وواجهة التطبيق لجميع مستخدميك.",
+      "Your logo across the dashboard and application header. Not built yet — shown for roadmap honesty only.",
+      "شعارك في لوحة التحكم وواجهة التطبيق. غير متوفر بعد — يُعرض للشفافية فقط.",
     ),
-    usdMonthlyMinor: 100,
-    aedMonthlyMinor: 400,
-    availability: "available",
-    features: ["feat.branding_app"],
+    usdMonthlyMinor: 0,
+    aedMonthlyMinor: 0,
+    availability: "deferred",
+    availabilityNote: L(
+      "In-app branding is not built yet and cannot be purchased.",
+      "العلامة داخل التطبيق غير متوفرة بعد ولا يمكن شراؤها.",
+    ),
+    features: [],
     limitDeltas: {},
     stackable: false,
     sort: 210,
@@ -576,12 +602,14 @@ export const BUNDLES: readonly BundleDef[] = [
     key: "bundle.starter_ops",
     names: L("Starter Operations", "العمليات الأساسية"),
     description: L(
-      "Quote, invoice and share progress with your customers, with your logo on documents.",
-      "أصدر العروض والفواتير وشارك التقدم مع عملائك، مع شعارك على المستندات.",
+      "Quote, invoice and share progress with your customers.",
+      "أصدر العروض والفواتير وشارك التقدم مع عملائك.",
     ),
-    addonKeys: ["addon.quotes_invoices", "addon.customer_updates", "addon.branding_docs"],
-    usdMonthlyMinor: 900, // vs 1000 individually (−10%)
-    aedMonthlyMinor: 3300,
+    // 0070: addon.branding_docs removed (deferred — capability does not exist);
+    // price cut 900 → 700 to keep the discount genuine (pending owner ratification).
+    addonKeys: ["addon.quotes_invoices", "addon.customer_updates"],
+    usdMonthlyMinor: 700, // vs 800 individually (−12.5%)
+    aedMonthlyMinor: 2600, // vs 3000 individually (−13%)
     sort: 10,
   },
   {
@@ -653,9 +681,11 @@ export const BUNDLES: readonly BundleDef[] = [
     key: "bundle.full_ops",
     names: L("Full Operations", "العمليات الكاملة"),
     description: L(
-      "Every available module: billing, finance, procurement, costing, intelligence, imports, exports, audit and branding.",
-      "كل الوحدات المتاحة: الفوترة والمالية والمشتريات والتكاليف والذكاء والاستيراد والتصدير والتدقيق والعلامة.",
+      "Every available module: billing, finance, procurement, costing, intelligence, imports and audit.",
+      "كل الوحدات المتاحة: الفوترة والمالية والمشتريات والتكاليف والذكاء والاستيراد والتدقيق.",
     ),
+    // 0070: exports_extended + branding_docs + branding_app removed (deferred —
+    // capabilities do not exist). Members sum 6900 → 6300; price unchanged.
     addonKeys: [
       "addon.quotes_invoices",
       "addon.payments_ar",
@@ -671,12 +701,9 @@ export const BUNDLES: readonly BundleDef[] = [
       "addon.owner_digest",
       "addon.customer_updates",
       "addon.data_import",
-      "addon.exports_extended",
       "addon.audit_history",
-      "addon.branding_docs",
-      "addon.branding_app",
     ],
-    usdMonthlyMinor: 2900, // vs 6900 individually (−58%); the $25–45 "everything" market band
+    usdMonthlyMinor: 2900, // vs 6300 individually (−54%); the $25–45 "everything" market band
     aedMonthlyMinor: 10900,
     sort: 60,
   },

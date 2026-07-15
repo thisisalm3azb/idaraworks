@@ -1,18 +1,14 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Badge, Button, Card, CardHeader, EmptyState, Field } from "@/platform/ui";
 import { getT, getServerLocale } from "@/platform/i18n/server";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { can } from "@/platform/authz";
 import { TERM_KEYS } from "@/platform/registries";
-import {
-  TEMPLATE_BOATBUILDING,
-  diffConfig,
-  getInstalledTemplate,
-  listConfigRevisions,
-} from "@/platform/config";
+import { diffConfig, getInstalledTemplate, listConfigRevisions } from "@/platform/config";
 import { loadOrgTerminology, resolveTerm } from "@/platform/terminology";
 import { formatDateTime } from "@/platform/format";
-import { installTemplateAction, saveTermAction, undoRevisionAction } from "./actions";
+import { saveTermAction, undoRevisionAction } from "./actions";
 
 export default async function ConfigurationPage({
   params,
@@ -33,7 +29,6 @@ export default async function ConfigurationPage({
   const installedTemplate = await getInstalledTemplate(resolved.ctx);
   const revisions = await listConfigRevisions(resolved.ctx, 20);
 
-  const install = installTemplateAction.bind(null, orgId);
   const saveTerm = saveTermAction.bind(null, orgId);
   const undo = undoRevisionAction.bind(null, orgId);
 
@@ -63,14 +58,18 @@ export default async function ConfigurationPage({
             })}
           </p>
         ) : (
+          // No template installed yet: never one-click install a hardcoded template here
+          // (review fix) — route through the onboarding wizard, which carries the full
+          // template catalogue, the classifier's recommendation, and the pre-apply
+          // disclosure of exactly what an install changes.
           <div className="flex flex-col gap-3">
-            <p className="text-sm text-ink-secondary">
-              {t("config.install.desc", { template: TEMPLATE_BOATBUILDING.key })}
-            </p>
-            <form action={install}>
-              <input type="hidden" name="template_key" value={TEMPLATE_BOATBUILDING.key} />
-              <Button type="submit">{t("config.install.cta")}</Button>
-            </form>
+            <p className="text-sm text-ink-secondary">{t("config.setup.desc")}</p>
+            <Link
+              href={`/o/${orgId}/onboarding`}
+              className="inline-flex min-h-11 items-center justify-center gap-2 self-start rounded-md bg-brand px-4 text-sm font-medium text-ink-inverse transition-colors hover:bg-brand-strong"
+            >
+              {t("config.setup.cta")}
+            </Link>
           </div>
         )}
       </Card>

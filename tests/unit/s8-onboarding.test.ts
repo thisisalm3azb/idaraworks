@@ -44,7 +44,13 @@ describe("buildGroundedProposal (deterministic manual fallback)", () => {
   it("surfaces an out-of-plan requested feature as requires_upgrade (never applied)", () => {
     const p = buildGroundedProposal(baseIntake);
     expect(p.requires_upgrade).toContain("feat.sso"); // not in the always-on set
-    expect(p.requires_upgrade).not.toContain("feat.ai_narration"); // always-on
+    // feat.ai_narration is NOT enabled on the free plan (0065 add-on model) —
+    // it must be reported as requires_upgrade, never silently treated as free.
+    expect(p.requires_upgrade).toContain("feat.ai_narration");
+    const p2 = buildGroundedProposal(
+      OnboardingIntakeSchema.parse({ ...baseIntake, requested_features: ["feat.custom_fields"] }),
+    );
+    expect(p2.requires_upgrade).toEqual([]); // free-plan-enabled → never an upgrade
   });
 
   it("produces a structurally valid proposal that passes the validator", () => {

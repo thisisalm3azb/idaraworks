@@ -59,13 +59,21 @@ export async function installTemplate(ctx: Ctx, templateKey: string): Promise<In
     );
   }
 
-  // Org country picks the holiday calendar (F-41); fall back to the first shipped.
+  // Org country picks the holiday calendar (F-41). Templates ship AE + SA calendars
+  // (blocks.ts gccHolidayCalendars2026); a country WITHOUT a shipped calendar (KW/BH/OM/QA)
+  // falls back to the AE calendar EXPLICITLY — not "first manifest key wins", which was an
+  // accident of object literal order — until per-country calendars ship (editable in
+  // Settings after install either way). Note: this reads the org row's country; the
+  // onboarding wizard's intake.country is not threaded into this call (that would change
+  // installTemplate's signature and its callers — documented residual).
   const orgRows = (await withCtx(ctx, (tx) =>
     tx.execute(sql`select country from public.org where id = ${ctx.orgId}`),
   )) as unknown as Array<{ country: string }>;
   const country = orgRows[0]?.country?.trim() ?? "AE";
   const calendar =
-    manifest.holiday_calendars[country] ?? Object.values(manifest.holiday_calendars)[0];
+    manifest.holiday_calendars[country] ??
+    manifest.holiday_calendars["AE"] ??
+    Object.values(manifest.holiday_calendars)[0];
 
   const revisionIds: string[] = [];
   const apply = async (key: string, value: unknown, what: string) => {

@@ -85,11 +85,14 @@ describe("add-on catalogue integrity", () => {
     );
   });
 
-  it("the owner's five anchors are kept", () => {
+  it("the owner's anchors are kept (branding anchors dormant since the 0070 reclass)", () => {
     expect(getAddon("addon.members_10")!.usdMonthlyMinor).toBe(500);
     expect(getAddon("addon.quotes_invoices")!.usdMonthlyMinor).toBe(500);
-    expect(getAddon("addon.branding_docs")!.usdMonthlyMinor).toBe(200);
-    expect(getAddon("addon.branding_app")!.usdMonthlyMinor).toBe(100);
+    // 0070 honesty reclass: no branding capability exists, so the owner's $2/$1
+    // branding anchors are deferred ($0, unpurchasable) until branding ships —
+    // the anchor VALUES live on in docs/commercial/ADDON_CATALOGUE.md.
+    expect(getAddon("addon.branding_docs")!.availability).toBe("deferred");
+    expect(getAddon("addon.branding_app")!.availability).toBe("deferred");
     // Accounting ≈ $9 → the Finance bundle price.
     expect(BUNDLES.find((b) => b.key === "bundle.finance")!.usdMonthlyMinor).toBe(900);
   });

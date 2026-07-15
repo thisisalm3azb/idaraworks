@@ -22,16 +22,23 @@ import {
   APPROVAL_SUBJECTS,
 } from "./proposal";
 
-// Features available on every tier at this stage (release-gated, not tier-gated) — anything
-// an operator requests outside this set is surfaced as requires_upgrade, never applied.
-// (The add-on model refines this into entitlement-aware computation at apply time.)
-const ALWAYS_ON_FEATURES = new Set([
+// Features enabled on EVERY plan — i.e. exactly the FREE plan's enabled feature set,
+// mirroring the free-plan plan_entitlement seed in supabase/migrations/0065_addon_model.sql
+// (0065 seeds every entitlement_def of kind 'feature' for 'free', enabled only for this
+// list). Anything an operator requests outside this set is surfaced as requires_upgrade,
+// never applied — so this set must NEVER over-claim (an extra key here under-reports
+// requires_upgrade). Keep in sync with 0065 / later plan reseeds; guarded by
+// tests/unit/onboarding-intake-terms.test.ts.
+export const ALWAYS_ON_FEATURES = new Set([
+  "cap.jobs",
+  "cap.daily_reports",
+  "cap.issues",
+  "cap.customers",
+  "cap.people",
   "feat.ai_onboarding",
-  "feat.ai_narration",
   "feat.ai_drafts",
   "feat.custom_fields",
   "feat.org_terminology_overrides",
-  "feat.audit_export",
 ]);
 
 const COUNTRY_LABEL: Record<string, { en: string; ar: string }> = {
@@ -136,31 +143,43 @@ export function buildGroundedProposal(intake: OnboardingIntake): ConfigProposal 
     (f) => !ALWAYS_ON_FEATURES.has(f),
   );
 
-  // Terminology: if the founder's job term differs from the template's own,
-  // propose a terminology.overrides artifact so the chosen words are APPLIED
-  // (review finding: intake terms were previously echoed but silently dropped).
+  // Terminology: ONLY when the founder actually TYPED a job term that differs from the
+  // template's own do we propose a terminology.overrides artifact (so the chosen words are
+  // APPLIED, not just echoed). Blank intake terms mean the template's own term stands —
+  // no artifact, and no prose claiming the founder "chose" anything (review fix: the intake
+  // form previously defaulted to a domain word and installed it into every org).
   const artifacts: ProposalArtifact[] = [];
-  const templateJobEn = manifest?.terminology?.job?.en?.singular;
-  const templateJobAr = manifest?.terminology?.job?.ar?.singular;
-  if (
-    manifest &&
-    (intake.job_term_en !== (templateJobEn ?? "Job") ||
-      intake.job_term_ar !== (templateJobAr ?? "مهمة"))
-  ) {
+  const templateJobEn = manifest?.terminology?.job?.en?.singular ?? "Job";
+  const templateJobAr = manifest?.terminology?.job?.ar?.singular ?? "مهمة";
+  const typedEn = intake.job_term_en?.trim() || undefined;
+  const typedAr = intake.job_term_ar?.trim() || undefined;
+  const founderRenamed = Boolean(
+    (typedEn && typedEn !== templateJobEn) || (typedAr && typedAr !== templateJobAr),
+  );
+  const effJobEn = typedEn ?? templateJobEn;
+  const effJobAr = typedAr ?? templateJobAr;
+  if (manifest && founderRenamed) {
     artifacts.push({
       key: "terminology.overrides",
       value: {
         job: {
-          en: { singular: intake.job_term_en, plural: pluralizeEn(intake.job_term_en) },
+          en: { singular: effJobEn, plural: pluralizeEn(effJobEn) },
           // Arabic plurals are irregular — reuse the founder's term and let them
           // refine the plural in Settings → Configuration (editable any time).
-          ar: { singular: intake.job_term_ar, plural: intake.job_term_ar, gender: "m" as const },
+          ar: { singular: effJobAr, plural: effJobAr, gender: "m" as const },
         },
       },
-      rationale_en: `You chose to call your work items "${intake.job_term_en}" — this applies that name across the app (plural forms are editable in Settings).`,
-      rationale_ar: `اخترت تسمية وحدات العمل "${intake.job_term_ar}" — يعتمد هذا الاسم في التطبيق كاملاً (يمكن تعديل صيغة الجمع من الإعدادات).`,
+      rationale_en: `You chose to call your work items "${effJobEn}" — this applies that name across the app (plural forms are editable in Settings).`,
+      rationale_ar: `اخترت تسمية وحدات العمل "${effJobAr}" — يعتمد هذا الاسم في التطبيق كاملاً (يمكن تعديل صيغة الجمع من الإعدادات).`,
     });
   }
+  // Honest prose: a typed term is the founder's naming; a blank one keeps the template's.
+  const termClauseEn = founderRenamed
+    ? `work items called "${effJobEn}"`
+    : `work items keep the template's own term "${templateJobEn}"`;
+  const termClauseAr = founderRenamed
+    ? `تُسمّى وحدات العمل "${effJobAr}"`
+    : `تبقى تسمية وحدات العمل كما في القالب "${templateJobAr}"`;
 
   return {
     template_key: selected.key,
@@ -172,8 +191,8 @@ export function buildGroundedProposal(intake: OnboardingIntake): ConfigProposal 
     artifacts,
     approval_defaults,
     requires_upgrade,
-    intake_summary_en: `${intake.business_name} — a ${c.en} ${vatEn} business on a ${week} working week, base currency ${intake.base_currency}, work items called "${intake.job_term_en}". Grounded on the ${templateNameEn} template.`,
-    intake_summary_ar: `${intake.business_name} — منشأة في ${c.ar}، ${vatAr}، أسبوع عمل ${weekAr}، العملة ${intake.base_currency}، تُسمّى وحدات العمل "${intake.job_term_ar}". مبنية على قالب ${templateNameAr}.`,
+    intake_summary_en: `${intake.business_name} — a ${c.en} ${vatEn} business on a ${week} working week, base currency ${intake.base_currency}, ${termClauseEn}. Grounded on the ${templateNameEn} template.`,
+    intake_summary_ar: `${intake.business_name} — منشأة في ${c.ar}، ${vatAr}، أسبوع عمل ${weekAr}، العملة ${intake.base_currency}، ${termClauseAr}. مبنية على قالب ${templateNameAr}.`,
   };
 }
 

@@ -286,8 +286,19 @@ export async function applyAddonChange(
   payload: AddonChangePayload,
   eventRef: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  if (!getAddon(payload.addon_key)) {
+  const def = getAddon(payload.addon_key);
+  if (!def) {
     return { ok: false, error: `unknown addon key ${payload.addon_key}` };
+  }
+  // HONESTY LAW at the webhook wall too (the DB wall blocks only 'deferred'): an ACTIVATION of a
+  // non-purchasable add-on is refused even on a correctly-signed provider event. Flipping an
+  // already-granted non-purchasable key to removal_scheduled/removed must STILL pass — ops-granted
+  // gated add-ons are removed through this same path.
+  if (payload.status === "active" && !isPurchasable(def)) {
+    return {
+      ok: false,
+      error: `addon ${payload.addon_key} is not purchasable (${def.availability})`,
+    };
   }
   try {
     await db.execute(sql`
@@ -394,7 +405,14 @@ export async function changePlan(
   const mode: "immediate" | "scheduled" = sort.nxt > sort.cur ? "immediate" : "scheduled";
   // Fake provider (dev/test): model provider → webhook. A real provider is told via its API and
   // emits the webhook that this same processor applies (no different code path at activation).
-  await emitFakeSignal(ctx.orgId, "plan_changed", { planKey: newPlanKey, planChangeMode: mode });
+  // The linkage is established first (org creation never sets provider_customer_id) and the
+  // outcome is CHECKED — a discarded 'unresolved' used to report every failure as success.
+  await ensureFakeProviderLinkage(ctx);
+  const out = await emitFakeSignal(ctx.orgId, "plan_changed", {
+    planKey: newPlanKey,
+    planChangeMode: mode,
+  });
+  assertWebhookApplied(out, `plan ${newPlanKey}`);
   return { mode };
 }
 
@@ -404,7 +422,14 @@ export type AddonChangeRequest = {
   /** Expands to its member add-ons, each tagged source 'bundle.<key>' (the SAME addon keys —
    * a bundle is a discounted collection, never a second entitlement system). */
   bundleKey?: string;
+  /** Schedules period-end removal of EVERY org_addon row sourced from this bundle
+   * (source = 'bundle.<key>') — the bundle-level counterpart of `removals`. */
+  removeBundleKey?: string;
 };
+
+/** Purchase quantities are bounded 1..99 (packs are small integers; anything else is a bug or an
+ * abuse attempt — refused, never silently clamped). */
+const MAX_ADDON_QUANTITY = 99;
 
 export type AddonChangeResult = {
   added: number;
@@ -429,12 +454,19 @@ export async function changeAddons(
   if (!provider.enabled) throw new BillingProviderDisabledError("changeAddons");
 
   // Expand the bundle, then dedupe by key (last wins) so one request emits one signal per add-on.
+  // Quantity law: bounds-checked 1..MAX_ADDON_QUANTITY; a non-stackable add-on is ALWAYS
+  // quantity 1 (stackable:false was previously unenforced — any quantity slipped through).
   const byKey = new Map<string, { quantity: number; source: string }>();
   for (const a of req.additions) {
-    byKey.set(a.addonKey, {
-      quantity: Math.max(1, Math.trunc(a.quantity ?? 1)),
-      source: "individual",
-    });
+    const def = getAddon(a.addonKey);
+    if (!def) throw new SubscriptionActionError(`unknown add-on ${a.addonKey}`);
+    const requested = Math.trunc(a.quantity ?? 1);
+    if (!Number.isFinite(requested) || requested < 1 || requested > MAX_ADDON_QUANTITY) {
+      throw new SubscriptionActionError(
+        `quantity for ${a.addonKey} must be between 1 and ${MAX_ADDON_QUANTITY}`,
+      );
+    }
+    byKey.set(a.addonKey, { quantity: def.stackable ? requested : 1, source: "individual" });
   }
   if (req.bundleKey) {
     const bundle = getBundle(req.bundleKey);
@@ -448,29 +480,59 @@ export async function changeAddons(
     if (!def) throw new SubscriptionActionError(`unknown add-on ${key}`);
     if (!isPurchasable(def)) throw new AddonUnavailableError(def.key, def.availability);
   }
+  if (req.removeBundleKey && !getBundle(req.removeBundleKey)) {
+    throw new SubscriptionActionError(`unknown bundle ${req.removeBundleKey}`);
+  }
 
-  // Removals: validate against the org's CURRENT add-ons (tenant read — org_addon is tenant-read-
-  // only) and compute the period-end deadline from the deterministic no-provider anchor
-  // (org_plan_state.period_start, set at org creation).
+  // One tenant read (org_addon is tenant-read-only): the org's CURRENT add-on rows + the
+  // deterministic no-provider period anchor (org_plan_state.period_start, set at org creation).
+  const { anchor, rows } = await withCtx(ctx, async (tx) => {
+    const plan = (await tx.execute(sql`
+      select period_start::text as period_start from public.org_plan_state
+      where org_id = ${ctx.orgId}`)) as unknown as Array<{ period_start: string }>;
+    const addons = (await tx.execute(sql`
+      select addon_key, quantity, status, source from public.org_addon
+      where org_id = ${ctx.orgId} and status in ('active','removal_scheduled')`)) as unknown as Array<{
+      addon_key: string;
+      quantity: number;
+      status: string;
+      source: string;
+    }>;
+    return { anchor: plan[0]?.period_start ?? null, rows: addons };
+  });
+
+  // Quantity-decrease law: a LOWER quantity than currently held is a period-end change, exactly
+  // like a removal (the org paid for the larger pack through the period) — it must never apply
+  // immediately. Chosen behaviour (the simpler correct one): REFUSE the request and point the
+  // caller at the removal/period-end path, rather than silently scheduling a partial decrease.
+  for (const [key, a] of byKey) {
+    const cur = rows.find((r) => r.addon_key === key && r.status === "active");
+    if (cur && a.quantity < Number(cur.quantity)) {
+      throw new SubscriptionActionError(
+        `add-on ${key} is active at quantity ${cur.quantity}; a decrease applies at period end — ` +
+          `remove the pack and re-add it at the lower quantity next period`,
+      );
+    }
+  }
+
+  // Removals: explicit keys + (removeBundleKey) every current row sourced from that bundle,
+  // validated against the org's CURRENT add-ons; the period-end deadline comes from the anchor.
   let removeAt: string | null = null;
   const removals: Array<{ addonKey: string; quantity: number; source: string }> = [];
-  if (req.removals.length > 0) {
-    const { anchor, rows } = await withCtx(ctx, async (tx) => {
-      const plan = (await tx.execute(sql`
-        select period_start::text as period_start from public.org_plan_state
-        where org_id = ${ctx.orgId}`)) as unknown as Array<{ period_start: string }>;
-      const addons = (await tx.execute(sql`
-        select addon_key, quantity, status, source from public.org_addon
-        where org_id = ${ctx.orgId} and status in ('active','removal_scheduled')`)) as unknown as Array<{
-        addon_key: string;
-        quantity: number;
-        status: string;
-        source: string;
-      }>;
-      return { anchor: plan[0]?.period_start ?? null, rows: addons };
-    });
+  const removalKeys = [...req.removals];
+  if (req.removeBundleKey) {
+    for (const r of rows) {
+      if (r.source === req.removeBundleKey && !removalKeys.includes(r.addon_key)) {
+        removalKeys.push(r.addon_key);
+      }
+    }
+    if (removalKeys.length === req.removals.length) {
+      throw new SubscriptionActionError(`bundle ${req.removeBundleKey} is not active`);
+    }
+  }
+  if (removalKeys.length > 0) {
     removeAt = monthlyPeriodEnd(anchor ? new Date(anchor) : new Date(), new Date());
-    for (const key of req.removals) {
+    for (const key of removalKeys) {
       if (!getAddon(key)) throw new SubscriptionActionError(`unknown add-on ${key}`);
       const cur = rows.find((r) => r.addon_key === key);
       if (!cur) throw new SubscriptionActionError(`add-on ${key} is not active`);
@@ -478,11 +540,14 @@ export async function changeAddons(
     }
   }
 
-  // Fake provider (dev/test): model provider → webhook, one addon_changed event per add-on. A real
-  // provider is told via its API and emits the webhooks this same processor applies. org_addon is
-  // NEVER written here — applyAddonChange (the webhook path) is the only writer.
+  // Fake provider (dev/test): establish the org↔provider linkage (org creation never sets
+  // provider_customer_id — without this EVERY normally-created org round-tripped to 'unresolved'),
+  // then model provider → webhook, one addon_changed event per add-on, CHECKING each outcome.
+  // A real provider is told via its API and emits the webhooks this same processor applies.
+  // org_addon is NEVER written here — applyAddonChange (the webhook path) is the only writer.
+  await ensureFakeProviderLinkage(ctx);
   for (const [key, a] of byKey) {
-    await emitFakeSignal(ctx.orgId, "addon_changed", {
+    const out = await emitFakeSignal(ctx.orgId, "addon_changed", {
       providerEventId: `${key}_${Date.now()}`, // per-add-on suffix — never collapses as a duplicate
       addonChange: {
         addon_key: key,
@@ -492,9 +557,10 @@ export async function changeAddons(
         source: a.source,
       },
     });
+    assertWebhookApplied(out, `add-on ${key}`);
   }
   for (const r of removals) {
-    await emitFakeSignal(ctx.orgId, "addon_changed", {
+    const out = await emitFakeSignal(ctx.orgId, "addon_changed", {
       providerEventId: `${r.addonKey}_${Date.now()}`,
       addonChange: {
         addon_key: r.addonKey,
@@ -504,8 +570,59 @@ export async function changeAddons(
         source: r.source,
       },
     });
+    assertWebhookApplied(out, `add-on ${r.addonKey}`);
   }
   return { added: byKey.size, removalScheduled: removals.length, removeAt };
+}
+
+/**
+ * A tenant-initiated change is only a success when the modelled webhook actually APPLIED:
+ * 'processed', or 'duplicate' (an idempotent replay of the same signal). Anything else —
+ * 'unresolved' (org↔provider linkage missing), 'unverified', 'ignored'/'failed' (the wall refused
+ * the payload) — must surface as a thrown error the action maps to the danger banner. The old code
+ * discarded the outcome, so every failure (including 'unresolved' for ALL normally-created orgs)
+ * was reported as success.
+ */
+function assertWebhookApplied(out: WebhookOutcome, what: string): void {
+  if (out.status === "processed" || out.status === "duplicate") return;
+  throw new SubscriptionActionError(
+    `change for ${what} was not applied (webhook outcome: ${out.status})`,
+  );
+}
+
+/**
+ * FAKE-PROVIDER ONLY: guarantee the org↔provider linkage the webhook resolver needs. Root cause
+ * of the 'unresolved' failure: org creation (app.create_org_with_owner) never sets
+ * provider_customer_id, so the modelled round-trip resolved NO org for every app-created org.
+ * Fix inside the fake path: persist the deterministic fake ids via the EXISTING DB sole writer
+ * `app.advance_subscription` (0053 — "a no-op (same state, same plan) still safely refreshes the
+ * linkage"; provider ids passed to it are persisted) on a no-context platform client. No new
+ * migration or writer function needed. Never runs in prod: getBillingProvider() resolves the
+ * DISABLED provider there (identity check below), and both callers throw
+ * BillingProviderDisabledError before reaching this. An EXISTING linkage is never overwritten —
+ * a broken/foreign linkage stays broken and surfaces as 'unresolved' via assertWebhookApplied.
+ */
+async function ensureFakeProviderLinkage(ctx: Ctx): Promise<void> {
+  if (getBillingProvider() !== fakeBillingProvider) return;
+  const row = await withCtx(ctx, async (tx) => {
+    const rows = (await tx.execute(sql`
+      select billing_state, provider_customer_id from public.org_plan_state
+      where org_id = ${ctx.orgId}`)) as unknown as Array<{
+      billing_state: string;
+      provider_customer_id: string | null;
+    }>;
+    return rows[0];
+  });
+  if (!row) throw new SubscriptionActionError("org has no plan state");
+  if (row.provider_customer_id) return;
+  const { db, end } = createAppDb({ max: 1 });
+  try {
+    await db.execute(sql`
+      select app.advance_subscription(${ctx.orgId}::uuid, ${row.billing_state}, null, 'fake',
+        ${`fake_cus_${ctx.orgId}`}, ${`fake_sub_${ctx.orgId}`})`);
+  } finally {
+    await end();
+  }
 }
 
 export type SubscriptionView = {

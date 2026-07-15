@@ -1,8 +1,15 @@
 # Add-on Catalogue — Recommended Launch Catalogue
 
 > **Source of truth:** `src/platform/entitlements/addons.ts` (code-owned; migration 0065 seeds
-> `addon_def`/`addon_price` from exactly these keys, integration-tested for DB ⇔ code parity).
+> `addon_def`/`addon_price` from exactly these keys; migration 0070 applied the
+> **enforcement-honesty reclassification**; integration-tested for DB ⇔ code parity).
 > This document is the human-readable mirror.
+>
+> **Enforcement parity (0070, tested):** every feature key granted by a purchasable add-on must be
+> enforced at a real `hasFeature`/`requireCapability` call site
+> (`tests/unit/addon-enforcement-parity.test.ts`). Add-ons whose capability existed nowhere —
+> `addon.exports_extended`, `addon.branding_docs`, `addon.branding_app` — were reclassified to
+> **deferred** ($0, unpurchasable, price rows deactivated) rather than sold as no-ops.
 >
 > **Prices:** USD base + AED companion, per month, **tax-exclusive**; **yearly = 10× monthly**
 > (two months free). Seeded `is_placeholder = true` — recommended pending owner ratification
@@ -67,11 +74,11 @@ Field/foreman seats are always free and unlimited; packs add office + viewer sea
 | Key | Name (EN / AR) | USD/mo | AED/mo | Enables | Availability | Stackable |
 |---|---|---|---|---|---|---|
 | `addon.data_import` | Data import tools / أدوات استيراد البيانات | $3 | 11 | `feat.data_import` | available | No |
-| `addon.exports_extended` | Extended data exports / تصدير بيانات موسّع | $3 | 11 | `feat.exports_extended` (core record exports remain free on every plan — never gates your data) | available | No |
-| `addon.audit_history` | Audit & compliance history / سجل التدقيق والامتثال | $4 | 15 | `feat.audit_export` | available | No |
-| `addon.branding_docs` | Your logo on documents / شعارك على المستندات | $2 | 8 | `feat.branding_docs` | available | No |
-| `addon.branding_app` | Full in-app branding / علامتك داخل التطبيق | $1 | 4 | `feat.branding_app` | available | No |
+| `addon.audit_history` | Audit & compliance history / سجل التدقيق والامتثال | $4 | 15 | `feat.audit_export` — gates the audit-log CSV export (settings/export option + a server-side 403 on the export route); the core data-portability entities stay free on every plan (FR-9) | available | No |
 | `addon.priority_support` | Priority support / دعم ذو أولوية | $9 | 33 | priority human support | manual_process — activation confirmed directly | No |
+
+> `addon.exports_extended`, `addon.branding_docs` and `addon.branding_app` were reclassified to
+> **deferred** by migration 0070 — see the Deferred section below.
 
 ## Credential-gated (visible, NOT purchasable until credentials exist)
 
@@ -85,7 +92,7 @@ Field/foreman seats are always free and unlimited; packs add office + viewer sea
 ## Deferred — NEVER purchasable
 
 These capabilities **do not exist yet**. They are shown for roadmap honesty only, carry **$0 / no
-price rows in 0065**, and can never be purchased: the honesty-law test, `isPurchasable()`, the
+active price rows**, and can never be purchased: the honesty-law test, `isPurchasable()`, the
 pricing UI and the service layer all reject them, and any bundle containing one would be
 unpurchasable (`bundleIsPurchasable`). No bundle contains one.
 
@@ -96,6 +103,13 @@ unpurchasable (`bundleIsPurchasable`). No bundle contains one.
 | `addon.multi_currency` | Multi-currency documents / مستندات متعددة العملات | Not built — deferred |
 | `addon.whatsapp_pack` | WhatsApp / messaging pack / باقة واتساب والمراسلة | Not built — deferred |
 | `addon.api_webhooks` | API & webhook access / الوصول البرمجي وWebhooks | Not built — deferred |
+| `addon.exports_extended` | Extended data exports / تصدير بيانات موسّع | Reclassified deferred (0070) — no extended export tier exists; the current export set is the always-free core (was $3/11) |
+| `addon.branding_docs` | Your logo on documents / شعارك على المستندات | Reclassified deferred (0070) — no document-branding capability exists; the owner's **$2 / AED 8** anchor is retained here for when it ships |
+| `addon.branding_app` | Full in-app branding / علامتك داخل التطبيق | Reclassified deferred (0070) — no in-app branding capability exists; the owner's **$1 / AED 4** anchor is retained here for when it ships |
+
+**Purchasable count after 0070: 19** (17 `available` + 2 `manual_process`) — one below the
+20-add-on directive minimum. Flagged for the owner: the honest fix is to ship one of the deferred
+capabilities (branding_docs is the cheapest to build), never to re-list a no-op.
 
 ## Yearly prices
 
