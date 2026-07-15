@@ -33,7 +33,13 @@ import {
 
 // Re-exported for app-layer consumers (BUILD_BIBLE §3.2: service.ts is the
 // module's only public surface — pages/actions never import module internals).
-export { LOGO_MAX_BYTES, LOGO_ALLOWED_MIMES } from "./validation";
+export {
+  LOGO_MAX_BYTES,
+  LOGO_ALLOWED_MIMES,
+  ACCENT_COLOR_RE,
+  validateLogoBytes,
+  checkLogoDimensions,
+} from "./validation";
 
 export class BrandingError extends Error {
   constructor(

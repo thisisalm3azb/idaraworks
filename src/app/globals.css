@@ -7,10 +7,11 @@
  * (accepted debt per S0 checklist self-review #1, issue UI-1).
  */
 :root {
-  /* surfaces */
-  --surface-page: #f7f7f5;
+  /* surfaces — the page canvas sits a clear step below the white cards (U5:
+     kill the pale-on-pale; cards must read as raised surfaces, not outlines) */
+  --surface-page: #f0f0ec;
   --surface-card: #ffffff;
-  --surface-sunken: #efefec;
+  --surface-sunken: #e8e8e3;
   --surface-inverse: #1c1c1a;
 
   /* text */
@@ -36,6 +37,18 @@
   --border: #dddcd7;
   --border-strong: #c2c1bb;
   --focus-ring: #0f6b5c;
+
+  /* org accent (U5): the org layout overrides --accent from org_branding when
+     feat.branding_app is on; unset → the platform brand. The accent NEVER
+     carries text directly — it drives indicator bars and soft tints only, so
+     any tenant-chosen #rrggbb stays WCAG-safe (ink text on soft tint). */
+  --accent: var(--brand);
+  --accent-soft: color-mix(in srgb, var(--accent) 12%, white);
+  --accent-line: color-mix(in srgb, var(--accent) 32%, white);
+
+  /* elevation (U5): subtle, one direction, never decorative glows */
+  --elevation-1: 0 1px 2px rgb(28 28 26 / 0.05), 0 1px 3px rgb(28 28 26 / 0.06);
+  --elevation-2: 0 4px 10px rgb(28 28 26 / 0.08), 0 2px 4px rgb(28 28 26 / 0.05);
 
   /* shape & touch */
   --radius-sm: 6px;
@@ -66,6 +79,11 @@
   --color-info-soft: var(--info-soft);
   --color-line: var(--border);
   --color-line-strong: var(--border-strong);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-line: var(--accent-line);
+  --shadow-card: var(--elevation-1);
+  --shadow-pop: var(--elevation-2);
   --radius-sm: var(--radius-sm);
   --radius-md: var(--radius-md);
   --radius-lg: var(--radius-lg);

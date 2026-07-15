@@ -27,10 +27,10 @@ export default async function JobsPage({
   searchParams,
 }: {
   params: Promise<{ orgId: string }>;
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; stage?: string; filter?: string }>;
 }) {
   const { orgId } = await params;
-  const { error } = await searchParams;
+  const { error, stage, filter } = await searchParams;
   const resolved = await resolveCtx(orgId);
   if (typeof resolved === "string") redirect("/");
   const t = await getT();
@@ -39,7 +39,22 @@ export default async function JobsPage({
   const jobTerm = term("job", terms, "singular");
   const jobsTerm = term("job", terms, "plural");
 
-  const jobs = await listJobs(resolved.ctx, resolved.archetype);
+  const allJobs = await listJobs(resolved.ctx, resolved.archetype);
+  // U5 dashboard deep-links: ?stage=<stage_key> and ?filter=overdue are
+  // DISPLAY filters over the already-authorised list (no new read path).
+  const today = new Date().toISOString().slice(0, 10);
+  const jobs = allJobs.filter((j) => {
+    if (stage && j.currentStageKey !== stage) return false;
+    if (filter === "overdue") {
+      return (
+        (j.statusCategory === "active" || j.statusCategory === "on_hold") &&
+        !!j.dueDate &&
+        j.dueDate < today
+      );
+    }
+    return true;
+  });
+  const filtered = jobs.length !== allJobs.length || !!stage || filter === "overdue";
   const statusLabels = await getJobStatusLabels(resolved.ctx, locale);
   const canCreate = can(resolved.archetype, "jobs.create");
   const presets = canCreate ? await listActivePresets(resolved.ctx, resolved.archetype) : [];
@@ -53,6 +68,14 @@ export default async function JobsPage({
     <div className="flex flex-col gap-4">
       <Card>
         <CardHeader title={t("jobs.title", { jobs: jobsTerm })} />
+        {filtered ? (
+          <p className="mb-3 flex items-center gap-2 text-xs text-ink-secondary">
+            <Badge tone="brand">{t("jobs.filtered", { jobs: jobsTerm })}</Badge>
+            <Link href={`/o/${orgId}/jobs`} className="text-brand hover:underline">
+              {t("jobs.filter_clear")}
+            </Link>
+          </p>
+        ) : null}
         {error === "limit" ? (
           <p className="mb-3 rounded-md bg-warning-soft p-3 text-sm text-warning">
             {t("jobs.limit_reached", { job: jobTerm, jobs: jobsTerm })}

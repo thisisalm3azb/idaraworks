@@ -7,7 +7,8 @@ import { requestOrigin } from "@/platform/auth/callback";
 import { sql, withUserCtx } from "@/platform/tenancy";
 import { supabaseServer } from "@/platform/tenancy/supabase";
 import { getSessionUser, listMyOrgs } from "@/platform/auth/resolve";
-import { acceptInvite, createOrgForUser, logAuthEvent } from "@/platform/auth/identity";
+import { acceptInvite, logAuthEvent } from "@/platform/auth/identity";
+import { getDraft } from "@/modules/onboarding/service";
 import { rateLimit } from "@/platform/http/rateLimit";
 import { LOCALE_COOKIE, normalizeLocale } from "@/platform/i18n";
 
@@ -172,20 +173,6 @@ export async function logMfaEventAction(
   await logAuthEvent({ userId: user.id, event, ...meta });
 }
 
-export async function createOrgAction(formData: FormData): Promise<void> {
-  const user = await getSessionUser();
-  if (!user) redirect("/login");
-  const orgId = await createOrgForUser(user.id, {
-    name: String(formData.get("name") ?? ""),
-    country: String(formData.get("country") ?? ""),
-    baseCurrency: String(formData.get("base_currency") ?? ""),
-    timezone: String(formData.get("timezone") ?? "Asia/Dubai"),
-    languages: ["en"],
-    sixDayWeek: formData.get("six_day") === "on",
-  });
-  redirect(`/o/${orgId}`);
-}
-
 export async function acceptInviteAction(formData: FormData): Promise<void> {
   const token = String(formData.get("token") ?? "");
   const user = await getSessionUser();
@@ -206,10 +193,25 @@ export async function acceptInviteAction(formData: FormData): Promise<void> {
   }
 }
 
-/** Root landing decision: session → first org or onboarding; else login. */
+/**
+ * Root landing decision (U4): session → workspace, or the pre-org onboarding
+ * flow. Users with an org (invite acceptors included) land in the org and
+ * never see the flow — EXCEPT a founder whose confirm chain created the org
+ * but failed mid-way (active draft carrying the org id): they resume at review
+ * to finish the remaining setup honestly. No-org users with an active draft
+ * resume at their saved step; brand-new users land on Welcome.
+ */
 export async function resolveLanding(): Promise<string> {
   const user = await getSessionUser();
   if (!user) return "/login";
+  const draft = await getDraft(user.id).catch(() => null);
+  const activeDraft = draft && draft.status === "active" ? draft : null;
   const orgs = await listMyOrgs(user.id);
-  return orgs[0] ? `/o/${orgs[0].orgId}` : "/onboarding";
+  if (orgs[0]) {
+    return activeDraft?.data.confirm.org_id ? "/onboarding?step=review" : `/o/${orgs[0].orgId}`;
+  }
+  if (activeDraft && activeDraft.step !== "welcome") {
+    return `/onboarding?step=${activeDraft.step}`;
+  }
+  return "/onboarding";
 }

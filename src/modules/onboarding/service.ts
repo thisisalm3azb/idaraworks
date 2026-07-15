@@ -16,10 +16,86 @@ import type { RoleArchetype } from "@/platform/registries";
 import { hasFeature, checkLimit } from "@/platform/entitlements/resolve";
 import { installTemplate, applyConfigChange, previewConfigChange } from "@/platform/config";
 import { undoRevision, ConfigGuardError } from "@/platform/config";
+import { createOrgForUser } from "@/platform/auth/identity";
 import { createApprovalRule } from "@/modules/approvals/service";
 import { getOnboardingProvider } from "./provider";
 import { validateProposal } from "./validate";
 import { OnboardingIntakeSchema, ConfigProposalSchema, type ConfigProposal } from "./proposal";
+import { draftToIntake, DraftIncompleteError, type ConfirmState } from "./flow";
+import {
+  applyDraftBranding,
+  claimDraftConfirm,
+  completeDraft,
+  getDraft,
+  recordTierSelection,
+  releaseDraftConfirmClaim,
+  stashConfirmProgress,
+} from "./draft";
+
+// ── U4 pre-org flow public surface (BUILD_BIBLE §3.2: service.ts is the module's
+// only public surface — the app layer imports the draft/flow API through here). ──
+export {
+  getDraft,
+  saveDraft,
+  completeDraft,
+  recordTierSelection,
+  applyDraftBranding,
+  stashDraftLogo,
+  removeDraftLogo,
+  type OnboardingDraft,
+} from "./draft";
+export {
+  FLOW_STEPS,
+  isFlowStep,
+  nextStepAfter,
+  prevStepBefore,
+  stepProgressPct,
+  stepsRemaining,
+  stepComplete,
+  firstIncompleteStep,
+  resolveStep,
+  applyStepAnswers,
+  emptyDraftData,
+  recommendationForDraft,
+  buildClassifierText,
+  draftToIntake,
+  buildReviewSummary,
+  reviewMonthlyMinor,
+  effectiveUsersBand,
+  effectiveCustomerSharing,
+  askUsersBand,
+  askDepartments,
+  askWorkflowDescription,
+  askCustomerSharing,
+  DraftDataSchema,
+  DraftAnswersSchema,
+  TierSelectionSchema,
+  DraftBrandingSchema,
+  FlowValidationError,
+  DraftIncompleteError,
+  TIER_SETTING_KEY,
+  INDUSTRIES,
+  EMPLOYEE_BANDS,
+  USER_BANDS,
+  LOCATION_BANDS,
+  DEPARTMENTS,
+  WORK_PATTERNS,
+  WORK_INTAKE,
+  CAPABILITY_CHIPS,
+  DEVICES,
+  COUNTRY_DEFAULTS,
+  FLOW_CURRENCIES,
+  FLOW_TIMEZONES,
+  type DraftData,
+  type DraftAnswers,
+  type TierSelection,
+  type DraftBranding,
+  type FlowStep,
+  type FlowRecommendation,
+  type ReviewSummary,
+} from "./flow";
+export { selectTemplate, buildGroundedProposal } from "./provider";
+export { validateProposal } from "./validate";
 
 // Bind a JS array into an array COLUMN safely. Drizzle interpolates a bare `${jsArray}` as a
 // SQL value LIST — `()` for an empty array (a syntax error), `(a,b)` otherwise — never an array
@@ -330,4 +406,145 @@ export async function undoOnboarding(
     },
   );
   return { undone, retained };
+}
+
+// ── U4: the confirm chain (pre-org flow → real workspace) ─────────────────────
+export type ConfirmChainErrorCode = "no_draft" | "incomplete" | "in_progress" | "failed";
+
+export class ConfirmChainError extends OnboardingError {
+  constructor(
+    public readonly code: ConfirmChainErrorCode,
+    message: string,
+  ) {
+    super(message);
+    this.name = "ConfirmChainError";
+  }
+}
+
+export type ConfirmChainResult = { orgId: string; alreadyCompleted: boolean };
+
+/**
+ * THE single confirm action's engine (U4 §8): sequential + idempotent. Nothing
+ * before this ran against an org — the org creation, the template application
+ * (the ONLY one), the tier recording (app_settings; a recorded choice — no
+ * org_addon writes, no plan change, no payment) and the branding save all
+ * happen HERE, after the founder's explicit confirm.
+ *
+ * Idempotency: a per-draft claim (status-guarded, stale-reclaimable) blocks
+ * double submits; every completed link is stashed in the draft's confirm state,
+ * so a failure mid-chain (e.g. org created, template apply failed) is safe to
+ * retry — the next confirm resumes at the first unfinished link instead of
+ * creating a second org or re-applying the template.
+ *
+ * The creator is the org OWNER by construction (app.create_org_with_owner seeds
+ * the owner membership with cost+price privileges), so the chain runs under an
+ * owner ctx without a cookie-bound session — which also makes it directly
+ * integration-testable as a function.
+ */
+export async function runConfirmChain(userId: string): Promise<ConfirmChainResult> {
+  const draft = await getDraft(userId);
+  if (!draft) throw new ConfirmChainError("no_draft", "no onboarding draft to confirm");
+  if (draft.status === "completed") {
+    if (draft.data.confirm.org_id) {
+      return { orgId: draft.data.confirm.org_id, alreadyCompleted: true };
+    }
+    throw new ConfirmChainError("no_draft", "draft already completed without an organization");
+  }
+  if (!draft.data.tier) {
+    throw new ConfirmChainError("incomplete", "no subscription choice was made");
+  }
+  // Validate the full intake BEFORE claiming — an incomplete draft never claims.
+  let intake;
+  try {
+    intake = draftToIntake(draft.data);
+  } catch (err) {
+    if (err instanceof DraftIncompleteError) {
+      throw new ConfirmChainError("incomplete", err.message);
+    }
+    throw err;
+  }
+
+  const claimed = await claimDraftConfirm(userId);
+  if (!claimed) {
+    throw new ConfirmChainError("in_progress", "workspace creation is already running");
+  }
+
+  // Local mirror of the stash so each link sees prior progress without re-reads.
+  const confirm: ConfirmState = { ...draft.data.confirm };
+  const stash = async (patch: Partial<ConfirmState>) => {
+    Object.assign(confirm, patch);
+    await stashConfirmProgress(userId, patch);
+  };
+
+  try {
+    // 1 — organization (existing bootstrap; resumed if a previous run got here).
+    let orgId = confirm.org_id;
+    if (!orgId) {
+      orgId = await createOrgForUser(userId, {
+        name: intake.business_name,
+        country: intake.country,
+        baseCurrency: intake.base_currency,
+        timezone: draft.data.answers.timezone ?? "Asia/Dubai",
+        languages: intake.languages,
+        sixDayWeek: intake.six_day_week,
+      });
+      await stash({ org_id: orgId });
+    }
+    const ctx: Ctx = {
+      orgId,
+      userId,
+      costPrivileged: true, // the owner role seeded by create_org_with_owner
+      pricePrivileged: true,
+      requestId: "onboarding-confirm",
+    };
+
+    // 2 — template application through the governed S8 pipeline (the ONLY
+    // application; config.template is absent until this point).
+    if (!confirm.applied) {
+      let sessionId = confirm.session_id;
+      if (!sessionId) {
+        const started = await startOnboarding(ctx, "owner", intake);
+        sessionId = started.sessionId;
+        await stash({ session_id: sessionId });
+      }
+      try {
+        await applyOnboarding(ctx, "owner", sessionId);
+      } catch (err) {
+        // A prior run may have applied but died before stashing — that is success.
+        if (!(err instanceof OnboardingError && /already applied/i.test(err.message))) throw err;
+      }
+      await stash({ applied: true });
+    }
+
+    // 3 — record the tier selection (app_settings only — never entitlements).
+    if (!confirm.tier_recorded) {
+      await recordTierSelection(ctx, draft.data.tier);
+      await stash({ tier_recorded: true });
+    }
+
+    // 4 — branding stash through the real service (skippable; may be empty).
+    if (!confirm.branding_saved) {
+      await applyDraftBranding(
+        ctx,
+        "owner",
+        draft.data.branding,
+        draft.data.answers.business_name ?? null,
+      );
+      await stash({ branding_saved: true });
+    }
+
+    // 5 — close the draft. The claim marker stays on the completed row as the
+    // record of when the chain ran; completed drafts are never claimed again.
+    await completeDraft(userId);
+    return { orgId, alreadyCompleted: false };
+  } catch (err) {
+    // Release the claim so the founder can retry; progress stashes are kept —
+    // the retry resumes exactly at the failed link (honest, no duplication).
+    await releaseDraftConfirmClaim(userId).catch(() => {});
+    if (err instanceof ConfirmChainError) throw err;
+    throw new ConfirmChainError(
+      "failed",
+      `workspace setup did not finish: ${(err as Error).message}`,
+    );
+  }
 }

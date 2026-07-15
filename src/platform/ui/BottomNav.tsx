@@ -8,31 +8,26 @@ export type BottomNavItem = {
   href: string;
   active?: boolean;
   badge?: number;
+  /** Render as a button instead of a link (e.g. the "More" drawer trigger). */
+  onSelect?: () => void;
 };
 
 /**
- * Mobile bottom navigation — the field user's primary chrome (v2 §13).
- * Hidden on md+ where the AppShell header takes over. Items are role-scoped
- * by the caller; this component renders at most 5.
+ * Mobile bottom navigation — the field user's primary chrome (v2 §13),
+ * MOUNTED by the U5 org shell. Hidden on md+ where the sidebar takes over.
+ * Items are role-scoped by the caller; this component renders at most 5.
  * Touch targets ≥ 44px (BUILD_BIBLE §9.2).
  */
 export function BottomNav({ items }: { items: BottomNavItem[] }) {
   return (
     <nav
       aria-label="Primary"
-      className="fixed inset-x-0 bottom-0 z-10 border-t border-line bg-card md:hidden"
+      className="fixed inset-x-0 bottom-0 z-20 border-t border-line bg-card pb-[env(safe-area-inset-bottom)] md:hidden"
     >
       <ul className="mx-auto flex max-w-md items-stretch justify-around">
-        {items.slice(0, 5).map((item) => (
-          <li key={item.key} className="flex-1">
-            <a
-              href={item.href}
-              aria-current={item.active ? "page" : undefined}
-              className={cn(
-                "flex min-h-14 flex-col items-center justify-center gap-0.5 px-1 text-xs",
-                item.active ? "font-semibold text-brand" : "text-ink-secondary",
-              )}
-            >
+        {items.slice(0, 5).map((item) => {
+          const inner = (
+            <>
               <span aria-hidden className="relative text-lg leading-none">
                 {item.icon}
                 {item.badge ? (
@@ -41,10 +36,31 @@ export function BottomNav({ items }: { items: BottomNavItem[] }) {
                   </span>
                 ) : null}
               </span>
-              <span>{item.label}</span>
-            </a>
-          </li>
-        ))}
+              <span className="max-w-full truncate">{item.label}</span>
+            </>
+          );
+          const className = cn(
+            "flex min-h-14 w-full flex-col items-center justify-center gap-0.5 px-1 text-xs",
+            item.active ? "font-semibold text-accent" : "text-ink-secondary",
+          );
+          return (
+            <li key={item.key} className="min-w-0 flex-1">
+              {item.onSelect ? (
+                <button type="button" onClick={item.onSelect} className={className}>
+                  {inner}
+                </button>
+              ) : (
+                <a
+                  href={item.href}
+                  aria-current={item.active ? "page" : undefined}
+                  className={className}
+                >
+                  {inner}
+                </a>
+              )}
+            </li>
+          );
+        })}
       </ul>
     </nav>
   );

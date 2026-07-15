@@ -234,6 +234,8 @@ export type JobRow = {
   dueDate?: string | null;
   progress?: number | null;
   progressOverridden?: boolean;
+  /** Current stage key (U5 dashboard deep-links filter the list by it). */
+  currentStageKey?: string | null;
 };
 
 export async function listJobs(ctx: Ctx, archetype: RoleArchetype): Promise<JobRow[]> {
@@ -245,11 +247,13 @@ export async function listJobs(ctx: Ctx, archetype: RoleArchetype): Promise<JobR
       select j.id::text as id, j.reference, j.name, j.status_key, j.status_category,
              p.code as preset_code, c.name as customer_name, j.created_at::text as created_at,
              j.due_date::text as due_date, j.progress_override,
+             cs.stage_key as current_stage_key,
              (select coalesce(json_agg(json_build_object('weight', s.weight, 'status', s.status)), '[]'::json)
                 from public.job_stage s where s.job_id = j.id) as stages
       from public.job j
       left join public.job_preset p on p.id = j.preset_id
       left join public.customer c on c.id = j.customer_id
+      left join public.job_stage cs on cs.id = j.current_stage_id
       where j.org_id = ${ctx.orgId} and j.archived = false
         ${foreman ? sql`and ${assignedJobCondition(ctx)}` : sql``}
       order by j.created_at desc
@@ -265,6 +269,7 @@ export async function listJobs(ctx: Ctx, archetype: RoleArchetype): Promise<JobR
     created_at: string;
     due_date: string | null;
     progress_override: number | null;
+    current_stage_key: string | null;
     stages: StageForProgress[];
   }>;
   return rows.map((r) => ({
@@ -280,6 +285,7 @@ export async function listJobs(ctx: Ctx, archetype: RoleArchetype): Promise<JobR
     progress:
       r.progress_override !== null ? Number(r.progress_override) : computeProgress(r.stages),
     progressOverridden: r.progress_override !== null,
+    currentStageKey: r.current_stage_key,
   }));
 }
 

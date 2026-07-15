@@ -20,6 +20,18 @@ import { listOpenExceptions } from "@/modules/exceptions/service";
 import { computeAR } from "@/modules/invoices/service";
 import type { RoleArchetype } from "@/platform/registries";
 
+// U5 dashboard extras — the read-only aggregates behind the redesigned Today
+// screens (service.ts stays the module's only public surface, §3.2).
+export {
+  getDashboardExtras,
+  type DashboardExtras,
+  type StageSlice,
+  type TrendSeriesData,
+  type TrendPointData,
+  type DeadlineRow,
+  type OrgActivityRow,
+} from "./dashboard";
+
 export type FreshnessStamp = { computedAt: string; lastInputAt?: string | null };
 export type TodayCard = {
   key: string;
