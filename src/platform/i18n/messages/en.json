@@ -1142,6 +1142,7 @@
   "subscription.tier.change_one_liner": "Change any time — upgrades apply now, downgrades at period end.",
   "subscription.tier.your_plan": "Your current plan",
   "subscription.confirm.review": "Review the change",
+  "subscription.confirm.go_free": "Switching to Free schedules removal of your paid add-ons at the end of the current period. Your data is never deleted.",
   "subscription.builder.title": "Build your plan",
   "subscription.builder.back": "Back to comparison",
   "subscription.builder.reset": "Reset",

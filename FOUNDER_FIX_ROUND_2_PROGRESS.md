@@ -27,9 +27,9 @@ regression coverage, then run a complete founder-flow regression before another 
 | --- | --- | --- |
 | R0 | Baseline + tracker + inventory | ✅ |
 | R1 | Reproduce defects 2/3/4/5 in the DEPLOYED app (synthetic user+org, Playwright, real errors captured) | 🔄 |
-| R2 | Root-cause fixes (5 parallel/sequenced agents: logo, suppliers/master-data, menu, onboarding pricing redesign v2, subscription management) + error-quality | ⏳ |
+| R2 | Root-cause fixes (4 agents: logo, master-data, menu, subscription redesign+management) + error-quality | ✅ committed `e66bf29` — unit 650/650, typecheck/lint/build clean; full hosted integration running |
 | R3 | Complete founder-flow regression (3 synthetic orgs: construction, manufacturing, service/store) + error-message audit | ⏳ |
-| R4 | Independent adversarial review (visual + security + reliability) + fixes | ⏳ |
+| R4 | Independent adversarial review (visual + security) + fixes | ✅ security CLEAN (governed auth/isolation) + visual: 1 MATERIAL (F1 onboarding tier grid crammed by max-w-2xl) + minors — ALL fixed w/ regressions |
 | R5 | Gates + CI + deploy + production verification/evidence + guarded cleanup + final report | ⏳ |
 
 ## Reproduced defects / root causes (R1 — confirmed from deployed build 85f56e2 + code)

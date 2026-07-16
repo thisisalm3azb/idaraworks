@@ -26,6 +26,10 @@ import { requestLogger } from "@/platform/logger";
 import { ForbiddenError } from "@/platform/authz";
 import { BillingReadOnlyError, CapabilityRequiredError } from "@/platform/entitlements";
 
+/** Field names whose values must NEVER be echoed into the redirect URL (PII +
+ * pricing land in browser history / access logs otherwise — review finding). */
+const SENSITIVE_ECHO = /email|phone|mobile|tax|price|cost|iban|account/i;
+
 /** Stable, safe error codes the master-data forms understand (i18n: masterdata.error.<code>). */
 export type MasterDataErrorCode =
   | "unauthorized"
@@ -175,8 +179,11 @@ export function failMasterDataAction(err: unknown, opts: FailContext): never {
   qs.set("error", code);
   qs.set("ref", correlationId);
   if (field) qs.set("field", field);
+  // Preserve typed values so the form is not wiped — but NEVER echo PII/pricing
+  // into the redirect URL (review: it lands in browser history + access logs).
+  // Sensitive fields are re-typed; the specific message + focused field guide the user.
   for (const [k, v] of Object.entries(opts.values)) {
-    if (v) qs.set(k, v.slice(0, 300));
+    if (v && !SENSITIVE_ECHO.test(k)) qs.set(k, v.slice(0, 300));
   }
   redirect(`${opts.base}?${qs.toString()}`);
 }

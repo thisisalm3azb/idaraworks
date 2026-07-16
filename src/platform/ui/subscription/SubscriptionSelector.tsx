@@ -116,6 +116,7 @@ export function SubscriptionSelector({
       selectTierAction={selectTierAction}
       selectFreeAction={selectFreeAction}
       confirmSelect={confirmSelect}
+      priceVersion={hiddenFields?.priceVersion}
       onOpenCustom={customAction ? () => setPanel("custom") : undefined}
       canManage={canManage}
       providerEnabled={providerEnabled}

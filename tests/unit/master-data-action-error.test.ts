@@ -143,12 +143,14 @@ describe("failMasterDataAction", () => {
     expect(qs.get("error")).toBe("invalid_email");
     expect(qs.get("ref")).toBe("req-abc-123");
     expect(qs.get("field")).toBe("email");
-    expect(qs.get("name")).toBe("Ok Co"); // preserved
-    expect(qs.get("email")).toBe("nope"); // preserved
-    expect(qs.has("phone")).toBe(false); // empty values are not echoed
+    expect(qs.get("name")).toBe("Ok Co"); // non-sensitive value preserved
+    // PII (email/phone) is NEVER echoed into the URL — it lands in history/logs otherwise.
+    expect(qs.has("email")).toBe(false);
+    expect(qs.has("phone")).toBe(false);
 
-    // Never leaks internals into the client-facing URL.
+    // Never leaks internals or PII into the client-facing URL.
     expect(url).not.toMatch(/ZodError|stack|insert into|select |password|token/i);
+    expect(url).not.toContain("nope"); // the email value is not in the URL
   });
 
   it("re-throws Next control-flow (redirect) errors untouched — never swallowed", () => {

@@ -37,6 +37,9 @@ export type TierCardsProps = {
   selectFreeAction?: (formData: FormData) => Promise<void>;
   /** Two-step inline confirm before posting a tier (settings surface). */
   confirmSelect?: boolean;
+  /** Current price-version fingerprint — posted with every tier/free change so the
+   * governed path's stale-price guard applies to bundle changes too (review F5). */
+  priceVersion?: string;
   /** Opens the in-page Custom builder (SubscriptionSelector). Preferred over a link. */
   onOpenCustom?: () => void;
   /** Fallback when there is no in-page builder (e.g. a read-only compare): a link. */
@@ -124,6 +127,7 @@ function TierCard({
   isCurrent,
   selectTierAction,
   confirmSelect,
+  priceVersion,
   canManage,
 }: {
   tier: SelectionTier;
@@ -135,6 +139,7 @@ function TierCard({
   isCurrent: boolean;
   selectTierAction?: (formData: FormData) => Promise<void>;
   confirmSelect?: boolean;
+  priceVersion?: string;
   canManage: boolean;
 }) {
   let extraSeats = 0;
@@ -219,6 +224,9 @@ function TierCard({
                 <p className="text-sm text-ink">{t("subscription.confirm.body")}</p>
                 <form action={selectTierAction} className="w-full">
                   <input type="hidden" name="bundle" value={tier.bundleKey} />
+                  {priceVersion ? (
+                    <input type="hidden" name="priceVersion" value={priceVersion} />
+                  ) : null}
                   <Button type="submit" variant={tier.tier === "medium" ? "primary" : "secondary"}>
                     {t("subscription.confirm.review")}
                   </Button>
@@ -228,6 +236,9 @@ function TierCard({
           ) : (
             <form action={selectTierAction}>
               <input type="hidden" name="bundle" value={tier.bundleKey} />
+              {priceVersion ? (
+                <input type="hidden" name="priceVersion" value={priceVersion} />
+              ) : null}
               <Button
                 type="submit"
                 variant={tier.tier === "medium" ? "primary" : "secondary"}
@@ -256,6 +267,7 @@ export function TierCards({
   selectTierAction,
   selectFreeAction,
   confirmSelect,
+  priceVersion,
   onOpenCustom,
   customHref,
   canManage,
@@ -289,11 +301,33 @@ export function TierCards({
           <p className="text-xs text-ink-muted">{t("subscription.tier.free_note")}</p>
           <div className="mt-auto pt-1">
             {canManage && selectFreeAction && current !== "free" ? (
-              <form action={selectFreeAction}>
-                <Button type="submit" variant="secondary" className="w-full">
-                  {t("subscription.tier.select", { tier: t("subscription.plan.free") })}
-                </Button>
-              </form>
+              confirmSelect ? (
+                <details>
+                  <summary className="inline-flex min-h-11 w-full cursor-pointer list-none items-center justify-center gap-2 rounded-md border border-line-strong bg-card px-4 text-sm font-semibold text-ink transition-colors hover:bg-sunken [&::-webkit-details-marker]:hidden">
+                    {t("subscription.tier.select", { tier: t("subscription.plan.free") })}
+                  </summary>
+                  <div className="mt-2 flex flex-col items-start gap-2 rounded-md border border-warning bg-warning-soft p-3">
+                    <p className="text-sm text-ink">{t("subscription.confirm.go_free")}</p>
+                    <form action={selectFreeAction} className="w-full">
+                      {priceVersion ? (
+                        <input type="hidden" name="priceVersion" value={priceVersion} />
+                      ) : null}
+                      <Button type="submit" variant="secondary">
+                        {t("subscription.confirm.review")}
+                      </Button>
+                    </form>
+                  </div>
+                </details>
+              ) : (
+                <form action={selectFreeAction}>
+                  {priceVersion ? (
+                    <input type="hidden" name="priceVersion" value={priceVersion} />
+                  ) : null}
+                  <Button type="submit" variant="secondary" className="w-full">
+                    {t("subscription.tier.select", { tier: t("subscription.plan.free") })}
+                  </Button>
+                </form>
+              )
             ) : current === "free" ? (
               <p className="text-center text-xs font-medium text-success">
                 {t("subscription.tier.your_plan")}
@@ -312,6 +346,7 @@ export function TierCards({
           isCurrent={current === "medium"}
           selectTierAction={selectTierAction}
           confirmSelect={confirmSelect}
+          priceVersion={priceVersion}
           canManage={canManage}
         />
         <TierCard
@@ -324,6 +359,7 @@ export function TierCards({
           isCurrent={current === "high"}
           selectTierAction={selectTierAction}
           confirmSelect={confirmSelect}
+          priceVersion={priceVersion}
           canManage={canManage}
         />
 
@@ -336,7 +372,7 @@ export function TierCards({
             ) : null}
           </div>
           <div className="flex flex-col gap-0.5">
-            <p className="text-2xl font-bold tracking-tight text-ink">
+            <p className="text-3xl font-bold tracking-tight text-ink">
               {t("subscription.tier.custom_price")}
             </p>
             <p className="text-xs text-ink-muted">

@@ -1142,6 +1142,7 @@
   "subscription.tier.change_one_liner": "غيّر في أي وقت — الترقيات الآن والتخفيضات في نهاية الفترة.",
   "subscription.tier.your_plan": "خطتك الحالية",
   "subscription.confirm.review": "راجِع التغيير",
+  "subscription.confirm.go_free": "التبديل إلى المجانية يُجدوِل إزالة الإضافات المدفوعة في نهاية الفترة الحالية. لا تُحذف بياناتك أبداً.",
   "subscription.builder.title": "أنشئ خطتك",
   "subscription.builder.back": "العودة إلى المقارنة",
   "subscription.builder.reset": "إعادة تعيين",

@@ -111,9 +111,14 @@ export default async function OnboardingFlowPage({
     }
   })();
 
+  // The plan step shows four side-by-side tier cards — it needs the full width the
+  // settings page has (review F1: max-w-2xl crushed the 4-up grid to ~148px columns
+  // on the founder's purchase screen). Every other step is a single-column form.
+  const wide = effectiveStep === "plan";
+
   return (
     <AppShell brand={<span>IdaraWorks</span>} actions={<LanguageToggle />}>
-      <div className="mx-auto flex w-full max-w-2xl flex-col gap-4">
+      <div className={`mx-auto flex w-full flex-col gap-4 ${wide ? "max-w-6xl" : "max-w-2xl"}`}>
         {effectiveStep !== "welcome" ? (
           <div className="flex flex-col gap-1.5">
             <div className="flex items-center justify-between text-xs text-ink-muted">

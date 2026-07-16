@@ -1,0 +1,38 @@
+login -> /onboarding
+step0 /onboarding [Welcome to IdaraWorks] file=0
+  clicked: submit
+step1 /onboarding [Welcome to IdaraWorks] file=0
+  clicked: submit
+step2 /onboarding [Welcome to IdaraWorks] file=0
+  clicked: submit
+step3 /onboarding [Welcome to IdaraWorks] file=0
+  clicked: submit
+step4 /onboarding [Welcome to IdaraWorks] file=0
+  clicked: submit
+step5 /onboarding [Welcome to IdaraWorks] file=0
+  clicked: submit
+step6 /onboarding [Welcome to IdaraWorks] file=0
+  clicked: submit
+step7 /onboarding [Welcome to IdaraWorks] file=0
+  clicked: submit
+step8 /onboarding [Welcome to IdaraWorks] file=0
+  clicked: submit
+step9 /onboarding [Welcome to IdaraWorks] file=0
+  clicked: submit
+step10 /onboarding [Welcome to IdaraWorks] file=0
+  clicked: submit
+step11 /onboarding [Welcome to IdaraWorks] file=0
+  clicked: submit
+step12 /onboarding [Welcome to IdaraWorks] file=0
+  clicked: submit
+step13 /onboarding [Welcome to IdaraWorks] file=0
+  clicked: submit
+step14 /onboarding [Welcome to IdaraWorks] file=0
+  clicked: submit
+step15 /onboarding [Welcome to IdaraWorks] file=0
+  clicked: submit
+
+LOGO_RESULT=not-reached
+
+FAILS:
+[]

@@ -1,0 +1,29 @@
+url /onboarding?step=branding head=[Make it yours]
+file inputs=1
+PNG-300x120: SUCCESS preview_imgs=1
+transparent: SUCCESS preview_imgs=1
+JPG: SUCCESS preview_imgs=1
+
+POSTs:
+[
+ {
+  "s": 303,
+  "u": "/login",
+  "reqid": "e2f504c7-3dc7-44a8-be2b-f5b22fb1db8a"
+ },
+ {
+  "s": 200,
+  "u": "/onboarding?step=branding",
+  "reqid": "09e55abe-fdcb-493c-8598-287aaf22855a"
+ },
+ {
+  "s": 200,
+  "u": "/onboarding?step=branding",
+  "reqid": "06b70c68-44f4-476b-9085-9593e9ef8950"
+ },
+ {
+  "s": 200,
+  "u": "/onboarding?step=branding",
+  "reqid": "f53a4f14-f1be-45e7-8b10-3647b181fcf1"
+ }
+]
