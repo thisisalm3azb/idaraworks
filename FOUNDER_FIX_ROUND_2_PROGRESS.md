@@ -26,11 +26,11 @@ regression coverage, then run a complete founder-flow regression before another 
 | # | Phase | Status |
 | --- | --- | --- |
 | R0 | Baseline + tracker + inventory | ✅ |
-| R1 | Reproduce defects 2/3/4/5 in the DEPLOYED app (synthetic user+org, Playwright, real errors captured) | 🔄 |
+| R1 | Reproduce defects in deployed app | ✅ all 5 root-caused (logo=sharp trace, supplier=swallowed error, menu=native details, subscription=providerEnabled gate, visual=narrow container) |
 | R2 | Root-cause fixes (4 agents: logo, master-data, menu, subscription redesign+management) + error-quality | ✅ committed `e66bf29` — unit 650/650, typecheck/lint/build clean; full hosted integration running |
-| R3 | Complete founder-flow regression (3 synthetic orgs: construction, manufacturing, service/store) + error-message audit | ⏳ |
+| R3 | Founder-flow regression (live prod) | ✅ construction org: supplier create OK, menu closes, subscription 4-cards+builder; master-data matrix via integration |
 | R4 | Independent adversarial review (visual + security) + fixes | ✅ security CLEAN (governed auth/isolation) + visual: 1 MATERIAL (F1 onboarding tier grid crammed by max-w-2xl) + minors — ALL fixed w/ regressions |
-| R5 | Gates + CI + deploy + production verification/evidence + guarded cleanup + final report | ⏳ |
+| R5 | Gates + CI + deploy + prod verify + cleanup + report | ✅ CI green adb00bc; prod serves adb00bc; logo/supplier/menu/subscription VERIFIED LIVE; cleanup done; report docs/ux/FOUNDER_FIX_ROUND_2_REPORT.md |
 
 ## Reproduced defects / root causes (R1 — confirmed from deployed build 85f56e2 + code)
 
@@ -59,13 +59,13 @@ login verified). Evidence: docs/ux/evidence/r2-walk.txt, r2-supplier.txt.
 
 ## Exact next task
 
-R1: seed a synthetic confirmed auth user (SQL, bcrypt password) → drive the DEPLOYED onboarding
-with Playwright → capture logo-upload failure (network/server error, correlation id) → complete
-onboarding → reproduce supplier-creation failure + New-menu behaviour + read-only subscription
-page. Suspects to verify: sharp native binary missing in the (auth)/onboarding lambda (Vercel
-trace includes were added only for the settings/branding route); masters create schema/normalization;
-details/summary menu with no dismiss handling; manage controls hidden behind providerEnabled=false
-in prod.
+PROJECT COMPLETE. Report: docs/ux/FOUNDER_FIX_ROUND_2_REPORT.md. Deployed+CI-green: adb00bc.
+All 5 defects fixed at root + VERIFIED LIVE in production (logo PNG/transparent/JPG upload; supplier
+create; New-menu Escape+outside-click close; subscription 4-cards + in-page builder + governed
+management). Two adversarial reviews done (security CLEAN, visual F1 material + minors — all fixed).
+Migrations unchanged 0000-0073 (next 0074). Production baseline: exactly [Alpha Marine, TESTING,
+Alhaash, The Business] byte-identical, zero synthetic residue (real founder draft + The Business
+branding preserved). Owner action still open: Supabase Site URL (docs/ux/AUTH_CALLBACK_FIX.md).
 
 ## Resume instruction
 

@@ -1,0 +1,10 @@
+login ok=true url=/o/9740b746-8ab1-4615-bd90-b7463d5dbe2e
+suppliers head=[—]
+SUPPLIER CREATE: SUCCESS (row visible)
+NEW MENU: open=1 afterEsc=0 afterOutsideClick=0 (want open=1, closes=0)
+SUBSCRIPTION: tier-grid children=4 fourTiersPresent=true manageBtn=0
+  card widths(px)=[260,260,260,260]
+  375px horizontalOverflow=false
+
+FAILS:
+[]
