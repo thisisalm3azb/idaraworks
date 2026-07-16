@@ -124,10 +124,14 @@ describe("createSupplierAction — deployed code path", () => {
     expect(qs.get("error")).toBe("invalid_email");
     expect(qs.get("field")).toBe("email");
     expect(qs.get("ref")).toBeTruthy(); // correlation id present
-    // Form NOT wiped — the submitted values are echoed back.
+    // Form NOT wiped — non-sensitive values are echoed back...
     expect(qs.get("name")).toBe(`Kept Name ${run}`);
-    expect(qs.get("email")).toBe("not-an-email");
-    expect(qs.get("tax_reg_no")).toBe("100999");
+    // ...but PII (email/phone) and tax numbers are NEVER put in the URL (review F4:
+    // they would leak into browser history + access logs). They are re-typed.
+    expect(qs.has("email")).toBe(false);
+    expect(qs.has("phone")).toBe(false);
+    expect(qs.has("tax_reg_no")).toBe(false);
+    expect(url).not.toContain("not-an-email");
 
     // And nothing was written for the failed submit.
     const list = await listSuppliers(ctx(), "owner");
