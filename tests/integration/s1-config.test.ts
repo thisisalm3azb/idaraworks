@@ -413,12 +413,22 @@ describe("walking skeleton (DoD: job from preset + daily report, end-to-end)", (
     expect(jobs.find((j) => j.id === first.id)?.statusCategory).toBe("draft");
   });
 
+  // Report dates are DYNAMIC (today, UTC): the service treats older dates as
+  // backfill (owner/admin-only permission), so a hardcoded date makes these
+  // tests decay into testing the wrong gate once the calendar moves on — the
+  // exact CI failure this fixes (ForbiddenError: reports.backfill).
+  const REPORT_DATE = new Date().toISOString().slice(0, 10);
+  // The foreman test writes to a job that may be the SAME row as the owner
+  // test's; yesterday is still inside the service's normal ±1-day window (no
+  // backfill permission needed) and avoids the per-job-per-day uniqueness.
+  const REPORT_DATE_PREV = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+
   it("submits ONE daily report per job per day and emits the event", async () => {
     const ctx = ctxOf(ownerUser, true);
     const job = (await listJobs(ctx, "owner"))[0]!;
     const { id } = await submitDailyReport(ctx, "owner", {
       jobId: job.id,
-      reportDate: "2026-07-13",
+      reportDate: REPORT_DATE,
       summary: "Lamination completed on the port hull.",
       blockers: "Waiting on resin delivery",
       idempotencyKey: "s1-report-owner-1",
@@ -432,7 +442,7 @@ describe("walking skeleton (DoD: job from preset + daily report, end-to-end)", (
     await expect(
       submitDailyReport(ctx, "owner", {
         jobId: job.id,
-        reportDate: "2026-07-13",
+        reportDate: REPORT_DATE,
         summary: "duplicate",
         idempotencyKey: "s1-report-owner-2-different-key",
       }),
@@ -446,7 +456,7 @@ describe("walking skeleton (DoD: job from preset + daily report, end-to-end)", (
     await expect(
       submitDailyReport(foremanCtx, "foreman", {
         jobId: job.id,
-        reportDate: "2026-07-14",
+        reportDate: REPORT_DATE_PREV,
         summary: "not my job",
         idempotencyKey: "s1-report-foreman-denied",
       }),
@@ -455,7 +465,7 @@ describe("walking skeleton (DoD: job from preset + daily report, end-to-end)", (
     await owner`update public.job set foreman_user_id = ${managerUser} where id = ${job.id}`;
     const { id } = await submitDailyReport(foremanCtx, "foreman", {
       jobId: job.id,
-      reportDate: "2026-07-14",
+      reportDate: REPORT_DATE_PREV,
       summary: "my assigned job",
       idempotencyKey: "s1-report-foreman-assigned",
     });
