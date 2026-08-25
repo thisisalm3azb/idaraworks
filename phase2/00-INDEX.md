@@ -1,6 +1,7 @@
 # IdaraWorks — Phase 2 Architecture & Planning Package
 
 **Status:** Phase 2 deliverable · July 2026 · No production code, no migrations — specification only.
+**Continuation note (2026-08-26):** this package describes the *planned* architecture as frozen in July 2026. The application has since been **implemented and deployed** (S0–S11 + post-MVP work). For what was built after the freeze, the known spec-vs-code divergences, and the current owner directions, read **`14-POST-MVP-AMENDMENTS.md`** — several details below (template count, commercial tiers, S8 onboarding shape, role screens) are superseded there.
 **Audit status:** ✅ **Audited (`12-AUDIT.md`) — CONDITIONAL GO accepted by owner; all §2–§7 amendments APPLIED to docs 00–11.** The package is now internally consistent with the audit.
 **Freeze status:** 🧊 **ARCHITECTURE & MVP SCOPE FROZEN** — see `13-ARCHITECTURE-FREEZE.md`. Changes to frozen decisions require one of three justifications: a verified security issue, a proven scalability/reliability issue, or evidence from real pilot customers.
 **Engineering constitution:** `../BUILD_BIBLE.md` governs all implementation. Doc 11 is the engineering implementation plan.
@@ -24,6 +25,7 @@
 | 11 | `11-mvp-delivery-plan.md` | **Engineering implementation plan** — vertical slices with objectives, deliverables, dependencies, DB/API/UI work, testing, DoD, effort, risks |
 | 12 | `12-AUDIT.md` | Final cross-document audit: contradiction register, findings F-1…F-56, pre-build decisions, verdict |
 | 13 | `13-ARCHITECTURE-FREEZE.md` | Frozen decisions, intentionally-open decisions, change-control rule |
+| 14 | `14-POST-MVP-AMENDMENTS.md` | **Continuation of the freeze trail** — post-MVP implementation record (S1–S11, 8-template catalogue, add-on commercial model, onboarding wizard…), known divergences, and the 2026-08-26 owner directions (Setup Studio + dashboard redesign — approved, implementation pending) |
 
 Each document uses a uniform **Decision block** for major decisions:
 

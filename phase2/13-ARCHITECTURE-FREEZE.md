@@ -77,3 +77,15 @@ A frozen decision may be changed **only** with one of three justifications, reco
 | 2026-07-11 | **S0 Phase B APPROVED by owner** — hosted VC-1 7/7, migrations 0000–0002 applied, integration 18/18, CI green (commit 178e401). Phase B amendments A-B1…A-B7 filed in the S0 checklist. Phase C awaits separate approval. | Milestone record | Hosted verification + owner statement | Owner |
 
 **§3 status note:** OP-6, OP-7, OP-8, OP-9 and the PB-5 channel question are **closed** per the log above. Still open: OP-1 (incorporation — start at S0), OP-2/OP-14 (pricing + tier values), OP-3 (e-invoice partner, by S6), OP-4 (name check), OP-5 (ex-VAT accountant sign-off, by S5), OP-10/11 (pilot tuning), OP-12 (WhatsApp channel), OP-13 (second object kind).
+
+---
+
+## 5. Continuation pointer (added 2026-08-26 — no historical entry above is modified)
+
+This log's entries end 2026-07-11 and are preserved verbatim as the frozen baseline record.
+Implementation continued past that date (S1–S11 and the post-MVP programme). The freeze trail
+**continues in [`14-POST-MVP-AMENDMENTS.md`](./14-POST-MVP-AMENDMENTS.md)**, which records the
+post-freeze implementation changes (with links to their completion reports), the known
+spec-vs-code divergences, and the owner's 2026-08-26 product directions (Setup Studio and the
+Owner-dashboard redesign — approved, implementation pending). The change-control rule in §1
+remains in force; new amendments are appended there, not here.
