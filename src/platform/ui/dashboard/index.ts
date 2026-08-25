@@ -1,4 +1,23 @@
 export {
+  BusinessBrief,
+  NextBestActions,
+  AttentionZone,
+  SetupProgress,
+  CapabilitiesRow,
+  type BriefChipView,
+  type HomeActionView,
+  type AttentionRowView,
+  type SetupStepView,
+} from "./OwnerHome";
+export type {
+  OwnerHomeView,
+  OwnerHomeState,
+  BriefChip,
+  HomeAction,
+  AttentionRow,
+  SetupStep,
+} from "./owner-home-types";
+export {
   CommandCenterHero,
   buildOwnerSignals,
   type HeroSignal,

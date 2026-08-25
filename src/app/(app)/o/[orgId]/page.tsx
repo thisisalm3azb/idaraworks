@@ -3,23 +3,33 @@ import { redirect } from "next/navigation";
 import { Badge, Button, Card, CardHeader, EmptyState, buildQuickCreate } from "@/platform/ui";
 import {
   ActivityTimeline,
-  CommandCenterHero,
+  AttentionZone,
+  BusinessBrief,
+  CapabilitiesRow,
   DistributionBar,
   KpiCard,
   LockedCard,
+  NextBestActions,
   QuickActions,
   RowList,
   SectionCard,
+  SetupProgress,
   StatusDonut,
   TrendChart,
   WelcomeBanner,
-  buildOwnerSignals,
   computeDelta,
+  type AttentionRowView,
+  type BriefChipView,
   type DistributionDatum,
   type DonutDatum,
+  type HomeActionView,
   type ListRow,
+  type OwnerHomeView,
+  type SetupStepView,
   type TrendPoint,
 } from "@/platform/ui/dashboard";
+import { getAppBranding } from "@/modules/branding/service";
+import { OrgLogo } from "./OrgLogo";
 import { getT, getServerLocale, type Translator } from "@/platform/i18n/server";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { can } from "@/platform/authz";
@@ -27,6 +37,7 @@ import { loadOrgTerminology, term } from "@/platform/terminology";
 import type { Ctx } from "@/platform/tenancy";
 import type { RoleArchetype } from "@/platform/registries";
 import {
+  composeOwnerHome,
   composeToday,
   getDashboardExtras,
   type DashboardExtras,
@@ -41,8 +52,7 @@ import {
 } from "@/platform/entitlements";
 import { getOwnerDigest, type DigestSection } from "@/modules/digest/service";
 import { getInstalledTemplate } from "@/platform/config";
-import { formatDate, formatMoney, formatNumber, formatTime } from "@/platform/format";
-import { getStorageUsage } from "@/platform/files";
+import { formatDate, formatMoney, formatTime } from "@/platform/format";
 import type { CurrencyCode, Locale } from "@/platform/registries";
 import { dismissExceptionAction } from "./actions";
 
@@ -169,43 +179,146 @@ export default async function OrgHome({
       : []),
   ];
 
-  // Owner/Admin (microstep 001): the plain heading + the OwnerScreen KPI row are
-  // replaced by ONE command-center hero carrying the SAME four real signals —
-  // identical values, tones and destinations; all other roles keep the
-  // existing header untouched.
-  const ownerHero =
-    payload?.screen === "owner" ? (
-      <CommandCenterHero
-        eyebrow={t("dashboard.hero.eyebrow")}
-        heading={t("dashboard.hero.title")}
-        asOf={`${t("today.card_as_of")} ${formatDate(now, { locale })}`}
-        roleChip={t("today.screen.owner")}
-        signals={buildOwnerSignals({
-          orgId,
-          labels: {
-            active: t("dashboard.kpi.active_jobs", jobVars),
-            doneWeek: t("dashboard.kpi.done_week", jobVars),
-            approvals: t("dashboard.kpi.approvals_waiting"),
-            overdue: t("dashboard.kpi.overdue_jobs", jobVars),
-          },
-          counts: {
-            active: extras.jobs?.active ?? 0,
-            doneThisWeek: extras.jobs?.doneThisWeek ?? 0,
-            approvalsPending: extras.approvalsPending ?? 0,
-            overdue: extras.jobs?.overdue ?? 0,
-          },
-        })}
-        action={
-          can(a, "week.view")
-            ? { label: t("dashboard.hero.action_week"), href: `/o/${orgId}/week` }
-            : undefined
+  // Owner/Admin (microstep 002B — blueprint): the page head becomes the
+  // org-led Business Brief + Next Best Actions + Attention, composed by the
+  // pure deterministic owner-home composer from the EXISTING payloads above.
+  // All other roles keep the existing header + layout untouched.
+  const isOwnerScreen = payload?.screen === "owner";
+  let ownerHome: OwnerHomeView | null = null;
+  let ownerHasLogo = false;
+  if (isOwnerScreen) {
+    // Request-cached (the layout already fetches it) — no additional query cost.
+    const appBranding = await getAppBranding(resolved.ctx);
+    ownerHasLogo = appBranding.branding.logoFileId !== null;
+    const card = (key: string) => cardOf(payload?.cards ?? [], key);
+    const collections0 = card("collections")?.items[0] as
+      { outstandingMinor?: number | null; over90?: number | null } | undefined;
+    const atRiskItems = (card("at_risk")?.items ?? []).map((item, i) => ({
+      id: String(item.id ?? i),
+      ruleKey: String(item.ruleKey ?? ""),
+      severity: typeof item.severity === "string" ? item.severity : "warning",
+      jobId: item.jobId ? String(item.jobId) : null,
+    }));
+    const oldest = inbox.reduce<number | null>((acc, r) => {
+      const days = Math.floor((now.getTime() - Date.parse(r.createdAt)) / 86_400_000);
+      return acc === null || days > acc ? days : acc;
+    }, null);
+    ownerHome = composeOwnerHome({
+      orgId,
+      seesPrice: resolved.ctx.pricePrivileged,
+      canBilling: can(a, "billing.view"),
+      needsSetup,
+      hasLogo: ownerHasLogo,
+      counts: {
+        activeJobs: extras.jobs?.active ?? 0,
+        doneThisWeek: extras.jobs?.doneThisWeek ?? 0,
+        overdueJobs: extras.jobs?.overdue ?? 0,
+        reportsThisWeek: extras.reportsThisWeek,
+        reportsPrevWeek: extras.reportsPrevWeek,
+        approvalsPending: extras.approvalsPending ?? 0,
+        openIssues: extras.openIssues ?? 0,
+        quotesAwaiting: extras.quotesAwaiting,
+        blockers: card("blockers")?.count ?? 0,
+        missingReports: card("missing_reports")?.count ?? 0,
+        reportsToReview: card("reports_to_review")?.count ?? 0,
+        paymentsWeekMinor: extras.paymentsWeekMinor,
+        outstandingMinor: (collections0?.outstandingMinor ?? null) as number | null,
+        over90Minor: (collections0?.over90 ?? null) as number | null,
+        seatsTotal: extras.seats ? extras.seats.office + extras.seats.viewer : null,
+        mrSubmitted: (extras.mrOpen?.submitted ?? 0) + (extras.mrOpen?.approved ?? 0),
+        poOpen: extras.poStatus
+          ? extras.poStatus.approved + extras.poStatus.sent + extras.poStatus.partial
+          : 0,
+      },
+      atRisk: atRiskItems,
+      approvalsOldestDays: oldest,
+      quick: buildQuickCreate({ orgId, archetype: a, features: ent.features }).map((q) => ({
+        key: q.key,
+        labelKey: q.labelKey,
+        href: q.href,
+        icon: q.icon,
+      })),
+      capsOn: Object.entries(ent.features).filter(([k, v]) => k.startsWith("cap.") && v).length,
+      hasReportTrendData: (extras.reportTrend?.points ?? []).some((p) => p.value > 0),
+      hasPaymentsTrendData: (extras.paymentsTrend?.points ?? []).some((p) => p.value > 0),
+      hasStageData: (extras.stageDist ?? []).some((sl) => sl.count > 0),
+      hasActivity: extras.activity.length > 0,
+      hasDeadlines: (extras.deadlines ?? []).length > 0,
+      invoicingOn: ent.features["cap.invoicing"] ?? false,
+      paymentsOn: ent.features["cap.payments"] ?? false,
+    });
+  }
+
+  // The digest card, shared unchanged between the non-owner position and the
+  // owner home's curated layout (single markup, two slots).
+  const digestCard = digest ? (
+    <Card>
+      <CardHeader
+        title={t("digest.title")}
+        meta={
+          <span className="text-xs text-ink-muted">
+            {t("today.card_as_of")}{" "}
+            <span dir="ltr">
+              {formatTime(digest.computedAt, {
+                locale,
+                timeZone: resolved.timezone ?? undefined,
+              })}
+            </span>
+          </span>
         }
       />
-    ) : null;
+      {digest.narration ? (
+        <p className="mb-2 text-sm leading-relaxed text-ink">{digest.narration}</p>
+      ) : null}
+      <ul className="flex flex-col">
+        {digest.sections
+          .filter((sec) => sec.count > 0 || sec.moneyMinor)
+          .map((sec) => (
+            <DigestRow
+              key={sec.key}
+              section={sec}
+              orgId={orgId}
+              label={t(sec.labelKey)}
+              currency={currency}
+            />
+          ))}
+      </ul>
+      {digest.sections.every((sec) => sec.count === 0 && !sec.moneyMinor) ? (
+        <p className="text-xs text-ink-muted">{t("digest.all_clear")}</p>
+      ) : null}
+    </Card>
+  ) : null;
+
+  // The org-led Business Brief (owner) — every string translated here; the
+  // composer supplied only grounded keys/vars.
+  const briefNode = ownerHome ? (
+    <BusinessBrief
+      orgName={resolved.orgName}
+      logo={
+        ownerHasLogo ? (
+          <OrgLogo ctx={resolved.ctx} archetype={a} orgName={resolved.orgName} />
+        ) : null
+      }
+      dateLine={formatDate(now, { locale })}
+      sentence={t(ownerHome.brief.sentenceKey, { ...jobVars, ...ownerHome.brief.sentenceVars })}
+      chips={ownerHome.brief.chips.map((c): BriefChipView => ({
+        key: c.key,
+        label:
+          c.key === "payments" && extras.paymentsWeekMinor !== null
+            ? t(c.labelKey, {
+                ...jobVars,
+                amount: formatMoney(extras.paymentsWeekMinor, currency, { locale }),
+              })
+            : t(c.labelKey, { ...jobVars, ...c.vars }),
+        tone: c.tone,
+        href: c.href,
+      }))}
+    />
+  ) : null;
 
   return (
     <div className="flex flex-col gap-4">
-      {ownerHero ?? (
+      {briefNode ?? (
         <div className="flex items-center justify-between gap-2">
           <div>
             <h1 className="text-xl font-semibold text-ink">{t("today.title")}</h1>
@@ -226,30 +339,16 @@ export default async function OrgHome({
         />
       ) : null}
 
-      {needsSetup ? (
-        <SectionCard title={t("onboarding.checklist.title")}>
-          <ul className="flex flex-col gap-2 text-sm">
-            <li>
-              <Link href={`/o/${orgId}/onboarding`} className="text-accent hover:underline">
-                {t("onboarding.checklist.run")}
-              </Link>
-            </li>
-            <li>
-              <Link href={`/o/${orgId}/imports`} className="text-accent hover:underline">
-                {t("onboarding.checklist.import")}
-              </Link>
-            </li>
-          </ul>
-        </SectionCard>
-      ) : null}
-
       {sp.ok === "dismissed" ? (
         <Badge tone="success">{t("today.dismissed")}</Badge>
       ) : sp.error ? (
         <Badge tone="danger">{t("common.error")}</Badge>
       ) : null}
 
-      {canViewDigest && !digestEntitled ? (
+      {/* Non-owner screens keep the digest block exactly where it was. The
+          owner home renders the digest inside its curated layout instead, and
+          replaces the LockedCard upsell with the compact capabilities row. */}
+      {!isOwnerScreen && canViewDigest && !digestEntitled ? (
         <LockedCard
           title={t("digest.title")}
           description={t("digest.upsell")}
@@ -257,73 +356,41 @@ export default async function OrgHome({
           ctaLabel={s.canBilling ? t("digest.upsell_cta") : undefined}
         />
       ) : null}
-      {digest ? (
-        <Card>
-          <CardHeader
-            title={t("digest.title")}
-            meta={
-              <span className="text-xs text-ink-muted">
-                {t("today.card_as_of")}{" "}
-                <span dir="ltr">
-                  {formatTime(digest.computedAt, {
-                    locale,
-                    timeZone: resolved.timezone ?? undefined,
-                  })}
-                </span>
-              </span>
-            }
-          />
-          {digest.narration ? (
-            <p className="mb-2 text-sm leading-relaxed text-ink">{digest.narration}</p>
-          ) : null}
-          <ul className="flex flex-col">
-            {digest.sections
-              .filter((sec) => sec.count > 0 || sec.moneyMinor)
-              .map((sec) => (
-                <DigestRow
-                  key={sec.key}
-                  section={sec}
-                  orgId={orgId}
-                  label={t(sec.labelKey)}
-                  currency={currency}
-                />
-              ))}
-          </ul>
-          {digest.sections.every((sec) => sec.count === 0 && !sec.moneyMinor) ? (
-            <p className="text-xs text-ink-muted">{t("digest.all_clear")}</p>
-          ) : null}
-        </Card>
-      ) : null}
+      {!isOwnerScreen ? digestCard : null}
 
-      {payload?.screen === "owner" ? <OwnerScreen s={s} /> : null}
+      {ownerHome ? <OwnerScreen s={s} home={ownerHome} digestCard={digestCard} /> : null}
       {payload?.screen === "manager" ? <ManagerScreen s={s} /> : null}
       {payload?.screen === "foreman" ? <ForemanScreen s={s} /> : null}
       {payload?.screen === "accounts" ? <AccountsScreen s={s} /> : null}
       {payload?.screen === "procurement" ? <ProcurementScreen s={s} /> : null}
       {isViewer ? <ViewerScreen s={s} /> : null}
 
-      {quickActions.length > 0 ? (
-        <SectionCard title={t("dashboard.quick_actions")}>
-          <QuickActions actions={quickActions} />
-        </SectionCard>
+      {/* Non-owner screens keep the shared bottom section unchanged (002B
+          restructures ONLY the owner composition). */}
+      {!isOwnerScreen ? (
+        <>
+          {quickActions.length > 0 ? (
+            <SectionCard title={t("dashboard.quick_actions")}>
+              <QuickActions actions={quickActions} />
+            </SectionCard>
+          ) : null}
+
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            {extras.deadlines !== null ? <DeadlinesCard s={s} /> : null}
+            <SectionCard title={t("dashboard.activity")}>
+              <ActivityTimeline
+                entries={extras.activity.map((e) => ({
+                  key: e.id,
+                  summary: e.summary,
+                  when: formatDate(e.createdAt, { locale }),
+                  actor: e.actorName,
+                }))}
+                emptyLabel={t("dashboard.activity_empty")}
+              />
+            </SectionCard>
+          </div>
+        </>
       ) : null}
-
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-        {extras.deadlines !== null ? <DeadlinesCard s={s} /> : null}
-        <SectionCard title={t("dashboard.activity")}>
-          <ActivityTimeline
-            entries={extras.activity.map((e) => ({
-              key: e.id,
-              summary: e.summary,
-              when: formatDate(e.createdAt, { locale }),
-              actor: e.actorName,
-            }))}
-            emptyLabel={t("dashboard.activity_empty")}
-          />
-        </SectionCard>
-      </div>
-
-      {payload?.screen === "owner" && s.canBilling ? <SubscriptionStrip s={s} /> : null}
     </div>
   );
 }
@@ -404,26 +471,201 @@ function ReportTrendCard({ s }: { s: ScreenCtx }) {
   );
 }
 
-function ApprovalsCard({ s }: { s: ScreenCtx }) {
-  const { t, locale, orgId, inbox, currency } = s;
-  const rows: ListRow[] = inbox.slice(0, 6).map((r) => ({
-    key: r.id,
-    title: r.title || r.subjectType,
-    href: `/o/${orgId}/approvals`,
-    meta:
-      r.amountMinor !== null
-        ? formatMoney(Number(r.amountMinor), currency, { locale })
-        : formatDate(r.createdAt, { locale }),
-    metaLtr: r.amountMinor !== null,
-    badge: r.jobRef ? { label: r.jobRef, tone: "neutral" as const } : undefined,
+/**
+ * Owner/Admin home (microstep 002B — "Your business, alive"). The Brief is
+ * rendered by OrgHome above; this screen renders the action-led body from the
+ * pure composer's view model: Next Best Actions dominate the start column,
+ * Attention (elevated, only when real) + digest sit in the end column; the
+ * lower area shows ONLY sections with meaningful content; the empty state
+ * replaces charts with grounded Setup Progress + a teaching diagram. The old
+ * ApprovalsCard / at-risk card / money LockedCards / subscription strip /
+ * quick-action card are removed here per the approved removal list — their
+ * information lives in Attention, the actions, or the capabilities row.
+ */
+function OwnerScreen({
+  s,
+  home,
+  digestCard,
+}: {
+  s: ScreenCtx;
+  home: OwnerHomeView;
+  digestCard: React.ReactNode;
+}) {
+  const { t, locale, orgId, extras, currency } = s;
+  const vars = s.jobVars;
+
+  const actionViews: HomeActionView[] = home.actions.map((a) => ({
+    key: a.key,
+    title: t(a.titleKey, { ...vars, ...a.vars }),
+    reason: a.reasonKey ? t(a.reasonKey, { ...vars, ...a.vars }) : undefined,
+    href: a.href,
+    icon: a.icon,
+    urgency: a.urgency,
   }));
+
+  const attentionViews: AttentionRowView[] = home.attention.map((r) => ({
+    key: r.key,
+    label: r.ruleKey
+      ? t(`dashboard.rule.${r.ruleKey}`, vars)
+      : t(r.labelKey ?? "", { ...vars, ...r.vars }),
+    severity: r.severity,
+    severityLabel: t(`exceptions.severity.${r.severity}`),
+    href: r.href,
+  }));
+
+  const setupViews: SetupStepView[] | null = home.setup
+    ? home.setup.map((st) => ({
+        key: st.key,
+        label: t(st.labelKey, vars),
+        done: st.done,
+        href: st.href,
+        unlocks: st.unlocksKey ? t(st.unlocksKey, vars) : undefined,
+      }))
+    : null;
+
+  return (
+    <>
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[3fr_2fr]">
+        <NextBestActions title={t("home.actions.title")} actions={actionViews} />
+        <div className="flex flex-col gap-4">
+          <AttentionZone
+            title={t("home.attention.title")}
+            rows={attentionViews}
+            viewAllLabel={t("dashboard.view_all")}
+            viewAllHref={`/o/${orgId}/week`}
+          />
+          {setupViews ? (
+            <SetupProgress
+              title={t("home.setup.title")}
+              steps={setupViews}
+              diagram={{
+                from: vars.job ?? "",
+                mid: vars.daily_reports ?? "",
+                to: t("home.setup.diagram_done"),
+                caption: t("home.setup.diagram_caption", vars),
+              }}
+            />
+          ) : null}
+          {digestCard}
+        </div>
+      </div>
+
+      {home.sections.stages || home.sections.reportTrend ? (
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+          {home.sections.stages ? <StageCard s={s} /> : null}
+          {home.sections.reportTrend ? (
+            <SectionCard
+              title={t("dashboard.report_trend", vars)}
+              viewAllHref={`/o/${orgId}/reports/review`}
+              viewAllLabel={t("dashboard.view_all")}
+            >
+              <p className="mb-2 text-xs text-ink-muted">
+                {t("dashboard.week_delta")}{" "}
+                <span dir="ltr" className="font-mono text-ink">
+                  {computeDelta(extras.reportsThisWeek, extras.reportsPrevWeek).label}
+                </span>
+              </p>
+              <TrendChart
+                points={trendPoints(extras.reportTrend)}
+                title={t("dashboard.report_trend", vars)}
+                kind="bar"
+              />
+            </SectionCard>
+          ) : null}
+        </div>
+      ) : null}
+
+      {home.sections.collections || home.sections.payments ? (
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+          {home.sections.collections ? <CollectionsCard s={s} /> : null}
+          {home.sections.payments ? (
+            <SectionCard
+              title={t("dashboard.payments_trend")}
+              viewAllHref={`/o/${orgId}/payments`}
+              viewAllLabel={t("dashboard.view_all")}
+            >
+              {extras.paymentsWeekMinor !== null ? (
+                <p className="mb-2 text-xs text-ink-muted">
+                  {t("today.card.payments_week")}{" "}
+                  <span dir="ltr" className="font-mono font-semibold text-ink">
+                    {formatMoney(extras.paymentsWeekMinor, currency, { locale })}
+                  </span>
+                </p>
+              ) : null}
+              {moneyTrendPoints(extras.paymentsTrend, currency, locale).length > 0 ? (
+                <TrendChart
+                  points={moneyTrendPoints(extras.paymentsTrend, currency, locale)}
+                  title={t("dashboard.payments_trend")}
+                />
+              ) : null}
+            </SectionCard>
+          ) : null}
+        </div>
+      ) : null}
+
+      {home.sections.purchasing ? (
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+          <PurchasingCard s={s} />
+          <AttendanceCard s={s} />
+        </div>
+      ) : null}
+
+      {home.sections.deadlines || home.sections.activity ? (
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+          {home.sections.deadlines ? <DeadlinesCard s={s} /> : null}
+          {home.sections.activity ? (
+            <SectionCard title={t("dashboard.activity")}>
+              <ActivityTimeline
+                entries={extras.activity.map((e) => ({
+                  key: e.id,
+                  summary: e.summary,
+                  when: formatDate(e.createdAt, { locale }),
+                  actor: e.actorName,
+                }))}
+                emptyLabel={t("dashboard.activity_empty")}
+              />
+            </SectionCard>
+          ) : null}
+        </div>
+      ) : null}
+
+      {home.map ? (
+        <CapabilitiesRow
+          label={t("home.map.caps", { count: home.map.capsOn })}
+          manageLabel={home.map.showManage ? t("home.map.manage") : undefined}
+          manageHref={home.map.showManage ? `/o/${orgId}/settings/subscription` : undefined}
+        />
+      ) : null}
+    </>
+  );
+}
+
+/** Receivables summary — rendered only when price-visible AND non-zero (002B). */
+function CollectionsCard({ s }: { s: ScreenCtx }) {
+  const { t, locale, orgId, cards, currency } = s;
+  const collections = cardOf(cards, "collections");
+  const outstanding = (collections?.items[0]?.outstandingMinor ?? null) as number | null;
+  const over90 = (collections?.items[0]?.over90 ?? null) as number | null;
   return (
     <SectionCard
-      title={t("nav.approvals")}
-      viewAllHref={`/o/${orgId}/approvals`}
+      title={t("today.card.collections")}
+      viewAllHref={`/o/${orgId}/ar`}
       viewAllLabel={t("dashboard.view_all")}
     >
-      <RowList rows={rows} emptyLabel={t("approvals.inbox_empty")} />
+      <div className="flex flex-wrap gap-x-6 gap-y-2">
+        <div>
+          <p className="text-xs text-ink-muted">{t("dashboard.outstanding")}</p>
+          <p dir="ltr" className="font-mono text-xl font-semibold text-ink">
+            {outstanding !== null ? formatMoney(outstanding, currency, { locale }) : "—"}
+          </p>
+        </div>
+        <div>
+          <p className="text-xs text-ink-muted">{t("dashboard.over90")}</p>
+          <p dir="ltr" className="font-mono text-xl font-semibold text-danger">
+            {over90 !== null ? formatMoney(over90, currency, { locale }) : "—"}
+          </p>
+        </div>
+      </div>
     </SectionCard>
   );
 }
@@ -448,195 +690,27 @@ function DeadlinesCard({ s }: { s: ScreenCtx }) {
   );
 }
 
-async function SubscriptionStrip({ s }: { s: ScreenCtx }) {
-  const { t, orgId, extras, ent } = s;
-  const seats = extras.seats;
-  const gb = (bytes: number, digits: number) =>
-    formatNumber(bytes / 1024 ** 3, s.locale, {
-      minimumFractionDigits: digits,
-      maximumFractionDigits: digits,
-    });
-  let storageLabel: string | null = null;
-  try {
-    // Wave-1 helper — reads never throw on entitlement; guard IO failures only.
-    const q = await getStorageUsage(s.ctx);
-    const used = gb(q.bytesUsed, 2);
-    storageLabel = q.limitBytes === null ? `${used} GB` : `${used} / ${gb(q.limitBytes, 0)} GB`;
-  } catch {
-    storageLabel = null;
-  }
-  const officeLimit = ent.limits["limit.full_users"] ?? null;
+function ApprovalsCard({ s }: { s: ScreenCtx }) {
+  const { t, locale, orgId, inbox, currency } = s;
+  const rows: ListRow[] = inbox.slice(0, 6).map((r) => ({
+    key: r.id,
+    title: r.title || r.subjectType,
+    href: `/o/${orgId}/approvals`,
+    meta:
+      r.amountMinor !== null
+        ? formatMoney(Number(r.amountMinor), currency, { locale })
+        : formatDate(r.createdAt, { locale }),
+    metaLtr: r.amountMinor !== null,
+    badge: r.jobRef ? { label: r.jobRef, tone: "neutral" as const } : undefined,
+  }));
   return (
     <SectionCard
-      title={t("subscription.usage_title", s.jobVars)}
-      viewAllHref={`/o/${orgId}/settings/subscription`}
-      viewAllLabel={t("nav.subscription")}
+      title={t("nav.approvals")}
+      viewAllHref={`/o/${orgId}/approvals`}
+      viewAllLabel={t("dashboard.view_all")}
     >
-      <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
-        <span className="flex items-center gap-2">
-          <Badge tone="brand">{t(`subscription.plan.${ent.planKey}`)}</Badge>
-          <Badge tone="neutral">{t(`subscription.state.${ent.billingState}`)}</Badge>
-        </span>
-        {seats ? (
-          <span className="text-ink-secondary">
-            {t("subscription.usage.office_seats")}{" "}
-            <span dir="ltr" className="font-mono text-ink">
-              {seats.office}
-              {officeLimit !== null ? ` / ${officeLimit}` : ""}
-            </span>
-          </span>
-        ) : null}
-        {storageLabel ? (
-          <span className="text-ink-secondary">
-            {t("subscription.usage.storage")}{" "}
-            <span dir="ltr" className="font-mono text-ink">
-              {storageLabel}
-            </span>
-          </span>
-        ) : null}
-      </div>
+      <RowList rows={rows} emptyLabel={t("approvals.inbox_empty")} />
     </SectionCard>
-  );
-}
-
-// ── role screens ──────────────────────────────────────────────────────────────
-function OwnerScreen({ s }: { s: ScreenCtx }) {
-  const { t, locale, orgId, extras, cards, currency, ent } = s;
-  const collections = cardOf(cards, "collections");
-  const outstanding = (collections?.items[0]?.outstandingMinor ?? null) as number | null;
-  const over90 = (collections?.items[0]?.over90 ?? null) as number | null;
-  const atRisk = cardOf(cards, "at_risk");
-  const delta = computeDelta(extras.reportsThisWeek, extras.reportsPrevWeek);
-  const invoicingOn = ent.features["cap.invoicing"] ?? false;
-  const paymentsOn = ent.features["cap.payments"] ?? false;
-  const subHref = `/o/${orgId}/settings/subscription`;
-
-  const atRiskRows: ListRow[] = (atRisk?.items ?? []).map((item, i) => ({
-    key: String(item.id ?? i),
-    title: t(`dashboard.rule.${String(item.ruleKey)}`, s.jobVars),
-    href: item.jobId ? `/o/${orgId}/jobs/${String(item.jobId)}` : `/o/${orgId}/week`,
-    badge:
-      typeof item.severity === "string"
-        ? {
-            label: t(`exceptions.severity.${item.severity}`),
-            tone: SEV_TONE[item.severity] ?? "neutral",
-          }
-        : undefined,
-  }));
-
-  // (Microstep 001) The four KPI signals now live in the CommandCenterHero
-  // rendered by OrgHome for this screen — same values, tones and destinations.
-  return (
-    <>
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-        <StageCard s={s} />
-        <SectionCard
-          title={t("dashboard.report_trend", s.jobVars)}
-          viewAllHref={`/o/${orgId}/reports/review`}
-          viewAllLabel={t("dashboard.view_all")}
-        >
-          <p className="mb-2 text-xs text-ink-muted">
-            {t("dashboard.week_delta")}{" "}
-            <span dir="ltr" className="font-mono text-ink">
-              {delta.label}
-            </span>
-          </p>
-          {trendPoints(extras.reportTrend).length === 0 ? (
-            <p className="py-2 text-sm text-ink-muted">{t("dashboard.trend_empty")}</p>
-          ) : (
-            <TrendChart
-              points={trendPoints(extras.reportTrend)}
-              title={t("dashboard.report_trend", s.jobVars)}
-              kind="bar"
-            />
-          )}
-        </SectionCard>
-      </div>
-
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-        {/* Receivables summary — pricePrivileged only; money never reaches others. */}
-        {invoicingOn ? (
-          <SectionCard
-            title={t("today.card.collections")}
-            viewAllHref={`/o/${orgId}/ar`}
-            viewAllLabel={t("dashboard.view_all")}
-          >
-            <div className="flex flex-wrap gap-x-6 gap-y-2">
-              <div>
-                <p className="text-xs text-ink-muted">{t("dashboard.outstanding")}</p>
-                <p dir="ltr" className="font-mono text-xl font-semibold text-ink">
-                  {s.seesPrice && outstanding !== null
-                    ? formatMoney(outstanding, currency, { locale })
-                    : "—"}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs text-ink-muted">{t("dashboard.over90")}</p>
-                <p dir="ltr" className="font-mono text-xl font-semibold text-danger">
-                  {s.seesPrice && over90 !== null
-                    ? formatMoney(over90 as number, currency, { locale })
-                    : "—"}
-                </p>
-              </div>
-            </div>
-          </SectionCard>
-        ) : (
-          <LockedCard
-            title={t("today.card.collections")}
-            description={t("dashboard.locked_money")}
-            href={s.canBilling ? subHref : undefined}
-            ctaLabel={s.canBilling ? t("digest.upsell_cta") : undefined}
-          />
-        )}
-        {paymentsOn ? (
-          <SectionCard
-            title={t("dashboard.payments_trend")}
-            viewAllHref={`/o/${orgId}/payments`}
-            viewAllLabel={t("dashboard.view_all")}
-          >
-            {s.seesPrice && extras.paymentsWeekMinor !== null ? (
-              <p className="mb-2 text-xs text-ink-muted">
-                {t("today.card.payments_week")}{" "}
-                <span dir="ltr" className="font-mono font-semibold text-ink">
-                  {formatMoney(extras.paymentsWeekMinor, currency, { locale })}
-                </span>
-              </p>
-            ) : null}
-            {moneyTrendPoints(extras.paymentsTrend, currency, locale).length === 0 ? (
-              <p className="py-2 text-sm text-ink-muted">{t("dashboard.trend_empty")}</p>
-            ) : (
-              <TrendChart
-                points={moneyTrendPoints(extras.paymentsTrend, currency, locale)}
-                title={t("dashboard.payments_trend")}
-              />
-            )}
-          </SectionCard>
-        ) : (
-          <LockedCard
-            title={t("dashboard.payments_trend")}
-            description={t("dashboard.locked_money")}
-            href={s.canBilling ? subHref : undefined}
-            ctaLabel={s.canBilling ? t("digest.upsell_cta") : undefined}
-          />
-        )}
-      </div>
-
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-        <SectionCard
-          title={t("dashboard.at_risk")}
-          viewAllHref={`/o/${orgId}/week`}
-          viewAllLabel={t("dashboard.view_all")}
-        >
-          <RowList rows={atRiskRows} emptyLabel={t("today.card_empty")} />
-        </SectionCard>
-        <ApprovalsCard s={s} />
-      </div>
-
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-        <PurchasingCard s={s} />
-        <AttendanceCard s={s} />
-      </div>
-    </>
   );
 }
 

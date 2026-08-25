@@ -394,3 +394,6 @@ async function procurementCards(
     ];
   });
 }
+
+// Microstep 002B: the pure Owner Home composer (module public surface).
+export { composeOwnerHome, type OwnerHomeInputs } from "./owner-home";
