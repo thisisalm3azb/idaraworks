@@ -1,3 +1,9 @@
+export {
+  CommandCenterHero,
+  buildOwnerSignals,
+  type HeroSignal,
+  type HeroTone,
+} from "./CommandCenterHero";
 export { KpiCard } from "./KpiCard";
 export { TrendChart, type TrendPoint } from "./TrendChart";
 export { StatusDonut, type DonutDatum } from "./StatusDonut";

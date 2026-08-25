@@ -50,6 +50,14 @@
   --elevation-1: 0 1px 2px rgb(28 28 26 / 0.05), 0 1px 3px rgb(28 28 26 / 0.06);
   --elevation-2: 0 4px 10px rgb(28 28 26 / 0.08), 0 2px 4px rgb(28 28 26 / 0.05);
 
+  /* Command-center hero (microstep 001): graphite-navy layered surfaces,
+     derived from EXISTING tokens only (inverse graphite cast toward the info
+     navy) — no new raw hex, per the tokens-over-ad-hoc-values law. */
+  --hero-surface: color-mix(in srgb, var(--surface-inverse) 86%, var(--info));
+  --hero-raised: color-mix(in srgb, var(--surface-inverse) 72%, var(--info));
+  --hero-line: color-mix(in srgb, var(--text-inverse) 16%, transparent);
+  --hero-ink-dim: color-mix(in srgb, var(--text-inverse) 66%, var(--surface-inverse));
+
   /* shape & touch */
   --radius-sm: 6px;
   --radius-md: 10px;
@@ -77,6 +85,10 @@
   --color-success-soft: var(--success-soft);
   --color-info: var(--info);
   --color-info-soft: var(--info-soft);
+  --color-hero: var(--hero-surface);
+  --color-hero-raised: var(--hero-raised);
+  --color-hero-line: var(--hero-line);
+  --color-hero-dim: var(--hero-ink-dim);
   --color-line: var(--border);
   --color-line-strong: var(--border-strong);
   --color-accent: var(--accent);
@@ -101,4 +113,19 @@ body {
 :focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
+}
+
+/* Command-center hero: one restrained decorative motion — a slow orbital
+   drift on the aria-hidden SVG. Defined only under motion-safe, so
+   prefers-reduced-motion users get a fully static hero. */
+@media (prefers-reduced-motion: no-preference) {
+  .cch-orbit {
+    animation: cch-orbit 120s linear infinite;
+    transform-origin: center;
+  }
+  @keyframes cch-orbit {
+    to {
+      transform: rotate(360deg);
+    }
+  }
 }

@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { Badge, Button, Card, CardHeader, EmptyState, buildQuickCreate } from "@/platform/ui";
 import {
   ActivityTimeline,
+  CommandCenterHero,
   DistributionBar,
   KpiCard,
   LockedCard,
@@ -12,6 +13,7 @@ import {
   StatusDonut,
   TrendChart,
   WelcomeBanner,
+  buildOwnerSignals,
   computeDelta,
   type DistributionDatum,
   type DonutDatum,
@@ -167,17 +169,53 @@ export default async function OrgHome({
       : []),
   ];
 
+  // Owner/Admin (microstep 001): the plain heading + the OwnerScreen KPI row are
+  // replaced by ONE command-center hero carrying the SAME four real signals —
+  // identical values, tones and destinations; all other roles keep the
+  // existing header untouched.
+  const ownerHero =
+    payload?.screen === "owner" ? (
+      <CommandCenterHero
+        eyebrow={t("dashboard.hero.eyebrow")}
+        heading={t("dashboard.hero.title")}
+        asOf={`${t("today.card_as_of")} ${formatDate(now, { locale })}`}
+        roleChip={t("today.screen.owner")}
+        signals={buildOwnerSignals({
+          orgId,
+          labels: {
+            active: t("dashboard.kpi.active_jobs", jobVars),
+            doneWeek: t("dashboard.kpi.done_week", jobVars),
+            approvals: t("dashboard.kpi.approvals_waiting"),
+            overdue: t("dashboard.kpi.overdue_jobs", jobVars),
+          },
+          counts: {
+            active: extras.jobs?.active ?? 0,
+            doneThisWeek: extras.jobs?.doneThisWeek ?? 0,
+            approvalsPending: extras.approvalsPending ?? 0,
+            overdue: extras.jobs?.overdue ?? 0,
+          },
+        })}
+        action={
+          can(a, "week.view")
+            ? { label: t("dashboard.hero.action_week"), href: `/o/${orgId}/week` }
+            : undefined
+        }
+      />
+    ) : null;
+
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between gap-2">
-        <div>
-          <h1 className="text-xl font-semibold text-ink">{t("today.title")}</h1>
-          <p className="text-xs text-ink-muted">
-            {`${t("today.card_as_of")} ${formatDate(now, { locale })}`}
-          </p>
+      {ownerHero ?? (
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <h1 className="text-xl font-semibold text-ink">{t("today.title")}</h1>
+            <p className="text-xs text-ink-muted">
+              {`${t("today.card_as_of")} ${formatDate(now, { locale })}`}
+            </p>
+          </div>
+          <Badge tone="neutral">{t(`today.screen.${payload?.screen ?? "viewer"}`)}</Badge>
         </div>
-        <Badge tone="neutral">{t(`today.screen.${payload?.screen ?? "viewer"}`)}</Badge>
-      </div>
+      )}
 
       {sp.welcome === "1" ? (
         <WelcomeBanner
@@ -486,38 +524,10 @@ function OwnerScreen({ s }: { s: ScreenCtx }) {
         : undefined,
   }));
 
+  // (Microstep 001) The four KPI signals now live in the CommandCenterHero
+  // rendered by OrgHome for this screen — same values, tones and destinations.
   return (
     <>
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <KpiCard
-          label={t("dashboard.kpi.active_jobs", s.jobVars)}
-          value={String(extras.jobs?.active ?? 0)}
-          icon="briefcase"
-          href={`/o/${orgId}/jobs`}
-        />
-        <KpiCard
-          label={t("dashboard.kpi.done_week", s.jobVars)}
-          value={String(extras.jobs?.doneThisWeek ?? 0)}
-          icon="check"
-          tone={(extras.jobs?.doneThisWeek ?? 0) > 0 ? "success" : "neutral"}
-          href={`/o/${orgId}/jobs`}
-        />
-        <KpiCard
-          label={t("dashboard.kpi.approvals_waiting")}
-          value={String(extras.approvalsPending ?? 0)}
-          icon="inbox"
-          tone={(extras.approvalsPending ?? 0) > 0 ? "warning" : "neutral"}
-          href={`/o/${orgId}/approvals`}
-        />
-        <KpiCard
-          label={t("dashboard.kpi.overdue_jobs", s.jobVars)}
-          value={String(extras.jobs?.overdue ?? 0)}
-          icon="alert"
-          tone={(extras.jobs?.overdue ?? 0) > 0 ? "danger" : "neutral"}
-          href={`/o/${orgId}/jobs?filter=overdue`}
-        />
-      </div>
-
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         <StageCard s={s} />
         <SectionCard
