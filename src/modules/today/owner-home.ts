@@ -81,19 +81,39 @@ export function composeOwnerHome(i: OwnerHomeInputs): OwnerHomeView {
   const over90 = i.seesPrice ? (c.over90Minor ?? 0) : 0;
   const agedApprovals = c.approvalsPending > 0 && (i.approvalsOldestDays ?? 0) >= 2;
 
-  // ── State (deterministic) ──────────────────────────────────────────────────
-  const hasOperationalData =
+  // ── State (deterministic; corrected precedence — 002B.1) ──────────────────
+  // 1) Real attention signals always win. 2) Any other real operational
+  // evidence produces "active". 3) Only the absence of operational evidence
+  // may produce the quiet/setup experience. needsSetup can ADD a setup action
+  // (below) but can never hide operational attention or activity.
+  // At-risk rows are the exception engine's genuine warnings; info-severity
+  // rows stay visible in the zone without forcing the attention takeover.
+  const atRiskAlarm = i.atRisk.some((r) => r.severity !== "info");
+  const hasAttention =
+    c.overdueJobs > 0 || c.blockers > 0 || over90 > 0 || agedApprovals || atRiskAlarm;
+  // Every already-supplied trace of real operations counts as evidence — money
+  // only when price-visible (redaction: null is "absent", never 0).
+  const hasOperationalEvidence =
+    hasAttention ||
     c.activeJobs + c.doneThisWeek + c.overdueJobs > 0 ||
     c.approvalsPending > 0 ||
     c.reportsThisWeek + c.reportsPrevWeek > 0 ||
+    c.missingReports + c.reportsToReview > 0 ||
+    c.openIssues > 0 ||
     (c.quotesAwaiting ?? 0) > 0 ||
-    c.blockers > 0;
-  const state: OwnerHomeState =
-    i.needsSetup || !hasOperationalData
-      ? "empty"
-      : c.overdueJobs > 0 || c.blockers > 0 || over90 > 0 || agedApprovals
-        ? "attention"
-        : "active";
+    i.atRisk.length > 0 ||
+    c.mrSubmitted + c.poOpen > 0 ||
+    i.hasStageData ||
+    i.hasReportTrendData ||
+    i.hasDeadlines ||
+    i.hasActivity ||
+    (i.seesPrice &&
+      ((c.paymentsWeekMinor ?? 0) > 0 || (c.outstandingMinor ?? 0) > 0 || i.hasPaymentsTrendData));
+  const state: OwnerHomeState = hasAttention
+    ? "attention"
+    : hasOperationalEvidence
+      ? "active"
+      : "empty";
 
   // ── Attention rows (only real items; zone hidden when empty) ───────────────
   const attention: AttentionRow[] = [];
@@ -113,6 +133,15 @@ export function composeOwnerHome(i: OwnerHomeInputs): OwnerHomeView {
         vars: { count: c.overdueJobs },
         severity: "critical",
         href: `/o/${i.orgId}/jobs?filter=overdue`,
+      });
+    }
+    if (c.blockers > 0 && !i.atRisk.some((r) => r.ruleKey === "blocking_issue")) {
+      attention.push({
+        key: "blockers",
+        labelKey: "home.attention.blockers",
+        vars: { count: c.blockers },
+        severity: "critical",
+        href: `/o/${i.orgId}/week`,
       });
     }
     if (c.approvalsPending > 0) {
@@ -265,14 +294,27 @@ export function composeOwnerHome(i: OwnerHomeInputs): OwnerHomeView {
       urgency: "money",
     });
   }
-  // 5. empty-org setup / first work (grounded suggestions only)
+  // 5. unfinished workspace setup on a WORKING org — a lower-priority action
+  //    after genuine operational decisions and risks, never a takeover.
+  if (i.needsSetup && state !== "empty") {
+    push({
+      key: "finish_setup",
+      titleKey: "home.action.finish_setup",
+      reasonKey: "home.action.finish_setup_reason",
+      href: `/o/${i.orgId}/onboarding`,
+      icon: "settings",
+      urgency: "setup",
+    });
+  }
+  // 6. quiet-org setup / getting-started (grounded suggestions only — no
+  //    "first ever" claims: recent windows cannot prove all-time history).
   if (state === "empty") {
     const jobQuick = i.quick.find((q) => q.key === "job");
-    if (jobQuick && c.activeJobs + c.doneThisWeek + c.overdueJobs === 0) {
+    if (jobQuick) {
       push({
-        key: "first_job",
-        titleKey: "home.action.first_job",
-        reasonKey: "home.action.first_job_reason",
+        key: "create_job",
+        titleKey: "home.action.create_job",
+        reasonKey: "home.action.create_job_reason",
         href: jobQuick.href,
         icon: "briefcase",
         urgency: "setup",
@@ -299,7 +341,7 @@ export function composeOwnerHome(i: OwnerHomeInputs): OwnerHomeView {
       });
     }
   }
-  // 6. contextual create (fill remaining slots with the role's top quick-creates)
+  // 7. contextual create (fill remaining slots with the role's top quick-creates)
   for (const q of i.quick) {
     if (actions.length >= 3) break;
     if (actions.some((a) => a.href === q.href)) continue;
@@ -312,7 +354,9 @@ export function composeOwnerHome(i: OwnerHomeInputs): OwnerHomeView {
     });
   }
 
-  // ── Setup steps (empty state only; every `done` is grounded) ───────────────
+  // ── Setup steps (quiet state only; every `done` is grounded) ───────────────
+  // No "first {job} / first {report}" steps: the composer only receives
+  // recent-window aggregates, which cannot prove all-time firsts (002B.1).
   const setup: SetupStep[] | null =
     state === "empty"
       ? [
@@ -342,19 +386,6 @@ export function composeOwnerHome(i: OwnerHomeInputs): OwnerHomeView {
                 },
               ]
             : []),
-          {
-            key: "first_job",
-            labelKey: "home.setup.first_job",
-            done: c.activeJobs + c.doneThisWeek + c.overdueJobs > 0,
-            href: i.quick.find((q) => q.key === "job")?.href,
-            unlocksKey: "home.setup.first_job_unlocks",
-          },
-          {
-            key: "first_report",
-            labelKey: "home.setup.first_report",
-            done: c.reportsThisWeek + c.reportsPrevWeek > 0,
-            unlocksKey: "home.setup.first_report_unlocks",
-          },
         ]
       : null;
 

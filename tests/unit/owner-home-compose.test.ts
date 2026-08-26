@@ -67,7 +67,7 @@ describe("state determination", () => {
     expect(v.setup).not.toBeNull();
   });
 
-  it("empty when setup is incomplete regardless of anything else", () => {
+  it("empty when setup is incomplete AND no operational evidence exists", () => {
     const v = composeOwnerHome(base({ needsSetup: true }));
     expect(v.state).toBe("empty");
   });
@@ -154,11 +154,11 @@ describe("next best actions — deterministic priority, max three", () => {
     expect(redacted.brief.chips.map((c) => c.key)).not.toContain("payments");
   });
 
-  it("empty org gets grounded setup/first-work actions, then contextual creates", () => {
+  it("empty org gets grounded setup/getting-started actions, then contextual creates", () => {
     const v = composeOwnerHome(base());
     expect(v.actions.length).toBeGreaterThan(0);
     expect(v.actions.length).toBeLessThanOrEqual(3);
-    expect(v.actions[0]!.key).toBe("first_job");
+    expect(v.actions[0]!.key).toBe("create_job");
     for (const a of v.actions) {
       expect(["setup", "create"]).toContain(a.urgency);
     }
@@ -263,8 +263,10 @@ describe("setup steps — grounded completion only, no percentage anywhere", () 
     expect(byKey.get("config")).toBe(true); // needsSetup=false
     expect(byKey.get("logo")).toBe(true);
     expect(byKey.get("team")).toBe(false); // one seat
-    expect(byKey.get("first_job")).toBe(false);
-    expect(byKey.get("first_report")).toBe(false);
+    // 002B.1: no first-{job}/first-{report} steps — recent-window aggregates
+    // cannot prove all-time firsts, so the checklist may not claim them.
+    expect(byKey.has("first_job")).toBe(false);
+    expect(byKey.has("first_report")).toBe(false);
   });
 
   it("omits the team step entirely when seat data was not available", () => {
@@ -311,5 +313,162 @@ describe("lower-detail sections render only with meaningful data", () => {
       base({ counts: { ...ZERO_COUNTS, activeJobs: 2 }, hasReportTrendData: false }),
     );
     expect(v.sections.reportTrend).toBe(false);
+  });
+});
+
+describe("002B.1 — state truthfulness corrections", () => {
+  it("1. needsSetup plus overdue work classifies as attention, never empty", () => {
+    const v = composeOwnerHome(
+      base({ needsSetup: true, counts: { ...ZERO_COUNTS, activeJobs: 2, overdueJobs: 1 } }),
+    );
+    expect(v.state).toBe("attention");
+    expect(v.setup).toBeNull(); // no full setup experience above urgent work
+    expect(v.attention.map((r) => r.key)).toContain("overdue");
+  });
+
+  it("2. needsSetup plus active work classifies as active, never empty", () => {
+    const v = composeOwnerHome(
+      base({ needsSetup: true, counts: { ...ZERO_COUNTS, activeJobs: 3, reportsThisWeek: 2 } }),
+    );
+    expect(v.state).toBe("active");
+    expect(v.setup).toBeNull();
+  });
+
+  it("3. an atRisk row by itself can never produce empty", () => {
+    const warn = composeOwnerHome(
+      base({ atRisk: [{ id: "e1", ruleKey: "stale_job", severity: "warning", jobId: null }] }),
+    );
+    expect(warn.state).toBe("attention");
+    const info = composeOwnerHome(
+      base({ atRisk: [{ id: "e2", ruleKey: "note", severity: "info", jobId: null }] }),
+    );
+    // info-severity risk is visible evidence but does not force the takeover
+    expect(info.state).toBe("active");
+    expect(info.attention.map((r) => r.key)).toContain("risk_e2");
+  });
+
+  it("4. open issues cannot disappear into the empty state", () => {
+    const v = composeOwnerHome(base({ counts: { ...ZERO_COUNTS, openIssues: 2 } }));
+    expect(v.state).toBe("active");
+    expect(v.setup).toBeNull();
+  });
+
+  it("5. missing reports and review work count as operational evidence", () => {
+    expect(composeOwnerHome(base({ counts: { ...ZERO_COUNTS, missingReports: 3 } })).state).toBe(
+      "active",
+    );
+    expect(composeOwnerHome(base({ counts: { ...ZERO_COUNTS, reportsToReview: 1 } })).state).toBe(
+      "active",
+    );
+  });
+
+  it("6. a dormant configured org (historical traces only) is never treated as brand-new", () => {
+    // All recent-window counts are zero — only all-time traces remain.
+    for (const dormant of [
+      base({ hasActivity: true }),
+      base({ hasStageData: true }),
+      base({ hasDeadlines: true }),
+    ]) {
+      const v = composeOwnerHome(dormant);
+      expect(v.state).toBe("active");
+      expect(v.setup).toBeNull();
+      expect(JSON.stringify(v)).not.toMatch(/first_job|first_report/);
+    }
+  });
+
+  it("7. no first-{job}/{report} completion claim is derived from weekly aggregates", () => {
+    const quiet = composeOwnerHome(base());
+    expect(quiet.setup!.map((s) => s.key)).not.toEqual(
+      expect.arrayContaining(["first_job", "first_report"]),
+    );
+    expect(JSON.stringify(quiet.setup)).not.toMatch(/first/);
+    // The create action makes no "first ever" claim either.
+    const create = quiet.actions.find((a) => a.key === "create_job");
+    expect(create?.titleKey).toBe("home.action.create_job");
+  });
+
+  it("8. finish-setup stays below genuine operational priorities and can be squeezed out", () => {
+    const withRoom = composeOwnerHome(
+      base({
+        needsSetup: true,
+        counts: { ...ZERO_COUNTS, activeJobs: 2, overdueJobs: 1, approvalsPending: 1 },
+      }),
+    );
+    expect(withRoom.actions.map((a) => a.key)).toEqual([
+      "decide_approvals",
+      "review_overdue",
+      "finish_setup",
+    ]);
+    const full = composeOwnerHome(
+      base({
+        needsSetup: true,
+        counts: {
+          ...ZERO_COUNTS,
+          activeJobs: 2,
+          overdueJobs: 1,
+          approvalsPending: 1,
+          reportsToReview: 2,
+        },
+      }),
+    );
+    expect(full.actions.map((a) => a.key)).toEqual([
+      "decide_approvals",
+      "review_overdue",
+      "review_reports",
+    ]);
+  });
+
+  it("9. price redaction is unchanged — invisible money can never classify the org", () => {
+    const redacted = composeOwnerHome(
+      base({
+        seesPrice: false,
+        counts: {
+          ...ZERO_COUNTS,
+          over90Minor: 900000,
+          outstandingMinor: 100000,
+          paymentsWeekMinor: 100000,
+        },
+        hasPaymentsTrendData: true,
+      }),
+    );
+    expect(redacted.state).toBe("empty");
+    expect(redacted.attention).toHaveLength(0);
+    // The same signals, price-visible, are attention-worthy (over-90).
+    const priced = composeOwnerHome(base({ counts: { ...ZERO_COUNTS, over90Minor: 900000 } }));
+    expect(priced.state).toBe("attention");
+  });
+
+  it("10. the three-action maximum holds in every corrected path", () => {
+    const v = composeOwnerHome(
+      base({
+        needsSetup: true,
+        counts: {
+          ...ZERO_COUNTS,
+          activeJobs: 5,
+          overdueJobs: 2,
+          approvalsPending: 3,
+          reportsToReview: 4,
+          over90Minor: 100000,
+        },
+        approvalsOldestDays: 3,
+      }),
+    );
+    expect(v.actions.length).toBeLessThanOrEqual(3);
+  });
+
+  it("blockers alone produce a visible attention row (the takeover is never unexplained)", () => {
+    const v = composeOwnerHome(base({ counts: { ...ZERO_COUNTS, blockers: 2 } }));
+    expect(v.state).toBe("attention");
+    expect(v.attention.map((r) => r.key)).toContain("blockers");
+    expect(v.brief.sentenceKey).toBe("home.brief.attention");
+    // …and dedupes against an exception-engine blocking_issue row.
+    const deduped = composeOwnerHome(
+      base({
+        counts: { ...ZERO_COUNTS, blockers: 1 },
+        atRisk: [{ id: "e9", ruleKey: "blocking_issue", severity: "critical", jobId: "j9" }],
+      }),
+    );
+    expect(deduped.attention.map((r) => r.key)).not.toContain("blockers");
+    expect(deduped.attention.map((r) => r.key)).toContain("risk_e9");
   });
 });
