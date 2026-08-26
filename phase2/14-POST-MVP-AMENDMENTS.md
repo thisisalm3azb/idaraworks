@@ -79,8 +79,41 @@ custom-manifest builder, validation rules, install path, template-compatibility 
 workspace model **before** any template-facing removal begins. Direction 6 (dashboard visuals)
 requires no amendment — it is presentation-layer only — but must pass the standard review gates.
 
-## 4. Amendment log (this document, append-only)
+## 4. Owner product directions — **2026-08-27** (approved; implementation begins with 003B.1)
+
+Context: the Interaction Completeness Audit (`docs/ux/INTERACTION_COMPLETENESS_AUDIT.md`) was
+accepted; its §12 records this amendment in full. Summary of the binding direction:
+
+1. **Universal export contract.** Every record or report that reasonably requires a formal document
+   or a data export must be exportable in an appropriate format (print/PDF for formal documents,
+   CSV — later XLSX — for data). The typed catalogue at `src/platform/documents/catalogue.ts` is
+   authoritative and may never claim an export is available before its route ships.
+2. **Organization identity on documents is a core capability.** All formal documents use the
+   organization's actual identity — onboarding logo, legal/trading name, TRN, address, configured
+   document details — for every organization regardless of entitlements. `feat.branding_docs` is
+   redefined as *advanced document styling* (accent/letterhead controls), never the presence of
+   issuer identity. `feat.branding_app` (in-app placements) keeps its existing behavior.
+3. **Canonical issuer model.** `company` (default row) owns legal identity incl. the only TRN
+   source; `org_branding` owns visual identity; document-profile reads compose the two;
+   `org_branding.legal_name` is frozen as a legacy fallback (no writer remains).
+4. **Historical integrity.** Formal documents capture an immutable issuer snapshot at
+   formalization (writers land in 003B.2); issued documents are never re-branded by later profile
+   changes; pre-snapshot documents use an explicit legacy fallback.
+5. **Interaction-audit decisions D1–D8** are all ruled (audit §12.2): quote cancel with reason
+   approved; preset chosen at acceptance; manual expiry with 30-day default validity; partial
+   credit notes required before real paid billing (not in 003B.1); print-fallback-first document
+   strategy; member role changes required; approval-rule UI view-only first; no hard-delete for
+   the pilot.
+
+**Implementation status:** microstep 003B.1 ships the shared foundation — migration `0074`
+(structured company identity fields), the composed document-profile service, the issuer-snapshot
+schema, the branded document shell, the Brand & Documents settings surface with sample preview, and
+the honest entitlement re-copy. Print/export routes, lifecycle snapshot writers and customer
+completeness follow as separate microsteps (003B.2+).
+
+## 5. Amendment log (this document, append-only)
 
 | Date | Entry | Approved |
 | --- | --- | --- |
 | 2026-08-26 | Document created: post-freeze implementation record (§1), divergence register (§2), owner directions recorded pending implementation (§3). Baseline audit at commit `d9c884c` accepted by owner. | Owner |
+| 2026-08-27 | §4 added: universal document/export contract, core document identity, canonical issuer model, historical-integrity rule, interaction-audit decisions D1–D8 ruled. Interaction Completeness Audit accepted (its §12 carries the full amendment). Implementation begins with microstep 003B.1. | Owner |
