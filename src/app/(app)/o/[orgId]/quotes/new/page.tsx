@@ -1,22 +1,21 @@
 import { redirect } from "next/navigation";
-import { Badge, Button, Card, CardHeader } from "@/platform/ui";
+import { Card, CardHeader } from "@/platform/ui";
 import { lockedFeatureGate } from "@/platform/ui/subscription";
-import { getT } from "@/platform/i18n/server";
+import { getT, getServerLocale } from "@/platform/i18n/server";
 import { resolveCtx } from "@/platform/auth/resolve";
+import { loadOrgTerminology, term } from "@/platform/terminology";
 import { can } from "@/platform/authz";
 import { listQuoteFormOptions } from "@/modules/quotes/service";
+import { createCustomerInlineAction } from "../../customers/actions";
 import { createQuoteAction } from "../actions";
-
-const field = "flex flex-col gap-1 text-sm";
-const input =
-  "min-h-11 rounded-md border border-line bg-card px-3 py-2 text-ink focus:border-brand";
+import { QuoteForm } from "./QuoteForm";
 
 export default async function NewQuotePage({
   params,
   searchParams,
 }: {
   params: Promise<{ orgId: string }>;
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ customer?: string }>;
 }) {
   const { orgId } = await params;
   const sp = await searchParams;
@@ -28,89 +27,77 @@ export default async function NewQuotePage({
   const locked = await lockedFeatureGate(resolved.ctx, resolved.archetype, orgId, "cap.quoting");
   if (locked) return locked;
   const t = await getT();
+  const locale = await getServerLocale();
+  const terms = await loadOrgTerminology(resolved.ctx, locale);
+  const customerT = term("customer", terms, "singular");
   const opts = await listQuoteFormOptions(resolved.ctx);
+  // ?customer= continuity (from the customer detail page): honored ONLY when
+  // the id is in the org's own ACTIVE option list — a foreign or archived id
+  // silently falls back to no selection (and the service re-validates anyway).
+  const defaultCustomerId = opts.customers.some((c) => c.id === sp.customer)
+    ? sp.customer
+    : undefined;
+  const canCreateCustomer = can(resolved.archetype, "customers.manage");
+
   return (
     <div className="mx-auto flex w-full max-w-md flex-col gap-4">
       <h1 className="text-lg font-semibold text-ink">{t("quotes.new")}</h1>
-      {sp.error ? <Badge tone="danger">{t("common.error")}</Badge> : null}
       <Card>
         <CardHeader title={t("quotes.form.title")} />
-        <form action={createQuoteAction.bind(null, orgId)} className="flex flex-col gap-3">
-          <label className={field}>
-            {t("quotes.form.customer")}
-            <select name="customer_id" className={input}>
-              <option value="">—</option>
-              {opts.customers.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className={field}>
-            {t("quotes.form.preset")}
-            <select name="preset_id" className={input}>
-              <option value="">—</option>
-              {opts.presets.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className={field}>
-            {t("quotes.form.description")}
-            <input name="description" required maxLength={300} className={input} />
-          </label>
-          <div className="grid grid-cols-3 gap-2">
-            <label className={field}>
-              {t("quotes.form.qty")}
-              <input
-                name="qty"
-                type="number"
-                min="0"
-                step="0.001"
-                defaultValue="1"
-                dir="ltr"
-                className={input}
-              />
-            </label>
-            <label className={field}>
-              {t("quotes.form.unit")}
-              <input name="unit" defaultValue="unit" className={input} />
-            </label>
-            <label className={field}>
-              {t("quotes.form.vat")}
-              <input
-                name="vat_rate"
-                type="number"
-                min="0"
-                max="100"
-                step="0.01"
-                defaultValue="0"
-                dir="ltr"
-                className={input}
-              />
-            </label>
-          </div>
-          <label className={field}>
-            {t("quotes.form.unit_price")}
-            <input
-              name="unit_price"
-              type="number"
-              min="0"
-              step="0.01"
-              required
-              dir="ltr"
-              className={input}
-            />
-          </label>
-          <label className={field}>
-            {t("quotes.form.terms")}
-            <input name="terms" maxLength={2000} className={input} />
-          </label>
-          <Button type="submit">{t("quotes.form.submit")}</Button>
-        </form>
+        <QuoteForm
+          orgId={orgId}
+          customers={opts.customers.map((c) => ({ id: c.id, label: c.name }))}
+          presets={opts.presets}
+          defaultCustomerId={defaultCustomerId}
+          canCreateCustomer={canCreateCustomer}
+          createAction={createCustomerInlineAction.bind(null, orgId)}
+          submitAction={createQuoteAction.bind(null, orgId)}
+          relationshipLabels={{
+            addNew: t("relationship.add_new", { record: customerT }),
+            dialogTitle: t("relationship.dialog_title", { record: customerT }),
+            dialogDescription: t("relationship.dialog_hint"),
+            create: t("common.add"),
+            cancel: t("common.cancel"),
+            close: t("common.close"),
+            created: t("relationship.created_selected"),
+            similar: t("relationship.similar_exists"),
+            useExisting: t("relationship.use_existing"),
+            reference: t("masterdata.error.reference_short"),
+            errors: {
+              unauthorized: t("masterdata.error.unauthorized"),
+              invalid_email: t("masterdata.error.invalid_email"),
+              name_required: t("masterdata.error.name_required"),
+              invalid_input: t("masterdata.error.invalid_input"),
+              duplicate: t("masterdata.error.duplicate"),
+              read_only_billing: t("masterdata.error.read_only_billing"),
+              not_entitled: t("masterdata.error.not_entitled"),
+              server_error: t("masterdata.error.server_error"),
+              failed: t("masterdata.error.server_error"),
+            },
+          }}
+          dict={{
+            customer: t("quotes.form.customer"),
+            customer_placeholder: "—",
+            preset: t("quotes.form.preset"),
+            description: t("quotes.form.description"),
+            qty: t("quotes.form.qty"),
+            unit: t("quotes.form.unit"),
+            vat: t("quotes.form.vat"),
+            unit_price: t("quotes.form.unit_price"),
+            terms: t("quotes.form.terms"),
+            submit: t("quotes.form.submit"),
+            contact_name: t("customers.contact_name"),
+            phone: t("common.phone"),
+            errors: {
+              unauthorized: t("masterdata.error.unauthorized"),
+              forbidden: t("masterdata.error.unauthorized"),
+              customer_invalid: t("quotes.error.customer_invalid", { customer: customerT }),
+              customer_archived: t("quotes.error.customer_archived", { customer: customerT }),
+              invalid: t("quotes.error.invalid"),
+              failed: t("quotes.error.failed"),
+            },
+          }}
+        />
       </Card>
     </div>
   );

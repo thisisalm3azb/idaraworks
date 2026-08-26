@@ -88,9 +88,14 @@ export function computeQuoteTotals(
 
 async function customerName(tx: TenantTx, ctx: Ctx, customerId: string): Promise<string> {
   const rows = (await tx.execute(sql`
-    select name from public.customer where id = ${customerId} and org_id = ${ctx.orgId}
-  `)) as unknown as Array<{ name: string }>;
+    select name, active from public.customer where id = ${customerId} and org_id = ${ctx.orgId}
+  `)) as unknown as Array<{ name: string; active: boolean }>;
+  // A foreign-org id is invisible under RLS + the org filter, so it lands on
+  // the same "not found" as a nonexistent one — no cross-tenant signal.
   if (!rows[0]) throw new InvalidQuoteInputError("customer not found");
+  // Archived customers are visible history but not valid for NEW documents
+  // (003C): posted values cannot bypass the selector's active-only rule.
+  if (!rows[0].active) throw new InvalidQuoteInputError("customer archived");
   return rows[0].name;
 }
 

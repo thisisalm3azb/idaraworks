@@ -27,10 +27,10 @@ export default async function JobsPage({
   searchParams,
 }: {
   params: Promise<{ orgId: string }>;
-  searchParams: Promise<{ error?: string; stage?: string; filter?: string }>;
+  searchParams: Promise<{ error?: string; stage?: string; filter?: string; customer?: string }>;
 }) {
   const { orgId } = await params;
-  const { error, stage, filter } = await searchParams;
+  const { error, stage, filter, customer } = await searchParams;
   const resolved = await resolveCtx(orgId);
   if (typeof resolved === "string") redirect("/");
   const t = await getT();
@@ -170,6 +170,11 @@ export default async function JobsPage({
                 <select
                   id="customer_id"
                   name="customer_id"
+                  // ?customer= continuity (003C): preselect only when the id is in
+                  // the org-scoped ACTIVE list — foreign/archived ids fall back to none.
+                  defaultValue={
+                    customers.some((c) => c.active && c.id === customer) ? customer : ""
+                  }
                   className="min-h-11 rounded-md border border-line-strong bg-card px-3 text-base text-ink"
                 >
                   <option value="">{t("common.none")}</option>

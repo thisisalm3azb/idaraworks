@@ -357,18 +357,161 @@ export async function updateCustomer(
   );
 }
 
+export type CustomerListRow = {
+  id: string;
+  name: string;
+  country: string | null;
+  contactName: string | null;
+  phone: string | null;
+  active: boolean;
+};
+
+export type CustomerListOptions = {
+  /** Server-side search over name/contact/phone/email/TRN. */
+  q?: string;
+  /** Which lifecycle slice to return. DEFAULT "active" — archived customers
+   * never appear in relationship selectors unless explicitly requested. */
+  status?: "active" | "archived" | "all";
+  limit?: number;
+};
+
 export async function listCustomers(
   ctx: Ctx,
   archetype: RoleArchetype,
-): Promise<Array<{ id: string; name: string; country: string | null; active: boolean }>> {
+  opts: CustomerListOptions = {},
+): Promise<CustomerListRow[]> {
   assertCan(archetype, "customers.view");
+  const status = opts.status ?? "active";
+  const limit = Math.min(Math.max(opts.limit ?? 200, 1), 500);
+  const q = (opts.q ?? "").trim();
+  // ILIKE with escaped wildcards — the pattern is data, never structure.
+  const pattern = q ? `%${q.replace(/[\\%_]/g, (m) => `\\${m}`)}%` : null;
   const rows = (await withCtx(ctx, (tx) =>
     tx.execute(sql`
-      select id::text as id, name, country, active from public.customer
-      where org_id = ${ctx.orgId} order by active desc, name
+      select id::text as id, name, country, contact_name, phone, active
+      from public.customer
+      where org_id = ${ctx.orgId}
+        and (${status}::text = 'all' or active = (${status}::text = 'active'))
+        and (${pattern}::text is null
+             or name ilike ${pattern}
+             or coalesce(contact_name, '') ilike ${pattern}
+             or coalesce(phone, '') ilike ${pattern}
+             or coalesce(email, '') ilike ${pattern}
+             or coalesce(tax_reg_no, '') ilike ${pattern})
+      order by active desc, name
+      limit ${limit}
     `),
-  )) as unknown as Array<{ id: string; name: string; country: string | null; active: boolean }>;
-  return rows;
+  )) as unknown as Array<{
+    id: string;
+    name: string;
+    country: string | null;
+    contact_name: string | null;
+    phone: string | null;
+    active: boolean;
+  }>;
+  return rows.map((r) => ({
+    id: r.id,
+    name: r.name,
+    country: r.country,
+    contactName: r.contact_name,
+    phone: r.phone,
+    active: r.active,
+  }));
+}
+
+export type CustomerDetail = {
+  id: string;
+  name: string;
+  country: string | null;
+  contactName: string | null;
+  phone: string | null;
+  email: string | null;
+  taxRegNo: string | null;
+  notes: string | null;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+/** Single-customer read. Returns null for a missing OR foreign id (RLS +
+ * explicit org filter) — callers render not-found, never a distinction. */
+export async function getCustomer(
+  ctx: Ctx,
+  archetype: RoleArchetype,
+  id: string,
+): Promise<CustomerDetail | null> {
+  assertCan(archetype, "customers.view");
+  if (!z.string().uuid().safeParse(id).success) return null;
+  const rows = (await withCtx(ctx, (tx) =>
+    tx.execute(sql`
+      select id::text as id, name, country, contact_name, phone, email, tax_reg_no,
+             notes, active, created_at::text as created_at, updated_at::text as updated_at
+      from public.customer where org_id = ${ctx.orgId} and id = ${id}
+    `),
+  )) as unknown as Array<Record<string, string | boolean | null>>;
+  const r = rows[0];
+  if (!r) return null;
+  return {
+    id: r.id as string,
+    name: r.name as string,
+    country: (r.country as string) ?? null,
+    contactName: (r.contact_name as string) ?? null,
+    phone: (r.phone as string) ?? null,
+    email: (r.email as string) ?? null,
+    taxRegNo: (r.tax_reg_no as string) ?? null,
+    notes: (r.notes as string) ?? null,
+    active: r.active as boolean,
+    createdAt: r.created_at as string,
+    updatedAt: r.updated_at as string,
+  };
+}
+
+/**
+ * Explicit lifecycle command — archive (active=false) / reactivate
+ * (active=true). Deliberately separate from updateCustomer: archiving is a
+ * lifecycle decision with its own audit trail, not a form edit. Idempotent —
+ * a double submission finds zero rows to change and reports {changed:false}.
+ * There is no delete: history referencing the customer is never touched
+ * (documents snapshot the name; rows keep the FK).
+ */
+export async function setCustomerActive(
+  ctx: Ctx,
+  archetype: RoleArchetype,
+  id: string,
+  active: boolean,
+): Promise<{ changed: boolean }> {
+  assertCan(archetype, "customers.manage");
+  if (!z.string().uuid().safeParse(id).success) {
+    throw new Error("invalid customer id");
+  }
+  // Idempotence without audit noise: a repeat submission (already in the
+  // target state) returns quietly; only a real transition writes audit.
+  const current = (await withCtx(ctx, (tx) =>
+    tx.execute(sql`select active from public.customer where org_id = ${ctx.orgId} and id = ${id}`),
+  )) as unknown as Array<{ active: boolean }>;
+  if (!current[0]) throw new Error("customer not found");
+  if (current[0].active === active) return { changed: false };
+  return command(
+    ctx,
+    {
+      audit: (r: { changed: boolean; name: string | null }) => ({
+        action: active ? "customer.reactivate" : "customer.archive",
+        entityType: "customer",
+        entityId: id,
+        summary: r.name
+          ? `${active ? "Reactivated" : "Archived"} customer ${r.name}`
+          : `${active ? "Reactivate" : "Archive"} customer (no change)`,
+      }),
+    },
+    async (tx) => {
+      const rows = (await tx.execute(sql`
+        update public.customer set active = ${active}, updated_at = now()
+        where org_id = ${ctx.orgId} and id = ${id} and active <> ${active}
+        returning name
+      `)) as unknown as Array<{ name: string }>;
+      return { changed: rows.length > 0, name: rows[0]?.name ?? null };
+    },
+  ).then((r) => ({ changed: r.changed }));
 }
 
 // ── suppliers ────────────────────────────────────────────────────────────────

@@ -196,7 +196,10 @@ async function OverviewTab(props: {
 
   const crew = await listCrew(resolved.ctx, jobId);
   const employees = canCrew ? await listEmployees(resolved.ctx, a) : [];
-  const customers = canEdit && can(a, "customers.view") ? await listCustomers(resolved.ctx, a) : [];
+  const customers =
+    canEdit && can(a, "customers.view")
+      ? await listCustomers(resolved.ctx, a, { status: "all" })
+      : [];
   const members = canEdit ? await listAssignableMembers(resolved.ctx, a) : [];
 
   // Service reads (Bible §3.2 — no raw SQL in pages). Pricing is fetched ONLY

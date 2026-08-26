@@ -5,7 +5,15 @@ export { Button, type ButtonProps } from "./Button";
 export { Card, CardHeader } from "./Card";
 export { EmptyState } from "./EmptyState";
 export { OrgAvatar } from "./OrgAvatar";
+export { Dialog, type DialogProps } from "./Dialog";
 export { Field, type FieldProps } from "./Field";
+export {
+  RelationshipField,
+  type RelationshipCreateField,
+  type RelationshipCreateResult,
+  type RelationshipFieldLabels,
+  type RelationshipOption,
+} from "./RelationshipField";
 export { Menu, type MenuItem, type MenuSection } from "./Menu";
 export { Spinner } from "./Spinner";
 export { Icon, ICON_NAMES, type IconName } from "./icons";

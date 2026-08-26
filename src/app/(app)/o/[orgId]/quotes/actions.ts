@@ -16,10 +16,18 @@ import {
   InvalidQuoteInputError,
 } from "@/modules/quotes/service";
 
-export async function createQuoteAction(orgId: string, formData: FormData): Promise<void> {
+/** Typed create result (003C): the client form keeps every entered value on
+ * failure and receives a SPECIFIC code where the service distinguishes causes
+ * — never a raw exception detail, never a destructive redirect. */
+export type CreateQuoteResult = { ok: true; id: string } | { ok: false; error: string };
+
+export async function createQuoteAction(
+  orgId: string,
+  formData: FormData,
+): Promise<CreateQuoteResult> {
   const resolved = await resolveCtxForAction(orgId);
   if (resolved === "mfa_required") redirect("/mfa");
-  if (typeof resolved === "string") redirect("/");
+  if (typeof resolved === "string") return { ok: false, error: "unauthorized" };
   const currency = resolved.baseCurrency as CurrencyCode;
   const presetId = String(formData.get("preset_id") ?? "").trim();
   const customerId = String(formData.get("customer_id") ?? "").trim();
@@ -40,16 +48,17 @@ export async function createQuoteAction(orgId: string, formData: FormData): Prom
       ],
     });
     revalidatePath(`/o/${orgId}/quotes`);
-    redirect(`/o/${orgId}/quotes/${id}`);
+    return { ok: true, id };
   } catch (err) {
-    if ((err as { digest?: string }).digest?.startsWith("NEXT_REDIRECT")) throw err;
-    const code =
-      err instanceof ForbiddenError
-        ? "forbidden"
-        : err instanceof InvalidQuoteInputError
-          ? "invalid"
-          : "failed";
-    redirect(`/o/${orgId}/quotes/new?error=${code}`);
+    if (err instanceof ForbiddenError) return { ok: false, error: "forbidden" };
+    if (err instanceof InvalidQuoteInputError) {
+      // The service's controlled messages distinguish these causes; the codes
+      // map to specific i18n strings — the raw message never reaches the user.
+      if (err.message === "customer archived") return { ok: false, error: "customer_archived" };
+      if (err.message === "customer not found") return { ok: false, error: "customer_invalid" };
+      return { ok: false, error: "invalid" };
+    }
+    return { ok: false, error: "failed" };
   }
 }
 
