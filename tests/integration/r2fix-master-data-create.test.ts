@@ -186,7 +186,10 @@ describe("customer creation + edit + retire on a construction-template org", () 
     await updateCustomer(ctx, "owner", id, { name: `Renamed ${run}`, active: true });
     // Retire — deactivate (active:false); the row stays (no hard delete).
     await updateCustomer(ctx, "owner", id, { name: `Renamed ${run}`, active: false });
-    const after = await listCustomers(ctx, "owner");
+    // 003C: the DEFAULT list is active-only (archived rows leave selectors);
+    // the retired row remains reachable through the explicit archived/all read.
+    expect((await listCustomers(ctx, "owner")).some((c) => c.id === id)).toBe(false);
+    const after = await listCustomers(ctx, "owner", { status: "all" });
     const row = after.find((c) => c.id === id);
     expect(row?.active).toBe(false);
     expect(row?.name).toBe(`Renamed ${run}`);
