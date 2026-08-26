@@ -5,9 +5,11 @@
  *
  * Enforcement (honest add-on gates, display-level — reads NEVER throw):
  *   feat.branding_app  → in-app placements (header/dashboard logo)
- *   feat.branding_docs → document placements (LPO / quote / invoice logo slot)
- * When a feature is off the caller falls back to the organization-name
- * initials avatar (in-app) or the plain org-name text header (documents).
+ *   feat.branding_docs → ADVANCED document styling only (accent/letterhead —
+ *                        003B.1). Basic document identity (logo, names, TRN,
+ *                        address, footer) is CORE and never gated.
+ * When branding_app is off the in-app caller falls back to the
+ * organization-name initials avatar.
  *
  * The logo NEVER has a public write path: uploads run through this service
  * (config.manage + validation matrix + the VC-4 re-encode pipeline) and the
@@ -23,6 +25,12 @@ import { assertCan } from "@/platform/authz";
 import { command } from "@/platform/audit";
 import { hasFeature, getLimit } from "@/platform/entitlements";
 import { buildObjectPath, evaluateQuota, getFile, type FileVariants } from "@/platform/files";
+import {
+  DOC_LANGUAGES,
+  formatIssuerAddress,
+  type DocLanguage,
+  type IssuerIdentity,
+} from "@/platform/documents";
 import { logger } from "@/platform/logger";
 import type { RoleArchetype } from "@/platform/registries";
 import {
@@ -101,7 +109,9 @@ const emptyToNull = (v: unknown) => (typeof v === "string" && v.trim() === "" ? 
 export const SaveBrandingInput = z.object({
   accentColor: z.preprocess(emptyToNull, z.string().regex(ACCENT_COLOR_RE).nullable()),
   displayName: z.preprocess(emptyToNull, z.string().trim().min(1).max(120).nullable()),
-  legalName: z.preprocess(emptyToNull, z.string().trim().min(1).max(200).nullable()),
+  // legalName intentionally ABSENT (003B.1): org_branding.legal_name is frozen
+  // as a legacy fallback — the canonical legal name lives on the default
+  // company row (saveDocumentIdentity). Two legal names must never drift.
   footerDetails: z.preprocess(emptyToNull, z.string().trim().min(1).max(500).nullable()),
 });
 export type SaveBrandingInput = z.infer<typeof SaveBrandingInput>;
@@ -127,15 +137,15 @@ export async function saveBranding(
       },
     },
     async (tx) => {
+      // legal_name is deliberately untouched (frozen legacy column — 003B.1).
       await tx.execute(sql`
         insert into public.org_branding
-          (org_id, accent_color, display_name, legal_name, footer_details)
+          (org_id, accent_color, display_name, footer_details)
         values (${ctx.orgId}, ${input.accentColor}, ${input.displayName},
-                ${input.legalName}, ${input.footerDetails})
+                ${input.footerDetails})
         on conflict (org_id) do update set
           accent_color = excluded.accent_color,
           display_name = excluded.display_name,
-          legal_name = excluded.legal_name,
           footer_details = excluded.footer_details,
           updated_at = now()
       `);
@@ -324,6 +334,211 @@ export const getAppBranding = cache(async (ctx: Ctx): Promise<AppBranding> => {
   return { enabled, branding };
 });
 
+// ── Document profile (003B.1 — audit §12, phase2/14 §4) ──────────────────────
+//
+// ONE composed issuer read for every formal document. `company` (the default
+// row) is the canonical LEGAL identity — legal name, TRN (the only source),
+// licence, structured bilingual address, contacts, signatory, payment
+// instructions, default document language. `org_branding` is the canonical
+// VISUAL identity — logo, accent, trading display name, footer. Basic issuer
+// identity is a CORE capability: it is NEVER entitlement-gated.
+// feat.branding_docs gates ADVANCED STYLING ONLY (accent/letterhead controls).
+
+/** Resolve the tenant-scoped logo embed. Never a URL; degrades to null (the
+ * shell then renders the legal-name text header). */
+async function resolveLogoDataUri(ctx: Ctx, logoFileId: string | null): Promise<string | null> {
+  if (!logoFileId) return null;
+  try {
+    // RLS scopes this read to ctx.orgId — a foreign file id yields null.
+    const file = await getFile(ctx, logoFileId);
+    const main = file && file.status === "ready" && !file.voidedAt ? file.variants?.main : null;
+    if (!main) return null;
+    const bytes = await objectStore().get(file!.bucket, main.path);
+    return bytes ? `data:${main.mime};base64,${bytes.toString("base64")}` : null;
+  } catch (err) {
+    logger.warn(
+      { orgId: ctx.orgId, requestId: ctx.requestId, err: (err as Error).message },
+      "branding logo fetch failed — document renders with the legal-name fallback",
+    );
+    return null;
+  }
+}
+
+const optional = (max: number) =>
+  z.preprocess(emptyToNull, z.string().trim().min(1).max(max).nullable());
+
+export const SaveDocumentIdentityInput = z.object({
+  legalName: optional(200),
+  taxRegNo: optional(50),
+  tradeLicenseNo: optional(100),
+  addressEn: optional(400),
+  addressAr: optional(400),
+  city: optional(120),
+  region: optional(120),
+  postalCode: optional(20),
+  country: optional(120),
+  phone: optional(50),
+  email: z.preprocess(emptyToNull, z.string().trim().email().max(254).nullable()),
+  website: optional(200),
+  signatoryName: optional(160),
+  signatoryTitle: optional(160),
+  paymentInstructions: z.preprocess(emptyToNull, z.string().trim().min(1).max(1000).nullable()),
+  docLanguage: z.enum(DOC_LANGUAGES),
+});
+export type SaveDocumentIdentityInput = z.infer<typeof SaveDocumentIdentityInput>;
+
+/** Write the legal issuer identity onto the org's DEFAULT company row (the
+ * canonical source; unique-indexed per org by 0074). Audited via command(). */
+export async function saveDocumentIdentity(
+  ctx: Ctx,
+  archetype: RoleArchetype,
+  raw: unknown,
+): Promise<void> {
+  assertCan(archetype, "config.manage");
+  const parsed = SaveDocumentIdentityInput.safeParse(raw);
+  if (!parsed.success) throw new BrandingError("invalid_input", "invalid document identity fields");
+  const i = parsed.data;
+  await command(
+    ctx,
+    {
+      audit: {
+        action: "document_profile.update",
+        entityType: "org",
+        entityId: ctx.orgId,
+        summary: "Updated organization document identity",
+        after: i,
+      },
+    },
+    async (tx) => {
+      const updated = (await tx.execute(sql`
+        update public.company set
+          legal_name = ${i.legalName},
+          tax_reg_no = ${i.taxRegNo},
+          trade_license_no = ${i.tradeLicenseNo},
+          address_en = ${i.addressEn},
+          address_ar = ${i.addressAr},
+          city = ${i.city},
+          region = ${i.region},
+          postal_code = ${i.postalCode},
+          country = ${i.country},
+          phone = ${i.phone},
+          email = ${i.email},
+          website = ${i.website},
+          signatory_name = ${i.signatoryName},
+          signatory_title = ${i.signatoryTitle},
+          payment_instructions = ${i.paymentInstructions},
+          doc_language = ${i.docLanguage},
+          updated_at = now()
+        where org_id = ${ctx.orgId} and is_default
+        returning id
+      `)) as unknown as Array<{ id: string }>;
+      if (updated.length === 0) {
+        // Legacy safety net: every org since 0003 gets a default company at
+        // signup; an org somehow without one gets it created here.
+        await tx.execute(sql`
+          insert into public.company
+            (org_id, name, is_default, legal_name, tax_reg_no, trade_license_no,
+             address_en, address_ar, city, region, postal_code, country, phone,
+             email, website, signatory_name, signatory_title,
+             payment_instructions, doc_language)
+          values
+            (${ctx.orgId},
+             coalesce(${i.legalName}, (select name from public.org where id = ${ctx.orgId})),
+             true, ${i.legalName}, ${i.taxRegNo}, ${i.tradeLicenseNo},
+             ${i.addressEn}, ${i.addressAr}, ${i.city}, ${i.region},
+             ${i.postalCode}, ${i.country}, ${i.phone}, ${i.email}, ${i.website},
+             ${i.signatoryName}, ${i.signatoryTitle}, ${i.paymentInstructions},
+             ${i.docLanguage})
+        `);
+      }
+    },
+  );
+}
+
+export type DocumentProfile = {
+  /** Structured, serializable issuer identity (platform/documents contract). */
+  identity: IssuerIdentity;
+  /** Tenant-scoped logo embed — never a URL; null → legal-name text header. */
+  logoDataUri: string | null;
+  /** Pre-formatted address lines for the shell. */
+  addressLineEn: string | null;
+  addressLineAr: string | null;
+  /** feat.branding_docs — ADVANCED STYLING ONLY (never issuer identity). */
+  advancedStyling: boolean;
+  /** Only non-null when advanced styling is entitled. */
+  accentColor: string | null;
+};
+
+/**
+ * The ONE issuer read every formal document (and the settings preview) uses.
+ * Composes org (name) + default company (legal identity) + org_branding
+ * (visual identity). Legal-name resolution — the drift-proof chain:
+ * company.legal_name → org_branding.legal_name (frozen legacy) → company.name
+ * (signup-seeded) → org.name. Safe for legacy orgs: every field degrades to
+ * null and the names always resolve.
+ */
+export async function getDocumentProfile(ctx: Ctx): Promise<DocumentProfile> {
+  const rows = (await withCtx(ctx, (tx) =>
+    tx.execute(sql`
+      select o.name as org_name,
+             c.name as company_name, c.legal_name, c.tax_reg_no,
+             c.trade_license_no, c.address_en, c.address_ar, c.city, c.region,
+             c.postal_code, c.country, c.phone, c.email, c.website,
+             c.signatory_name, c.signatory_title, c.payment_instructions,
+             c.doc_language,
+             b.logo_file_id::text as logo_file_id, b.accent_color,
+             b.display_name, b.legal_name as branding_legal_name,
+             b.footer_details
+      from public.org o
+      left join public.company c on c.org_id = o.id and c.is_default
+      left join public.org_branding b on b.org_id = o.id
+      where o.id = ${ctx.orgId}
+    `),
+  )) as unknown as Array<Record<string, string | null>>;
+  const r = rows[0] ?? {};
+  const orgName = r.org_name ?? "";
+  const legalName = r.legal_name ?? r.branding_legal_name ?? r.company_name ?? orgName;
+  const tradingName = r.display_name ?? orgName;
+  const docLanguage = (r.doc_language ?? "bilingual") as DocLanguage;
+
+  const identity: IssuerIdentity = {
+    tradingName,
+    legalName,
+    trn: r.tax_reg_no ?? null,
+    licenseNo: r.trade_license_no ?? null,
+    addressEn: r.address_en ?? null,
+    addressAr: r.address_ar ?? null,
+    city: r.city ?? null,
+    region: r.region ?? null,
+    postalCode: r.postal_code ?? null,
+    country: r.country ?? null,
+    phone: r.phone ?? null,
+    email: r.email ?? null,
+    website: r.website ?? null,
+    signatoryName: r.signatory_name ?? null,
+    signatoryTitle: r.signatory_title ?? null,
+    paymentInstructions: r.payment_instructions ?? null,
+    footer: r.footer_details ?? null,
+    docLanguage,
+    logoFileId: r.logo_file_id ?? null,
+  };
+
+  // Core identity is never gated; the feature check covers STYLING only.
+  const [advancedStyling, logoDataUri] = await Promise.all([
+    hasFeature(ctx, "feat.branding_docs"),
+    resolveLogoDataUri(ctx, identity.logoFileId),
+  ]);
+
+  return {
+    identity,
+    logoDataUri,
+    addressLineEn: formatIssuerAddress(identity, "en"),
+    addressLineAr: formatIssuerAddress(identity, "ar"),
+    advancedStyling,
+    accentColor: advancedStyling ? (r.accent_color ?? null) : null,
+  };
+}
+
 export type DocBranding = {
   /** Embedded at render time from tenant-scoped storage — never a URL. */
   logoDataUri: string | null;
@@ -331,43 +546,18 @@ export type DocBranding = {
   footerDetails: string | null;
 };
 
-const EMPTY_DOC_BRANDING: DocBranding = {
-  logoDataUri: null,
-  displayName: null,
-  footerDetails: null,
-};
-
 /**
- * DOCUMENT placements read (LPO / quote / invoice renderers). Gated by
- * feat.branding_docs — when off, templates keep their org-name text header.
- * The logo bytes come from the org's OWN file row (RLS-scoped read) and are
- * embedded as a data URI; a storage hiccup degrades to the text fallback
- * rather than failing the document render.
+ * DOCUMENT placements read (LPO / quote / invoice renderers) — kept for the
+ * existing template callers. 003B.1: NO LONGER entitlement-gated — the
+ * organization's logo, name and footer are core document identity on every
+ * plan (audit §12.1). feat.branding_docs now gates only advanced styling,
+ * enforced in getDocumentProfile.
  */
 export async function getDocBranding(ctx: Ctx): Promise<DocBranding> {
-  if (!(await hasFeature(ctx, "feat.branding_docs"))) return { ...EMPTY_DOC_BRANDING };
-  const branding = await getBranding(ctx);
-  let logoDataUri: string | null = null;
-  if (branding.logoFileId) {
-    try {
-      // RLS scopes this read to ctx.orgId — a foreign file id yields null.
-      const file = await getFile(ctx, branding.logoFileId);
-      const main = file && file.status === "ready" && !file.voidedAt ? file.variants?.main : null;
-      if (main) {
-        const bytes = await objectStore().get(file!.bucket, main.path);
-        if (bytes) logoDataUri = `data:${main.mime};base64,${bytes.toString("base64")}`;
-      }
-    } catch (err) {
-      logger.warn(
-        { orgId: ctx.orgId, requestId: ctx.requestId, err: (err as Error).message },
-        "branding logo fetch failed — document renders with the org-name fallback",
-      );
-      logoDataUri = null;
-    }
-  }
+  const profile = await getDocumentProfile(ctx);
   return {
-    logoDataUri,
-    displayName: branding.displayName,
-    footerDetails: branding.footerDetails,
+    logoDataUri: profile.logoDataUri,
+    displayName: profile.identity.tradingName,
+    footerDetails: profile.identity.footer,
   };
 }

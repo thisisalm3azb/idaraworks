@@ -497,8 +497,8 @@ export async function getQuote(
 /**
  * Build the bilingual quote HTML — INTERNAL (called by the quote PDF worker
  * with a verified ctx; no assertCan, org-scoped RLS is the wall — mirrors
- * buildLpoHtmlForPo). U2 branding: getDocBranding gates the logo/footer embed
- * on feat.branding_docs and never throws; the org-name text header is the
+ * buildLpoHtmlForPo). 003B.1: getDocBranding embeds the logo/footer for every
+ * org (core document identity) and never throws; the org-name text header is the
  * fallback. Returns null if the quote is not visible in the org context.
  */
 export async function buildQuoteHtmlForQuote(ctx: Ctx, quoteId: string): Promise<string | null> {

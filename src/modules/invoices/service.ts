@@ -552,8 +552,8 @@ export async function buildInvoiceHtmlInternal(
   invoiceId: string,
   qr: string | null,
 ): Promise<string | null> {
-  // U2 branding: logo + footer embed only when feat.branding_docs is on
-  // (getDocBranding is the gate and never throws — text fallback otherwise).
+  // 003B.1: core document identity — logo + footer embed for EVERY org
+  // (getDocBranding never throws; missing logo → text fallback).
   const branding = await getDocBranding(ctx);
   return withCtx(ctx, async (tx) => {
     const inv = (await tx.execute(sql`

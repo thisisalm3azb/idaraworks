@@ -20,8 +20,10 @@ import {
   getAppBranding,
   getBranding,
   getDocBranding,
+  getDocumentProfile,
   removeLogo,
   saveBranding,
+  saveDocumentIdentity,
   uploadLogo,
 } from "@/modules/branding/service";
 import { ownerSql, wipeOrgs } from "./helpers";
@@ -192,27 +194,29 @@ describe("org_branding RLS (tenant isolation + no delete grant)", () => {
 });
 
 describe("saveBranding round-trip + validation", () => {
-  it("persists accent colour, names and footer; empty strings become null", async () => {
+  it("persists accent/display/footer; empty → null; legal_name is FROZEN (003B.1)", async () => {
+    // Seed a legacy legal name and prove saveBranding never touches it again.
+    await owner`update public.org_branding set legal_name = 'Legacy Legal LLC'
+      where org_id = ${orgA}`;
     await saveBranding(ctxA(), "owner", {
       accentColor: "#0F766E",
       displayName: "Alpha Branding Co",
-      legalName: "Alpha Branding LLC",
       footerDetails: "PO Box 1 — TRN 100000000000003",
     });
     const b = await getBranding(ctxA());
     expect(b.accentColor).toBe("#0F766E");
     expect(b.displayName).toBe("Alpha Branding Co");
-    expect(b.legalName).toBe("Alpha Branding LLC");
     expect(b.footerDetails).toContain("TRN");
+    expect(b.legalName).toBe("Legacy Legal LLC"); // frozen legacy column untouched
     await saveBranding(ctxA(), "owner", {
       accentColor: "",
       displayName: "Alpha Branding Co",
-      legalName: "",
       footerDetails: "",
     });
     const cleared = await getBranding(ctxA());
     expect(cleared.accentColor).toBeNull();
-    expect(cleared.legalName).toBeNull();
+    expect(cleared.footerDetails).toBeNull();
+    expect(cleared.legalName).toBe("Legacy Legal LLC"); // still untouched
   });
 
   it("rejects a malformed accent colour", async () => {
@@ -220,7 +224,6 @@ describe("saveBranding round-trip + validation", () => {
       saveBranding(ctxA(), "owner", {
         accentColor: "teal",
         displayName: null,
-        legalName: null,
         footerDetails: null,
       }),
     ).rejects.toThrow(BrandingError);
@@ -297,22 +300,114 @@ describe("uploadLogo → getBranding round-trip (real image pipeline + object st
     ).rejects.toMatchObject({ code: "too_small_dims" });
   });
 
-  it("display gates: docs/app branding embed ONLY when the feature is on (free plan starts off)", async () => {
-    // Free plan: both features off — reads never throw, they fall back.
+  it("003B.1 core identity: document branding resolves on the FREE plan (no add-on)", async () => {
+    // Basic document identity is CORE — the onboarding logo + trading name +
+    // legacy legal-name fallback all resolve with both features off.
     expect((await getAppBranding(ctxA())).enabled).toBe(false);
-    const off = await getDocBranding(ctxA());
-    expect(off.logoDataUri).toBeNull();
-    expect(off.displayName).toBeNull();
-    // Grant the add-ons (DEFINER writer, platform path) — the gates open.
+    const p = await getDocumentProfile(ctxA());
+    expect(p.logoDataUri).toMatch(/^data:image\/png;base64,/);
+    expect(p.identity.tradingName).toBe("Alpha Branding Co");
+    expect(p.identity.legalName).toBe("Legacy Legal LLC"); // org_branding legacy fallback
+    expect(p.advancedStyling).toBe(false);
+    expect(p.accentColor).toBeNull(); // accent = advanced styling, gated
+    const doc = await getDocBranding(ctxA());
+    expect(doc.logoDataUri).toMatch(/^data:image\/png;base64,/);
+    expect(doc.displayName).toBe("Alpha Branding Co");
+  });
+
+  it("saveDocumentIdentity → default company row; company.legal_name becomes canonical", async () => {
+    await saveDocumentIdentity(ctxA(), "owner", {
+      legalName: "Alpha Branding LLC",
+      taxRegNo: "100000000000003",
+      tradeLicenseNo: "CN-1234567",
+      addressEn: "Warehouse 4, Industrial Area 2",
+      addressAr: "مستودع ٤، المنطقة الصناعية ٢",
+      city: "Sharjah",
+      region: "Sharjah",
+      postalCode: "",
+      country: "United Arab Emirates",
+      phone: "+971 6 555 0000",
+      email: "office@alpha.example",
+      website: "www.alpha.example",
+      signatoryName: "A. Owner",
+      signatoryTitle: "General Manager",
+      paymentInstructions: "Bank X — IBAN AE00 0000 0000",
+      docLanguage: "bilingual",
+    });
+    const p = await getDocumentProfile(ctxA());
+    expect(p.identity.legalName).toBe("Alpha Branding LLC"); // company beats legacy
+    expect(p.identity.trn).toBe("100000000000003"); // the ONLY TRN source
+    expect(p.identity.docLanguage).toBe("bilingual");
+    expect(p.addressLineEn).toBe(
+      "Warehouse 4, Industrial Area 2, Sharjah, Sharjah, United Arab Emirates",
+    );
+    expect(p.addressLineAr).toContain("مستودع ٤");
+    expect(p.addressLineAr).toContain("، "); // Arabic comma joins
+  });
+
+  it("rejects an invalid business email at the service wall", async () => {
+    await expect(
+      saveDocumentIdentity(ctxA(), "owner", {
+        legalName: "Alpha Branding LLC",
+        taxRegNo: null,
+        tradeLicenseNo: null,
+        addressEn: null,
+        addressAr: null,
+        city: null,
+        region: null,
+        postalCode: null,
+        country: null,
+        phone: null,
+        email: "not-an-email",
+        website: null,
+        signatoryName: null,
+        signatoryTitle: null,
+        paymentInstructions: null,
+        docLanguage: "en",
+      }),
+    ).rejects.toMatchObject({ code: "invalid_input" });
+  });
+
+  it("cross-tenant isolation: profiles never mix; company rows are RLS-walled", async () => {
+    const pb = await getDocumentProfile(ctxB());
+    expect(pb.identity.trn).toBeNull();
+    expect(pb.identity.legalName).not.toBe("Alpha Branding LLC");
+    expect(pb.logoDataUri).toBeNull();
+    // Raw wall: ctx B sees only its own company rows…
+    const rows = (await withCtx(ctxB(), (tx) =>
+      tx.execute(sql`select org_id::text as org_id from public.company`),
+    )) as unknown as Array<{ org_id: string }>;
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows.every((r) => r.org_id === orgB)).toBe(true);
+    // …and cannot update org A's row (zero rows hit).
+    await withCtx(ctxB(), (tx) =>
+      tx.execute(sql`update public.company set tax_reg_no = 'HACK' where org_id = ${orgA}`),
+    );
+    const check = (await owner`
+      select tax_reg_no from public.company where org_id = ${orgA} and is_default`) as unknown as Array<{
+      tax_reg_no: string;
+    }>;
+    expect(check[0]!.tax_reg_no).toBe("100000000000003");
+  });
+
+  it("legacy org compatibility: an org that never saved identity resolves safe fallbacks", async () => {
+    const pb = await getDocumentProfile(ctxB());
+    expect(pb.identity.legalName.length).toBeGreaterThan(0); // signup-seeded company name
+    expect(pb.identity.tradingName).toBe("Brand B");
+    expect(pb.identity.docLanguage).toBe("bilingual"); // safe default
+    expect(pb.addressLineEn).toBeNull(); // no address parts → null, never ""
+  });
+
+  it("gates: feat.branding_app still gates in-app; feat.branding_docs now gates ADVANCED STYLING only", async () => {
     await setAddon(orgA, "addon.branding_docs", "active");
     await setAddon(orgA, "addon.branding_app", "active");
     expect((await getAppBranding(ctxA())).enabled).toBe(true);
-    const on = await getDocBranding(ctxA());
-    expect(on.logoDataUri).toMatch(/^data:image\/png;base64,/);
-    expect(on.displayName).toBe("Alpha Branding Co");
-    // …and org B (no add-on, no logo) still resolves the honest empty shape.
-    const b = await getDocBranding(ctxB());
-    expect(b.logoDataUri).toBeNull();
+    const on = await getDocumentProfile(ctxA());
+    expect(on.advancedStyling).toBe(true);
+    // Core identity is identical with or without the add-on.
+    expect(on.identity.legalName).toBe("Alpha Branding LLC");
+    // Org B (no add-on, no logo) still resolves the honest core shape.
+    expect((await getDocBranding(ctxB())).logoDataUri).toBeNull();
   });
 
   it("removeLogo clears the pointer but NEVER deletes the file row", async () => {

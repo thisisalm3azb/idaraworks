@@ -11,6 +11,7 @@ import {
   LOGO_MAX_BYTES,
   removeLogo,
   saveBranding,
+  saveDocumentIdentity,
   uploadLogo,
 } from "@/modules/branding/service";
 
@@ -90,8 +91,40 @@ export async function saveBrandingAction(
     await saveBranding(resolved.ctx, resolved.archetype, {
       accentColor: String(formData.get("accent_color") ?? ""),
       displayName: String(formData.get("display_name") ?? ""),
-      legalName: String(formData.get("legal_name") ?? ""),
       footerDetails: String(formData.get("footer_details") ?? ""),
+    });
+  } catch (err) {
+    return toResult(err, resolved.ctx);
+  }
+  revalidate(orgId);
+  return { error: null };
+}
+
+/** Legal identity + document details → the default company row (003B.1). */
+export async function saveDocumentIdentityAction(
+  orgId: string,
+  formData: FormData,
+): Promise<BrandingActionResult> {
+  const resolved = await resolveOr(orgId);
+  const s = (name: string) => String(formData.get(name) ?? "");
+  try {
+    await saveDocumentIdentity(resolved.ctx, resolved.archetype, {
+      legalName: s("legal_name"),
+      taxRegNo: s("tax_reg_no"),
+      tradeLicenseNo: s("trade_license_no"),
+      addressEn: s("address_en"),
+      addressAr: s("address_ar"),
+      city: s("city"),
+      region: s("region"),
+      postalCode: s("postal_code"),
+      country: s("country"),
+      phone: s("phone"),
+      email: s("email"),
+      website: s("website"),
+      signatoryName: s("signatory_name"),
+      signatoryTitle: s("signatory_title"),
+      paymentInstructions: s("payment_instructions"),
+      docLanguage: s("doc_language") || "bilingual",
     });
   } catch (err) {
     return toResult(err, resolved.ctx);

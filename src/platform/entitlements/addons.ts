@@ -392,12 +392,17 @@ export const ADDONS: readonly AddonDef[] = [
   // logo slots on LPO/quote/invoice templates), so both branding add-ons are
   // honestly sellable again at the owner's $2/$1 anchors. Enforcement call
   // sites live in src/modules/branding/service.ts (parity-tested).
+  // 003B.1 honesty redefinition (audit §12.1): basic document identity —
+  // logo, legal/trading name, TRN, address, footer — is a CORE capability on
+  // every plan. This add-on sells ADVANCED STYLING only (accent colour +
+  // letterhead/cover layout on printed documents), enforced in
+  // getDocumentProfile (src/modules/branding/service.ts).
   {
     key: "addon.branding_docs",
-    names: L("Your logo on documents", "شعارك على المستندات"),
+    names: L("Advanced document styling", "تنسيق متقدم للمستندات"),
     description: L(
-      "Your logo and footer details on printed quotes, invoices and purchase orders.",
-      "شعارك وبيانات التذييل على عروض الأسعار والفواتير وأوامر الشراء المطبوعة.",
+      "Accent colour and letterhead styling on printed documents. Your logo, legal identity, TRN and address appear on every document as standard — no add-on needed.",
+      "لون مميز وتنسيق ترويسة متقدم للمستندات المطبوعة. يظهر شعارك وهويتك القانونية والرقم الضريبي والعنوان على كل مستند بشكل أساسي دون أي إضافة.",
     ),
     usdMonthlyMinor: 200,
     aedMonthlyMinor: 800,

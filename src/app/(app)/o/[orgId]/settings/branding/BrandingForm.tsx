@@ -27,7 +27,6 @@ export type BrandingDict = {
   identity_title: string;
   display_name: string;
   display_name_hint: string;
-  legal_name: string;
   footer: string;
   footer_hint: string;
   save: string;
@@ -40,7 +39,6 @@ export type BrandingDict = {
 export type BrandingInitial = {
   accentColor: string | null;
   displayName: string | null;
-  legalName: string | null;
   footerDetails: string | null;
 };
 
@@ -261,12 +259,6 @@ export function BrandingForm({
                 defaultValue={initial.displayName ?? ""}
                 hint={dict.display_name_hint}
                 maxLength={120}
-              />
-              <Field
-                label={dict.legal_name}
-                name="legal_name"
-                defaultValue={initial.legalName ?? ""}
-                maxLength={200}
               />
               <div className="flex flex-col gap-1.5">
                 <label htmlFor="footer_details" className="text-sm font-medium text-ink">

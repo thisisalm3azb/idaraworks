@@ -948,8 +948,8 @@ export async function getPurchaseOrder(
  * null if the PO is not visible in the org context.
  */
 export async function buildLpoHtmlForPo(ctx: Ctx, poId: string): Promise<string | null> {
-  // U2 branding: logo + footer embed only when feat.branding_docs is on
-  // (getDocBranding is the gate and never throws — text fallback otherwise).
+  // 003B.1: core document identity — logo + footer embed for EVERY org
+  // (getDocBranding never throws; missing logo → text fallback).
   const branding = await getDocBranding(ctx);
   return withCtx(ctx, async (tx) => {
     const rows = (await tx.execute(sql`
