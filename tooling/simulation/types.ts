@@ -250,7 +250,7 @@ export type ApprovalRow = {
   id: string;
   subjectType: ApprovalRuleRow["subjectType"];
   subjectId: string;
-  subjectSummary: Record<string, unknown>;
+  subjectSummary: { title: string; amountMinor?: number; jobRef?: string };
   assignedRole: string;
   state: "pending" | "approved" | "rejected" | "withdrawn" | "superseded";
   decidedAt: string | null;

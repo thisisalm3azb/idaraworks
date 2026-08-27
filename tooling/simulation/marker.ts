@@ -26,10 +26,20 @@ export type DemoMarker = {
 export const EXPECTED_PROJECT_REF = "anhgeeutrwftsvuzfinf";
 
 export function isDemoMarker(v: unknown): v is DemoMarker {
+  // Tolerate a JSON-string-encoded marker as well as a proper object, so cleanup
+  // can still recognise (and remove) a marker written by an older/misencoded run.
+  let obj: unknown = v;
+  if (typeof obj === "string") {
+    try {
+      obj = JSON.parse(obj);
+    } catch {
+      return false;
+    }
+  }
   return (
-    !!v &&
-    typeof v === "object" &&
-    (v as { is_demo?: unknown }).is_demo === true &&
-    typeof (v as { scenario?: unknown }).scenario === "string"
+    !!obj &&
+    typeof obj === "object" &&
+    (obj as { is_demo?: unknown }).is_demo === true &&
+    typeof (obj as { scenario?: unknown }).scenario === "string"
   );
 }

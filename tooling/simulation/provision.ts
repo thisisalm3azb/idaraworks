@@ -150,16 +150,16 @@ export async function provisionScenario(
 
   // 7) VAT posture + demo marker (typed app_settings; no new column).
   await owner`insert into public.app_settings (org_id, key, value)
-    values (${orgId}, 'finance.vat_registered', ${JSON.stringify(scenario.vatRegistered)}::jsonb)
+    values (${orgId}, 'finance.vat_registered', ${owner.json(scenario.vatRegistered)})
     on conflict (org_id, key) do update set value = excluded.value, updated_at = now()`;
   await owner`insert into public.app_settings (org_id, key, value)
-    values (${orgId}, ${DEMO_MARKER_KEY}, ${JSON.stringify({
+    values (${orgId}, ${DEMO_MARKER_KEY}, ${owner.json({
       is_demo: true,
       sim_version: SIM_VERSION,
       generated_at: opts.generatedAt,
       scenario: scenario.key,
       as_of: opts.asOf,
-    })}::jsonb)
+    })})
     on conflict (org_id, key) do update set value = excluded.value, updated_at = now()`;
 
   // 8) Preset code → id map (for job inserts).

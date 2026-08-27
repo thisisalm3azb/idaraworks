@@ -78,15 +78,15 @@ export async function applyPlan(
          billing_points, custom_values, current_stage_id, created_by, created_at, updated_at)
         values (${j.id}, ${org}, ${j.reference}, ${j.name}, ${presetId}, ${j.customerId},
                 ${j.statusKey}, ${j.statusCategory}, ${j.startDate}, ${j.dueDate}, ${j.completedDate},
-                ${j.sellingPriceMinor}, ${j.paymentTerms}, ${JSON.stringify(j.billingPoints)}::jsonb,
-                '{}'::jsonb, null, ${uid}, ${j.createdAt}, ${j.updatedAt})
+                ${j.sellingPriceMinor}, ${j.paymentTerms}, ${tx.json(j.billingPoints)},
+                ${tx.json({})}, null, ${uid}, ${j.createdAt}, ${j.updatedAt})
         on conflict (id) do update set status_key = excluded.status_key, status_category = excluded.status_category,
-          due_date = excluded.due_date, completed_date = excluded.completed_date,
+          due_date = excluded.due_date, completed_date = excluded.completed_date, billing_points = excluded.billing_points,
           selling_price_minor = excluded.selling_price_minor, updated_at = excluded.updated_at`;
       bump("jobs");
       for (const st of j.stages) {
         await tx`insert into public.job_stage (id, org_id, job_id, stage_key, name, weight, sort, status, started_at, completed_at)
-          values (${st.id}, ${org}, ${j.id}, ${st.stageKey}, ${JSON.stringify({ en: st.en, ar: st.ar })}::jsonb, ${st.weight}, ${st.sort}, ${st.status}, ${st.startedAt}, ${st.completedAt})
+          values (${st.id}, ${org}, ${j.id}, ${st.stageKey}, ${tx.json({ en: st.en, ar: st.ar })}, ${st.weight}, ${st.sort}, ${st.status}, ${st.startedAt}, ${st.completedAt})
           on conflict (id) do update set status = excluded.status, started_at = excluded.started_at, completed_at = excluded.completed_at`;
         bump("job_stages");
       }
@@ -158,7 +158,7 @@ export async function applyPlan(
     }
     for (const ap of plan.approvals) {
       await tx`insert into public.approval (id, org_id, subject_type, subject_id, subject_summary, requested_by, assigned_role, state, decided_by, decided_at, decision_note, self_approved, created_at, updated_at)
-        values (${ap.id}, ${org}, ${ap.subjectType}, ${ap.subjectId}, ${JSON.stringify(ap.subjectSummary)}::jsonb, ${uid}, ${ap.assignedRole}, ${ap.state}, ${ap.decidedAt ? uid : null}, ${ap.decidedAt}, ${ap.decisionNote}, ${ap.selfApproved}, ${ap.createdAt}, ${ap.createdAt})
+        values (${ap.id}, ${org}, ${ap.subjectType}, ${ap.subjectId}, ${tx.json(ap.subjectSummary)}, ${uid}, ${ap.assignedRole}, ${ap.state}, ${ap.decidedAt ? uid : null}, ${ap.decidedAt}, ${ap.decisionNote}, ${ap.selfApproved}, ${ap.createdAt}, ${ap.createdAt})
         on conflict (id) do update set state = excluded.state, decided_by = excluded.decided_by, decided_at = excluded.decided_at, decision_note = excluded.decision_note`;
       bump("approvals");
     }

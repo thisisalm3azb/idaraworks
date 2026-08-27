@@ -62,12 +62,16 @@ export async function cleanupDemoOrgs(owner: Sql, orgIds: string[]): Promise<Cle
 
   const deletedUsers: string[] = [];
   await owner.begin(async (tx) => {
+    // Public org-scoped rows: bypass FK ordering (replica) since we delete whole tenants.
     await tx.unsafe("set local session_replication_role = replica");
     for (const { table_name } of tbls) {
       await tx.unsafe(`delete from public.${table_name} where org_id = any($1::uuid[])`, [orgIds]);
     }
     await tx.unsafe(`delete from public.org where id = any($1::uuid[])`, [orgIds]);
-    // Delete a dedicated owner user only if it now has NO remaining membership.
+    // Restore normal FK/cascade behaviour BEFORE touching the auth schema, so
+    // deleting an auth user cascades its identities/sessions (no orphans left
+    // that would block re-creating the same email).
+    await tx.unsafe("set local session_replication_role = default");
     for (const uid of candidateUsers) {
       const remain = (await tx.unsafe(
         `select 1 from public.membership where user_id = $1 limit 1`,
@@ -79,7 +83,6 @@ export async function cleanupDemoOrgs(owner: Sql, orgIds: string[]): Promise<Cle
         deletedUsers.push(uid);
       }
     }
-    await tx.unsafe("set local session_replication_role = default");
   });
   return { orgIds, deletedUsers, tables: tbls.length };
 }
