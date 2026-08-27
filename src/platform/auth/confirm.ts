@@ -11,12 +11,7 @@ import { sanitizeNext } from "./callback";
  * helper stays outside the Supabase-client boundary (only platform/tenancy may
  * import @supabase/*). */
 export type EmailOtpType =
-  | "signup"
-  | "email"
-  | "invite"
-  | "recovery"
-  | "email_change"
-  | "magiclink";
+  "signup" | "email" | "invite" | "recovery" | "email_change" | "magiclink";
 
 /** The email verification types a link may carry. Anything else is rejected. */
 export const ALLOWED_EMAIL_OTP_TYPES: readonly EmailOtpType[] = [
