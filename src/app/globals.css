@@ -129,23 +129,24 @@ body {
     }
   }
 
-  /* Homepage hero: a single dot travelling the connector rail to communicate
-     that information flows forward through the operating stages. Defined only
-     here, so prefers-reduced-motion users get the static rail with no motion. */
-  .home-flow-dot {
+  /* The Living Operations System (005B.1) — information travelling forward
+     along a connector (homepage hero) and the gentle attention pulse on the one
+     highlighted next action. Both defined only here, so prefers-reduced-motion
+     users get the fully-legible static composition with no movement. */
+  .los-pulse {
     inset-inline-start: 0;
-    animation: home-flow 6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+    animation: los-pulse-flow 3.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
   }
-  .home-flow-dot[data-dir="rtl"] {
-    animation-name: home-flow-rtl;
+  .los-pulse[data-dir="rtl"] {
+    animation-name: los-pulse-flow-rtl;
   }
-  @keyframes home-flow {
+  @keyframes los-pulse-flow {
     from {
       inset-inline-start: 0%;
       opacity: 0;
     }
-    12%,
-    88% {
+    20%,
+    80% {
       opacity: 1;
     }
     to {
@@ -153,39 +154,46 @@ body {
       opacity: 0;
     }
   }
-  @keyframes home-flow-rtl {
+  @keyframes los-pulse-flow-rtl {
     from {
       inset-inline-start: 100%;
       opacity: 0;
     }
-    12%,
-    88% {
+    20%,
+    80% {
       opacity: 1;
     }
     to {
       inset-inline-start: 0%;
       opacity: 0;
+    }
+  }
+  .los-cta {
+    animation: los-cta-pulse 2.6s ease-in-out infinite;
+  }
+  @keyframes los-cta-pulse {
+    0%,
+    100% {
+      box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 30%, transparent);
+    }
+    50% {
+      box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 12%, transparent);
     }
   }
 
-  /* Auth-gateway visual: a dot travelling the VERTICAL connector rail
-     (direction-agnostic). Static under prefers-reduced-motion. */
-  .auth-flow-dot {
-    top: 0;
-    animation: auth-flow 5.5s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  /* Signup visual (005B.1): a slow, soft ring breathing out from the business
+     core — the one motion on the auth side. Static under reduced motion (the
+     span carries no box-shadow at rest, so the core simply sits still). */
+  .los-core {
+    animation: los-core-pulse 4s ease-in-out infinite;
   }
-  @keyframes auth-flow {
-    from {
-      top: 0%;
-      opacity: 0;
+  @keyframes los-core-pulse {
+    0%,
+    100% {
+      box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 22%, transparent);
     }
-    12%,
-    88% {
-      opacity: 1;
-    }
-    to {
-      top: 100%;
-      opacity: 0;
+    50% {
+      box-shadow: 0 0 0 7px color-mix(in srgb, var(--accent) 7%, transparent);
     }
   }
 }
