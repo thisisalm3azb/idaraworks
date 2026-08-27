@@ -47,3 +47,12 @@ next-env.d.ts
 /blob-report/
 
 .vercel
+
+# Simulation credentials, manifest & screenshots (micro-step 006A) — NEVER commit.
+# Real secrets live outside the repo (…/Desktop/IdaraWorks Private/); these patterns
+# are a defensive backstop for any file accidentally written inside the repo.
+simulation-accounts.txt
+sim-credentials*
+sim-manifest*
+sim-screenshots/
+.sim-secrets/
