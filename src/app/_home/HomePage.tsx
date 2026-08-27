@@ -26,10 +26,26 @@ export async function HomePage({ workspaceHref }: { workspaceHref: string | null
 
   return (
     <div className="flex min-h-dvh flex-col bg-page text-ink">
+      {/* Skip link (H2): invisible until keyboard focus, then a fixed, high-z
+          card above the sticky header. Targets the focusable <main id="main">. */}
+      <a
+        href="#main"
+        className="sr-only focus:not-sr-only focus:fixed focus:start-3 focus:top-3 focus:z-50 focus:flex focus:min-h-11 focus:items-center focus:rounded-md focus:border focus:border-line-strong focus:bg-card focus:px-4 focus:text-sm focus:font-semibold focus:text-ink focus:shadow-pop"
+      >
+        {t("home.nav.skip")}
+      </a>
+
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <header className="sticky top-0 z-30 border-b border-line bg-page/85 backdrop-blur">
-        <div className="mx-auto flex min-h-14 w-full max-w-6xl items-center justify-between gap-4 px-4">
-          <Link href="/" className="flex items-center gap-2 font-semibold text-ink">
+        {/* Desktop hierarchy (H2): brand at the start edge, section nav truly
+            centered, language/login/primary at the end edge. Mobile keeps the
+            flex row (brand + burger); the hidden desktop groups leave the grid. */}
+        <div className="mx-auto flex min-h-14 w-full max-w-6xl items-center justify-between gap-4 px-4 md:grid md:grid-cols-[1fr_auto_1fr]">
+          <Link
+            href="/"
+            aria-label={t("home.nav.brand_home")}
+            className="flex min-h-11 items-center gap-2 font-semibold text-ink md:justify-self-start"
+          >
             <span
               aria-hidden
               className="flex size-7 items-center justify-center rounded-md bg-brand text-ink-inverse"
@@ -39,31 +55,34 @@ export async function HomePage({ workspaceHref }: { workspaceHref: string | null
             <span>IdaraWorks</span>
           </Link>
 
-          <nav className="hidden items-center gap-1 md:flex" aria-label={t("home.nav.primary")}>
+          <nav
+            className="hidden items-center gap-1 md:flex md:justify-self-center"
+            aria-label={t("home.nav.primary")}
+          >
             {sections.map((s) => (
               <a
                 key={s.href}
                 href={s.href}
-                className="rounded-md px-3 py-2 text-sm font-medium text-ink-secondary hover:bg-sunken hover:text-ink"
+                className="flex min-h-11 items-center rounded-md px-3 text-sm font-medium text-ink-secondary hover:bg-sunken hover:text-ink"
               >
                 {s.label}
               </a>
             ))}
           </nav>
 
-          <div className="hidden items-center gap-2 md:flex">
+          <div className="hidden items-center gap-2 md:flex md:justify-self-end">
             <LanguageSwitch ariaLabel={t("home.nav.switch_language")} />
             {secondary ? (
               <Link
                 href={secondary.href}
-                className="rounded-md px-3 py-2 text-sm font-medium text-ink hover:bg-sunken"
+                className="flex min-h-11 items-center rounded-md px-3 text-sm font-medium text-ink hover:bg-sunken"
               >
                 {secondary.label}
               </Link>
             ) : null}
             <Link
               href={primary.href}
-              className="inline-flex min-h-10 items-center rounded-md bg-brand px-4 text-sm font-semibold text-ink-inverse hover:bg-brand-strong"
+              className="inline-flex min-h-11 items-center rounded-md bg-brand px-4 text-sm font-semibold text-ink-inverse hover:bg-brand-strong"
             >
               {primary.label}
             </Link>
@@ -75,12 +94,13 @@ export async function HomePage({ workspaceHref }: { workspaceHref: string | null
             secondary={secondary}
             openLabel={t("home.nav.open_menu")}
             closeLabel={t("home.nav.close_menu")}
+            navLabel={t("home.nav.primary")}
             languageSlot={<LanguageSwitch ariaLabel={t("home.nav.switch_language")} />}
           />
         </div>
       </header>
 
-      <main className="flex-1">
+      <main id="main" tabIndex={-1} className="flex-1 outline-none">
         {/* ── 1. Hero ──────────────────────────────────────────────────────── */}
         <section className="mx-auto grid w-full max-w-6xl items-center gap-10 px-4 py-14 sm:py-20 lg:grid-cols-[1.05fr_1fr]">
           <div>
@@ -117,7 +137,7 @@ export async function HomePage({ workspaceHref }: { workspaceHref: string | null
         </section>
 
         {/* ── 2. The business flow ─────────────────────────────────────────── */}
-        <section id="how" className="border-y border-line bg-card">
+        <section id="how" className="scroll-mt-16 border-y border-line bg-card">
           <div className="mx-auto w-full max-w-6xl px-4 py-16">
             <SectionHead
               eyebrow={t("home.flow.eyebrow")}
@@ -218,7 +238,7 @@ export async function HomePage({ workspaceHref }: { workspaceHref: string | null
         </section>
 
         {/* ── 4. Core capabilities (organized by outcome) ──────────────────── */}
-        <section id="product" className="border-y border-line bg-card">
+        <section id="product" className="scroll-mt-16 border-y border-line bg-card">
           <div className="mx-auto w-full max-w-6xl px-4 py-16">
             <SectionHead
               eyebrow={t("home.caps.eyebrow")}
@@ -258,8 +278,8 @@ export async function HomePage({ workspaceHref }: { workspaceHref: string | null
           </div>
         </section>
 
-        {/* ── 5. GCC-ready ─────────────────────────────────────────────────── */}
-        <section className="mx-auto w-full max-w-6xl px-4 py-16">
+        {/* ── 5. International and regional fit ────────────────────────────── */}
+        <section id="international" className="mx-auto w-full max-w-6xl scroll-mt-16 px-4 py-16">
           <SectionHead
             eyebrow={t("home.gcc.eyebrow")}
             title={t("home.gcc.title")}
@@ -290,7 +310,7 @@ export async function HomePage({ workspaceHref }: { workspaceHref: string | null
         </section>
 
         {/* ── 6. Pricing ───────────────────────────────────────────────────── */}
-        <section id="pricing" className="border-y border-line bg-card">
+        <section id="pricing" className="scroll-mt-16 border-y border-line bg-card">
           <div className="mx-auto w-full max-w-6xl px-4 py-16">
             <SectionHead
               eyebrow={t("home.pricing.eyebrow")}

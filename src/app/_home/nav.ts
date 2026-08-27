@@ -28,9 +28,12 @@ export function homeNav(
   const secondary: HomeCta | null = authed
     ? null
     : { href: LOGIN_HREF, label: t("home.nav.login") };
+  // Section links in the PAGE'S reading order (H2): flow → capabilities →
+  // international → pricing, so the nav teaches the page's own structure.
   const sections: HomeCta[] = [
-    { href: "#product", label: t("home.nav.product") },
     { href: "#how", label: t("home.nav.how") },
+    { href: "#product", label: t("home.nav.product") },
+    { href: "#international", label: t("home.nav.international") },
     { href: "#pricing", label: t("home.nav.pricing") },
   ];
   return { authed, primary, secondary, sections };

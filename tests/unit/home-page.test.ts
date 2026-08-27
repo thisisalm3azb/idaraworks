@@ -6,7 +6,7 @@
  * client island. Auth-routing regressions are guarded here and in the
  * auth-callback suite; the full journey lives in the gated e2e spec.
  */
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { createElement as h } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
@@ -92,7 +92,9 @@ describe("routing / CTA contract", () => {
     expect(primary.href).toBe("/signup");
     expect(secondary).toEqual({ href: LOGIN_HREF, label: "home.nav.login" });
     expect(secondary!.href).toBe("/login");
-    expect(sections.map((s) => s.href)).toEqual(["#product", "#how", "#pricing"]);
+    // H2: section links in the page's own reading order, including the new
+    // international anchor.
+    expect(sections.map((s) => s.href)).toEqual(["#how", "#product", "#international", "#pricing"]);
   });
 
   it("authenticated: Open workspace → resolved landing, and NO log-in action", () => {
@@ -154,6 +156,7 @@ describe("MobileMenu accessibility + RTL safety", async () => {
       secondary: { href: "/login", label: "تسجيل الدخول" },
       openLabel: "فتح القائمة",
       closeLabel: "إغلاق القائمة",
+      navLabel: "الرئيسية",
       languageSlot: null,
     }),
   );
@@ -251,6 +254,124 @@ describe("H1 truthfulness + international-first copy", () => {
     for (const k of MARKETING) {
       expect(String(en[k as keyof typeof en]), `en.${k} has an em dash`).not.toContain("—");
       expect(String(ar[k as keyof typeof ar]), `ar.${k} has an em dash`).not.toContain("—");
+    }
+  });
+});
+
+// H2 (006C): public header + navigation. The homepage is an async server
+// component (cookies-bound), so structural wiring is asserted against its
+// SOURCE, the nav contract against the pure homeNav(), and the focus trap
+// against its pure decision function — the repo has no DOM test environment
+// (vitest env "node", no jsdom dependency), so real keydown/focus events are
+// verified on the deployed page, not here.
+describe("H2 header + navigation", () => {
+  const homeSrc = readFileSync("src/app/_home/HomePage.tsx", "utf8");
+  const menuSrc = readFileSync("src/app/_home/MobileMenu.tsx", "utf8");
+  const langSrc = readFileSync("src/app/_home/LanguageSwitch.tsx", "utf8");
+
+  it("every header section link targets an existing homepage anchor, with sticky offset", () => {
+    const { sections } = homeNav(tFake, null);
+    for (const s of sections) {
+      const id = s.href.slice(1);
+      const sectionTag = new RegExp(`<section id="${id}" className="[^"]*scroll-mt-`);
+      expect(sectionTag.test(homeSrc), `#${id} must exist with a scroll-mt offset`).toBe(true);
+    }
+  });
+
+  it("adds no Trust link before the Trust section exists (H8)", () => {
+    const { sections } = homeNav(tFake, null);
+    expect(sections.some((s) => /trust/i.test(s.href) || /trust/i.test(s.label))).toBe(false);
+    expect("home.nav.trust" in en).toBe(false);
+    expect("home.nav.trust" in ar).toBe(false);
+  });
+
+  it("International targets the real international section anchor", () => {
+    const { sections } = homeNav(tFake, null);
+    const intl = sections.find((s) => s.label === "home.nav.international");
+    expect(intl?.href).toBe("#international");
+    expect(homeSrc).toMatch(/<section id="international"/);
+    expect(en["home.nav.international" as keyof typeof en]).toBeTruthy();
+    expect(ar["home.nav.international" as keyof typeof ar]).toBeTruthy();
+  });
+
+  it("skip link targets a real, focusable main-content destination", () => {
+    expect(homeSrc).toMatch(/href="#main"/);
+    expect(homeSrc).toMatch(/<main id="main" tabIndex=\{-1\}/);
+    // Hidden until focus, then a visible ≥44px card above the sticky header.
+    expect(homeSrc).toMatch(/sr-only focus:not-sr-only/);
+    expect(homeSrc).toMatch(/focus:min-h-11/);
+    expect(homeSrc).toMatch(/focus:z-50/);
+    expect(en["home.nav.skip" as keyof typeof en]).toBeTruthy();
+    expect(ar["home.nav.skip" as keyof typeof ar]).toBeTruthy();
+  });
+
+  it("desktop navigation is a labelled landmark with 44px targets; brand link is named", () => {
+    expect(homeSrc).toMatch(/<nav[^>]*aria-label=\{t\("home\.nav\.primary"\)\}/s);
+    expect(homeSrc).toMatch(/min-h-11 items-center rounded-md px-3 text-sm font-medium/);
+    expect(homeSrc).toMatch(/aria-label=\{t\("home\.nav\.brand_home"\)\}/);
+  });
+
+  it("mobile nav landmark uses a proper label, not the open-menu button label", () => {
+    expect(menuSrc).toMatch(/<nav[^>]*aria-label=\{navLabel\}/s);
+    expect(menuSrc).not.toMatch(/<nav[^>]*aria-label=\{openLabel\}/s);
+  });
+
+  describe("mobile-menu focus trap (pure decision function)", async () => {
+    const { trapTabTarget } = await import("@/app/_home/MobileMenu");
+    const [trigger, a, b, c] = ["trigger", "a", "b", "c"];
+
+    it("Tab from the last control wraps to the trigger", () => {
+      expect(trapTabTarget([trigger, a, b, c], c, false)).toBe(trigger);
+    });
+    it("Shift+Tab from the trigger wraps to the last control", () => {
+      expect(trapTabTarget([trigger, a, b, c], trigger, true)).toBe(c);
+    });
+    it("focus that escaped the cycle is pulled back to the trigger", () => {
+      expect(trapTabTarget([trigger, a, b, c], "outside", false)).toBe(trigger);
+      expect(trapTabTarget([trigger, a, b, c], null, false)).toBe(trigger);
+    });
+    it("mid-cycle Tab lets the browser's default order proceed", () => {
+      expect(trapTabTarget([trigger, a, b, c], a, false)).toBeNull();
+      expect(trapTabTarget([trigger, a, b, c], b, true)).toBeNull();
+    });
+    it("an empty cycle traps nothing", () => {
+      expect(trapTabTarget([], null, false)).toBeNull();
+    });
+    it("the keydown handler wires Tab through the trap with trigger + sheet controls", () => {
+      expect(menuSrc).toMatch(/e\.key === "Tab"/);
+      expect(menuSrc).toMatch(/\[trigger, \.\.\.Array\.from\(sheet\.querySelectorAll/);
+      expect(menuSrc).toMatch(/trapTabTarget\(\s*cycle/);
+    });
+  });
+
+  it("Escape closes and returns focus to the trigger; links close; scroll is restored", () => {
+    // Source-level wiring tripwires (real events are exercised on production —
+    // no DOM environment exists in this suite).
+    expect(menuSrc).toMatch(
+      /e\.key === "Escape"[\s\S]{0,120}setOpen\(false\);\s*triggerRef\.current\?\.focus\(\)/,
+    );
+    expect(menuSrc).toMatch(/onClick=\{\(\) => setOpen\(false\)\}/);
+    expect(menuSrc).toMatch(/document\.body\.style\.overflow = "hidden"/);
+    expect(menuSrc).toMatch(/document\.body\.style\.overflow = "";/);
+  });
+
+  it("language control is text-labelled, 44px, accessible, and offers no Spanish", () => {
+    expect(langSrc).toMatch(/العربية/);
+    expect(langSrc).toMatch(/English/);
+    expect(langSrc).toMatch(/min-h-11/);
+    expect(langSrc).toMatch(/aria-label=\{ariaLabel\}/);
+    expect(langSrc).not.toMatch(/"es"|Español/);
+  });
+
+  it("new header copy exists in both catalogs with no em dash and natural Arabic", () => {
+    for (const k of ["home.nav.international", "home.nav.skip", "home.nav.brand_home"] as const) {
+      const e = String(en[k as keyof typeof en]);
+      const a2 = String(ar[k as keyof typeof ar]);
+      expect(e).toBeTruthy();
+      expect(a2).toBeTruthy();
+      expect(e).not.toContain("—");
+      expect(a2).not.toContain("—");
+      expect(/[؀-ۿ]/.test(a2), `ar.${k} must carry Arabic script`).toBe(true);
     }
   });
 });
