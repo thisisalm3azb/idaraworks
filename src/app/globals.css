@@ -129,55 +129,64 @@ body {
     }
   }
 
-  /* The Living Operations System (005B.1) — information travelling forward
-     along a connector (homepage hero) and the gentle attention pulse on the one
-     highlighted next action. Both defined only here, so prefers-reduced-motion
-     users get the fully-legible static composition with no movement. */
-  .los-pulse {
-    inset-inline-start: 0;
-    animation: los-pulse-flow 3.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
-  }
-  .los-pulse[data-dir="rtl"] {
-    animation-name: los-pulse-flow-rtl;
-  }
-  @keyframes los-pulse-flow {
-    from {
-      inset-inline-start: 0%;
-      opacity: 0;
+  /* Intelligent Clay hero (H3) — "a workspace that takes shape". Desktop only
+     (mobile renders the finished State B statically) and motion-safe only.
+     Every animation runs a single time, uses transform/opacity only, and ends
+     on the stable, complete State B. The shape-in rule settles each State-B
+     element into place (staggered via --icv-delay; fill-mode both keeps it
+     hidden until its turn, so the first paint reads as the simple State A flow
+     with no layout shift). The pulse rule sends one information dot across a
+     connector, then fades it; with no animation applied (reduced motion,
+     mobile) the dot rests statically at the connector start. */
+  @media (min-width: 1024px) {
+    .icv-shape {
+      animation: icv-shape-in 0.45s cubic-bezier(0.2, 0, 0.2, 1) 1 both;
+      animation-delay: var(--icv-delay, 0.4s);
     }
-    20%,
-    80% {
-      opacity: 1;
+    @keyframes icv-shape-in {
+      from {
+        opacity: 0;
+        transform: translateY(6px) scale(0.97);
+      }
+      to {
+        opacity: 1;
+        transform: none;
+      }
     }
-    to {
-      inset-inline-start: 100%;
-      opacity: 0;
+    .icv-pulse {
+      animation: icv-pulse-run 0.9s ease-in-out 1 both;
+      animation-delay: var(--icv-pulse-delay, 2s);
     }
-  }
-  @keyframes los-pulse-flow-rtl {
-    from {
-      inset-inline-start: 100%;
-      opacity: 0;
+    .icv-pulse[data-dir="rtl"] {
+      animation-name: icv-pulse-run-rtl;
     }
-    20%,
-    80% {
-      opacity: 1;
+    @keyframes icv-pulse-run {
+      0% {
+        opacity: 0;
+        transform: translateX(0);
+      }
+      20%,
+      80% {
+        opacity: 1;
+      }
+      100% {
+        opacity: 0;
+        transform: translateX(50px);
+      }
     }
-    to {
-      inset-inline-start: 0%;
-      opacity: 0;
-    }
-  }
-  .los-cta {
-    animation: los-cta-pulse 2.6s ease-in-out infinite;
-  }
-  @keyframes los-cta-pulse {
-    0%,
-    100% {
-      box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 30%, transparent);
-    }
-    50% {
-      box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 12%, transparent);
+    @keyframes icv-pulse-run-rtl {
+      0% {
+        opacity: 0;
+        transform: translateX(0);
+      }
+      20%,
+      80% {
+        opacity: 1;
+      }
+      100% {
+        opacity: 0;
+        transform: translateX(-50px);
+      }
     }
   }
 
