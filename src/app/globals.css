@@ -128,4 +128,43 @@ body {
       transform: rotate(360deg);
     }
   }
+
+  /* Homepage hero: a single dot travelling the connector rail to communicate
+     that information flows forward through the operating stages. Defined only
+     here, so prefers-reduced-motion users get the static rail with no motion. */
+  .home-flow-dot {
+    inset-inline-start: 0;
+    animation: home-flow 6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  }
+  .home-flow-dot[data-dir="rtl"] {
+    animation-name: home-flow-rtl;
+  }
+  @keyframes home-flow {
+    from {
+      inset-inline-start: 0%;
+      opacity: 0;
+    }
+    12%,
+    88% {
+      opacity: 1;
+    }
+    to {
+      inset-inline-start: 100%;
+      opacity: 0;
+    }
+  }
+  @keyframes home-flow-rtl {
+    from {
+      inset-inline-start: 100%;
+      opacity: 0;
+    }
+    12%,
+    88% {
+      opacity: 1;
+    }
+    to {
+      inset-inline-start: 0%;
+      opacity: 0;
+    }
+  }
 }

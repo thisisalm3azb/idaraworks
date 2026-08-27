@@ -27,7 +27,14 @@ export default async function LoginPage({
   const t = await getT();
   const { error, notice } = await searchParams;
   return (
-    <AppShell brand={<span>IdaraWorks</span>} actions={<LanguageToggle />}>
+    <AppShell
+      brand={
+        <Link href="/" className="text-ink hover:text-brand">
+          IdaraWorks
+        </Link>
+      }
+      actions={<LanguageToggle />}
+    >
       <div className="mx-auto w-full max-w-sm">
         <Card>
           <h1 className="mb-4 text-lg font-semibold text-ink">{t("auth.login.title")}</h1>

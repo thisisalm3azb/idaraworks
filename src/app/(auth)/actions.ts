@@ -108,7 +108,9 @@ export async function loginAction(formData: FormData): Promise<void> {
   }
   await logAuthEvent({ userId: data.user.id, event: "login_success", ...meta });
   await applyLocaleFromProfile(data.user.id);
-  redirect("/");
+  // "/" is now the public homepage (005A) — route the signed-in user straight
+  // to their workspace/onboarding instead of bouncing through marketing.
+  redirect(await resolveLanding());
 }
 
 export async function signupAction(formData: FormData): Promise<void> {
@@ -192,7 +194,8 @@ export async function resetPasswordAction(formData: FormData): Promise<void> {
   if (error) {
     redirect("/reset-password?error=failed");
   }
-  redirect("/");
+  // "/" is the public homepage now (005A) — go to the resolved workspace.
+  redirect(await resolveLanding());
 }
 
 export async function logoutAction(): Promise<void> {
