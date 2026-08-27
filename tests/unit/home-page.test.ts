@@ -6,6 +6,7 @@
  * client island. Auth-routing regressions are guarded here and in the
  * auth-callback suite; the full journey lives in the gated e2e spec.
  */
+import { existsSync } from "node:fs";
 import { createElement as h } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
@@ -166,5 +167,90 @@ describe("MobileMenu accessibility + RTL safety", async () => {
   it("uses no physical-direction classes (mirrors under RTL)", () => {
     const classes = [...html.matchAll(/class="([^"]*)"/g)].map((m) => m[1]).join(" ");
     expect(PHYSICAL.test(classes), classes).toBe(false);
+  });
+});
+
+// H1 (006B): homepage truthfulness + international-first copy. These assertions
+// encode the deliberate copy corrections and must not be weakened to pass.
+describe("H1 truthfulness + international-first copy", () => {
+  const marketingEn = MARKETING.map((k) => String(en[k as keyof typeof en])).join("  ");
+  const marketingAr = MARKETING.map((k) => String(ar[k as keyof typeof ar])).join("  ");
+  const builtEn = Object.keys(en)
+    .filter((k) => k.startsWith("home.built."))
+    .map((k) => String(en[k as keyof typeof en]))
+    .join("  ");
+
+  it("does not claim AI configures the product today (removed claim cannot return)", () => {
+    expect(marketingEn.toLowerCase()).not.toContain("ai can help");
+    expect(marketingEn).not.toMatch(
+      /turn(s|ing)?\s+(your\s+)?(plain\s+)?answers\s+into\s+a\s+working\s+setup/i,
+    );
+    // No marketing copy attributes configuration or setup to AI in the present tense.
+    expect(marketingEn).not.toMatch(/\bAI\b[^.]{0,60}(configur|set\s?up|setup)/i);
+    expect(builtEn).not.toMatch(/\bAI\b/); // the built section is AI-free after H1
+  });
+
+  it("describes guided setup truthfully: nothing is created until confirmed", () => {
+    expect(builtEn).toMatch(/guided setup/i);
+    expect(builtEn).toMatch(
+      /nothing is created until|before (anything|it) is (created|confirmed)/i,
+    );
+  });
+
+  it("keeps the AI configuration boundary as a planned principle, not an active feature", () => {
+    const guard = String(en["home.built.guardrail" as keyof typeof en]);
+    expect(guard).toMatch(/propose changes for you to approve/i);
+    expect(guard).toMatch(/never (write|change)[^.]*(code|database|security)/i);
+    expect(guard.toLowerCase()).not.toContain("ai helps with configuration");
+  });
+
+  it("removes GCC-only positioning", () => {
+    for (const blob of [marketingEn, marketingAr]) {
+      expect(blob.toLowerCase()).not.toContain("made for the gcc");
+    }
+    expect(marketingEn).not.toMatch(/native for (the )?gcc/i);
+    expect(marketingEn).not.toMatch(/(built|made|only|exclusively) for (the )?gcc\b/i);
+    expect(String(en["home.meta.description" as keyof typeof en])).not.toMatch(
+      /for gcc (small|medium|businesses)/i,
+    );
+  });
+
+  it("renders international-first framing, with the UAE and GCC as the launch market", () => {
+    expect(marketingEn).toMatch(/across markets/i);
+    expect(marketingEn).toMatch(/first launch market/i);
+    // GCC is allowed only as launch-market context, never as the product boundary.
+    expect(marketingEn).toMatch(/uae and gcc/i);
+  });
+
+  it("describes English and Arabic as available now", () => {
+    expect(marketingEn).toMatch(/arabic and english/i);
+    expect(marketingEn).toMatch(/arabic and english[^.]*\b(today|now|work)\b/i);
+    expect(marketingEn).toMatch(/right-to-left/i);
+  });
+
+  it("describes Spanish as planned, never as available, and adds no Spanish locale", () => {
+    expect(marketingEn).toMatch(/spanish is planned/i);
+    expect(marketingEn).not.toMatch(/spanish[^.]*\b(today|now|available)\b/i);
+    expect(existsSync("src/platform/i18n/messages/es.json")).toBe(false);
+  });
+
+  it("does not claim custom roles or trade-tailored permissions", () => {
+    expect(marketingEn).not.toMatch(/custom roles?/i);
+    expect(marketingEn).not.toMatch(/create (your own )?roles?/i);
+    expect(marketingEn).not.toMatch(/permissions that match your trade/i);
+  });
+
+  it("preserves the available-now vs planned distinction and the Illustrative label", () => {
+    expect(String(en["home.built.now_label" as keyof typeof en])).toMatch(/now|available/i);
+    expect(String(en["home.built.planned_label" as keyof typeof en])).toMatch(/planned/i);
+    expect(en["home.viz.illustrative" as keyof typeof en]).toBeTruthy();
+    expect(ar["home.viz.illustrative" as keyof typeof ar]).toBeTruthy();
+  });
+
+  it("contains no em dash in any homepage marketing copy (en or ar)", () => {
+    for (const k of MARKETING) {
+      expect(String(en[k as keyof typeof en]), `en.${k} has an em dash`).not.toContain("—");
+      expect(String(ar[k as keyof typeof ar]), `ar.${k} has an em dash`).not.toContain("—");
+    }
   });
 });
