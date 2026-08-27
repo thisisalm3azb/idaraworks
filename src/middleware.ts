@@ -19,6 +19,17 @@ export async function middleware(request: NextRequest) {
     redirect.headers.set(REQUEST_ID_HEADER, requestId);
     return redirect;
   }
+  // 005B.1: the token-hash confirmation/recovery flow. If a link ever lands on
+  // "/?token_hash=…&type=…" (e.g. a Site-URL-root email), forward it to the
+  // dedicated /auth/confirm route (params preserved) so verification still
+  // completes server-side instead of stranding the user on the homepage.
+  if (request.nextUrl.pathname === "/" && request.nextUrl.searchParams.has("token_hash")) {
+    const forward = request.nextUrl.clone();
+    forward.pathname = "/auth/confirm";
+    const redirect = NextResponse.redirect(forward);
+    redirect.headers.set(REQUEST_ID_HEADER, requestId);
+    return redirect;
+  }
   const response = await updateSession(request);
   // Echoed on the response so user-reported failures correlate with logs.
   response.headers.set(REQUEST_ID_HEADER, requestId);

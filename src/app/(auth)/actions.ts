@@ -152,7 +152,7 @@ export async function signupAction(formData: FormData): Promise<void> {
   // brand-new founder defaults to /onboarding.
   const next = safeNextFrom(formData);
   const dest = next || "/onboarding";
-  const emailRedirectTo = `${requestOrigin(await headers())}/auth/callback?next=${encodeURIComponent(dest)}`;
+  const emailRedirectTo = confirmRedirectTo(requestOrigin(await headers()), dest);
   const supabase = supabaseServer(await cookies());
   const { data, error } = await supabase.auth.signUp({
     email,
@@ -180,7 +180,15 @@ export async function signupAction(formData: FormData): Promise<void> {
  * signUp flow, rate limiting and audit as signupAction.
  */
 export type RegisterResult =
-  { ok: true; confirm: true } | { ok: false; error: "rate_limited" | "invalid" | "failed" };
+  | { ok: true; confirm: true; email: string }
+  | { ok: false; error: "rate_limited" | "invalid" | "failed" };
+
+/** The token-hash confirmation destination (005B.1): the server-side
+ * /auth/confirm route establishes the session from the email link, so
+ * confirmation is not tied to the initiating browser. */
+function confirmRedirectTo(origin: string, dest: string): string {
+  return `${origin}/auth/confirm?next=${encodeURIComponent(dest)}`;
+}
 
 export async function registerAction(nextRaw: string, formData: FormData): Promise<RegisterResult> {
   const email = String(formData.get("email") ?? "")
@@ -198,7 +206,7 @@ export async function registerAction(nextRaw: string, formData: FormData): Promi
 
   const next = sanitizeNext(nextRaw, "");
   const dest = next || "/onboarding";
-  const emailRedirectTo = `${requestOrigin(await headers())}/auth/callback?next=${encodeURIComponent(dest)}`;
+  const emailRedirectTo = confirmRedirectTo(requestOrigin(await headers()), dest);
   const supabase = supabaseServer(await cookies());
   const { data, error } = await supabase.auth.signUp({
     email,
@@ -208,7 +216,38 @@ export async function registerAction(nextRaw: string, formData: FormData): Promi
   if (error || !data.user) return { ok: false, error: "failed" };
   await logAuthEvent({ userId: data.user.id, event: "signup", ...meta });
   if (data.session) redirect(dest); // confirmations off → straight into onboarding
-  return { ok: true, confirm: true }; // confirmation email sent → inline notice
+  return { ok: true, confirm: true, email }; // confirmation email sent → inline notice
+}
+
+/**
+ * Resend the signup confirmation email (005B.1) for the "Check your inbox"
+ * state. Rate-limited and non-enumerating: the caller always sees the same
+ * neutral success, whether or not the email is a real pending signup.
+ */
+export type ResendResult = { ok: true } | { ok: false; error: "rate_limited" | "invalid" };
+
+export async function resendConfirmationAction(
+  nextRaw: string,
+  formData: FormData,
+): Promise<ResendResult> {
+  const email = String(formData.get("email") ?? "")
+    .trim()
+    .toLowerCase();
+  if (!email.includes("@")) return { ok: false, error: "invalid" };
+  const meta = await requestMeta();
+  // A tight window so the resend button can't be hammered (non-enumerating).
+  const rl = await rateLimit("otp_send", meta.ip ?? email);
+  if (!rl.allowed) return { ok: false, error: "rate_limited" };
+
+  const dest = sanitizeNext(nextRaw, "") || "/onboarding";
+  const emailRedirectTo = confirmRedirectTo(requestOrigin(await headers()), dest);
+  const supabase = supabaseServer(await cookies());
+  // Result deliberately ignored — success is indistinguishable from "no such
+  // pending signup" so the resend never reveals account existence.
+  await supabase.auth
+    .resend({ type: "signup", email, options: { emailRedirectTo } })
+    .catch(() => {});
+  return { ok: true };
 }
 
 /**
@@ -229,7 +268,9 @@ export async function forgotPasswordAction(formData: FormData): Promise<void> {
     redirect("/forgot?error=rate_limited");
   }
   if (email) {
-    const redirectTo = `${requestOrigin(await headers())}/auth/callback?next=/reset-password`;
+    // 005B.1: the recovery email uses the token-hash /auth/confirm route
+    // (type=recovery) — server-side, device-independent, no localhost fallback.
+    const redirectTo = confirmRedirectTo(requestOrigin(await headers()), "/reset-password");
     const supabase = supabaseServer(await cookies());
     // The result is intentionally NOT surfaced — a failure here (unknown email,
     // provider hiccup) must be indistinguishable from success to the caller.

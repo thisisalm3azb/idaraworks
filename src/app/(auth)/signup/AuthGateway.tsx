@@ -9,10 +9,10 @@
  * confirmation is required — an inline "check your inbox". Identity only; no
  * business information is requested here.
  */
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import { Button, Field, Icon } from "@/platform/ui";
-import type { RegisterResult } from "../actions";
+import type { RegisterResult, ResendResult } from "../actions";
 
 export type GatewayDict = {
   google: string;
@@ -31,14 +31,33 @@ export type GatewayDict = {
   agree_mid: string;
   privacy: string;
   confirm_title: string;
-  confirm_body: string;
+  confirm_sent_to: string;
+  confirm_explain: string;
+  confirm_spam: string;
+  confirm_expired: string;
+  resend: string;
+  resend_cooldown: string; // "{s}"
+  resend_sent: string;
+  resend_rate: string;
+  change_email: string;
+  verified_already: string;
   errors: Record<string, string>;
 };
+
+/** Mask an email for display: keep the first char + domain, hide the rest.
+ * Never a security control — just avoids showing the full address on screen. */
+function maskEmail(email: string): string {
+  const [local, domain] = email.split("@");
+  if (!domain || !local) return email;
+  const head = local.slice(0, 1);
+  return `${head}${"•".repeat(Math.max(1, Math.min(local.length - 1, 4)))}@${domain}`;
+}
 
 export function AuthGateway({
   oauthOn,
   loginHref,
   registerAction,
+  resendAction,
   googleAction,
   googleNext,
   dict,
@@ -46,6 +65,7 @@ export function AuthGateway({
   oauthOn: boolean;
   loginHref: string;
   registerAction: (formData: FormData) => Promise<RegisterResult>;
+  resendAction: (formData: FormData) => Promise<ResendResult>;
   /** Server action for the Google form (reads provider + next from the form). */
   googleAction: (formData: FormData) => void | Promise<void>;
   /** Safe same-origin invite/workspace next, threaded through the OAuth round trip. */
@@ -54,7 +74,7 @@ export function AuthGateway({
 }) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const [confirm, setConfirm] = useState(false);
+  const [confirmEmail, setConfirmEmail] = useState<string | null>(null);
 
   function onSubmit(formData: FormData) {
     if (pending) return;
@@ -62,25 +82,22 @@ export function AuthGateway({
     startTransition(async () => {
       const res = await registerAction(formData);
       if (res.ok) {
-        setConfirm(true); // email confirmation required — show inline notice
+        setConfirmEmail(res.email); // email confirmation required — show the inbox state
         return;
       }
       setError(dict.errors[res.error] ?? dict.errors.failed!);
     });
   }
 
-  if (confirm) {
+  if (confirmEmail !== null) {
     return (
-      <div
-        className="rounded-lg border border-line bg-card p-6 text-center shadow-card"
-        role="status"
-      >
-        <span className="mx-auto flex size-11 items-center justify-center rounded-full bg-success-soft text-success">
-          <Icon name="inbox" size={22} aria-hidden />
-        </span>
-        <h2 className="mt-3 text-lg font-semibold text-ink">{dict.confirm_title}</h2>
-        <p className="mt-1.5 text-sm leading-relaxed text-ink-secondary">{dict.confirm_body}</p>
-      </div>
+      <CheckInbox
+        email={confirmEmail}
+        loginHref={loginHref}
+        resendAction={resendAction}
+        onChangeEmail={() => setConfirmEmail(null)}
+        dict={dict}
+      />
     );
   }
 
@@ -157,6 +174,113 @@ export function AuthGateway({
           {dict.privacy}
         </Link>
         .
+      </p>
+    </div>
+  );
+}
+
+const RESEND_COOLDOWN_S = 30;
+
+/**
+ * "Check your inbox" state (005B.1) — masked email, plain-language explanation
+ * that verification continues setup (no second login), a rate-limited resend
+ * with a client cooldown and non-enumerating feedback, a start-over path, spam
+ * + expiry guidance, and a Log-in link for someone who already verified.
+ */
+function CheckInbox({
+  email,
+  loginHref,
+  resendAction,
+  onChangeEmail,
+  dict,
+}: {
+  email: string;
+  loginHref: string;
+  resendAction: (formData: FormData) => Promise<ResendResult>;
+  onChangeEmail: () => void;
+  dict: GatewayDict;
+}) {
+  const [pending, startTransition] = useTransition();
+  const [cooldown, setCooldown] = useState(0);
+  const [note, setNote] = useState<{ kind: "ok" | "rate"; text: string } | null>(null);
+
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const id = setTimeout(() => setCooldown((s) => s - 1), 1000);
+    return () => clearTimeout(id);
+  }, [cooldown]);
+
+  function resend() {
+    if (pending || cooldown > 0) return;
+    setNote(null);
+    startTransition(async () => {
+      const fd = new FormData();
+      fd.set("email", email);
+      const res = await resendAction(fd);
+      if (res.ok) {
+        setNote({ kind: "ok", text: dict.resend_sent });
+        setCooldown(RESEND_COOLDOWN_S);
+      } else {
+        setNote({ kind: "rate", text: dict.resend_rate });
+        setCooldown(RESEND_COOLDOWN_S);
+      }
+    });
+  }
+
+  return (
+    <div
+      className="rounded-lg border border-line bg-card p-6 text-center shadow-card"
+      role="status"
+    >
+      <span className="mx-auto flex size-11 items-center justify-center rounded-full bg-success-soft text-success">
+        <Icon name="inbox" size={22} aria-hidden />
+      </span>
+      <h2 className="mt-3 text-lg font-semibold text-ink">{dict.confirm_title}</h2>
+      <p className="mt-1.5 text-sm leading-relaxed text-ink-secondary">
+        {dict.confirm_sent_to}{" "}
+        <span dir="ltr" className="font-medium text-ink">
+          {maskEmail(email)}
+        </span>
+      </p>
+      <p className="mt-1.5 text-sm leading-relaxed text-ink-secondary">{dict.confirm_explain}</p>
+
+      {note ? (
+        <p
+          role="status"
+          className={
+            "mt-3 rounded-md p-2.5 text-sm " +
+            (note.kind === "ok" ? "bg-success-soft text-success" : "bg-warning-soft text-warning")
+          }
+        >
+          {note.text}
+        </p>
+      ) : null}
+
+      <div className="mt-4 flex flex-col gap-2">
+        <Button
+          type="button"
+          variant="secondary"
+          onClick={resend}
+          disabled={pending || cooldown > 0}
+        >
+          {cooldown > 0 ? dict.resend_cooldown.replace("{s}", String(cooldown)) : dict.resend}
+        </Button>
+        <button
+          type="button"
+          onClick={onChangeEmail}
+          className="min-h-9 text-sm font-medium text-brand hover:underline"
+        >
+          {dict.change_email}
+        </button>
+      </div>
+
+      <p className="mt-4 text-xs leading-relaxed text-ink-muted">{dict.confirm_spam}</p>
+      <p className="mt-1 text-xs leading-relaxed text-ink-muted">{dict.confirm_expired}</p>
+      <p className="mt-3 text-sm text-ink-secondary">
+        {dict.verified_already}{" "}
+        <Link href={loginHref} className="font-medium text-brand hover:underline">
+          {dict.login}
+        </Link>
       </p>
     </div>
   );

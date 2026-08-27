@@ -58,15 +58,33 @@ allowed_mime_types = ["image/jpeg", "image/png", "image/webp"]
 # Phase C: identity. Local/CI: email signup without confirmations so integration
 # tests run headlessly; hosted keeps confirmations ON (dashboard). Phone provider
 # is configured on hosted only (Twilio Verify — owner OA-4); disabled locally.
+#
+# 005B.1 — LOCAL config only. This file governs `supabase start`, NOT the hosted
+# project. The HOSTED Auth config is a dashboard owner action (see the 005B.1
+# report / owner checklist): Site URL = https://idaraworks.vercel.app, the
+# redirect allow-list below (production origin), and the token-hash email
+# templates pointing at /auth/confirm. Production must never use a localhost
+# Site URL — that was the root cause of the confirmation-link defect.
 enabled = true
 site_url = "http://localhost:3000"
-additional_redirect_urls = ["http://localhost:3000"]
+# Include the SSR verification routes so a local email round trip resolves.
+additional_redirect_urls = [
+  "http://localhost:3000",
+  "http://localhost:3000/auth/confirm",
+  "http://localhost:3000/auth/callback",
+]
 jwt_expiry = 3600
 enable_refresh_token_rotation = true
 
 [auth.email]
 enable_signup = true
 enable_confirmations = false
+# Hosted template (dashboard) — Confirm signup & Reset password must link to the
+# server-rendered token-hash route so verification is not tied to the initiating
+# browser and never lands on localhost:
+#   {{ .RedirectTo }}&token_hash={{ .TokenHash }}&type=signup     (confirm signup)
+#   {{ .RedirectTo }}&token_hash={{ .TokenHash }}&type=recovery   (reset password)
+# where RedirectTo is the app's emailRedirectTo (…/auth/confirm?next=…).
 
 [auth.sms]
 enable_signup = false

@@ -37,10 +37,20 @@ const DICT = {
   agree_mid: "and",
   privacy: "Privacy Policy",
   confirm_title: "Check your inbox",
-  confirm_body: "We sent a link.",
+  confirm_sent_to: "We sent a verification link to",
+  confirm_explain: "Open it to finish setup — no second login.",
+  confirm_spam: "Check spam.",
+  confirm_expired: "Links expire.",
+  resend: "Resend email",
+  resend_cooldown: "Resend in {s}s",
+  resend_sent: "Sent.",
+  resend_rate: "Wait a moment.",
+  change_email: "Use a different email",
+  verified_already: "Already verified?",
   errors: { failed: "Failed", invalid: "Invalid", rate_limited: "Slow down" },
 };
 const noop = async () => ({ ok: false as const, error: "failed" as const });
+const noopResend = async () => ({ ok: true as const });
 const noopVoid = () => {};
 
 describe("AuthGateway — identity step structure & provider gating", async () => {
@@ -53,6 +63,7 @@ describe("AuthGateway — identity step structure & provider gating", async () =
         loginHref: next ? `/login?next=${encodeURIComponent(next)}` : "/login",
         googleNext: next,
         registerAction: noop,
+        resendAction: noopResend,
         googleAction: noopVoid,
         dict: DICT,
       }),

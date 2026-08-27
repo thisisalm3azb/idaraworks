@@ -6,7 +6,7 @@ import { directionFor } from "@/platform/i18n";
 import { sanitizeNext } from "@/platform/auth/callback";
 import { oauthEnabled } from "@/platform/auth/oauth";
 import { getSessionUser } from "@/platform/auth/resolve";
-import { registerAction, signInWithProviderAction } from "../actions";
+import { registerAction, resendConfirmationAction, signInWithProviderAction } from "../actions";
 import { LanguageToggle } from "../LanguageToggle";
 import { AuthGateway } from "./AuthGateway";
 import { AuthVisual } from "./AuthVisual";
@@ -68,6 +68,7 @@ export default async function SignupPage({
                 loginHref={loginHref}
                 googleNext={next}
                 registerAction={registerAction.bind(null, next)}
+                resendAction={resendConfirmationAction.bind(null, next)}
                 googleAction={signInWithProviderAction}
                 dict={{
                   google: t("auth.gateway.google"),
@@ -86,7 +87,16 @@ export default async function SignupPage({
                   agree_mid: t("auth.gateway.agree_mid"),
                   privacy: t("auth.gateway.privacy"),
                   confirm_title: t("auth.gateway.confirm_title"),
-                  confirm_body: t("auth.gateway.confirm_body"),
+                  confirm_sent_to: t("auth.gateway.confirm_sent_to"),
+                  confirm_explain: t("auth.gateway.confirm_explain"),
+                  confirm_spam: t("auth.gateway.confirm_spam"),
+                  confirm_expired: t("auth.gateway.confirm_expired"),
+                  resend: t("auth.gateway.resend"),
+                  resend_cooldown: t("auth.gateway.resend_cooldown"),
+                  resend_sent: t("auth.gateway.resend_sent"),
+                  resend_rate: t("auth.gateway.resend_rate"),
+                  change_email: t("auth.gateway.change_email"),
+                  verified_already: t("auth.gateway.verified_already"),
                   errors: {
                     invalid: t("auth.gateway.error_invalid"),
                     rate_limited: t("auth.login.rate_limited"),
