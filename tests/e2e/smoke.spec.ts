@@ -1,11 +1,25 @@
 import { expect, test } from "@playwright/test";
 
-// `/` now redirects to /login when unauthenticated (Phase C). The login page is
-// the stable unauthenticated smoke surface.
-test("unauthenticated root redirects to the login screen", async ({ page }) => {
+// `/` is the public marketing homepage for signed-out visitors (005A) — it no
+// longer redirects to /login. Get Started routes to registration; Log in to
+// /login. Runs at both desktop and mobile-375, so it doubles as a homepage
+// responsive check.
+test("unauthenticated root renders the public homepage", async ({ page }) => {
   await page.goto("/");
-  await expect(page).toHaveURL(/\/login/);
-  await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
+  await expect(page).not.toHaveURL(/\/login/);
+  await expect(page.getByRole("heading", { level: 1 })).toContainText("Run your business");
+  await expect(page.getByRole("link", { name: "Get Started" }).first()).toHaveAttribute(
+    "href",
+    "/signup",
+  );
+  await expect(page.getByRole("link", { name: "Log in" }).first()).toHaveAttribute(
+    "href",
+    "/login",
+  );
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
+  );
+  expect(overflow).toBe(false);
 });
 
 test("no horizontal overflow at mobile width", async ({ page }) => {
