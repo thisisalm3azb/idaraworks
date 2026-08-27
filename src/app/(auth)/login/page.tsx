@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { AppShell, Button, Card, Field } from "@/platform/ui";
 import { getT } from "@/platform/i18n/server";
+import { sanitizeNext } from "@/platform/auth/callback";
 import { loginAction, signInWithProviderAction } from "../actions";
 import { oauthEnabled } from "@/platform/auth/oauth";
 import { LanguageToggle } from "../LanguageToggle";
@@ -22,10 +23,14 @@ const ERROR_KEYS: Record<string, string> = {
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; notice?: string }>;
+  searchParams: Promise<{ error?: string; notice?: string; next?: string }>;
 }) {
   const t = await getT();
-  const { error, notice } = await searchParams;
+  const { error, notice, next: nextRaw } = await searchParams;
+  // Invite/workspace context (open-redirect guarded), threaded through every
+  // sign-in path so an invited visitor lands on their invite, not onboarding.
+  const next = sanitizeNext(nextRaw ?? "", "");
+  const signupHref = `/signup${next ? `?next=${encodeURIComponent(next)}` : ""}`;
   return (
     <AppShell
       brand={
@@ -49,6 +54,7 @@ export default async function LoginPage({
             </p>
           ) : null}
           <form action={loginAction} className="flex flex-col gap-4">
+            {next ? <input type="hidden" name="next" value={next} /> : null}
             <Field
               label={t("auth.login.email")}
               name="email"
@@ -77,12 +83,14 @@ export default async function LoginPage({
               </p>
               <form action={signInWithProviderAction}>
                 <input type="hidden" name="provider" value="google" />
+                {next ? <input type="hidden" name="next" value={next} /> : null}
                 <Button type="submit" variant="secondary" className="w-full">
                   {t("auth.login.google")}
                 </Button>
               </form>
               <form action={signInWithProviderAction}>
                 <input type="hidden" name="provider" value="azure" />
+                {next ? <input type="hidden" name="next" value={next} /> : null}
                 <Button type="submit" variant="secondary" className="w-full">
                   {t("auth.login.microsoft")}
                 </Button>
@@ -91,7 +99,7 @@ export default async function LoginPage({
           ) : null}
           <p className="mt-4 text-sm text-ink-secondary">
             {t("auth.login.no_account")}{" "}
-            <Link className="font-medium text-brand" href="/signup">
+            <Link className="font-medium text-brand" href={signupHref}>
               {t("auth.login.signup_link")}
             </Link>
           </p>

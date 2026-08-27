@@ -44,11 +44,16 @@ test("security headers are present (S0 checklist §14)", async ({ request }) => 
   expect(res.headers()["referrer-policy"]).toBe("strict-origin-when-cross-origin");
 });
 
-test("login → signup navigation works", async ({ page }) => {
+test("login → signup navigation reaches the registration gateway", async ({ page }) => {
   await page.goto("/login");
   await page.getByRole("link", { name: "Create an account" }).click();
   await expect(page).toHaveURL(/\/signup/);
-  await expect(page.getByRole("heading", { name: "Create your account" })).toBeVisible();
+  // 005B: /signup is the new split-screen registration gateway.
+  await expect(page.getByRole("heading", { name: /Create your IdaraWorks account/ })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Terms of Service" })).toHaveAttribute(
+    "href",
+    "/terms",
+  );
 });
 
 test("health endpoint responds with per-dependency checks (Phase I)", async ({ request }) => {

@@ -55,7 +55,7 @@ async function assertNoHorizontalOverflow(page: Page): Promise<void> {
 async function signup(page: Page, fullName: string, email: string): Promise<void> {
   await page.goto("/signup");
   await page.getByLabel("Full name").fill(fullName);
-  await page.getByLabel("Email").fill(email);
+  await page.getByLabel("Work email").fill(email);
   await page.getByLabel("Password").fill(PASSWORD);
   await page.getByRole("button", { name: "Create account" }).click();
   await expect(page).toHaveURL(/\/onboarding/);
@@ -276,7 +276,7 @@ test.describe("founder onboarding journey (U6)", () => {
     await page.getByRole("button", { name: "Account", exact: true }).click();
     await page.getByRole("button", { name: "Log out" }).click();
     await expect(page).toHaveURL(/\/login/);
-    await page.getByLabel("Email").fill(email);
+    await page.getByLabel("Work email").fill(email);
     await page.getByLabel("Password").fill(PASSWORD);
     await page.getByRole("button", { name: "Sign in" }).click();
     await expect(page).toHaveURL(new RegExp(orgPath.replace(/[/]/g, "\\/")));

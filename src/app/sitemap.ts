@@ -9,5 +9,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { url: CANONICAL, changeFrequency: "monthly", priority: 1 },
     { url: `${CANONICAL}/login`, changeFrequency: "yearly", priority: 0.3 },
     { url: `${CANONICAL}/signup`, changeFrequency: "yearly", priority: 0.5 },
+    { url: `${CANONICAL}/terms`, changeFrequency: "yearly", priority: 0.2 },
+    { url: `${CANONICAL}/privacy`, changeFrequency: "yearly", priority: 0.2 },
   ];
 }

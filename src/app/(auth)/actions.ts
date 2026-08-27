@@ -3,7 +3,7 @@
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { oauthEnabled } from "@/platform/auth/oauth";
-import { requestOrigin } from "@/platform/auth/callback";
+import { requestOrigin, sanitizeNext } from "@/platform/auth/callback";
 import { validateNewPassword } from "@/platform/auth/password";
 import { sql, withUserCtx } from "@/platform/tenancy";
 import { supabaseServer } from "@/platform/tenancy/supabase";
@@ -76,15 +76,32 @@ async function requestMeta() {
  */
 const OAUTH_PROVIDERS = new Set(["google", "azure"]);
 
+/** A same-origin post-auth destination or "" — the invite/workspace context an
+ * unauthenticated visitor carried into the gateway (open-redirect guarded).
+ * "" means "no explicit next; use resolveLanding()". */
+function safeNextFrom(formData: FormData): string {
+  return sanitizeNext(String(formData.get("next") ?? ""), "");
+}
+
 export async function signInWithProviderAction(formData: FormData): Promise<void> {
   if (!oauthEnabled()) redirect("/login?error=oauth_disabled");
   const provider = String(formData.get("provider") ?? "");
   if (!OAUTH_PROVIDERS.has(provider)) redirect("/login?error=invalid");
+  // Rate-limit the OAuth kickoff like the other auth entry points (was unbounded).
+  const meta = await requestMeta();
+  const rl = await rateLimit("login", meta.ip ?? provider);
+  if (!rl.allowed) redirect("/login?error=rate_limited");
+  const next = safeNextFrom(formData);
   const origin = requestOrigin(await headers());
   const supabase = supabaseServer(await cookies());
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: provider as "google" | "azure",
-    options: { redirectTo: `${origin}/auth/callback` },
+    // Thread the invite/workspace `next` through the provider round trip so an
+    // invited Google user lands on their invite, not a fresh onboarding. The
+    // callback re-sanitizes it (defence in depth).
+    options: {
+      redirectTo: `${origin}/auth/callback${next ? `?next=${encodeURIComponent(next)}` : ""}`,
+    },
   });
   if (error || !data.url) redirect("/login?error=oauth_failed");
   redirect(data.url);
@@ -108,9 +125,11 @@ export async function loginAction(formData: FormData): Promise<void> {
   }
   await logAuthEvent({ userId: data.user.id, event: "login_success", ...meta });
   await applyLocaleFromProfile(data.user.id);
-  // "/" is now the public homepage (005A) — route the signed-in user straight
-  // to their workspace/onboarding instead of bouncing through marketing.
-  redirect(await resolveLanding());
+  // An invited/intended destination (safe same-origin) wins so invites survive
+  // login; otherwise resolveLanding() → workspace or onboarding. "/" is the
+  // public homepage now (005A), never a post-login landing.
+  const next = safeNextFrom(formData);
+  redirect(next || (await resolveLanding()));
 }
 
 export async function signupAction(formData: FormData): Promise<void> {
@@ -129,7 +148,11 @@ export async function signupAction(formData: FormData): Promise<void> {
   // unset emailRedirectTo once sent prod users to localhost:3000 (see
   // docs/ux/AUTH_CALLBACK_FIX.md). /auth/callback exchanges the code, then
   // forwards to the sanitized `next`.
-  const emailRedirectTo = `${requestOrigin(await headers())}/auth/callback?next=/onboarding`;
+  // A safe `next` (e.g. an invite) survives the confirmation round trip; a
+  // brand-new founder defaults to /onboarding.
+  const next = safeNextFrom(formData);
+  const dest = next || "/onboarding";
+  const emailRedirectTo = `${requestOrigin(await headers())}/auth/callback?next=${encodeURIComponent(dest)}`;
   const supabase = supabaseServer(await cookies());
   const { data, error } = await supabase.auth.signUp({
     email,
@@ -140,9 +163,52 @@ export async function signupAction(formData: FormData): Promise<void> {
     redirect("/signup?error=failed");
   }
   await logAuthEvent({ userId: data.user.id, event: "signup", ...meta });
-  // Local/CI: confirmations off => session exists => straight to onboarding.
-  // Hosted: confirmations on => the confirm link lands on /auth/callback.
-  redirect(data.session ? "/onboarding" : "/login?notice=confirm_email");
+  // Local/CI: confirmations off => session exists => straight to the destination.
+  // Hosted: confirmations on => the confirm link lands on /auth/callback (which
+  // carries `next`); the notice page keeps `next` so a later Log in also honours it.
+  if (data.session) redirect(dest);
+  redirect(`/login?notice=confirm_email${next ? `&next=${encodeURIComponent(next)}` : ""}`);
+}
+
+/**
+ * Registration gateway action (005B) — the typed-result twin of signupAction
+ * for the new split-screen gateway: on failure it returns a generic,
+ * non-enumerating result so the client keeps the entered name/email (no
+ * sensitive value ever rides a URL); on success it either redirects (session
+ * present — confirmations off) or returns { confirm: true } so the gateway
+ * shows an inline "check your email" state. Reuses the SAME secure Supabase
+ * signUp flow, rate limiting and audit as signupAction.
+ */
+export type RegisterResult =
+  { ok: true; confirm: true } | { ok: false; error: "rate_limited" | "invalid" | "failed" };
+
+export async function registerAction(nextRaw: string, formData: FormData): Promise<RegisterResult> {
+  const email = String(formData.get("email") ?? "")
+    .trim()
+    .toLowerCase();
+  const password = String(formData.get("password") ?? "");
+  const fullName = String(formData.get("full_name") ?? "").trim();
+  const meta = await requestMeta();
+
+  if (!email.includes("@") || password.length < 10) {
+    return { ok: false, error: "invalid" };
+  }
+  const rl = await rateLimit("signup", meta.ip ?? email);
+  if (!rl.allowed) return { ok: false, error: "rate_limited" };
+
+  const next = sanitizeNext(nextRaw, "");
+  const dest = next || "/onboarding";
+  const emailRedirectTo = `${requestOrigin(await headers())}/auth/callback?next=${encodeURIComponent(dest)}`;
+  const supabase = supabaseServer(await cookies());
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password,
+    options: { data: { full_name: fullName }, emailRedirectTo },
+  });
+  if (error || !data.user) return { ok: false, error: "failed" };
+  await logAuthEvent({ userId: data.user.id, event: "signup", ...meta });
+  if (data.session) redirect(dest); // confirmations off → straight into onboarding
+  return { ok: true, confirm: true }; // confirmation email sent → inline notice
 }
 
 /**

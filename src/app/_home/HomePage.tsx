@@ -407,6 +407,12 @@ export async function HomePage({ workspaceHref }: { workspaceHref: string | null
             <Link href={LOGIN} className="text-ink-secondary hover:text-ink">
               {t("home.nav.login")}
             </Link>
+            <Link href="/terms" className="text-ink-secondary hover:text-ink">
+              {t("auth.gateway.terms")}
+            </Link>
+            <Link href="/privacy" className="text-ink-secondary hover:text-ink">
+              {t("auth.gateway.privacy")}
+            </Link>
             <Link href={primary.href} className="font-medium text-brand hover:underline">
               {primary.label}
             </Link>

@@ -167,4 +167,25 @@ body {
       opacity: 0;
     }
   }
+
+  /* Auth-gateway visual: a dot travelling the VERTICAL connector rail
+     (direction-agnostic). Static under prefers-reduced-motion. */
+  .auth-flow-dot {
+    top: 0;
+    animation: auth-flow 5.5s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  }
+  @keyframes auth-flow {
+    from {
+      top: 0%;
+      opacity: 0;
+    }
+    12%,
+    88% {
+      opacity: 1;
+    }
+    to {
+      top: 100%;
+      opacity: 0;
+    }
+  }
 }

@@ -25,7 +25,7 @@ const PASSWORD = "Customer-Pass-123!";
 async function signupAndCreateWorkspace(page: Page, email: string, bizName: string) {
   await page.goto("/signup");
   await page.getByLabel("Full name").fill("Quote Tester");
-  await page.getByLabel("Email").fill(email);
+  await page.getByLabel("Work email").fill(email);
   await page.getByLabel("Password").fill(PASSWORD);
   await page.getByRole("button", { name: "Create account" }).click();
   await expect(page).toHaveURL(/\/onboarding/);

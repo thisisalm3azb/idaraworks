@@ -35,7 +35,7 @@ async function createOrg(page: Page): Promise<string> {
 
   await page.goto("/signup");
   await page.getByLabel("Full name").fill("Menu Tester");
-  await page.getByLabel("Email").fill(email);
+  await page.getByLabel("Work email").fill(email);
   await page.getByLabel("Password").fill(PASSWORD);
   await page.getByRole("button", { name: "Create account" }).click();
   await expect(page).toHaveURL(/\/onboarding/);

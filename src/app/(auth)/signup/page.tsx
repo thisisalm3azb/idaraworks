@@ -1,54 +1,108 @@
 import Link from "next/link";
-import { AppShell, Button, Card, Field } from "@/platform/ui";
-import { getT } from "@/platform/i18n/server";
-import { signupAction } from "../actions";
+import { redirect } from "next/navigation";
+import { Icon } from "@/platform/ui";
+import { getT, getServerLocale } from "@/platform/i18n/server";
+import { directionFor } from "@/platform/i18n";
+import { sanitizeNext } from "@/platform/auth/callback";
+import { oauthEnabled } from "@/platform/auth/oauth";
+import { getSessionUser } from "@/platform/auth/resolve";
+import { registerAction, signInWithProviderAction } from "../actions";
 import { LanguageToggle } from "../LanguageToggle";
+import { AuthGateway } from "./AuthGateway";
+import { AuthVisual } from "./AuthVisual";
 
+/**
+ * Registration gateway (005B) — the new Get Started destination. An original
+ * split-screen: the identity form on one side, an IdaraWorks operational
+ * illustration on the other. Signed-out visitors register with email or (when
+ * ready) Google; a signed-in visitor is sent straight to their landing rather
+ * than re-registering. `next` (an invite/workspace context) is preserved
+ * end-to-end and open-redirect-guarded.
+ */
 export default async function SignupPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ next?: string }>;
 }) {
+  const sp = await searchParams;
+  const next = sanitizeNext(sp.next ?? "", "");
+  // A signed-in visitor never re-registers — honour an invite/workspace next,
+  // otherwise the public homepage.
+  const user = await getSessionUser();
+  if (user) redirect(next || "/");
+
   const t = await getT();
-  const { error } = await searchParams;
+  const locale = await getServerLocale();
+  const dir = directionFor(locale);
+  const oauthOn = oauthEnabled();
+  const loginHref = `/login${next ? `?next=${encodeURIComponent(next)}` : ""}`;
+
   return (
-    <AppShell brand={<span>IdaraWorks</span>} actions={<LanguageToggle />}>
-      <div className="mx-auto w-full max-w-sm">
-        <Card>
-          <h1 className="mb-4 text-lg font-semibold text-ink">{t("auth.signup.title")}</h1>
-          {error ? (
-            <p role="alert" className="mb-3 rounded-md bg-danger-soft p-3 text-sm text-danger">
-              {error === "rate_limited" ? t("auth.login.rate_limited") : t("auth.signup.error")}
+    <div className="grid min-h-dvh grid-cols-1 lg:grid-cols-[1fr_1fr]" dir={dir}>
+      {/* Main panel — the priority. */}
+      <div className="flex flex-col bg-page">
+        <div className="flex min-h-14 items-center justify-between px-5 pt-4">
+          <Link href="/" className="flex items-center gap-2 font-semibold text-ink">
+            <span
+              aria-hidden
+              className="flex size-7 items-center justify-center rounded-md bg-brand text-ink-inverse"
+            >
+              <Icon name="grid" size={16} />
+            </span>
+            <span>IdaraWorks</span>
+          </Link>
+          <LanguageToggle />
+        </div>
+
+        <div className="flex flex-1 items-center justify-center px-5 py-8">
+          <div className="w-full max-w-sm">
+            <h1 className="text-2xl font-semibold tracking-tight text-ink sm:text-3xl">
+              {t("auth.gateway.title")}
+            </h1>
+            <p className="mt-2 text-sm leading-relaxed text-ink-secondary">
+              {t("auth.gateway.subtitle")}
             </p>
-          ) : null}
-          <form action={signupAction} className="flex flex-col gap-4">
-            <Field label={t("auth.signup.full_name")} name="full_name" required minLength={2} />
-            <Field
-              label={t("auth.login.email")}
-              name="email"
-              type="email"
-              autoComplete="email"
-              required
-            />
-            <Field
-              label={t("auth.login.password")}
-              name="password"
-              type="password"
-              autoComplete="new-password"
-              required
-              minLength={10}
-              hint={t("auth.signup.password_hint")}
-            />
-            <Button type="submit">{t("auth.signup.submit")}</Button>
-          </form>
-          <p className="mt-4 text-sm text-ink-secondary">
-            {t("auth.signup.have_account")}{" "}
-            <Link className="font-medium text-brand" href="/login">
-              {t("auth.signup.login_link")}
-            </Link>
-          </p>
-        </Card>
+            <div className="mt-6">
+              <AuthGateway
+                oauthOn={oauthOn}
+                loginHref={loginHref}
+                googleNext={next}
+                registerAction={registerAction.bind(null, next)}
+                googleAction={signInWithProviderAction}
+                dict={{
+                  google: t("auth.gateway.google"),
+                  or: t("auth.gateway.or"),
+                  full_name: t("auth.signup.full_name"),
+                  email: t("auth.gateway.email"),
+                  email_hint: t("auth.gateway.email_hint"),
+                  password: t("auth.login.password"),
+                  password_hint: t("auth.signup.password_hint"),
+                  submit: t("auth.gateway.submit"),
+                  submitting: t("auth.gateway.submitting"),
+                  have_account: t("auth.gateway.have_account"),
+                  login: t("auth.login.title"),
+                  agree_pre: t("auth.gateway.agree_pre"),
+                  terms: t("auth.gateway.terms"),
+                  agree_mid: t("auth.gateway.agree_mid"),
+                  privacy: t("auth.gateway.privacy"),
+                  confirm_title: t("auth.gateway.confirm_title"),
+                  confirm_body: t("auth.gateway.confirm_body"),
+                  errors: {
+                    invalid: t("auth.gateway.error_invalid"),
+                    rate_limited: t("auth.login.rate_limited"),
+                    failed: t("auth.gateway.error_failed"),
+                  },
+                }}
+              />
+            </div>
+          </div>
+        </div>
       </div>
-    </AppShell>
+
+      {/* Visual panel — hidden on small screens so the form owns the priority. */}
+      <div className="hidden p-3 lg:block">
+        <AuthVisual t={t} />
+      </div>
+    </div>
   );
 }
