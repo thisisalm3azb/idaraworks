@@ -111,14 +111,24 @@ describe("H3.1 hero — the Living Business Surface", () => {
     expect(arText.match(/مستلمة/g)?.length).toBe(1);
   });
 
-  it("states the terminology example explicitly, with no bare quoted term", () => {
+  it("states terminology flexibility as identity, and retired wording stays retired", () => {
     const enText = productEn.replace(/<[^>]+>/g, "");
-    expect(enText).toContain("Your term: Order");
+    expect(enText).toContain("Called Order in your workspace");
     const arText = productAr.replace(/<[^>]+>/g, "");
-    expect(arText).toContain("مصطلحك: طلبية");
-    // The old unexplained treatment is gone.
+    expect(arText).toContain("يُسمّى طلبية في مساحة عملك");
+    // H3 and H3.1 treatments must not return.
     expect(productEn).not.toContain("&ldquo;");
-    expect(productEn).not.toMatch(/your term(?!:)/i);
+    expect(enText).not.toContain("Your term");
+    expect(arText).not.toContain("مصطلحك:");
+  });
+
+  it("shows the optional-module dock with meaningful localized wording", () => {
+    const enText = productEn.replace(/<[^>]+>/g, "");
+    expect(enText).toContain("Add what you need");
+    const arText = productAr.replace(/<[^>]+>/g, "");
+    expect(arText).toContain("أضف ما تحتاجه");
+    // The dock exists for desktop AND as the mobile closing row.
+    expect((productEn.match(/Add what you need/g) ?? []).length).toBe(2);
   });
 
   it("has a localized concise aria-label and a visible localized caption", () => {
@@ -136,6 +146,8 @@ describe("H3.1 hero — the Living Business Surface", () => {
       "home.viz.term_generic",
       "home.viz.team_assigned",
       "home.viz.approval_ready",
+      "home.viz.term_note",
+      "home.viz.dock",
       "home.viz.invoice",
       "home.viz.payment",
     ]) {
@@ -214,6 +226,8 @@ describe("H3.1 hero — the Living Business Surface", () => {
       "home.viz.team_v",
       "home.viz.status",
       "home.viz.term_hint",
+      "home.viz.term_label",
+      "home.viz.term_custom",
       "home.viz.total",
     ]) {
       expect(k in enCat).toBe(false);
@@ -241,24 +255,27 @@ describe("hero motion rules", () => {
     expect(guardAt).toBeGreaterThan(-1);
     const widthGateAt = css.indexOf("@media (min-width: 1024px)", guardAt);
     expect(widthGateAt).toBeGreaterThan(guardAt);
-    for (const rule of [".lbs-settle", ".lbs-link", ".lbs-pulse"]) {
+    for (const rule of [".lbs-settle", ".lbs-channel", ".lbs-link", ".lbs-pulse"]) {
       expect(css.includes(rule), `${rule} missing`).toBe(true);
       expect(css.indexOf(rule)).toBeGreaterThan(widthGateAt);
     }
-    expect(css.slice(0, guardAt)).not.toMatch(/\.lbs-|lbs-settle-in|lbs-pulse-run|lbs-link-in/);
+    expect(css.slice(0, guardAt)).not.toMatch(
+      /\.lbs-|lbs-settle-in|lbs-pulse-run|lbs-link-in|lbs-channel-in/,
+    );
   });
 
   it("hero motion never loops: no infinite iteration anywhere in the hero rules", () => {
     expect(lbsBlock.length).toBeGreaterThan(100);
     expect(lbsBlock).not.toContain("infinite");
     expect(lbsBlock).toMatch(/lbs-settle-in[^;]*\)\s*1 both/);
+    expect(lbsBlock).toMatch(/lbs-channel-in[^;]*\s1 both/);
     expect(lbsBlock).toMatch(/lbs-link-in[^;]*\s1 both/);
     expect(lbsBlock).toMatch(/lbs-pulse-run[^;]*\s1 both/);
   });
 
   it("animates transform and opacity only (no layout, inset or box-shadow motion)", () => {
     const segments = lbsBlock.split("@keyframes").slice(1);
-    expect(segments.length).toBe(4); // settle-in, link-in, pulse-run, pulse-run-rtl
+    expect(segments.length).toBe(5); // settle-in, channel-in, link-in, pulse-run, pulse-run-rtl
     for (const seg of segments) {
       expect(seg).not.toMatch(/box-shadow|inset|margin|padding|top:|left:|right:|width:|height:/);
     }
