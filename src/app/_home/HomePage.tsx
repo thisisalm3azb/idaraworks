@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Icon, type IconName } from "@/platform/ui";
 import { getT, getServerLocale } from "@/platform/i18n/server";
 import { directionFor } from "@/platform/i18n";
+import { CapabilityMap } from "./CapabilityMap";
 import { FlowJourney } from "./FlowJourney";
 import { FoundationShapes } from "./FoundationShapes";
 import { LanguageSwitch } from "./LanguageSwitch";
@@ -155,7 +156,7 @@ export async function HomePage({ workspaceHref }: { workspaceHref: string | null
           <FoundationShapes t={t} />
         </section>
 
-        {/* ── 4. Core capabilities (organized by outcome) ──────────────────── */}
+        {/* ── 4. The operating capability map (H6) ─────────────────────────── */}
         <section id="product" className="scroll-mt-16 border-y border-line bg-card">
           <div className="mx-auto w-full max-w-6xl px-4 py-16">
             <SectionHead
@@ -163,36 +164,7 @@ export async function HomePage({ workspaceHref }: { workspaceHref: string | null
               title={t("home.caps.title")}
               body={t("home.caps.subtitle")}
             />
-            <div className="mt-10 grid gap-4 md:grid-cols-2">
-              {(
-                [
-                  ["banknote", "win"],
-                  ["briefcase", "run"],
-                  ["truck", "supply"],
-                  ["chart", "see"],
-                ] as [IconName, string][]
-              ).map(([icon, k]) => (
-                <div key={k} className="rounded-lg border border-line bg-page p-6 shadow-card">
-                  <div className="flex items-center gap-3">
-                    <span className="flex size-10 items-center justify-center rounded-md bg-brand-soft text-brand">
-                      <Icon name={icon} size={20} aria-hidden />
-                    </span>
-                    <h3 className="text-lg font-semibold text-ink">{t(`home.caps.${k}.title`)}</h3>
-                  </div>
-                  <p className="mt-2 text-sm text-ink-secondary">{t(`home.caps.${k}.desc`)}</p>
-                  <ul className="mt-4 flex flex-wrap gap-2">
-                    {["i1", "i2", "i3"].map((i) => (
-                      <li
-                        key={i}
-                        className="inline-flex items-center rounded-full border border-line bg-card px-3 py-1 text-xs font-medium text-ink-secondary"
-                      >
-                        {t(`home.caps.${k}.${i}`)}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ))}
-            </div>
+            <CapabilityMap t={t} />
           </div>
         </section>
 
