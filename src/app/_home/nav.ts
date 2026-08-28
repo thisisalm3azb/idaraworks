@@ -29,7 +29,10 @@ export function homeNav(
     ? null
     : { href: LOGIN_HREF, label: t("home.nav.login") };
   // Section links in the PAGE'S reading order (H2): flow → capabilities →
-  // international → pricing, so the nav teaches the page's own structure.
+  // international → pricing. H8 decision: the Trust section (#trust) is
+  // deliberately NOT in the header — a fifth item overflows the English
+  // header at 768px (verified by measurement). Trust stays reachable through
+  // the page flow and the footer link instead.
   const sections: HomeCta[] = [
     { href: "#how", label: t("home.nav.how") },
     { href: "#product", label: t("home.nav.product") },

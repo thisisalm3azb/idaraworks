@@ -9,6 +9,7 @@ import { FoundationShapes } from "./FoundationShapes";
 import { LanguageSwitch } from "./LanguageSwitch";
 import { MobileMenu } from "./MobileMenu";
 import { ProductVisual } from "./ProductVisual";
+import { TrustBoundary } from "./TrustBoundary";
 import { pricingTiers } from "./pricing";
 import { homeNav, LOGIN_HREF } from "./nav";
 
@@ -179,7 +180,14 @@ export async function HomePage({ workspaceHref }: { workspaceHref: string | null
           <BusinessPassport t={t} />
         </section>
 
-        {/* ── 6. Pricing ───────────────────────────────────────────────────── */}
+        {/* ── 6. Trust and privacy (H8) ────────────────────────────────────── */}
+        <section id="trust" className="scroll-mt-16 border-t border-line">
+          <div className="mx-auto w-full max-w-6xl px-4 py-14">
+            <TrustBoundary t={t} />
+          </div>
+        </section>
+
+        {/* ── 7. Pricing ───────────────────────────────────────────────────── */}
         <section id="pricing" className="scroll-mt-16 border-y border-line bg-card">
           <div className="mx-auto w-full max-w-6xl px-4 py-16">
             <SectionHead
@@ -293,6 +301,9 @@ export async function HomePage({ workspaceHref }: { workspaceHref: string | null
             </a>
             <a href="#pricing" className="text-ink-secondary hover:text-ink">
               {t("home.nav.pricing")}
+            </a>
+            <a href="#trust" className="text-ink-secondary hover:text-ink">
+              {t("home.nav.trust")}
             </a>
             <Link href={LOGIN} className="text-ink-secondary hover:text-ink">
               {t("home.nav.login")}

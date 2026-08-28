@@ -94,8 +94,9 @@ describe("routing / CTA contract", () => {
     expect(primary.href).toBe("/signup");
     expect(secondary).toEqual({ href: LOGIN_HREF, label: "home.nav.login" });
     expect(secondary!.href).toBe("/login");
-    // H2: section links in the page's own reading order, including the new
-    // international anchor.
+    // H2/H8: section links in the page's own reading order. Trust is
+    // deliberately absent (a fifth item overflows the 768px English header);
+    // #trust is reached through the page flow and the footer.
     expect(sections.map((s) => s.href)).toEqual(["#how", "#product", "#international", "#pricing"]);
   });
 
@@ -280,11 +281,14 @@ describe("H2 header + navigation", () => {
     }
   });
 
-  it("adds no Trust link before the Trust section exists (H8)", () => {
+  it("the Trust section exists; the header omits it by measured decision (H8)", () => {
+    // The section and anchor are real; the header stays at four items because
+    // a fifth overflows the English header at 768px. The footer links #trust.
+    expect(homeSrc).toMatch(/<section id="trust" className="[^"]*scroll-mt-16/);
     const { sections } = homeNav(tFake, null);
-    expect(sections.some((s) => /trust/i.test(s.href) || /trust/i.test(s.label))).toBe(false);
-    expect("home.nav.trust" in en).toBe(false);
-    expect("home.nav.trust" in ar).toBe(false);
+    expect(sections.some((s) => s.href === "#trust")).toBe(false);
+    expect(en["home.nav.trust" as keyof typeof en]).toBeTruthy(); // used by the footer
+    expect(ar["home.nav.trust" as keyof typeof ar]).toBeTruthy();
   });
 
   it("International targets the real international section anchor", () => {
