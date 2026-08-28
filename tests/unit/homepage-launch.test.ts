@@ -87,8 +87,9 @@ describe("H10 — homepage copy contracts", () => {
 
   it("the public journey keeps one consistent primary CTA wording", () => {
     expect(String(en["home.nav.get_started" as keyof typeof en])).toBe("Get Started");
-    // The pricing cards, final CTA and footer all render the same primary
-    // label from the same key (asserted structurally in HomePage source).
-    expect((homeSrc.match(/\{primary\.label\}/g) ?? []).length).toBeGreaterThanOrEqual(4);
+    // Header, hero, pricing plans and footer all draw the primary label from
+    // the same routing contract (the closing section deliberately uses the
+    // clearer "Build my workspace" for signed-out visitors).
+    expect((homeSrc.match(/primary\.label/g) ?? []).length).toBeGreaterThanOrEqual(4);
   });
 });

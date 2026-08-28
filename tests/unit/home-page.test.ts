@@ -64,8 +64,10 @@ describe("homepage i18n content", () => {
   it("makes no unsupported customer-count, compliance, or rating claims", () => {
     // "reviews" (plural) targets fake social proof; the verb "review" is the
     // product's real review-before-apply behavior (H5) and stays allowed.
+    // A percentage is banned as fake statistics UNLESS it is the verified
+    // annual saving ("Save 20%" / "وفّر 20%" — H9.1).
     const BANNED =
-      /\b(trusted by|customers worldwide|\d+[\d,]*\+? (customers|businesses|users|companies)|certified|compliant|ISO|SOC ?2|GDPR|guarantee|award|rated|reviews|testimonial|★|money[- ]back)\b/i;
+      /\b(trusted by|customers worldwide|\d+[\d,]*\+? (customers|businesses|users|companies)|certified|compliant|ISO|SOC ?2|GDPR|guarantee|award|rated|reviews|testimonial|★|money[- ]back)\b|(?<!save )(?<!وفّر )(?<!\d)\d+%/i;
     for (const loc of [en, ar]) {
       for (const k of MARKETING) {
         expect(
@@ -76,12 +78,16 @@ describe("homepage i18n content", () => {
     }
   });
 
-  it("never displays a numeric price (launch pricing is being finalized)", () => {
-    // The only permitted numeral run is the illustrative demo total in the hero
-    // visualization (badged Illustrative). Pricing copy carries no currency figure.
+  it("pricing numerals are only the approved facts (H9.1: prices live in config)", () => {
+    // Prices render from the typed pricing config, never from catalog copy.
+    // The only catalog numerals allowed are the verified facts: seat counts
+    // (3 / 13) and the 20% annual saving.
     for (const k of HOME_KEYS.filter((x) => x.startsWith("home.pricing."))) {
       const v = String(en[k as keyof typeof en]);
-      expect(/\d/.test(v), `pricing key ${k} contains a number: "${v}"`).toBe(false);
+      const stripped = v.replace(/\b(3|13)\b/g, "").replace(/20%/g, "");
+      expect(/\d/.test(stripped), `pricing key ${k} carries an unapproved number: "${v}"`).toBe(
+        false,
+      );
     }
   });
 });
@@ -119,17 +125,21 @@ describe("routing / CTA contract", () => {
 });
 
 describe("pricing config — single source, real catalogue tiers", () => {
-  it("draws the two paid tiers straight from the entitlements catalogue", () => {
+  it("anchors internal tiers to the catalogue; public labels are the H9.1 names", () => {
     const tiers = pricingTiers();
     expect(tiers.map((t) => t.key)).toEqual(["free", "medium", "high"]);
-    expect(tiers[1]!.names).toEqual(getTierBundle("medium")!.names);
-    expect(tiers[2]!.names).toEqual(getTierBundle("high")!.names);
+    // The catalogue tiers must still exist (identity anchor); the PUBLIC
+    // display labels are deliberately different (documented mapping).
+    expect(getTierBundle("medium")).toBeTruthy();
+    expect(getTierBundle("high")).toBeTruthy();
+    expect(tiers.map((t) => t.names.en)).toEqual(["Free", "Operations", "Complete"]);
   });
 
-  it("carries no numeric price and exactly one truthful badge", () => {
+  it("carries exactly the approved target prices and one truthful badge", () => {
     const tiers = pricingTiers();
     expect(tiers.filter((t) => t.badgeKey).length).toBe(1);
-    expect(JSON.stringify(tiers)).not.toMatch(/\$|usd|aed|\d+\s*\/\s*(mo|month)/i);
+    expect(tiers.map((t) => t.price.monthlyUsd)).toEqual([0, 39, 89]);
+    expect(tiers.map((t) => t.price.annualBilledUsd)).toEqual([0, 372, 852]);
   });
 });
 

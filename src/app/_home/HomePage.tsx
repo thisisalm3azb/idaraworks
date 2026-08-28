@@ -3,11 +3,13 @@ import { Icon } from "@/platform/ui";
 import { getT, getServerLocale } from "@/platform/i18n/server";
 import { directionFor } from "@/platform/i18n";
 import { BusinessPassport } from "./BusinessPassport";
+import { ClosingSection } from "./ClosingSection";
 import { CapabilityMap } from "./CapabilityMap";
 import { FlowJourney } from "./FlowJourney";
 import { FoundationShapes } from "./FoundationShapes";
 import { LanguageSwitch } from "./LanguageSwitch";
 import { MobileMenu } from "./MobileMenu";
+import { PricingPlans } from "./PricingPlans";
 import { ProductVisual } from "./ProductVisual";
 import { TrustBoundary } from "./TrustBoundary";
 import { pricingTiers } from "./pricing";
@@ -27,7 +29,7 @@ export async function HomePage({ workspaceHref }: { workspaceHref: string | null
   const t = await getT();
   const locale = await getServerLocale();
   const dir = directionFor(locale);
-  const { primary, secondary, sections } = homeNav(t, workspaceHref);
+  const { authed, primary, secondary, sections } = homeNav(t, workspaceHref);
 
   return (
     <div className="flex min-h-dvh flex-col bg-page text-ink">
@@ -210,70 +212,51 @@ export async function HomePage({ workspaceHref }: { workspaceHref: string | null
               </ul>
             </div>
 
-            <div className="mt-6 grid gap-4 lg:grid-cols-3">
-              {pricingTiers().map((tier, depth) => (
-                <div
-                  key={tier.key}
-                  className={
-                    "flex flex-col rounded-lg border bg-page p-6 " +
-                    (tier.featured
-                      ? "border-brand shadow-pop ring-1 ring-brand/20"
-                      : "border-line shadow-card")
-                  }
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <h3 className="text-lg font-semibold text-ink">
-                      {locale === "ar" ? tier.names.ar : tier.names.en}
-                    </h3>
-                    {tier.badgeKey ? (
-                      <span className="inline-flex items-center rounded-full bg-brand-soft px-2.5 py-1 text-xs font-medium text-brand">
-                        {t(tier.badgeKey)}
-                      </span>
-                    ) : null}
-                  </div>
-                  {/* Operating depth, expressed structurally not by price. */}
-                  <span className="mt-2 flex items-center gap-1" aria-hidden="true">
-                    {[0, 1, 2].map((i) => (
-                      <span
-                        key={i}
-                        className={
-                          "h-1.5 w-6 rounded-full " + (i <= depth ? "bg-brand/70" : "bg-line")
-                        }
-                      />
-                    ))}
-                  </span>
-                  <p className="mt-2 text-sm text-ink-secondary">{t(tier.tagKey)}</p>
-                  <p className="mt-4 text-sm font-medium text-ink">
-                    {t("home.pricing.finalizing")}
-                  </p>
-                  <ul className="mt-4 flex flex-1 flex-col gap-2.5">
-                    {tier.outcomeKeys.map((o) => (
-                      <li key={o} className="flex items-start gap-2.5 text-sm text-ink-secondary">
-                        <Icon
-                          name="check"
-                          size={16}
-                          aria-hidden
-                          className="mt-0.5 shrink-0 text-brand"
-                        />
-                        <span>{t(o)}</span>
-                      </li>
-                    ))}
-                  </ul>
-                  <Link
-                    href={primary.href}
-                    className={
-                      "mt-6 inline-flex min-h-11 items-center justify-center rounded-md px-4 text-sm font-semibold " +
-                      (tier.featured
-                        ? "bg-brand text-ink-inverse hover:bg-brand-strong"
-                        : "border border-line-strong bg-card text-ink hover:bg-sunken")
-                    }
-                  >
-                    {primary.label}
-                  </Link>
-                </div>
-              ))}
-            </div>
-            <p className="mt-6 text-center text-xs text-ink-muted">{t("home.pricing.note")}</p>
+            {/* The plans (H9.1): approved launch targets with an accessible
+                Monthly/Annual selector; strings resolve here on the server. */}
+            <PricingPlans
+              labels={{
+                group: t("home.pricing.billing_label"),
+                monthly: t("home.pricing.billing_monthly"),
+                annual: t("home.pricing.billing_annual"),
+                save: t("home.pricing.billing_save"),
+              }}
+              plans={pricingTiers().map((tier, i) => ({
+                key: tier.key,
+                name: locale === "ar" ? tier.names.ar : tier.names.en,
+                tag: t(tier.tagKey),
+                users: t(tier.usersKey),
+                outcomes: tier.outcomeKeys.map((o) => t(o)),
+                micro: t(tier.microKey),
+                badge: tier.badgeKey ? t(tier.badgeKey) : null,
+                featured: tier.featured,
+                depth: i + 1,
+                monthly: {
+                  amount: `$${tier.price.monthlyUsd}`,
+                  suffix: t(
+                    tier.price.monthlyUsd === 0
+                      ? "home.pricing.suffix_free"
+                      : "home.pricing.suffix_monthly",
+                  ),
+                },
+                annual: {
+                  amount: `$${tier.price.annualPerMonthUsd}`,
+                  suffix: t(
+                    tier.price.annualPerMonthUsd === 0
+                      ? "home.pricing.suffix_free"
+                      : "home.pricing.suffix_annual",
+                  ),
+                  billed:
+                    tier.price.annualBilledUsd > 0
+                      ? t("home.pricing.billed_annually", {
+                          amount: `$${tier.price.annualBilledUsd}`,
+                        })
+                      : "",
+                },
+                cta: { href: primary.href, label: primary.label },
+              }))}
+            />
+            <p className="mt-6 text-center text-sm text-ink-secondary">{t("home.pricing.early")}</p>
             <p className="mt-2 text-center text-sm text-ink-secondary">
               {t("home.pricing.existing")}{" "}
               <Link href={LOGIN} className="font-medium text-brand hover:underline">
@@ -283,33 +266,13 @@ export async function HomePage({ workspaceHref }: { workspaceHref: string | null
           </div>
         </section>
 
-        {/* ── 7. Final call to action ──────────────────────────────────────── */}
+        {/* ── 8. Closing: from setup to a living workspace (H9.1) ──────────── */}
         <section className="mx-auto w-full max-w-6xl px-4 py-20">
-          <div className="overflow-hidden rounded-xl border border-hero-line bg-hero px-6 py-14 text-center shadow-pop sm:px-10">
-            <h2 className="mx-auto max-w-2xl text-balance text-3xl font-semibold leading-tight text-white sm:text-4xl">
-              {t("home.cta.title")}
-            </h2>
-            <p className="mx-auto mt-4 max-w-xl text-pretty text-base leading-relaxed text-hero-dim">
-              {t("home.cta.body")}
-            </p>
-            <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-              <Link
-                href={primary.href}
-                className="inline-flex min-h-12 items-center rounded-md bg-white px-6 text-base font-semibold text-ink hover:bg-white/90"
-              >
-                {primary.label}
-              </Link>
-              {secondary ? (
-                <Link
-                  href={secondary.href}
-                  className="inline-flex min-h-12 items-center rounded-md border border-hero-line px-5 text-base font-medium text-white hover:bg-white/10"
-                >
-                  {secondary.label}
-                </Link>
-              ) : null}
-            </div>
-            <p className="mx-auto mt-5 text-sm text-hero-dim">{t("home.cta.reassure")}</p>
-          </div>
+          <ClosingSection
+            t={t}
+            primary={authed ? primary : { href: primary.href, label: t("home.close.cta") }}
+            secondary={secondary}
+          />
         </section>
       </main>
 
