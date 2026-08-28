@@ -129,37 +129,39 @@ body {
     }
   }
 
-  /* The Living Business Surface hero (H3.1). Desktop only (mobile renders the
-     finished connected state statically) and motion-safe only. Every animation
-     runs a single time, uses transform/opacity only, and ends on the stable
-     connected State B. The settle rule brings each object from its lightly
-     scattered State-A offset (per-element --lbs-from-x/-y and --lbs-delay;
-     fill-mode both holds the scattered frame during the delay, so the first
-     paint reads as separate signals over the surface with zero layout shift).
-     The channel rule forms the surface pathway, the link rule then draws the active connections, and the
-     pulse rule sends one information dot across a connector, then fades it;
-     with no animation applied (reduced motion, mobile) links are simply
-     visible and the dot rests at the connector start. */
+  /* The Living Control Surface hero (H3.3B). Desktop only (mobile renders the
+     finished connected state statically) and motion-safe only. Every rule runs
+     a single time and ends on the stable connected state. The settle rule
+     brings each formed zone from its lightly separated offset (per-element
+     --lcs-from-x/-y and --lcs-delay; fill-mode both holds the separated frame
+     during the delay, so the first paint reads as an unformed surface with
+     zero layout shift and never a blank frame). The form rule fades the
+     carved channel into the surface, the carve rule draws the single
+     operational path once along its direction (pathLength-normalized dash),
+     and the pulse rule sends one signal along the completed path via
+     offset-distance, then fades it. With no animation applied (reduced
+     motion, mobile) the connected state renders immediately: the carved path
+     is fully visible and the pulse stays hidden (it is motion-only). */
   @media (min-width: 1024px) {
-    .lbs-settle {
-      animation: lbs-settle-in 0.7s cubic-bezier(0.2, 0, 0.2, 1) 1 both;
-      animation-delay: var(--lbs-delay, 0.2s);
+    .lcs-settle {
+      animation: lcs-settle-in 0.55s cubic-bezier(0.2, 0, 0.2, 1) 1 both;
+      animation-delay: var(--lcs-delay, 0.1s);
     }
-    @keyframes lbs-settle-in {
+    @keyframes lcs-settle-in {
       from {
-        opacity: 0.5;
-        transform: translate(var(--lbs-from-x, 0px), var(--lbs-from-y, 12px)) scale(0.97);
+        opacity: 0.45;
+        transform: translate(var(--lcs-from-x, 0px), var(--lcs-from-y, 10px)) scale(0.985);
       }
       to {
         opacity: 1;
         transform: none;
       }
     }
-    .lbs-channel {
-      animation: lbs-channel-in 0.6s ease 1 both;
-      animation-delay: 1s;
+    .lcs-form {
+      animation: lcs-form-in 0.45s ease 1 both;
+      animation-delay: 1.15s;
     }
-    @keyframes lbs-channel-in {
+    @keyframes lcs-form-in {
       from {
         opacity: 0;
       }
@@ -167,51 +169,35 @@ body {
         opacity: 1;
       }
     }
-    .lbs-link {
-      animation: lbs-link-in 0.4s ease 1 both;
-      animation-delay: 1.3s;
+    .lcs-carve-line {
+      stroke-dasharray: 1;
+      animation: lcs-carve-draw 0.9s ease-in-out 1 both;
+      animation-delay: 1.2s;
     }
-    @keyframes lbs-link-in {
+    @keyframes lcs-carve-draw {
       from {
-        opacity: 0;
+        stroke-dashoffset: 1;
       }
       to {
-        opacity: 1;
+        stroke-dashoffset: 0;
       }
     }
-    .lbs-pulse {
-      animation: lbs-pulse-run 0.7s ease-in-out 1 both;
-      animation-delay: var(--lbs-pulse-delay, 2s);
+    .lcs-pulse {
+      animation: lcs-pulse-run 0.8s ease-in-out 1 both;
+      animation-delay: 2.1s;
     }
-    .lbs-pulse[data-dir="rtl"] {
-      animation-name: lbs-pulse-run-rtl;
-    }
-    @keyframes lbs-pulse-run {
+    @keyframes lcs-pulse-run {
       0% {
+        offset-distance: 0%;
         opacity: 0;
-        transform: translateX(0);
       }
-      20%,
-      80% {
+      15%,
+      85% {
         opacity: 1;
       }
       100% {
+        offset-distance: 100%;
         opacity: 0;
-        transform: translateX(42px);
-      }
-    }
-    @keyframes lbs-pulse-run-rtl {
-      0% {
-        opacity: 0;
-        transform: translateX(0);
-      }
-      20%,
-      80% {
-        opacity: 1;
-      }
-      100% {
-        opacity: 0;
-        transform: translateX(-42px);
       }
     }
   }

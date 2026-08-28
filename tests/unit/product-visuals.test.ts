@@ -1,13 +1,13 @@
 /**
- * Public product visuals — the homepage hero ("The Living Business Surface",
- * H3.1) and the signup-side composition. Server-rendered illustrations with
+ * Public product visuals — the homepage hero ("The Living Control Surface",
+ * H3.3B) and the signup-side composition. Server-rendered illustrations with
  * hard guarantees:
  *  - every referenced i18n key resolves in BOTH locales (no ⟦marker⟧ leaks),
  *  - each visual is ONE labelled conceptual image with decorative internals
  *    hidden from assistive technology,
  *  - honestly badged Illustrative, with a visible caption, and NO invented
  *    business data: no names, counts, amounts, percentages or trust claims,
- *  - RTL-safe (logical classes; operational direction mirrors),
+ *  - RTL-safe (logical classes; the carved operational path mirrors),
  *  - complete as STATIC markup (no client JS / hydration dependency), and
  *  - hero motion runs ONCE, desktop-only, only under motion-safe.
  */
@@ -79,26 +79,77 @@ describe("public product visuals", () => {
   });
 });
 
-// ── H3.1: the Living Business Surface ────────────────────────────────────────
-describe("H3.1 hero — the Living Business Surface", () => {
-  it("contains no invented business names anywhere (renders or catalogs)", () => {
-    for (const html of [productEn, productAr]) {
-      expect(html).not.toContain("Rawan");
-      expect(html).not.toContain("روان");
-      expect(html).not.toMatch(/Bakery/i);
+// ── H3.3B: the Living Control Surface ────────────────────────────────────────
+describe("H3.3B hero — the Living Control Surface", () => {
+  const heroSrc = readFileSync(
+    fileURLToPath(new URL("../../src/app/_home/ProductVisual.tsx", import.meta.url)),
+    "utf8",
+  );
+  const css = readFileSync(
+    fileURLToPath(new URL("../../src/app/globals.css", import.meta.url)),
+    "utf8",
+  );
+
+  it("retires the H3.2 tilted plane, recessed rail and connector row for good", () => {
+    for (const gone of ["rotateX(", "perspective", "lbs-", "data-dir="]) {
+      expect(heroSrc, `source still contains ${gone}`).not.toContain(gone);
     }
-    expect(JSON.stringify(enCat)).not.toContain("Rawan");
-    expect(JSON.stringify(arCat)).not.toContain("روان");
+    expect(css).not.toContain("lbs-");
+    for (const html of [productEn, productAr]) {
+      expect(html).not.toContain("lbs-");
+    }
   });
 
-  it("contains no invented stage, team or other counts", () => {
+  it("renders ONE molded surface holding every formed zone", () => {
     for (const html of [productEn, productAr]) {
-      expect(html).not.toMatch(/Stage \d+ of \d+/i);
-      expect(html).not.toMatch(/\d+\s*(people|أشخاص)/);
-      expect(html).not.toMatch(/المرحلة \d+/);
-      // No digits at all in the semantic labels of the hero.
-      const text = html.replace(/<[^>]+>/g, " ").replace(/&[a-z]+;/g, " ");
-      expect(text).not.toMatch(/\d/);
+      expect((html.match(/data-lcs="surface"/g) ?? []).length).toBe(1);
+      // Zones formed from the surface: signals, quote+invoice, work, payment.
+      expect((html.match(/data-lcs="signal"/g) ?? []).length).toBe(2);
+      expect((html.match(/data-lcs="formed"/g) ?? []).length).toBe(2);
+      expect((html.match(/data-lcs="work"/g) ?? []).length).toBe(1);
+      expect((html.match(/data-lcs="payment"/g) ?? []).length).toBe(1);
+    }
+  });
+
+  it("carves ONE continuous operational path (a single uninterrupted curve)", () => {
+    for (const html of [productEn, productAr]) {
+      const accents = [...html.matchAll(/data-lcs="carve"[^>]*\sd="([^"]+)"/g)];
+      expect(accents.length).toBe(1);
+      const d = accents[0]?.[1] ?? "";
+      // One subpath only: exactly one M command, no path restarts.
+      expect(d.trim().startsWith("M ")).toBe(true);
+      expect((d.match(/M /g) ?? []).length).toBe(1);
+    }
+  });
+
+  it("mirrors the carved path (and only the path wrapper) under RTL", () => {
+    expect(productAr).toContain("scaleX(-1)");
+    expect(productEn).not.toContain("scaleX(-1)");
+    // Zones mirror through logical positions; the canvas flips its scale
+    // origin so the fitted composition stays anchored in both directions.
+    expect(productEn).toContain("origin-top-left");
+    expect(productEn).toContain("rtl:lg:origin-top-right");
+  });
+
+  it("represents the truthful operational concepts, and nothing else", () => {
+    for (const k of [
+      "home.viz.customer",
+      "home.viz.request",
+      "home.viz.quote",
+      "home.viz.quote_accepted",
+      "home.viz.term_generic",
+      "home.viz.work_v",
+      "home.viz.team_assigned",
+      "home.viz.approval_ready",
+      "home.viz.term_note",
+      "home.viz.dock",
+      "home.viz.invoice",
+      "home.viz.invoice_v",
+      "home.viz.payment",
+      "home.viz.payment_v",
+    ]) {
+      expect(productEn, `missing ${k} (en)`).toContain(en(k));
+      expect(productAr, `missing ${k} (ar)`).toContain(ar(k));
     }
   });
 
@@ -111,24 +162,41 @@ describe("H3.1 hero — the Living Business Surface", () => {
     expect(arText.match(/مستلمة/g)?.length).toBe(1);
   });
 
+  it("contains no invented names, numbers, dates or metrics in semantic text", () => {
+    for (const html of [productEn, productAr]) {
+      expect(html).not.toContain("Rawan");
+      expect(html).not.toContain("روان");
+      expect(html).not.toMatch(/Bakery/i);
+      expect(html).not.toMatch(/Stage \d+ of \d+/i);
+      const text = html.replace(/<[^>]+>/g, " ").replace(/&[a-z]+;/g, " ");
+      expect(text).not.toMatch(/\d/);
+      expect(html).not.toMatch(/\b(AED|USD|SAR|EUR|QAR|KWD|BHD|OMR)\b/);
+    }
+    expect(JSON.stringify(enCat)).not.toContain("Rawan");
+    expect(JSON.stringify(arCat)).not.toContain("روان");
+  });
+
   it("states terminology flexibility as identity, and retired wording stays retired", () => {
     const enText = productEn.replace(/<[^>]+>/g, "");
     expect(enText).toContain("Called Order in your workspace");
     const arText = productAr.replace(/<[^>]+>/g, "");
     expect(arText).toContain("يُسمّى طلبية في مساحة عملك");
-    // H3 and H3.1 treatments must not return.
     expect(productEn).not.toContain("&ldquo;");
     expect(enText).not.toContain("Your term");
     expect(arText).not.toContain("مصطلحك:");
   });
 
-  it("shows the optional-module dock with meaningful localized wording", () => {
+  it("offers recessed capability sockets with meaningful localized wording, once", () => {
     const enText = productEn.replace(/<[^>]+>/g, "");
-    expect(enText).toContain("Add what you need");
+    expect(enText).toContain("Space for what you need");
     const arText = productAr.replace(/<[^>]+>/g, "");
-    expect(arText).toContain("أضف ما تحتاجه");
-    // The dock exists for desktop AND as the mobile closing row.
-    expect((productEn.match(/Add what you need/g) ?? []).length).toBe(2);
+    expect(arText).toContain("مساحة لما تحتاجه");
+    // ONE shared labelled socket across desktop and mobile, plus one small
+    // unlabelled desktop recess; the retired dock wording stays retired.
+    expect((productEn.match(/Space for what you need/g) ?? []).length).toBe(1);
+    expect((productEn.match(/data-lcs="socket"/g) ?? []).length).toBe(2);
+    expect(enText).not.toContain("Add what you need");
+    expect(arText).not.toContain("أضف ما تحتاجه");
   });
 
   it("has a localized concise aria-label and a visible localized caption", () => {
@@ -138,29 +206,18 @@ describe("H3.1 hero — the Living Business Surface", () => {
     expect(productAr).toContain(ar("home.viz.caption"));
   });
 
-  it("represents the truthful signal set: customer, request, quote, work, team, invoice, payment", () => {
-    for (const k of [
-      "home.viz.customer",
-      "home.viz.request",
-      "home.viz.quote",
-      "home.viz.term_generic",
-      "home.viz.team_assigned",
-      "home.viz.approval_ready",
-      "home.viz.term_note",
-      "home.viz.dock",
-      "home.viz.invoice",
-      "home.viz.payment",
-    ]) {
-      expect(productEn, `missing ${k} (en)`).toContain(en(k));
-      expect(productAr, `missing ${k} (ar)`).toContain(ar(k));
+  it("renders no fake interactive control and nothing focusable", () => {
+    for (const html of [productEn, productAr]) {
+      expect(html).not.toMatch(/<button|<a |<input|tabindex/i);
     }
   });
 
   it("makes the separate and connected states structurally identifiable", () => {
     for (const html of [productEn, productAr]) {
-      expect(html).toContain('data-state="a"'); // incoming signals
-      expect(html).toContain('data-state="b"'); // the settled connected flow
-      expect(html).toContain("--lbs-from-x"); // per-object scattered offsets
+      expect(html).toContain("lcs-settle"); // zones settle from separated offsets
+      expect(html).toContain("lcs-form"); // the channel forms once
+      expect(html).toContain("lcs-carve-line"); // the path draws once
+      expect(html).toContain("--lcs-from-x"); // per-zone separated offsets
     }
   });
 
@@ -168,23 +225,29 @@ describe("H3.1 hero — the Living Business Surface", () => {
     for (const k of ["home.viz.work_v", "home.viz.quote_accepted", "home.viz.payment_v"]) {
       expect(productEn).toContain(en(k));
     }
-    expect(productEn).not.toMatch(/style="[^"]*opacity:\s*0/);
+    // Only the motion-only pulse is hidden at rest; no semantic node is.
+    const hidden = [...productEn.matchAll(/class="([^"]*opacity-0[^"]*)"/g)];
+    expect(hidden.length).toBe(1);
+    expect(hidden[0]?.[1] ?? "").toContain("lcs-pulse");
   });
 
-  it("renders no monetary amount and no fake interactive control", () => {
-    for (const html of [productEn, productAr]) {
-      expect(html).not.toMatch(/\b(AED|USD|SAR|EUR|QAR|KWD|BHD|OMR)\b/);
-      expect(html).not.toMatch(/<button|<a |<input|tabindex/i);
-    }
+  it("gives mobile an intentional vertical composition, not a shrunken canvas", () => {
+    // Carved stubs link the stages on mobile only; the carved SVG path and
+    // texture are desktop-only; every semantic zone stays visible on mobile.
+    expect((productEn.match(/lg:hidden/g) ?? []).length).toBeGreaterThanOrEqual(4);
+    expect(productEn).toContain("hidden lg:block");
+    expect(productEn).not.toMatch(
+      /data-lcs="(signal|formed|work|payment)"[^>]*class="[^"]*\bhidden\b/,
+    );
+    // The desktop canvas is a fixed composition with stepped scaling, so the
+    // carved path and the zones keep exact registration at every lg+ width.
+    expect(productEn).toContain("lg:[transform:scale(0.9)]");
+    expect(productEn).toContain("xl:[transform:scale(1)]");
   });
 
   it("introduces no raster, video, canvas, WebGL or animation library", () => {
-    const src = readFileSync(
-      fileURLToPath(new URL("../../src/app/_home/ProductVisual.tsx", import.meta.url)),
-      "utf8",
-    );
     for (const bad of ["<img", "<canvas", "<video", "webgl", "three", "framer-motion", "gsap"]) {
-      expect(src.toLowerCase()).not.toContain(bad);
+      expect(heroSrc.toLowerCase()).not.toContain(bad);
     }
     const pkg = JSON.parse(
       readFileSync(fileURLToPath(new URL("../../package.json", import.meta.url)), "utf8"),
@@ -192,19 +255,6 @@ describe("H3.1 hero — the Living Business Surface", () => {
     for (const dep of Object.keys(pkg.dependencies ?? {})) {
       expect(dep).not.toMatch(/framer|three|gsap|lottie|animejs|motion/);
     }
-  });
-
-  it("mirrors the operational direction and pulse under RTL", () => {
-    expect(productEn).toMatch(/data-dir="ltr"/);
-    expect(productAr).toMatch(/data-dir="rtl"/);
-    expect(productAr).toContain("scaleX(-1)");
-    expect(productEn).not.toContain("scaleX(-1)");
-  });
-
-  it("mobile gets the simplified static composition; the surface plane is desktop-only", () => {
-    expect((productEn.match(/hidden lg:flex/g) ?? []).length).toBeGreaterThanOrEqual(2);
-    expect(productEn).toContain("lg:hidden"); // the mobile vertical spine stubs
-    expect(productEn).toContain("hidden lg:block"); // the perspective surface
   });
 
   it("hero copy exists in both catalogs, natural Arabic, no em dash; retired keys stay retired", () => {
@@ -217,7 +267,7 @@ describe("H3.1 hero — the Living Business Surface", () => {
       expect(e).not.toContain("—");
       expect(a).not.toContain("—");
     }
-    for (const k of ["home.viz.caption", "home.viz.aria", "home.viz.team_assigned"]) {
+    for (const k of ["home.viz.caption", "home.viz.aria", "home.viz.dock"]) {
       expect(/[؀-ۿ]/.test(String(arCat[k as keyof typeof arCat]))).toBe(true);
     }
     for (const k of [
@@ -246,49 +296,72 @@ describe("hero motion rules", () => {
   const guardAt = css.indexOf(guard);
   // The hero block runs from its header comment to the (out-of-scope) signup
   // visual's rules that follow it in the same motion-safe media query.
-  const lbsBlock = css.slice(
-    css.indexOf("The Living Business Surface hero (H3.1)"),
+  const lcsBlock = css.slice(
+    css.indexOf("The Living Control Surface hero (H3.3B)"),
     css.indexOf("Signup visual"),
   );
 
-  it("defines .lbs-* only inside the motion-safe block, nested behind a desktop width gate", () => {
+  it("defines .lcs-* only inside the motion-safe block, nested behind a desktop width gate", () => {
     expect(guardAt).toBeGreaterThan(-1);
     const widthGateAt = css.indexOf("@media (min-width: 1024px)", guardAt);
     expect(widthGateAt).toBeGreaterThan(guardAt);
-    for (const rule of [".lbs-settle", ".lbs-channel", ".lbs-link", ".lbs-pulse"]) {
+    for (const rule of [".lcs-settle", ".lcs-form", ".lcs-carve-line", ".lcs-pulse"]) {
       expect(css.includes(rule), `${rule} missing`).toBe(true);
       expect(css.indexOf(rule)).toBeGreaterThan(widthGateAt);
     }
     expect(css.slice(0, guardAt)).not.toMatch(
-      /\.lbs-|lbs-settle-in|lbs-pulse-run|lbs-link-in|lbs-channel-in/,
+      /\.lcs-|lcs-settle-in|lcs-form-in|lcs-carve-draw|lcs-pulse-run/,
     );
   });
 
   it("hero motion never loops: no infinite iteration anywhere in the hero rules", () => {
-    expect(lbsBlock.length).toBeGreaterThan(100);
-    expect(lbsBlock).not.toContain("infinite");
-    expect(lbsBlock).toMatch(/lbs-settle-in[^;]*\)\s*1 both/);
-    expect(lbsBlock).toMatch(/lbs-channel-in[^;]*\s1 both/);
-    expect(lbsBlock).toMatch(/lbs-link-in[^;]*\s1 both/);
-    expect(lbsBlock).toMatch(/lbs-pulse-run[^;]*\s1 both/);
+    expect(lcsBlock.length).toBeGreaterThan(100);
+    expect(lcsBlock).not.toContain("infinite");
+    expect(lcsBlock).toMatch(/lcs-settle-in[^;]*\)\s*1 both/);
+    expect(lcsBlock).toMatch(/lcs-form-in[^;]*\s1 both/);
+    expect(lcsBlock).toMatch(/lcs-carve-draw[^;]*\s1 both/);
+    expect(lcsBlock).toMatch(/lcs-pulse-run[^;]*\s1 both/);
   });
 
-  it("animates transform and opacity only (no layout, inset or box-shadow motion)", () => {
-    const segments = lbsBlock.split("@keyframes").slice(1);
-    expect(segments.length).toBe(5); // settle-in, channel-in, link-in, pulse-run, pulse-run-rtl
-    for (const seg of segments) {
-      expect(seg).not.toMatch(/box-shadow|inset|margin|padding|top:|left:|right:|width:|height:/);
+  it("animates only cheap paint-safe properties (opacity, transform, path offsets)", () => {
+    // Slice each @keyframes to its balanced closing brace so trailing rules
+    // (the next selector's animation shorthand) are not misread as keyframe
+    // declarations.
+    const bodies: string[] = [];
+    for (const seg of lcsBlock.split("@keyframes").slice(1)) {
+      let depth = 0;
+      let end = seg.length;
+      for (let i = seg.indexOf("{"); i < seg.length; i++) {
+        if (seg[i] === "{") depth++;
+        if (seg[i] === "}" && --depth === 0) {
+          end = i;
+          break;
+        }
+      }
+      bodies.push(seg.slice(0, end));
+    }
+    expect(bodies.length).toBe(4); // settle-in, form-in, carve-draw, pulse-run
+    for (const body of bodies) {
+      expect(body).not.toMatch(/box-shadow|inset|margin|padding|top:|left:|right:|width:|height:/);
+      const props = [...body.matchAll(/^\s*([a-z-]+):/gm)].map((m) => m[1]);
+      expect(props.length).toBeGreaterThan(0);
+      for (const p of props) {
+        expect(["opacity", "transform", "stroke-dashoffset", "offset-distance"]).toContain(p);
+      }
     }
   });
 
-  it("the RTL pulse travels the opposite direction", () => {
-    expect(css).toMatch(/lbs-pulse-run-rtl/);
-    expect(css).toMatch(/translateX\(42px\)/);
-    expect(css).toMatch(/translateX\(-42px\)/);
+  it("the whole story ends within ~3 seconds (last delay + duration)", () => {
+    const delays = [...lcsBlock.matchAll(/animation(?:-delay)?:[^;]*?([\d.]+)s/g)].map((m) =>
+      parseFloat(m[1] ?? "0"),
+    );
+    expect(Math.max(...delays)).toBeLessThanOrEqual(2.2); // latest start
+    expect(lcsBlock).toContain("animation-delay: 2.1s"); // the closing pulse
   });
 
   it("the old hero animation sets are gone; the signup core stays guarded", () => {
     expect(css).not.toContain(".icv-");
+    expect(css).not.toContain(".lbs-");
     expect(css).not.toContain(".los-pulse");
     expect(css).not.toContain(".los-cta");
     expect(css.indexOf(".los-core")).toBeGreaterThan(guardAt);
