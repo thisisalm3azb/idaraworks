@@ -129,38 +129,52 @@ body {
     }
   }
 
-  /* Intelligent Clay hero (H3) — "a workspace that takes shape". Desktop only
-     (mobile renders the finished State B statically) and motion-safe only.
-     Every animation runs a single time, uses transform/opacity only, and ends
-     on the stable, complete State B. The shape-in rule settles each State-B
-     element into place (staggered via --icv-delay; fill-mode both keeps it
-     hidden until its turn, so the first paint reads as the simple State A flow
-     with no layout shift). The pulse rule sends one information dot across a
-     connector, then fades it; with no animation applied (reduced motion,
-     mobile) the dot rests statically at the connector start. */
+  /* The Living Business Surface hero (H3.1). Desktop only (mobile renders the
+     finished connected state statically) and motion-safe only. Every animation
+     runs a single time, uses transform/opacity only, and ends on the stable
+     connected State B. The settle rule brings each object from its lightly
+     scattered State-A offset (per-element --lbs-from-x/-y and --lbs-delay;
+     fill-mode both holds the scattered frame during the delay, so the first
+     paint reads as separate signals over the surface with zero layout shift).
+     The link rule fades the connections in AFTER the objects settle, and the
+     pulse rule sends one information dot across a connector, then fades it;
+     with no animation applied (reduced motion, mobile) links are simply
+     visible and the dot rests at the connector start. */
   @media (min-width: 1024px) {
-    .icv-shape {
-      animation: icv-shape-in 0.45s cubic-bezier(0.2, 0, 0.2, 1) 1 both;
-      animation-delay: var(--icv-delay, 0.4s);
+    .lbs-settle {
+      animation: lbs-settle-in 0.7s cubic-bezier(0.2, 0, 0.2, 1) 1 both;
+      animation-delay: var(--lbs-delay, 0.2s);
     }
-    @keyframes icv-shape-in {
+    @keyframes lbs-settle-in {
       from {
-        opacity: 0;
-        transform: translateY(6px) scale(0.97);
+        opacity: 0.5;
+        transform: translate(var(--lbs-from-x, 0px), var(--lbs-from-y, 12px)) scale(0.97);
       }
       to {
         opacity: 1;
         transform: none;
       }
     }
-    .icv-pulse {
-      animation: icv-pulse-run 0.9s ease-in-out 1 both;
-      animation-delay: var(--icv-pulse-delay, 2s);
+    .lbs-link {
+      animation: lbs-link-in 0.5s ease 1 both;
+      animation-delay: 1.4s;
     }
-    .icv-pulse[data-dir="rtl"] {
-      animation-name: icv-pulse-run-rtl;
+    @keyframes lbs-link-in {
+      from {
+        opacity: 0;
+      }
+      to {
+        opacity: 1;
+      }
     }
-    @keyframes icv-pulse-run {
+    .lbs-pulse {
+      animation: lbs-pulse-run 0.9s ease-in-out 1 both;
+      animation-delay: var(--lbs-pulse-delay, 2s);
+    }
+    .lbs-pulse[data-dir="rtl"] {
+      animation-name: lbs-pulse-run-rtl;
+    }
+    @keyframes lbs-pulse-run {
       0% {
         opacity: 0;
         transform: translateX(0);
@@ -171,10 +185,10 @@ body {
       }
       100% {
         opacity: 0;
-        transform: translateX(50px);
+        transform: translateX(42px);
       }
     }
-    @keyframes icv-pulse-run-rtl {
+    @keyframes lbs-pulse-run-rtl {
       0% {
         opacity: 0;
         transform: translateX(0);
@@ -185,7 +199,7 @@ body {
       }
       100% {
         opacity: 0;
-        transform: translateX(-50px);
+        transform: translateX(-42px);
       }
     }
   }

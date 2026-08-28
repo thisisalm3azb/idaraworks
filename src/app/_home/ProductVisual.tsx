@@ -1,57 +1,70 @@
 import { Icon, type IconName } from "@/platform/ui";
 
 /**
- * Homepage hero visual — "A workspace that takes shape" (H3, blueprint §8).
+ * Homepage hero visual — "The Living Business Surface" (H3.1).
  *
- * One coherent operating board built from real product objects, in two
- * conceptual states carried by the SAME markup:
+ * One spatial composition: a restrained perspective surface (the shared
+ * operating environment) with the business's own operational signals settling
+ * onto it. Two conceptual states carried by the SAME server-rendered markup:
  *
- *  - State A (`data-state="a"`): the simple flow every business starts with —
- *    customer → work → cash — connected by one information spine.
- *  - State B (`data-state="b"`): the same objects gaining useful structure —
- *    an accepted quote, a stage progression, team and approval feeding the
- *    central work object, an issued invoice, and a terminology treatment
- *    showing the work object called by the business's own word ("Order").
+ *  - State A (separate): the signals are present but lightly scattered above
+ *    the surface, and the connections are not yet drawn.
+ *  - State B (connected): the same signals settle into one clear operating
+ *    flow (customer / request -> quote -> work -> invoice -> payment), the
+ *    central work object rises above the surface, the links fade in, and one
+ *    information pulse crosses the flow once.
  *
- * Motion (desktop, motion-safe only, in globals.css): the B elements settle in
- * ONCE (transform/opacity, staggered, ~1.5s), then a single information pulse
- * crosses each connector ONCE and fades. Nothing loops; the final frame is the
- * complete, stable State B. Reduced-motion users, mobile widths and no-JS
- * visitors get the finished State B immediately — the component is fully
- * server-rendered and depends on no hydration.
+ * Truthful by construction: no company or person names, no monetary values,
+ * no counts, no percentages. Statuses are qualitative (Accepted, In progress,
+ * Team assigned, Approval ready, Issued, Received) and the terminology
+ * treatment is explicit: "Your term: Order". Exactly ONE payment outcome.
  *
- * Depth is layered, not decorative: the central work object sits raised
- * (accent border, deeper shadow, slight lift) over quieter supporting
- * surfaces. Everything is tokens + inline SVG; every value is illustrative
- * and the board is badged as such, with a visible caption stating the concept.
- * No monetary amount is shown — cash is a qualitative "Received" outcome.
+ * Depth is layered, not decorative: the perspective plane is the base, signal
+ * chips sit close to it, the quote/invoice objects stand on it, and the work
+ * object is lifted above it with the strongest elevation. Faint dashed module
+ * slots on the plane imply the surface can be arranged around the business.
+ *
+ * Motion (>=lg, motion-safe only, in globals.css): a run-once settle of every
+ * object from its scattered State-A offset, then the links fade in, then one
+ * pulse crosses each connector once. Everything ends stable. Reduced motion,
+ * mobile and no-JS render the finished State B immediately; the component is
+ * fully server-rendered with no hydration dependency.
  */
+
+/** A quiet operational object standing on the surface. */
 function Node({
   icon,
   label,
   value,
   tone = "neutral",
-  state,
   className = "",
+  fromX,
+  fromY,
   delay,
 }: {
   icon: IconName;
   label: string;
   value: string;
   tone?: "neutral" | "success";
-  state: "a" | "b";
   className?: string;
+  fromX?: string;
+  fromY?: string;
   delay?: string;
 }) {
   return (
     <div
-      data-state={state}
+      data-state="b"
       className={
-        "flex items-center gap-2.5 rounded-lg border border-line bg-card p-2.5 shadow-card " +
-        (state === "b" ? "icv-shape " : "") +
+        "lbs-settle flex items-center gap-2.5 rounded-lg border border-line bg-card p-3 shadow-card " +
         className
       }
-      style={delay ? ({ "--icv-delay": delay } as React.CSSProperties) : undefined}
+      style={
+        {
+          "--lbs-from-x": fromX,
+          "--lbs-from-y": fromY,
+          "--lbs-delay": delay,
+        } as React.CSSProperties
+      }
     >
       <span
         className={
@@ -71,26 +84,58 @@ function Node({
   );
 }
 
-/** Horizontal spine connector (desktop): dashed rail, forward chevron, and one
- * information pulse that crosses ONCE (motion-safe; static dot otherwise). */
+/** A light incoming-signal chip, sitting close to the surface. */
+function SignalChip({
+  icon,
+  label,
+  fromX,
+  fromY,
+  delay,
+}: {
+  icon: IconName;
+  label: string;
+  fromX?: string;
+  fromY?: string;
+  delay?: string;
+}) {
+  return (
+    <span
+      data-state="a"
+      className="lbs-settle inline-flex items-center gap-1.5 self-start rounded-full border border-line bg-card/90 px-3 py-1.5 text-xs font-medium text-ink-secondary shadow-card"
+      style={
+        {
+          "--lbs-from-x": fromX,
+          "--lbs-from-y": fromY,
+          "--lbs-delay": delay,
+        } as React.CSSProperties
+      }
+    >
+      <Icon name={icon} size={13} aria-hidden />
+      {label}
+    </span>
+  );
+}
+
+/** Horizontal spine connector (desktop): sits BEHIND the objects, fades in
+ * with State B, and carries one information pulse that crosses once. */
 function Connector({ dir, pulseDelay }: { dir: "ltr" | "rtl"; pulseDelay: string }) {
   return (
     <div
-      className="relative hidden h-6 w-14 items-center lg:flex"
+      className="lbs-link relative z-0 hidden h-6 w-12 items-center lg:flex"
       aria-hidden="true"
-      data-state="a"
+      data-state="b"
     >
       <span
         className="h-px w-full"
         style={{
           backgroundImage:
-            "repeating-linear-gradient(to right, color-mix(in srgb, var(--accent) 45%, transparent) 0 5px, transparent 5px 11px)",
+            "repeating-linear-gradient(to right, color-mix(in srgb, var(--accent) 50%, transparent) 0 5px, transparent 5px 11px)",
         }}
       />
       <span
-        className="icv-pulse absolute start-0 size-1.5 rounded-full bg-accent"
+        className="lbs-pulse absolute start-0 size-1.5 rounded-full bg-accent"
         data-dir={dir}
-        style={{ "--icv-pulse-delay": pulseDelay } as React.CSSProperties}
+        style={{ "--lbs-pulse-delay": pulseDelay } as React.CSSProperties}
       />
       <svg
         className="absolute end-0"
@@ -113,11 +158,11 @@ function Connector({ dir, pulseDelay }: { dir: "ltr" | "rtl"; pulseDelay: string
   );
 }
 
-/** Vertical spine stub (mobile only): keeps the customer → work → cash path
- * reading as one connected flow when the board stacks. */
+/** Vertical spine stub (mobile): keeps the flow reading connected when the
+ * simplified static composition stacks. */
 function VStub() {
   return (
-    <div className="flex justify-center lg:hidden" aria-hidden="true" data-state="a">
+    <div className="flex justify-center lg:hidden" aria-hidden="true" data-state="b">
       <span className="h-5 w-0 border-s-2 border-dotted border-accent-line" />
     </div>
   );
@@ -126,138 +171,140 @@ function VStub() {
 export function ProductVisual({ t, dir }: { t: (k: string) => string; dir: "ltr" | "rtl" }) {
   return (
     <div>
-      <div className="relative w-full overflow-hidden rounded-xl border border-line bg-gradient-to-br from-sunken to-card p-5 shadow-card sm:p-6">
-        <span className="absolute end-4 top-4 z-10 inline-flex items-center rounded-full border border-line bg-card/80 px-2.5 py-1 text-[11px] font-medium text-ink-muted backdrop-blur">
+      <div className="relative w-full overflow-hidden rounded-xl border border-line bg-gradient-to-b from-page to-sunken p-5 sm:p-6 lg:min-h-[430px] lg:p-8">
+        <span className="absolute end-4 top-4 z-20 inline-flex items-center rounded-full border border-line bg-card/80 px-2.5 py-1 text-[11px] font-medium text-ink-muted backdrop-blur">
           {t("home.viz.illustrative")}
         </span>
+
+        {/* The shared operating surface: a restrained perspective plane with a
+            faint structural grid and two empty module slots, implying the
+            environment is arranged around the business (desktop only). */}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-x-4 bottom-4 top-10 hidden lg:block"
+          style={{ perspective: "1100px" }}
+        >
+          <div
+            className="absolute inset-0 rounded-3xl border border-line-strong/60"
+            style={{
+              transform: "rotateX(52deg) scaleY(1.25)",
+              transformOrigin: "50% 100%",
+              background:
+                "linear-gradient(to top, color-mix(in srgb, var(--surface-card) 88%, var(--accent)) 0%, var(--surface-sunken) 100%)," +
+                "repeating-linear-gradient(to right, color-mix(in srgb, var(--accent) 7%, transparent) 0 1px, transparent 1px 56px)," +
+                "repeating-linear-gradient(to top, color-mix(in srgb, var(--accent) 7%, transparent) 0 1px, transparent 1px 44px)",
+              backgroundBlendMode: "multiply",
+              boxShadow:
+                "inset 0 1px 0 color-mix(in srgb, white 65%, transparent), 0 18px 30px -18px rgb(28 28 26 / 0.25)",
+            }}
+          >
+            {/* Empty module slots: the surface has room shaped for more. */}
+            <span className="absolute bottom-8 start-10 h-10 w-24 rounded-lg border border-dashed border-line-strong/70" />
+            <span className="absolute bottom-10 end-12 h-10 w-20 rounded-lg border border-dashed border-line-strong/70" />
+          </div>
+        </div>
 
         <div
           role="img"
           aria-label={t("home.viz.aria")}
-          className="mt-6 grid grid-cols-1 items-stretch gap-3 lg:grid-cols-[1fr_auto_1.35fr_auto_1fr] lg:items-center"
+          className="relative z-10 mt-8 grid grid-cols-1 items-stretch gap-3 lg:mt-24 lg:grid-cols-[1fr_auto_1.5fr_auto_1fr] lg:items-center lg:gap-2"
         >
-          {/* WIN side — where the operation begins. */}
-          <div className="flex flex-col gap-2">
-            <Node
+          {/* Incoming side: the business's own signals, then the accepted quote. */}
+          <div className="relative z-10 flex flex-col gap-2">
+            <SignalChip
               icon="users"
               label={t("home.viz.customer")}
-              value={t("home.viz.customer_v")}
-              state="a"
+              fromX="-14px"
+              fromY="-18px"
+              delay="0.15s"
+            />
+            <SignalChip
+              icon="inbox"
+              label={t("home.viz.request")}
+              fromX="-8px"
+              fromY="14px"
+              delay="0.3s"
             />
             <Node
               icon="clipboard"
               label={t("home.viz.quote")}
               value={t("home.viz.quote_accepted")}
-              state="b"
-              delay="0.3s"
               className="hidden lg:flex"
+              fromX="-12px"
+              fromY="10px"
+              delay="0.45s"
             />
           </div>
 
           <VStub />
-          <Connector dir={dir} pulseDelay="1.7s" />
+          <Connector dir={dir} pulseDelay="2s" />
 
-          {/* CENTRAL work object — the focus, slightly raised above the board. */}
-          <div className="rounded-xl border border-accent-line bg-card p-3.5 shadow-pop lg:-translate-y-1">
-            <div className="flex items-start justify-between gap-2" data-state="a">
-              <span className="flex min-w-0 flex-1 items-start gap-2">
-                <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-brand text-ink-inverse">
-                  <Icon name="briefcase" size={15} aria-hidden />
-                </span>
-                <span className="min-w-0">
-                  <span className="block text-[10px] font-medium uppercase tracking-wide text-ink-muted">
+          {/* The central work object: the strongest element, lifted above the
+              surface, carrying the business's own word for its work. */}
+          <div
+            data-state="b"
+            className="lbs-settle relative z-10"
+            style={{ "--lbs-from-y": "16px", "--lbs-delay": "0.6s" } as React.CSSProperties}
+          >
+            <div className="rounded-xl border border-accent-line bg-card p-4 shadow-pop lg:-translate-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <span className="flex min-w-0 items-center gap-2.5">
+                  <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-brand text-ink-inverse">
+                    <Icon name="briefcase" size={16} aria-hidden />
+                  </span>
+                  <span className="text-sm font-semibold text-ink">
                     {t("home.viz.term_generic")}
                   </span>
-                  {/* Terminology shaping: the work object carries the
-                      business's own word. */}
-                  <span
-                    data-state="b"
-                    className="icv-shape mt-0.5 flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5"
-                    style={{ "--icv-delay": "0.5s" } as React.CSSProperties}
-                  >
-                    <span className="rounded bg-accent-soft px-1.5 py-0.5 text-xs font-semibold text-ink">
-                      &ldquo;{t("home.viz.term_custom")}&rdquo;
-                    </span>
-                    <span className="whitespace-nowrap text-[10px] text-ink-muted">
-                      {t("home.viz.term_hint")}
-                    </span>
-                  </span>
                 </span>
-              </span>
-              <span className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full bg-brand-soft px-2 py-0.5 text-[10px] font-medium text-brand">
-                <span className="size-1.5 rounded-full bg-brand" aria-hidden />
-                {t("home.viz.work_v")}
-              </span>
-            </div>
-
-            {/* Stage progression — structure the operation gained. */}
-            <div
-              data-state="b"
-              className="icv-shape mt-3"
-              style={{ "--icv-delay": "0.65s" } as React.CSSProperties}
-            >
-              <div className="flex items-center gap-1" aria-hidden="true">
-                {[0, 1, 2].map((i) => (
-                  <span
-                    key={i}
-                    className={
-                      "h-1.5 flex-1 rounded-full " + (i <= 1 ? "bg-brand" : "bg-line-strong")
-                    }
-                  />
-                ))}
+                <span className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full bg-brand-soft px-2 py-0.5 text-[10px] font-medium text-brand">
+                  <span className="size-1.5 rounded-full bg-brand" aria-hidden />
+                  {t("home.viz.work_v")}
+                </span>
               </div>
-              <p className="mt-1.5 text-[11px] text-ink-muted">{t("home.viz.work_stage")}</p>
-            </div>
 
-            {/* Team + approval feeding the work object. */}
-            <div
-              data-state="b"
-              className="icv-shape mt-3 flex flex-wrap gap-1.5"
-              style={{ "--icv-delay": "0.8s" } as React.CSSProperties}
-            >
-              <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-line bg-sunken px-2 py-0.5 text-[10px] text-ink-secondary">
-                <Icon name="users" size={11} aria-hidden />
-                <span className="font-semibold">{t("home.viz.team")}</span>
-                <span>{t("home.viz.team_v")}</span>
-              </span>
-              <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-line bg-sunken px-2 py-0.5 text-[10px] text-ink-secondary">
-                <Icon name="check" size={11} aria-hidden />
-                <span className="font-semibold">{t("home.viz.approval")}</span>
-                <span>{t("home.viz.approval_v")}</span>
-              </span>
+              {/* Terminology shaping, stated explicitly. */}
+              <p className="mt-2.5 rounded-md bg-accent-soft px-2.5 py-1.5 text-[11px] font-medium text-ink">
+                {t("home.viz.term_label")}: {t("home.viz.term_custom")}
+              </p>
+
+              {/* The operating state, qualitative only. */}
+              <ul className="mt-2.5 flex flex-col gap-1.5">
+                <li className="flex items-center gap-2 text-[11px] text-ink-secondary">
+                  <Icon name="users" size={12} aria-hidden className="shrink-0 text-brand" />
+                  {t("home.viz.team_assigned")}
+                </li>
+                <li className="flex items-center gap-2 text-[11px] text-ink-secondary">
+                  <Icon name="check" size={12} aria-hidden className="shrink-0 text-success" />
+                  {t("home.viz.approval_ready")}
+                </li>
+              </ul>
             </div>
           </div>
 
           <VStub />
-          <Connector dir={dir} pulseDelay="2.5s" />
+          <Connector dir={dir} pulseDelay="2.6s" />
 
-          {/* OUTCOME side — what the work becomes. No amounts: qualitative. */}
-          <div className="flex flex-col gap-2">
+          {/* Outcome side: the document the work becomes, and ONE payment
+              outcome settling back into the connected surface. */}
+          <div className="relative z-10 flex flex-col gap-2 lg:pt-6">
             <Node
               icon="receipt"
               label={t("home.viz.invoice")}
               value={t("home.viz.invoice_v")}
-              state="b"
-              delay="0.95s"
               className="hidden lg:flex"
+              fromX="12px"
+              fromY="-14px"
+              delay="0.75s"
             />
             <Node
               icon="banknote"
               label={t("home.viz.payment")}
               value={t("home.viz.payment_v")}
               tone="success"
-              state="a"
+              fromX="14px"
+              fromY="12px"
+              delay="0.9s"
             />
-            <div
-              data-state="b"
-              className="icv-shape flex items-center gap-1.5 rounded-lg border border-success/40 bg-success-soft px-2.5 py-1.5"
-              style={{ "--icv-delay": "1.1s" } as React.CSSProperties}
-            >
-              <span className="size-1.5 shrink-0 rounded-full bg-success" aria-hidden />
-              <span className="text-[10px] font-medium uppercase tracking-wide text-success">
-                {t("home.viz.status")}
-              </span>
-            </div>
           </div>
         </div>
       </div>
