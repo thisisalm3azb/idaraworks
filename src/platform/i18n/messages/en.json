@@ -182,7 +182,7 @@
   "home.pricing.title": "Start free, grow when you are ready",
   "home.pricing.subtitle": "Pick the set of outcomes that fits today. You can change tier at any time.",
   "home.pricing.finalizing": "Launch pricing is being finalized",
-  "home.pricing.note": "Prices are shown at sign-up. No charge is taken while you set up your workspace.",
+  "home.pricing.note": "No charge is taken while you set up your workspace.",
   "home.pricing.free.tag": "For getting started and running your first work",
   "home.pricing.free.o1": "Customers, work and daily operations",
   "home.pricing.free.o2": "Guided setup in Arabic or English",
@@ -1578,5 +1578,12 @@
   "locked.cta": "View plans & add-ons",
   "locked.ask_admin": "Ask your workspace owner or admin to activate it from the subscription page.",
   "locked.unavailable_title": "Not available yet",
-  "locked.unavailable": "This capability isn't available yet and can't be purchased."
+  "locked.unavailable": "This capability isn't available yet and can't be purchased.",
+  "home.pricing.spine_label": "Included in every plan",
+  "home.pricing.s1": "An organization workspace with its own boundary",
+  "home.pricing.s2": "Arabic and English, with full right-to-left",
+  "home.pricing.s3": "Your business identity on supported documents",
+  "home.pricing.s4": "One connected record of the work",
+  "home.pricing.existing": "Already using IdaraWorks?",
+  "home.cta.reassure": "Free to start, in Arabic or English. No charge while you set up."
 }

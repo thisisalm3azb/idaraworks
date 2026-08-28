@@ -195,8 +195,23 @@ export async function HomePage({ workspaceHref }: { workspaceHref: string | null
               title={t("home.pricing.title")}
               body={t("home.pricing.subtitle")}
             />
-            <div className="mt-10 grid gap-4 lg:grid-cols-3">
-              {pricingTiers().map((tier) => (
+            {/* The comparison spine: what every plan shares (H9). */}
+            <div className="mx-auto mt-8 max-w-3xl rounded-lg border border-line bg-page px-4 py-3">
+              <p className="text-center text-[11px] font-semibold uppercase tracking-wide text-ink-secondary">
+                {t("home.pricing.spine_label")}
+              </p>
+              <ul className="mt-2 flex flex-wrap items-center justify-center gap-x-5 gap-y-1.5">
+                {(["s1", "s2", "s3", "s4"] as const).map((k) => (
+                  <li key={k} className="flex items-center gap-1.5 text-xs text-ink">
+                    <Icon name="check" size={12} aria-hidden className="shrink-0 text-brand" />
+                    {t(`home.pricing.${k}`)}
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <div className="mt-6 grid gap-4 lg:grid-cols-3">
+              {pricingTiers().map((tier, depth) => (
                 <div
                   key={tier.key}
                   className={
@@ -216,7 +231,18 @@ export async function HomePage({ workspaceHref }: { workspaceHref: string | null
                       </span>
                     ) : null}
                   </div>
-                  <p className="mt-1 text-sm text-ink-secondary">{t(tier.tagKey)}</p>
+                  {/* Operating depth, expressed structurally not by price. */}
+                  <span className="mt-2 flex items-center gap-1" aria-hidden="true">
+                    {[0, 1, 2].map((i) => (
+                      <span
+                        key={i}
+                        className={
+                          "h-1.5 w-6 rounded-full " + (i <= depth ? "bg-brand/70" : "bg-line")
+                        }
+                      />
+                    ))}
+                  </span>
+                  <p className="mt-2 text-sm text-ink-secondary">{t(tier.tagKey)}</p>
                   <p className="mt-4 text-sm font-medium text-ink">
                     {t("home.pricing.finalizing")}
                   </p>
@@ -248,6 +274,12 @@ export async function HomePage({ workspaceHref }: { workspaceHref: string | null
               ))}
             </div>
             <p className="mt-6 text-center text-xs text-ink-muted">{t("home.pricing.note")}</p>
+            <p className="mt-2 text-center text-sm text-ink-secondary">
+              {t("home.pricing.existing")}{" "}
+              <Link href={LOGIN} className="font-medium text-brand hover:underline">
+                {t("home.nav.login")}
+              </Link>
+            </p>
           </div>
         </section>
 
@@ -276,6 +308,7 @@ export async function HomePage({ workspaceHref }: { workspaceHref: string | null
                 </Link>
               ) : null}
             </div>
+            <p className="mx-auto mt-5 text-sm text-hero-dim">{t("home.cta.reassure")}</p>
           </div>
         </section>
       </main>
@@ -296,14 +329,20 @@ export async function HomePage({ workspaceHref }: { workspaceHref: string | null
             className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm"
             aria-label={t("home.footer.nav")}
           >
+            <a href="#how" className="text-ink-secondary hover:text-ink">
+              {t("home.nav.how")}
+            </a>
             <a href="#product" className="text-ink-secondary hover:text-ink">
               {t("home.nav.product")}
             </a>
-            <a href="#pricing" className="text-ink-secondary hover:text-ink">
-              {t("home.nav.pricing")}
+            <a href="#international" className="text-ink-secondary hover:text-ink">
+              {t("home.nav.international")}
             </a>
             <a href="#trust" className="text-ink-secondary hover:text-ink">
               {t("home.nav.trust")}
+            </a>
+            <a href="#pricing" className="text-ink-secondary hover:text-ink">
+              {t("home.nav.pricing")}
             </a>
             <Link href={LOGIN} className="text-ink-secondary hover:text-ink">
               {t("home.nav.login")}
