@@ -1,6 +1,6 @@
 import type { MetadataRoute } from "next";
 
-const CANONICAL = "https://idaraworks.vercel.app";
+const CANONICAL = "https://www.idaraworks.com";
 
 /** Sitemap (005A): the public surface only — the homepage and the two
  * public auth-funnel pages. Tenant/app routes are intentionally excluded. */

@@ -1,6 +1,6 @@
 import type { MetadataRoute } from "next";
 
-const CANONICAL = "https://idaraworks.vercel.app";
+const CANONICAL = "https://www.idaraworks.com";
 
 /**
  * Robots policy (005A): the public homepage and the marketing-funnel auth

@@ -5,7 +5,7 @@ import { t } from "@/platform/i18n";
 import { resolveLanding } from "./(auth)/actions";
 import { HomePage } from "./_home/HomePage";
 
-const CANONICAL = "https://idaraworks.vercel.app";
+const CANONICAL = "https://www.idaraworks.com";
 
 /**
  * Root `/` — the public IdaraWorks homepage (005A). Rendered for everyone:

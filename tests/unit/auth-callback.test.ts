@@ -237,10 +237,10 @@ describe("requestOrigin in production (header trust eliminated)", () => {
     }
   });
 
-  it("falls back to the canonical prod origin when APP_URL is unset", () => {
+  it("falls back to the canonical prod origin (custom domain) when APP_URL is unset", () => {
     process.env.APP_ENV = "prod";
     try {
-      expect(requestOrigin(h)).toBe("https://idaraworks.vercel.app");
+      expect(requestOrigin(h)).toBe("https://www.idaraworks.com");
     } finally {
       delete process.env.APP_ENV;
     }

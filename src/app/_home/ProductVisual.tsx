@@ -226,7 +226,7 @@ export function ProductVisual({ t, dir }: { t: (k: string) => string; dir: "ltr"
                 behind every formed zone; mirrored as a whole under RTL. */}
             <div
               aria-hidden="true"
-              className="lcs-form pointer-events-none absolute inset-0 hidden lg:block"
+              className="lcs-form pointer-events-none absolute inset-0 hidden overflow-hidden lg:block"
               style={dir === "rtl" ? { transform: "scaleX(-1)" } : undefined}
             >
               <svg className="absolute inset-0 h-full w-full" viewBox="0 0 500 372" fill="none">

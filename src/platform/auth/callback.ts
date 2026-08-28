@@ -10,7 +10,7 @@
  */
 
 /** The canonical production origin — the safe default when APP_URL is not set. */
-const CANONICAL_PROD_ORIGIN = "https://idaraworks.vercel.app";
+const CANONICAL_PROD_ORIGIN = "https://www.idaraworks.com";
 
 /**
  * Derive the request's public origin.
