@@ -69,7 +69,7 @@ describe("H10 — homepage copy contracts", () => {
   // setup/map are the authenticated owner-dashboard keys (002B) and are
   // governed by their own suites.
   const homeKeys = Object.keys(en).filter((k) =>
-    /^home\.(meta|nav|hero|viz|flow|built|caps|gcc|trust|pricing|cta|footer)\./.test(k),
+    /^home.(meta|nav|hero|viz|flow|built|os|gcc|trust|pricing|close|footer)\./.test(k),
   );
 
   it("homepage catalogs carry no em dash in either language", () => {

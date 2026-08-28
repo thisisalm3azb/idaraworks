@@ -28,7 +28,7 @@ const HOME_KEYS = Object.keys(en).filter((k) => k.startsWith("home."));
 // attention/setup/map namespaces are the owner-DASHBOARD keys (002B), governed
 // by their own tests; the content-quality checks below target marketing copy.
 const MARKETING = HOME_KEYS.filter((k) =>
-  /^home\.(meta|nav|hero|viz|flow|built|caps|gcc|pricing|cta|footer)\./.test(k),
+  /^home.(meta|nav|hero|viz|flow|built|os|gcc|trust|pricing|close|footer)\./.test(k),
 );
 
 const PHYSICAL =

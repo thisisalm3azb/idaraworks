@@ -164,7 +164,7 @@ describe("H8 — accessibility, RTL, motion, scope", () => {
       "<ProductVisual t={t} dir={dir} />",
       "<FlowJourney t={t} />",
       "<FoundationShapes t={t} />",
-      "<CapabilityMap t={t} />",
+      "<BusinessOS t={t} />", // H11 successor of the capability map
       "<BusinessPassport t={t} />",
     ]) {
       expect(homeSrc).toContain(marker);

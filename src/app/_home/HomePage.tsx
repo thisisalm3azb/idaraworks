@@ -2,9 +2,9 @@ import Link from "next/link";
 import { Icon } from "@/platform/ui";
 import { getT, getServerLocale } from "@/platform/i18n/server";
 import { directionFor } from "@/platform/i18n";
+import { BusinessOS } from "./BusinessOS";
 import { BusinessPassport } from "./BusinessPassport";
 import { ClosingSection } from "./ClosingSection";
-import { CapabilityMap } from "./CapabilityMap";
 import { FlowJourney } from "./FlowJourney";
 import { FoundationShapes } from "./FoundationShapes";
 import { LanguageSwitch } from "./LanguageSwitch";
@@ -160,15 +160,15 @@ export async function HomePage({ workspaceHref }: { workspaceHref: string | null
           <FoundationShapes t={t} />
         </section>
 
-        {/* ── 4. The operating capability map (H6) ─────────────────────────── */}
+        {/* ── 4. The Business OS (H11) ─────────────────────────────────────── */}
         <section id="product" className="scroll-mt-16 border-y border-line bg-card">
           <div className="mx-auto w-full max-w-6xl px-4 py-16">
             <SectionHead
-              eyebrow={t("home.caps.eyebrow")}
-              title={t("home.caps.title")}
-              body={t("home.caps.subtitle")}
+              eyebrow={t("home.os.eyebrow")}
+              title={t("home.os.title")}
+              body={t("home.os.body")}
             />
-            <CapabilityMap t={t} />
+            <BusinessOS t={t} />
           </div>
         </section>
 

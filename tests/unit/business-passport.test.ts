@@ -193,7 +193,7 @@ describe("H7 — accessibility, RTL, motion, scope", () => {
     expect(homeSrc).toContain("<ProductVisual t={t} dir={dir} />");
     expect(homeSrc).toContain("<FlowJourney t={t} />");
     expect(homeSrc).toContain("<FoundationShapes t={t} />");
-    expect(homeSrc).toContain("<CapabilityMap t={t} />");
+    expect(homeSrc).toContain("<BusinessOS t={t} />"); // H11 successor of the capability map
     expect(homeSrc).toMatch(/<section id="pricing"/);
   });
 
