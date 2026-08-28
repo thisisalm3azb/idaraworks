@@ -82,6 +82,7 @@ export const AUDIT_ENTITY_TYPES = [
   "config", // Phase F: config-artifact revisions are audited (D-1.8)
   "team", // S1 masters — no file attachments in MVP, but audited
   "item", // S1 catalog — audited (costs are financial config)
+  "agent", // H12: agent-run audit records (correlation id as entity id)
   "attendance", // S3 — the manual grid mark is an audited HR mutation (no files)
   "approval", // S4 — the decision record (submit/decide/withdraw are audited)
   "approval_rule", // S4 — rule edits are config-audited
