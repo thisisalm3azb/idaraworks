@@ -62,8 +62,10 @@ describe("homepage i18n content", () => {
   });
 
   it("makes no unsupported customer-count, compliance, or rating claims", () => {
+    // "reviews" (plural) targets fake social proof; the verb "review" is the
+    // product's real review-before-apply behavior (H5) and stays allowed.
     const BANNED =
-      /\b(trusted by|customers worldwide|\d+[\d,]*\+? (customers|businesses|users|companies)|certified|compliant|ISO|SOC ?2|GDPR|guarantee|award|rated|reviews?|testimonial|★|money[- ]back)\b/i;
+      /\b(trusted by|customers worldwide|\d+[\d,]*\+? (customers|businesses|users|companies)|certified|compliant|ISO|SOC ?2|GDPR|guarantee|award|rated|reviews|testimonial|★|money[- ]back)\b/i;
     for (const loc of [en, ar]) {
       for (const k of MARKETING) {
         expect(

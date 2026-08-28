@@ -3,6 +3,7 @@ import { Icon, type IconName } from "@/platform/ui";
 import { getT, getServerLocale } from "@/platform/i18n/server";
 import { directionFor } from "@/platform/i18n";
 import { FlowJourney } from "./FlowJourney";
+import { FoundationShapes } from "./FoundationShapes";
 import { LanguageSwitch } from "./LanguageSwitch";
 import { MobileMenu } from "./MobileMenu";
 import { ProductVisual } from "./ProductVisual";
@@ -149,54 +150,9 @@ export async function HomePage({ workspaceHref }: { workspaceHref: string | null
           </div>
         </section>
 
-        {/* ── 3. Built around the user's business ──────────────────────────── */}
+        {/* ── 3. One foundation, different shapes (H5) ─────────────────────── */}
         <section className="mx-auto w-full max-w-6xl px-4 py-16">
-          <div className="grid gap-10 lg:grid-cols-[1fr_1fr] lg:items-center">
-            <div>
-              <SectionHead
-                eyebrow={t("home.built.eyebrow")}
-                title={t("home.built.title")}
-                body={t("home.built.body")}
-                align="start"
-              />
-              <ul className="mt-6 flex flex-col gap-3">
-                {["p1", "p2", "p3"].map((p) => (
-                  <li key={p} className="flex items-start gap-3">
-                    <Icon
-                      name="check"
-                      size={18}
-                      aria-hidden
-                      className="mt-0.5 shrink-0 text-brand"
-                    />
-                    <span className="text-sm leading-relaxed text-ink-secondary">
-                      {t(`home.built.${p}`)}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <div className="flex flex-col gap-3">
-              <div className="rounded-lg border border-line bg-card p-5 shadow-card">
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-success-soft px-2.5 py-1 text-xs font-medium text-success">
-                  <span className="size-1.5 rounded-full bg-success" aria-hidden />
-                  {t("home.built.now_label")}
-                </span>
-                <p className="mt-2 text-sm leading-relaxed text-ink">{t("home.built.now_body")}</p>
-              </div>
-              <div className="rounded-lg border border-dashed border-line-strong bg-page p-5">
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-line px-2.5 py-1 text-xs font-medium text-ink-secondary">
-                  {t("home.built.planned_label")}
-                </span>
-                <p className="mt-2 text-sm leading-relaxed text-ink-secondary">
-                  {t("home.built.planned_body")}
-                </p>
-              </div>
-              <p className="flex items-start gap-2 rounded-md bg-sunken p-3 text-xs leading-relaxed text-ink-secondary">
-                <Icon name="lock" size={15} aria-hidden className="mt-0.5 shrink-0" />
-                <span>{t("home.built.guardrail")}</span>
-              </p>
-            </div>
-          </div>
+          <FoundationShapes t={t} />
         </section>
 
         {/* ── 4. Core capabilities (organized by outcome) ──────────────────── */}
