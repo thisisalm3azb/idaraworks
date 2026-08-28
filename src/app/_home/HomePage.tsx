@@ -1,7 +1,8 @@
 import Link from "next/link";
-import { Icon, type IconName } from "@/platform/ui";
+import { Icon } from "@/platform/ui";
 import { getT, getServerLocale } from "@/platform/i18n/server";
 import { directionFor } from "@/platform/i18n";
+import { BusinessPassport } from "./BusinessPassport";
 import { CapabilityMap } from "./CapabilityMap";
 import { FlowJourney } from "./FlowJourney";
 import { FoundationShapes } from "./FoundationShapes";
@@ -168,35 +169,14 @@ export async function HomePage({ workspaceHref }: { workspaceHref: string | null
           </div>
         </section>
 
-        {/* ── 5. International and regional fit ────────────────────────────── */}
+        {/* ── 5. The business passport (H7) ────────────────────────────────── */}
         <section id="international" className="mx-auto w-full max-w-6xl scroll-mt-16 px-4 py-16">
           <SectionHead
             eyebrow={t("home.gcc.eyebrow")}
             title={t("home.gcc.title")}
             body={t("home.gcc.subtitle")}
           />
-          <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {(
-              [
-                ["globe", "bilingual"],
-                ["building", "identity"],
-                ["receipt", "documents"],
-                ["calculator", "regional"],
-              ] as [IconName, string][]
-            ).map(([icon, k]) => (
-              <div key={k} className="rounded-lg border border-line bg-card p-5 shadow-card">
-                <span className="flex size-9 items-center justify-center rounded-md bg-brand-soft text-brand">
-                  <Icon name={icon} size={18} aria-hidden />
-                </span>
-                <h3 className="mt-3 text-base font-semibold text-ink">
-                  {t(`home.gcc.${k}.title`)}
-                </h3>
-                <p className="mt-1.5 text-sm leading-relaxed text-ink-secondary">
-                  {t(`home.gcc.${k}.desc`)}
-                </p>
-              </div>
-            ))}
-          </div>
+          <BusinessPassport t={t} />
         </section>
 
         {/* ── 6. Pricing ───────────────────────────────────────────────────── */}
