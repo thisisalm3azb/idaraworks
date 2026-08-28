@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Icon, type IconName } from "@/platform/ui";
 import { getT, getServerLocale } from "@/platform/i18n/server";
 import { directionFor } from "@/platform/i18n";
+import { FlowJourney } from "./FlowJourney";
 import { LanguageSwitch } from "./LanguageSwitch";
 import { MobileMenu } from "./MobileMenu";
 import { ProductVisual } from "./ProductVisual";
@@ -136,7 +137,7 @@ export async function HomePage({ workspaceHref }: { workspaceHref: string | null
           </div>
         </section>
 
-        {/* ── 2. The business flow ─────────────────────────────────────────── */}
+        {/* ── 2. The business journey (H4) ─────────────────────────────────── */}
         <section id="how" className="scroll-mt-16 border-y border-line bg-card">
           <div className="mx-auto w-full max-w-6xl px-4 py-16">
             <SectionHead
@@ -144,46 +145,7 @@ export async function HomePage({ workspaceHref }: { workspaceHref: string | null
               title={t("home.flow.title")}
               body={t("home.flow.subtitle")}
             />
-            <ol className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {(
-                [
-                  ["users", "win"],
-                  ["clipboard", "plan"],
-                  ["briefcase", "run"],
-                  ["package", "cost"],
-                  ["banknote", "paid"],
-                  ["chart", "understand"],
-                ] as [IconName, string][]
-              ).map(([icon, k], i) => (
-                <li
-                  key={k}
-                  className="relative rounded-lg border border-line bg-page p-5 shadow-card"
-                >
-                  <div className="flex items-center gap-3">
-                    <span className="flex size-9 items-center justify-center rounded-md bg-brand-soft text-brand">
-                      <Icon name={icon} size={18} aria-hidden />
-                    </span>
-                    <span
-                      dir="ltr"
-                      className="font-mono text-xs font-medium text-ink-muted"
-                      aria-hidden
-                    >
-                      {String(i + 1).padStart(2, "0")}
-                    </span>
-                  </div>
-                  <h3 className="mt-3 text-base font-semibold text-ink">
-                    {t(`home.flow.${k}.name`)}
-                  </h3>
-                  <p className="mt-1.5 text-sm leading-relaxed text-ink-secondary">
-                    {t(`home.flow.${k}.desc`)}
-                  </p>
-                </li>
-              ))}
-            </ol>
-            <p className="mt-8 flex items-start gap-2 rounded-md border border-accent-line bg-accent-soft p-4 text-sm text-ink">
-              <Icon name="check" size={18} aria-hidden className="mt-0.5 shrink-0 text-brand" />
-              <span>{t("home.flow.thread")}</span>
-            </p>
+            <FlowJourney t={t} />
           </div>
         </section>
 
