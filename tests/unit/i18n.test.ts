@@ -19,11 +19,17 @@ describe("catalog parity", () => {
     // S1: ICU placeholders are STRIPPED first — {job}/{jobs} argument names are
     // exactly the doc-07 mechanism; only LITERAL noun text is banned.
     const stripPlaceholders = (v: string) => v.replace(/\{[a-z_]+\}/gi, " ");
+    // H13: the homepage agent showcase and Business OS map are MARKETING copy
+    // naming canonical product surfaces ("Project Agent", "Projects, phases,
+    // tasks..."), not in-app strings a business can re-term. The doc-07 law
+    // covers workspace UI; these two namespaces are the documented exemption.
+    const EXEMPT = /^home\.(agents|os)\./;
     for (const [locale, cat] of [
       ["en", en],
       ["ar", ar],
     ] as const) {
       for (const [key, value] of Object.entries(cat)) {
+        if (EXEMPT.test(key)) continue;
         expect(
           BANNED.test(stripPlaceholders(value)),
           `${locale}.${key} = "${value}" hardcodes a domain noun`,

@@ -1,7 +1,9 @@
 import Link from "next/link";
-import { Icon } from "@/platform/ui";
+import { Icon, type IconName } from "@/platform/ui";
 import { getT, getServerLocale } from "@/platform/i18n/server";
 import { directionFor } from "@/platform/i18n";
+import { AGENT_IDS, type AgentId } from "@/platform/agents/registry";
+import { AgentShowcase, type AgentVM } from "./AgentShowcase";
 import { BusinessOS } from "./BusinessOS";
 import { BusinessPassport } from "./BusinessPassport";
 import { ClosingSection } from "./ClosingSection";
@@ -24,6 +26,41 @@ import { homeNav, LOGIN_HREF } from "./nav";
  * an "Open workspace" action instead of being forced through registration.
  */
 const LOGIN = LOGIN_HREF;
+
+/**
+ * H13: the interim visual identity for each canonical agent — one coherent
+ * editorial palette (deep mineral greens and warm earth tones), a monogram
+ * and a domain icon per agent. This backs the designed monogram tiles until
+ * the commissioned portraits specified in docs/design/AGENT_PORTRAIT_SYSTEM.md
+ * are produced (see PORTRAIT_ASSETS in AgentShowcase.tsx for the swap point).
+ */
+const AGENT_INK = "#EFECE2";
+const AGENT_VISUALS: Record<AgentId, { monogram: string; icon: IconName; bg: string }> = {
+  manager: { monogram: "M", icon: "grid", bg: "#0B5348" },
+  executive: { monogram: "EX", icon: "building", bg: "#2E3B36" },
+  operations: { monogram: "OP", icon: "briefcase", bg: "#145C50" },
+  project: { monogram: "PR", icon: "calendar", bg: "#4A5340" },
+  sales_crm: { monogram: "SC", icon: "megaphone", bg: "#6B4A2A" },
+  accounting: { monogram: "AC", icon: "receipt", bg: "#37474B" },
+  finance: { monogram: "FI", icon: "banknote", bg: "#27473F" },
+  people_payroll: { monogram: "PP", icon: "users", bg: "#5A4632" },
+  inventory_purchasing: { monogram: "IN", icon: "truck", bg: "#565C4C" },
+  planning_analytics: { monogram: "PL", icon: "trendUp", bg: "#1F4D5A" },
+};
+
+function agentVM(id: AgentId, t: (k: string) => string): AgentVM {
+  const v = AGENT_VISUALS[id];
+  return {
+    id,
+    name: t(`home.agents.${id}.name`),
+    role: t(`home.agents.${id}.role`),
+    outcome: t(`home.agents.${id}.outcome`),
+    question: t(`home.agents.${id}.q`),
+    monogram: v.monogram,
+    icon: v.icon,
+    tone: { bg: v.bg, ink: AGENT_INK },
+  };
+}
 
 export async function HomePage({ workspaceHref }: { workspaceHref: string | null }) {
   const t = await getT();
@@ -60,6 +97,12 @@ export async function HomePage({ workspaceHref }: { workspaceHref: string | null
               <Icon name="grid" size={16} />
             </span>
             <span>IdaraWorks</span>
+            <span className="hidden items-center gap-2 lg:flex" aria-hidden="true">
+              <span className="h-4 w-px bg-line-strong" />
+              <span className="text-xs font-medium tracking-wide text-ink-muted">
+                {t("home.nav.clay")}
+              </span>
+            </span>
           </Link>
 
           <nav
@@ -121,6 +164,9 @@ export async function HomePage({ workspaceHref }: { workspaceHref: string | null
             <p className="mt-5 max-w-xl text-pretty text-lg leading-relaxed text-ink-secondary">
               {t("home.hero.subtitle")}
             </p>
+            <p className="mt-3 max-w-xl text-pretty text-sm leading-relaxed text-ink-muted">
+              {t("home.hero.support")}
+            </p>
             <div className="mt-7 flex flex-wrap items-center gap-3">
               <Link
                 href={primary.href}
@@ -143,7 +189,26 @@ export async function HomePage({ workspaceHref }: { workspaceHref: string | null
           </div>
         </section>
 
-        {/* ── 2. The business journey (H4) ─────────────────────────────────── */}
+        {/* ── 2. The agent command room (H13) ──────────────────────────────── */}
+        <section id="agents" className="mx-auto w-full max-w-6xl scroll-mt-16 px-4 pb-16 pt-2">
+          <SectionHead
+            eyebrow={t("home.agents.eyebrow")}
+            title={t("home.agents.title")}
+            body={t("home.agents.intro")}
+          />
+          <AgentShowcase
+            manager={agentVM("manager", t)}
+            specialists={AGENT_IDS.filter((id) => id !== "manager").map((id) => agentVM(id, t))}
+            labels={{
+              evidence: t("home.agents.evidence"),
+              approval: t("home.agents.approval"),
+              record: t("home.agents.record"),
+              ask: t("home.agents.ask"),
+            }}
+          />
+        </section>
+
+        {/* ── 3. The business journey (H4) ─────────────────────────────────── */}
         <section id="how" className="scroll-mt-16 border-y border-line bg-card">
           <div className="mx-auto w-full max-w-6xl px-4 py-16">
             <SectionHead

@@ -92,7 +92,9 @@ describe("H9.1 — plan identity and prices", () => {
     expect(String(en["home.pricing.early" as keyof typeof en])).toMatch(
       /early access is free while billing is being prepared/i,
     );
-    expect(String(en["home.pricing.early" as keyof typeof en])).toMatch(/planned launch prices/i);
+    // H13: "These are the launch prices." — stated plainly, no roadmap label.
+    expect(String(en["home.pricing.early" as keyof typeof en])).toMatch(/the launch prices/i);
+    expect(String(en["home.pricing.early" as keyof typeof en])).not.toMatch(/\bplanned\b/i);
   });
 
   it("makes no discount, urgency, trial, unlimited-usage or card claim beyond the verified ones", () => {

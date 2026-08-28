@@ -5,7 +5,8 @@
  *  - adaptability is DEMONSTRATED within verified shipped behavior only
  *    (terminology choice, stage shaping, supported capabilities, reviewed
  *    setup, undo with history) over one stable foundation,
- *  - Available now vs Planned stay strictly separated, planned labelled,
+ *  - the ledger lists only shipped capability (H13: no roadmap-status labels
+ *    in customer-facing copy),
  *  - the configuration-safety law remains, in plain and detailed form,
  *  - no industry templates, invented data, AI/code-writing claims,
  *  - RTL-safe logical classes, static markup, no fake controls.
@@ -105,27 +106,28 @@ describe("H5 — structure", () => {
     expect(tEn("home.built.review_s3")).toMatch(/nothing is created until/i);
   });
 
-  it("keeps Available now and Planned unmistakable, planned labelled and quieter", () => {
+  it("lists only shipped capability in the ledger, with no roadmap-status labels (H13)", () => {
     for (const [html, tt] of [
       [htmlEn, tEn],
       [htmlAr, tAr],
     ] as const) {
-      expect(html).toContain(tt("home.built.now_label"));
-      expect(html).toContain(tt("home.built.planned_label"));
       for (const k of ["now_i1", "now_i2", "now_i3", "now_i4", "now_i5"]) {
         expect(html).toContain(tt(`home.built.${k}`));
       }
-      for (const k of ["pl_i1", "pl_i2", "pl_i3", "pl_i4"]) {
-        expect(html).toContain(tt(`home.built.${k}`));
-      }
     }
-    // Planned items render inside the dashed, muted ledger panel AFTER the
-    // planned label, so no planned item can be mistaken for shipped.
-    const planned = htmlEn.indexOf(tEn("home.built.planned_label"));
-    for (const k of ["pl_i1", "pl_i2", "pl_i3", "pl_i4"]) {
-      expect(htmlEn.indexOf(tEn(`home.built.${k}`))).toBeGreaterThan(planned);
+    // The roadmap-label keys are retired outright; every listed item is
+    // shipped, so nothing needs an availability chip.
+    for (const k of [
+      "home.built.now_label",
+      "home.built.planned_label",
+      "home.built.pl_i1",
+      "home.built.pl_i2",
+      "home.built.pl_i3",
+      "home.built.pl_i4",
+    ]) {
+      expect(k in en, `${k} must be retired`).toBe(false);
+      expect(k in ar, `${k} must be retired`).toBe(false);
     }
-    expect(htmlEn).toMatch(/border-dashed border-line-strong/);
   });
 
   it("carries the safety law in plain language plus the detailed guardrail", () => {

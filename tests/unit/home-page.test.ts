@@ -28,7 +28,7 @@ const HOME_KEYS = Object.keys(en).filter((k) => k.startsWith("home."));
 // attention/setup/map namespaces are the owner-DASHBOARD keys (002B), governed
 // by their own tests; the content-quality checks below target marketing copy.
 const MARKETING = HOME_KEYS.filter((k) =>
-  /^home.(meta|nav|hero|viz|flow|built|os|gcc|trust|pricing|close|footer)\./.test(k),
+  /^home.(meta|nav|hero|agents|viz|flow|built|os|gcc|trust|pricing|close|footer)\./.test(k),
 );
 
 const PHYSICAL =
@@ -244,9 +244,8 @@ describe("H1 truthfulness + international-first copy", () => {
     expect(marketingEn).toMatch(/right-to-left/i);
   });
 
-  it("describes Spanish as planned, never as available, and adds no Spanish locale", () => {
-    expect(marketingEn).toMatch(/spanish is planned/i);
-    expect(marketingEn).not.toMatch(/spanish[^.]*\b(today|now|available)\b/i);
+  it("names no unshipped language (H13) and adds no Spanish locale", () => {
+    expect(marketingEn).not.toMatch(/spanish/i);
     expect(existsSync("src/platform/i18n/messages/es.json")).toBe(false);
   });
 
@@ -256,11 +255,14 @@ describe("H1 truthfulness + international-first copy", () => {
     expect(marketingEn).not.toMatch(/permissions that match your trade/i);
   });
 
-  it("preserves the available-now vs planned distinction and the Illustrative label", () => {
-    expect(String(en["home.built.now_label" as keyof typeof en])).toMatch(/now|available/i);
-    expect(String(en["home.built.planned_label" as keyof typeof en])).toMatch(/planned/i);
+  it("keeps the Illustrative label and carries no roadmap-status label (H13)", () => {
     expect(en["home.viz.illustrative" as keyof typeof en]).toBeTruthy();
     expect(ar["home.viz.illustrative" as keyof typeof ar]).toBeTruthy();
+    expect("home.built.now_label" in en).toBe(false);
+    expect("home.built.planned_label" in en).toBe(false);
+    expect(marketingEn).not.toMatch(
+      /\b(planned|coming soon|expanding|future capabilit|available now|roadmap)\b/i,
+    );
   });
 
   it("contains no em dash in any homepage marketing copy (en or ar)", () => {

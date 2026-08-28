@@ -11,7 +11,8 @@ import { Icon } from "@/platform/ui";
  *    logo, currency, terminology) lives in workspace settings
  *    (src/platform/documents/issuer.ts, branding + company settings).
  *  - Language: English and Arabic ship across every screen with complete RTL;
- *    the locale persists via cookie. Spanish is planned only.
+ *    the locale persists via cookie. Only shipped languages are shown (H13
+ *    removed the customer-facing roadmap-status labels).
  *  - Documents: quote, tax invoice and purchase order print templates carry
  *    the identity, and each document can be issued in English, Arabic or
  *    bilingual (DOC_LANGUAGES).
@@ -203,28 +204,16 @@ export function BusinessPassport({ t }: { t: TFn }) {
         {t("home.gcc.docnote")}
       </p>
 
-      {/* Market readiness: now is louder than planned. */}
-      <div className="mt-6 grid gap-3 sm:grid-cols-[1.35fr_1fr]">
-        <div className="rounded-lg border border-line bg-card p-4 shadow-card">
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-success-soft px-2.5 py-1 text-xs font-medium text-success">
-            <span className="size-1.5 rounded-full bg-success" aria-hidden />
-            {t("home.gcc.now_label")}
-          </span>
-          <ul className="mt-2.5 flex flex-wrap gap-x-5 gap-y-1.5">
-            {(["n1", "n2", "n3", "n4", "n5"] as const).map((k) => (
-              <li key={k} className="flex items-start gap-1.5 text-sm text-ink">
-                <Icon name="check" size={13} aria-hidden className="mt-1 shrink-0 text-brand" />
-                {t(`home.gcc.${k}`)}
-              </li>
-            ))}
-          </ul>
-        </div>
-        <div className="rounded-lg border border-dashed border-line-strong bg-page p-4">
-          <span className="inline-flex items-center rounded-full border border-line px-2.5 py-1 text-xs font-medium text-ink-secondary">
-            {t("home.gcc.planned_label")}
-          </span>
-          <p className="mt-2.5 text-sm text-ink-secondary">{t("home.gcc.pl1")}</p>
-        </div>
+      {/* Market readiness (H13: one confident ledger). */}
+      <div className="mt-6 rounded-lg border border-line bg-card p-4 shadow-card">
+        <ul className="flex flex-wrap justify-center gap-x-6 gap-y-2">
+          {(["n1", "n2", "n3", "n4", "n5"] as const).map((k) => (
+            <li key={k} className="flex items-start gap-1.5 text-sm text-ink">
+              <Icon name="check" size={13} aria-hidden className="mt-1 shrink-0 text-brand" />
+              {t(`home.gcc.${k}`)}
+            </li>
+          ))}
+        </ul>
       </div>
 
       <p className="mx-auto mt-8 max-w-xl text-balance text-center text-lg font-medium leading-relaxed text-ink">

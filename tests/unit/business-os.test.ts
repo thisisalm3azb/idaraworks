@@ -3,12 +3,14 @@
  * north-star documents. Guarantees:
  *  - founder positioning ("Built by managers, for managers", "One business.
  *    One system.") renders in both locales,
- *  - every domain's NOW line is backed by shipped workspace surfaces (nav
- *    IA), while expansion lines are future-facing and cannot be confused
- *    with shipped capability (distinct keys, marker structure, legend),
- *  - the role-aware intelligence band is explicitly PLANNED, and "powered
- *    by AI" wording cannot render while AI_AGENTS_PRODUCTION_READY is false
- *    (flipping it requires a real entitlement capability key),
+ *  - the section presents ONE complete system: seven domains around the
+ *    shared record plus role-aware intelligence as a core layer, with the
+ *    H13 roadmap-status labels (legend, now/next split, Planned band)
+ *    retired from customer-facing copy,
+ *  - the intelligence layer keeps the product laws visible (grounded in
+ *    records, human approval), and "powered by AI" wording cannot render
+ *    while AI_AGENTS_PRODUCTION_READY is false (flipping it requires a real
+ *    entitlement capability key),
  *  - no internal module/entitlement/permission identifier is exposed,
  *  - the agent architecture document carries every non-negotiable law and
  *    the north star exists with the truth line,
@@ -90,86 +92,98 @@ describe("H11 — positioning", () => {
   });
 });
 
-describe("H11 — domain truth", () => {
-  it("renders six domains around one record, both locales", () => {
+describe("H13 — one complete system", () => {
+  it("renders seven domains and the intelligence layer around one record, both locales", () => {
     for (const [html, tt] of [
       [htmlEn, tEn],
       [htmlAr, tAr],
     ] as const) {
       expect(html).toContain(tt("home.os.record_title"));
       expect(html).toContain(tt("home.os.record_note"));
-      expect((html.match(/<h3/g) ?? []).length).toBe(8); // record + 6 domains + agents
-      for (const d of DOMAIN_KEYS) {
+      expect((html.match(/<h3/g) ?? []).length).toBe(9); // record + 7 domains + intelligence
+      for (const d of [...DOMAIN_KEYS, "admin"]) {
         expect(html).toContain(tt(`home.os.${d}.title`));
-        expect(html).toContain(tt(`home.os.${d}.now`));
-        expect(html).toContain(tt(`home.os.${d}.next`));
+        expect(html).toContain(tt(`home.os.${d}.line`));
       }
-      expect(html).toContain(tt("home.os.legend_now"));
-      expect(html).toContain(tt("home.os.legend_next"));
+      expect(html).toContain(tt("home.os.intel_title"));
+      expect(html).toContain(tt("home.os.intel_line"));
     }
   });
 
-  it("every NOW line is backed by shipped surfaces; no unshipped module reads as shipped", () => {
-    // Each now-phrase decomposes to audited nav surfaces (H6 inventory).
-    const BACKING: Record<(typeof DOMAIN_KEYS)[number], string[]> = {
-      customers: ["customers", "quotes", "customer_updates"],
-      work: ["jobs", "report_new", "reports_review", "issues", "approvals"],
-      people: ["people", "attendance", "members"],
-      supply: ["items", "material_requests", "purchase_orders", "suppliers"],
-      money: ["invoices", "payments", "expenses", "costing", "ar"],
-      planning: ["today", "exports"],
-    };
-    for (const [domain, keys] of Object.entries(BACKING)) {
-      for (const k of keys) {
-        expect(NAV_KEYS.has(k), `${domain}.now claims unshipped surface ${k}`).toBe(true);
-      }
-    }
-    // Expansion lines only carry future modules; none may appear in a NOW line.
-    const nows = DOMAIN_KEYS.map((d) => String(en[`home.os.${d}.now` as keyof typeof en])).join(
-      " ",
-    );
-    for (const future of [
-      /pipeline/i,
-      /contract/i,
+  it("covers the complete promised scope across the domain lines (Part F)", () => {
+    const lines = [...DOMAIN_KEYS, "admin"]
+      .map(
+        (d) =>
+          `${en[`home.os.${d}.title` as keyof typeof en]} ${en[`home.os.${d}.line` as keyof typeof en]}`,
+      )
+      .join(" ");
+    for (const required of [
+      /customers/i,
+      /CRM/i,
+      /projects/i,
+      /phases/i,
+      /tasks/i,
+      /HR|people/i,
       /payroll/i,
-      /leave/i,
       /inventory/i,
-      /warehous/i,
-      /asset/i,
-      /general ledger/i,
-      /payables/i,
+      /purchasing/i,
+      /assets/i,
+      /accounting/i,
       /budget/i,
+      /cash/i,
       /forecast/i,
+      /analytics/i,
+      /documents/i,
+      /approvals/i,
+      /administration/i,
     ]) {
-      expect(nows).not.toMatch(future);
+      expect(lines, `domain lines must cover ${required}`).toMatch(required);
+    }
+    // The shipped-surface inventory still exists (sanity: nav IA unchanged).
+    for (const k of ["customers", "quotes", "invoices", "attendance", "purchase_orders"]) {
+      expect(NAV_KEYS.has(k), `core surface ${k} missing from nav`).toBe(true);
     }
   });
 
-  it("expansion wording is future-facing and structurally distinct from shipped", () => {
-    expect(String(en["home.os.legend_next" as keyof typeof en])).toMatch(/expanding/i);
-    // Now lines render with the check icon; next lines with the dashed open
-    // marker and muted tone — asserted structurally.
-    expect(osSrc).toMatch(/OpenDot/);
-    expect((htmlEn.match(/border-dashed border-line-strong/g) ?? []).length).toBeGreaterThanOrEqual(
-      7, // 6 domain open dots + legend marker (+ agents band border)
+  it("carries no roadmap-status label anywhere in customer-facing homepage copy (H13)", () => {
+    // The label keys are retired outright.
+    for (const k of [
+      "home.os.legend_now",
+      "home.os.legend_next",
+      "home.os.agents_label",
+      "home.os.agents_title",
+      "home.os.agents_body",
+      "home.os.agents_suggest",
+      "home.os.agents_approve",
+    ]) {
+      expect(k in en, `${k} must be retired`).toBe(false);
+      expect(k in ar, `${k} must be retired`).toBe(false);
+    }
+    for (const d of [...DOMAIN_KEYS, "admin"]) {
+      expect(`home.os.${d}.now` in en).toBe(false);
+      expect(`home.os.${d}.next` in en).toBe(false);
+    }
+    // No roadmap-status wording anywhere in the marketing catalog (the one
+    // legitimate stage-name pill "Scheduled" replaced the old "Planned").
+    const marketing = Object.keys(en)
+      .filter((k) =>
+        /^home\.(meta|nav|hero|agents|viz|flow|built|os|gcc|trust|pricing|close|footer)\./.test(k),
+      )
+      .map((k) => `${en[k as keyof typeof en]} ${ar[k as keyof typeof ar] ?? ""}`)
+      .join("  ");
+    expect(marketing).not.toMatch(
+      /\b(planned|coming soon|expanding|future capabilit|available now|roadmap)\b/i,
     );
+    expect(marketing).not.toMatch(/قريباً|مخطط لها|قيد التوسعة/);
   });
 });
 
-describe("H11 — role-aware intelligence gating", () => {
-  it("the agents band is explicitly planned", () => {
-    for (const [html, tt] of [
-      [htmlEn, tEn],
-      [htmlAr, tAr],
-    ] as const) {
-      expect(html).toContain(tt("home.os.agents_label")); // "Planned" chip
-      expect(html).toContain(tt("home.os.agents_title"));
-      expect(html).toContain(tt("home.os.agents_body"));
-      expect(html).toContain(tt("home.os.agents_suggest"));
-      expect(html).toContain(tt("home.os.agents_approve"));
-    }
-    expect(String(en["home.os.agents_label" as keyof typeof en])).toBe("Planned");
-    expect(String(en["home.os.agents_body" as keyof typeof en])).toMatch(/^Planned agents will/);
+describe("H13 — role-aware intelligence gating", () => {
+  it("the intelligence layer states grounding and human approval", () => {
+    expect(String(en["home.os.intel_line" as keyof typeof en])).toMatch(
+      /grounded in your records/i,
+    );
+    expect(String(en["home.os.intel_line" as keyof typeof en])).toMatch(/human approval/i);
   });
 
   it("'powered by AI' wording cannot render without a real production capability", () => {
@@ -271,14 +285,13 @@ describe("H11 — integrity, truthfulness, scope", () => {
     }
   });
 
-  it("static markup, logical classes, mirrored arrow, no fake controls", () => {
+  it("static markup, logical classes, no fake controls", () => {
     for (const html of [htmlEn, htmlAr]) {
       const classes = [...html.matchAll(/class="([^"]*)"/g)].map((m) => m[1]).join(" ");
       expect(PHYSICAL.test(classes), classes).toBe(false);
       expect(html).not.toMatch(/<button|<a |<input|tabindex|role="(button|switch)"/i);
       expect(html).not.toMatch(/animation|animate-/);
     }
-    expect(htmlEn).toContain("rtl:-scale-x-100");
     expect(osSrc).not.toMatch(/animation[:-]|@keyframes/);
   });
 });

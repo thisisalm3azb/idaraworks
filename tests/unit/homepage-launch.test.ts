@@ -69,7 +69,7 @@ describe("H10 — homepage copy contracts", () => {
   // setup/map are the authenticated owner-dashboard keys (002B) and are
   // governed by their own suites.
   const homeKeys = Object.keys(en).filter((k) =>
-    /^home.(meta|nav|hero|viz|flow|built|os|gcc|trust|pricing|close|footer)\./.test(k),
+    /^home.(meta|nav|hero|agents|viz|flow|built|os|gcc|trust|pricing|close|footer)\./.test(k),
   );
 
   it("homepage catalogs carry no em dash in either language", () => {
@@ -79,10 +79,11 @@ describe("H10 — homepage copy contracts", () => {
     }
   });
 
-  it("Spanish is consistently planned, never available", () => {
-    const blob = homeKeys.map((k) => String(en[k as keyof typeof en])).join(" ");
-    expect(blob).toMatch(/spanish is planned|spanish, as a first-class language/i);
-    expect(blob).not.toMatch(/spanish[^.]*\b(available|today|now)\b/i);
+  it("no unshipped language is named anywhere in homepage copy (H13)", () => {
+    const blob = homeKeys
+      .map((k) => `${en[k as keyof typeof en]} ${ar[k as keyof typeof ar] ?? ""}`)
+      .join(" ");
+    expect(blob).not.toMatch(/spanish|الإسبانية/i);
   });
 
   it("the public journey keeps one consistent primary CTA wording", () => {

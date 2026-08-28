@@ -3,8 +3,8 @@
  *  - the four-card International grid is retired,
  *  - one identity passport feeds two genuinely mirrored outputs (EN ltr /
  *    AR rtl via real lang+dir attributes, not manual reversal),
- *  - English/Arabic/RTL are stated available now; Spanish is Planned only
- *    and never selectable,
+ *  - English/Arabic/RTL are stated available today; only shipped languages
+ *    appear (H13: no roadmap-status labels, no unshipped language named),
  *  - identity, currency, tax and document claims match the audited
  *    implementation (IssuerIdentity fields, DOC_LANGUAGES, per-document
  *    currency and rate) with no compliance/translation/worldwide claims,
@@ -101,24 +101,24 @@ describe("H7 — structure", () => {
     }
   });
 
-  it("keeps Available now louder than Planned, and Spanish never selectable", () => {
+  it("lists only shipped readiness, with no roadmap labels or unshipped language (H13)", () => {
     for (const [html, tt] of [
       [htmlEn, tEn],
       [htmlAr, tAr],
     ] as const) {
-      expect(html).toContain(tt("home.gcc.now_label"));
-      expect(html).toContain(tt("home.gcc.planned_label"));
       for (const k of ["n1", "n2", "n3", "n4", "n5"]) {
         expect(html).toContain(tt(`home.gcc.${k}`));
       }
-      expect(html).toContain(tt("home.gcc.pl1"));
       expect(html).toContain(tt("home.gcc.close"));
     }
-    // Spanish appears only inside the dashed Planned panel, after its label.
-    expect(htmlEn.indexOf(tEn("home.gcc.pl1"))).toBeGreaterThan(
-      htmlEn.indexOf(tEn("home.gcc.planned_label")),
-    );
-    expect(htmlEn).toMatch(/border-dashed border-line-strong/);
+    // The roadmap-label keys are retired outright, and no unshipped language
+    // is named anywhere in the section.
+    for (const k of ["home.gcc.now_label", "home.gcc.planned_label", "home.gcc.pl1"]) {
+      expect(k in en, `${k} must be retired`).toBe(false);
+      expect(k in ar, `${k} must be retired`).toBe(false);
+    }
+    expect(gccEn).not.toMatch(/spanish/i);
+    expect(htmlEn + htmlAr).not.toMatch(/spanish|الإسبانية/i);
     // English and Arabic availability is explicit text.
     expect(tEn("home.gcc.n1")).toMatch(/arabic and english[^.]*today/i);
     expect(tEn("home.gcc.n2")).toMatch(/right-to-left/i);

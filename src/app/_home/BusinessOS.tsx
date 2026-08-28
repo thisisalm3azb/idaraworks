@@ -1,35 +1,26 @@
 import { Icon, type IconName } from "@/platform/ui";
 
 /**
- * H11: the Business OS section (the "#product" body). Establishes the
- * north-star positioning — one business, one system, built by managers for
- * managers — as one coherent operating-system visual: six business domains
- * ported into a single connected business record, each domain stating what
- * ships today (check) and where IdaraWorks is expanding (open marker), plus
- * a clearly PLANNED role-aware intelligence band.
+ * H11/H13: the Business OS section (the "#product" body). One complete
+ * operating system: seven business domains ported into a single connected
+ * business record, with role-aware intelligence presented as a core layer of
+ * the same system (H13 removed the roadmap-status labels per founder
+ * direction; the engineering roadmap stays truthful in
+ * docs/product/IDARAWORKS_BUSINESS_OS_NORTH_STAR.md).
  *
- * Truth rules (tested):
- *  - every "now" line is backed by shipped workspace surfaces (the same
- *    audited inventory as the H6 map: nav IA, routes, services);
- *  - every expansion line is future-facing wording from the north-star
- *    document, visually and semantically distinct (legend + open marker);
- *  - the agents band renders PLANNED wording only: no production AI exists
- *    (verified: no AI SDK in the codebase; provider seams are unimplemented),
- *    so AI_AGENTS_PRODUCTION_READY stays false and tests forbid "Powered by
- *    AI" style claims while it is false.
- *
- * Static server markup in the homepage's material language; ports mirror
- * under RTL via logical offsets; no fake controls; no motion.
+ * The intelligence layer keeps the product laws visible: recommendations are
+ * grounded in records, and consequential actions wait for human approval.
+ * Static server markup; ports mirror under RTL via logical offsets.
  */
 
 type TFn = (k: string) => string;
 
 /**
- * The single switch that will later allow live agent wording. It may become
- * true ONLY when a real production agent exists behind a tested backend
- * capability (see docs/architecture/ROLE_AWARE_AGENT_ARCHITECTURE.md §7);
- * tests enforce that public "powered by AI" wording cannot render while this
- * is false, and that flipping it requires a real entitlement capability key.
+ * The switch that will later allow live agent wording such as "powered by
+ * role-aware AI agents". It may become true ONLY when a real production
+ * agent exists behind a tested backend capability (see
+ * docs/architecture/ROLE_AWARE_AGENT_ARCHITECTURE.md §7); tests enforce that
+ * such wording cannot render while this is false.
  */
 export const AI_AGENTS_PRODUCTION_READY = false as const;
 
@@ -71,16 +62,6 @@ function Port({ side }: { side: "start" | "end" }) {
   );
 }
 
-/** The open "expanding" marker: clearly not the shipped check. */
-function OpenDot() {
-  return (
-    <span
-      aria-hidden="true"
-      className="mt-1 size-3 shrink-0 rounded-full border-[1.5px] border-dashed border-line-strong"
-    />
-  );
-}
-
 function DomainPlate({ t, d }: { t: TFn; d: Domain }) {
   return (
     <div
@@ -97,13 +78,8 @@ function DomainPlate({ t, d }: { t: TFn; d: Domain }) {
         </span>
         <h3 className="text-base font-semibold text-ink">{t(`home.os.${d.key}.title`)}</h3>
       </div>
-      <p className="mt-2.5 flex items-start gap-2 text-[13px] leading-relaxed text-ink">
-        <Icon name="check" size={14} aria-hidden className="mt-0.5 shrink-0 text-brand" />
-        {t(`home.os.${d.key}.now`)}
-      </p>
-      <p className="mt-1.5 flex items-start gap-2 text-[13px] leading-relaxed text-ink-muted">
-        <OpenDot />
-        {t(`home.os.${d.key}.next`)}
+      <p className="mt-2.5 text-[13px] leading-relaxed text-ink-secondary">
+        {t(`home.os.${d.key}.line`)}
       </p>
     </div>
   );
@@ -116,9 +92,8 @@ export function BusinessOS({ t }: { t: TFn }) {
         {t("home.os.support")}
       </p>
 
-      {/* ── The operating system: six domains, one record ─────────────────── */}
+      {/* ── The operating system: the domains around one record ───────────── */}
       <div className="mt-8 flex flex-col gap-2.5 lg:grid lg:grid-cols-[minmax(0,1fr)_232px_minmax(0,1fr)] lg:gap-x-14 lg:gap-y-5">
-        {/* The record: mobile first in the stack, desktop center column. */}
         <div
           className="relative overflow-hidden rounded-xl border px-4 py-4 lg:col-start-2 lg:row-span-3 lg:row-start-1 lg:flex lg:flex-col lg:justify-center lg:px-5"
           style={{
@@ -177,58 +152,42 @@ export function BusinessOS({ t }: { t: TFn }) {
         ))}
       </div>
 
-      {/* ── The status legend: shipped vs expanding, in text ──────────────── */}
-      <div className="mx-auto mt-6 flex w-fit flex-wrap items-center justify-center gap-x-5 gap-y-2">
-        <span className="flex items-center gap-1.5 rounded-full border border-line bg-card px-3 py-1.5 text-xs font-medium text-ink">
-          <Icon name="check" size={13} aria-hidden className="shrink-0 text-brand" />
-          {t("home.os.legend_now")}
-        </span>
-        <span className="flex items-center gap-2 rounded-full border border-dashed border-line-strong bg-page px-3 py-1.5 text-xs font-medium text-ink-secondary">
-          <span
-            aria-hidden="true"
-            className="size-2.5 shrink-0 rounded-full border-[1.5px] border-dashed border-line-strong"
-          />
-          {t("home.os.legend_next")}
-        </span>
+      {/* Documents, approvals and administration span the whole system. */}
+      <div
+        className="mt-2.5 rounded-xl border border-line bg-card p-4 lg:mt-5"
+        style={{
+          boxShadow:
+            "0 3px 0 color-mix(in srgb, var(--border-strong) 70%, var(--warning-soft)), var(--elevation-1)",
+        }}
+      >
+        <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-brand-soft text-brand">
+            <Icon name="clipboard" size={16} aria-hidden />
+          </span>
+          <h3 className="text-base font-semibold text-ink">{t("home.os.admin.title")}</h3>
+          <p className="w-full text-[13px] leading-relaxed text-ink-secondary sm:ms-auto sm:w-auto">
+            {t("home.os.admin.line")}
+          </p>
+        </div>
       </div>
 
-      {/* ── Role-aware intelligence: explicitly planned ───────────────────── */}
-      <div className="mx-auto mt-8 max-w-3xl rounded-xl border border-dashed border-line-strong bg-page p-5">
-        <div className="flex flex-wrap items-center gap-2.5">
-          <span className="inline-flex items-center rounded-full border border-line bg-card px-2.5 py-1 text-xs font-medium text-ink-secondary">
-            {t("home.os.agents_label")}
+      {/* Role-aware intelligence: a core layer of the same system. */}
+      <div
+        className="mt-2.5 rounded-xl border px-4 py-4 lg:mt-5"
+        style={{
+          borderColor: "color-mix(in srgb, var(--accent) 35%, var(--border-strong))",
+          background: "color-mix(in srgb, var(--accent) 4%, var(--surface-card))",
+          boxShadow: "var(--elevation-1)",
+        }}
+      >
+        <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-brand text-ink-inverse">
+            <Icon name="grid" size={15} aria-hidden />
           </span>
-          <h3 className="text-base font-semibold text-ink">{t("home.os.agents_title")}</h3>
-        </div>
-        <p className="mt-2 text-sm leading-relaxed text-ink-secondary">
-          {t("home.os.agents_body")}
-        </p>
-        {/* The contract in miniature: the agent suggests, a person approves. */}
-        <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-ink-secondary">
-          <span className="inline-flex items-center gap-1.5 rounded-md border border-line bg-card px-2.5 py-1.5">
-            <Icon name="user" size={12} aria-hidden className="shrink-0 text-brand" />
-            {t("home.os.agents_suggest")}
-          </span>
-          <svg
-            width="14"
-            height="10"
-            viewBox="0 0 14 10"
-            aria-hidden="true"
-            className="shrink-0 text-ink-muted rtl:-scale-x-100"
-          >
-            <path
-              d="M1 5h10.5M8 1.5 12 5l-4 3.5"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.8"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-          <span className="inline-flex items-center gap-1.5 rounded-md border border-line bg-card px-2.5 py-1.5">
-            <Icon name="check" size={12} aria-hidden className="shrink-0 text-success" />
-            {t("home.os.agents_approve")}
-          </span>
+          <h3 className="text-base font-semibold text-ink">{t("home.os.intel_title")}</h3>
+          <p className="w-full text-[13px] leading-relaxed text-ink-secondary sm:ms-auto sm:w-auto">
+            {t("home.os.intel_line")}
+          </p>
         </div>
       </div>
     </div>

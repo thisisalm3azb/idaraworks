@@ -20,10 +20,10 @@ import { Icon, type IconName } from "@/platform/ui";
  *    every configuration change is recorded and undoable.
  *
  * All of that shapes layers stacked over ONE stable foundation slab (the
- * connected operating record), followed by a compact availability ledger
- * (Available now vs Planned, planned clearly labelled and quieter) and a
- * closing statement. The safety law is presented as a calm trust line with
- * the detailed guardrail as small supporting text.
+ * connected operating record), followed by a compact capability ledger and a
+ * closing statement (H13 removed the customer-facing roadmap-status labels;
+ * every listed item is shipped). The safety law is presented as a calm trust
+ * line with the detailed guardrail as small supporting text.
  *
  * Static server markup: no animation, no interactive or fake controls; the
  * chips and pills are plain text displays. Mirrors fully under RTL via
@@ -241,34 +241,16 @@ export function FoundationShapes({ t }: { t: TFn }) {
         </div>
       </div>
 
-      {/* ── Availability ledger: now is louder than planned ──────────────── */}
-      <div className="grid gap-3 sm:grid-cols-[1.15fr_1fr] lg:col-span-2">
-        <div className="rounded-lg border border-line bg-card p-4 shadow-card">
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-success-soft px-2.5 py-1 text-xs font-medium text-success">
-            <span className="size-1.5 rounded-full bg-success" aria-hidden />
-            {t("home.built.now_label")}
-          </span>
-          <ul className="mt-2.5 flex flex-wrap gap-x-5 gap-y-1.5">
-            {(["now_i1", "now_i2", "now_i3", "now_i4", "now_i5"] as const).map((k) => (
-              <li key={k} className="flex items-center gap-1.5 text-sm text-ink">
-                <Icon name="check" size={13} aria-hidden className="shrink-0 text-brand" />
-                {t(`home.built.${k}`)}
-              </li>
-            ))}
-          </ul>
-        </div>
-        <div className="rounded-lg border border-dashed border-line-strong bg-page p-4">
-          <span className="inline-flex items-center rounded-full border border-line px-2.5 py-1 text-xs font-medium text-ink-secondary">
-            {t("home.built.planned_label")}
-          </span>
-          <ul className="mt-2.5 flex flex-wrap gap-x-5 gap-y-1.5">
-            {(["pl_i1", "pl_i2", "pl_i3", "pl_i4"] as const).map((k) => (
-              <li key={k} className="text-sm text-ink-secondary">
-                {t(`home.built.${k}`)}
-              </li>
-            ))}
-          </ul>
-        </div>
+      {/* ── What the foundation carries (H13: one confident ledger) ──────── */}
+      <div className="rounded-lg border border-line bg-card p-4 shadow-card lg:col-span-2">
+        <ul className="flex flex-wrap justify-center gap-x-6 gap-y-2">
+          {(["now_i1", "now_i2", "now_i3", "now_i4", "now_i5"] as const).map((k) => (
+            <li key={k} className="flex items-center gap-1.5 text-sm text-ink">
+              <Icon name="check" size={13} aria-hidden className="shrink-0 text-brand" />
+              {t(`home.built.${k}`)}
+            </li>
+          ))}
+        </ul>
       </div>
 
       {/* ── Closing statement ────────────────────────────────────────────── */}
