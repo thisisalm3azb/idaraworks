@@ -1,9 +1,13 @@
 # Agent Portrait System (H13)
 
-Status: **specified, assets not yet produced.** The homepage agent showcase
-ships with the designed interim identity described in §4. This document is the
-complete brief for producing the final portrait assets and the exact procedure
-for swapping them in without code changes beyond one manifest.
+Status: **produced and installed (H13.1, 2026-08-29).** All ten commissioned
+portraits ship in `public/agents/{agentId}.webp` (640x800 4:5 WebP, metadata
+stripped, each well under the 120 KB budget) and `PORTRAIT_ASSETS` in
+`AgentShowcase.tsx` references every one. The locally owned source PNGs
+(1122x1402) live outside the repo and must not be modified. The monogram
+identity in §4 remains only as the automatic fallback for a genuinely missing
+asset; tests assert no canonical agent falls back today. The rest of this
+document is the standing brief for any future re-shoot or new agent.
 
 ## 1. Intent
 
@@ -58,13 +62,15 @@ photographer, one studio, one visit — a management team photographed together.
 | `inventory_purchasing` | Inventory and Purchasing Agent | Grounded, methodical; dependable presence. |
 | `planning_analytics` | Planning and Analytics Agent | Curious and sharp; the analyst who enjoys the question. |
 
-## 4. The interim identity (what ships until assets exist)
+## 4. The monogram fallback
 
-Until final portraits are produced, `AgentShowcase.tsx` renders a **designed
-monogram tile** per agent: the agent's deep tonal background from §5, the
-shared material texture, a large monogram, and a small domain-icon chip. This
-is a deliberate identity system in the site's own material language — it is
-NOT a placeholder icon set, and nothing else may be substituted for it.
+If an agent's portrait asset were ever missing, `AgentShowcase.tsx` falls back
+to the **designed monogram tile**: the agent's deep tonal background from §5,
+the shared material texture, a large monogram, and a small domain-icon chip.
+This is a deliberate identity system in the site's own material language — it
+is NOT a placeholder icon set, and nothing else may be substituted for it.
+Since H13.1 every canonical agent has a portrait, so the fallback should never
+render in production.
 
 ## 5. Technical asset specification
 

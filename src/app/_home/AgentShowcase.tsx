@@ -15,13 +15,15 @@ import { Icon, type IconName } from "@/platform/ui";
  * arrives pre-resolved from the server; this island only holds which agent's
  * detail panel is open.
  *
- * Portrait system: photographic portraits are specified in
- * docs/design/AGENT_PORTRAIT_SYSTEM.md and are NOT yet produced (no image
- * generation in this environment). Until the commissioned assets land in
- * /public/agents/, each agent renders its designed interim identity: an
- * editorial monogram tile on the agent's own tone from one coherent palette,
- * with the shared material texture. This is a deliberate identity system,
- * not an icon substitution; the swap point is PORTRAIT_ASSETS below.
+ * Portrait system (H13.1): the commissioned editorial portraits specified in
+ * docs/design/AGENT_PORTRAIT_SYSTEM.md are INSTALLED in /public/agents/
+ * (640x800 4:5 WebP, one per canonical agent). The portraits depict digital
+ * specialist personas, not employees, and carry no text; they are decorative
+ * (empty alt) because the agent's name and role are always adjacent visible
+ * text in both locales. The Manager renders the full 4:5 portrait; the small
+ * square specialist tiles crop toward the face (objectPosition). The tonal
+ * monogram tile remains ONLY as the automatic fallback for a genuinely
+ * missing asset — tests assert no canonical agent falls back today.
  *
  * Accessibility: every card is a real button (aria-expanded/aria-controls)
  * opening one shared detail region; name and responsibility are always
@@ -41,37 +43,54 @@ export type AgentVM = {
   tone: { bg: string; ink: string };
 };
 
-/** Commissioned photographic assets (see the portrait system doc). All null
- * until produced; setting a path swaps the tile to the real portrait. */
+/** The commissioned portrait for every canonical agent (H13.1). A null value
+ * would fall back to the monogram tile; tests require none is null and that
+ * every referenced file exists in public/. */
 export const PORTRAIT_ASSETS: Record<string, string | null> = {
-  manager: null,
-  executive: null,
-  operations: null,
-  project: null,
-  sales_crm: null,
-  accounting: null,
-  finance: null,
-  people_payroll: null,
-  inventory_purchasing: null,
-  planning_analytics: null,
+  manager: "/agents/manager.webp",
+  executive: "/agents/executive.webp",
+  operations: "/agents/operations.webp",
+  project: "/agents/project.webp",
+  sales_crm: "/agents/sales_crm.webp",
+  accounting: "/agents/accounting.webp",
+  finance: "/agents/finance.webp",
+  people_payroll: "/agents/people_payroll.webp",
+  inventory_purchasing: "/agents/inventory_purchasing.webp",
+  planning_analytics: "/agents/planning_analytics.webp",
 };
+
+/** Intrinsic dimensions of every production portrait (the component contract:
+ * 4:5, sized for high-density displays; asserted against the files by test). */
+export const PORTRAIT_WIDTH = 640;
+export const PORTRAIT_HEIGHT = 800;
 
 function Portrait({ agent, size }: { agent: AgentVM; size: "lg" | "md" }) {
   const asset = PORTRAIT_ASSETS[agent.id] ?? null;
   if (asset) {
-    // The commissioned photograph: cover-cropped into the same tile, with the
-    // same domain-icon chip. Decorative — name and role are adjacent text.
+    // The commissioned portrait. The Manager (lg) shows the complete 4:5
+    // frame; the small square tiles (md) cover-crop biased toward the face.
+    // The fixed-ratio container plus intrinsic width/height prevent layout
+    // shift; only the always-visible Manager loads eagerly.
     return (
       <span
         aria-hidden="true"
         className={
           "relative flex shrink-0 overflow-hidden rounded-xl " +
-          (size === "lg" ? "size-20 sm:size-24" : "size-12")
+          (size === "lg" ? "aspect-[4/5] w-28 sm:w-36" : "size-12")
         }
         style={{ background: agent.tone.bg }}
       >
-        {/* eslint-disable-next-line @next/next/no-img-element -- fixed-size decorative tile */}
-        <img src={asset} alt="" className="absolute inset-0 size-full object-cover" />
+        {/* eslint-disable-next-line @next/next/no-img-element -- fixed-tile decorative asset; one 640x800 file covers every density of these small slots */}
+        <img
+          src={asset}
+          alt=""
+          width={PORTRAIT_WIDTH}
+          height={PORTRAIT_HEIGHT}
+          loading={size === "lg" ? "eager" : "lazy"}
+          decoding="async"
+          className="absolute inset-0 size-full object-cover"
+          style={size === "md" ? { objectPosition: "50% 22%" } : undefined}
+        />
         <span
           className={
             "absolute flex items-center justify-center rounded-md " +

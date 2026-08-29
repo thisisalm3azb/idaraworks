@@ -14,11 +14,12 @@
  *  - accessibility: real buttons with aria-expanded/aria-controls, one shared
  *    detail region, 44px targets, nothing essential hover-only, static
  *    markup (reduced motion needs no special path), logical classes only,
- *  - the portrait system ships as the documented monogram identity with the
- *    asset manifest empty (the commissioned photographs are a REPORTED
- *    missing asset, never silently substituted stock/icons).
+ *  - the portrait system is INSTALLED (H13.1): every canonical agent has a
+ *    real production asset in public/agents/ meeting the 4:5 / size budget
+ *    contract, rendered with stable dimensions and lazy specialists; the
+ *    monogram remains only as the fallback for a genuinely missing asset.
  */
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { createElement as h } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -27,7 +28,13 @@ import { t } from "@/platform/i18n";
 import en from "@/platform/i18n/messages/en.json";
 import ar from "@/platform/i18n/messages/ar.json";
 import { AGENT_IDS } from "@/platform/agents/registry";
-import { AgentShowcase, PORTRAIT_ASSETS, type AgentVM } from "@/app/_home/AgentShowcase";
+import {
+  AgentShowcase,
+  PORTRAIT_ASSETS,
+  PORTRAIT_WIDTH,
+  PORTRAIT_HEIGHT,
+  type AgentVM,
+} from "@/app/_home/AgentShowcase";
 
 const tEn = (k: string) => t(k, undefined, "en");
 const tAr = (k: string) => t(k, undefined, "ar");
@@ -235,32 +242,99 @@ describe("H13 — accessibility, RTL, motion", () => {
   });
 });
 
-describe("H13 — the portrait system", () => {
-  it("the asset manifest covers exactly the canonical agents and is empty (reported, not substituted)", () => {
+/** Minimal WebP dimension reader (VP8 / VP8L / VP8X), so the asset contract
+ * is asserted against the real files with no new dependency. */
+function webpDimensions(buf: Buffer): { width: number; height: number } {
+  expect(buf.subarray(0, 4).toString("ascii")).toBe("RIFF");
+  expect(buf.subarray(8, 12).toString("ascii")).toBe("WEBP");
+  const fourcc = buf.subarray(12, 16).toString("ascii");
+  if (fourcc === "VP8X") {
+    return {
+      width: 1 + buf.readUIntLE(24, 3),
+      height: 1 + buf.readUIntLE(27, 3),
+    };
+  }
+  if (fourcc === "VP8 ") {
+    // Lossy: key-frame start code 9d 01 2a, then 14-bit width/height.
+    expect(buf[23]).toBe(0x9d);
+    return {
+      width: buf.readUInt16LE(26) & 0x3fff,
+      height: buf.readUInt16LE(28) & 0x3fff,
+    };
+  }
+  if (fourcc === "VP8L") {
+    const bits = buf.readUInt32LE(21);
+    return { width: (bits & 0x3fff) + 1, height: ((bits >> 14) & 0x3fff) + 1 };
+  }
+  throw new Error(`unknown WebP variant ${fourcc}`);
+}
+
+describe("H13.1 — the installed portrait system", () => {
+  it("every canonical agent has a manifest entry, no nulls, no duplicate paths", () => {
     expect(Object.keys(PORTRAIT_ASSETS).sort()).toEqual([...AGENT_IDS].sort());
-    // No commissioned portrait exists yet; the designed monogram identity
-    // renders instead. Producing the photographs per the spec doc and filling
-    // this manifest is the REPORTED missing asset requirement.
+    const paths = AGENT_IDS.map((id) => PORTRAIT_ASSETS[id]);
+    for (const [i, p] of paths.entries()) {
+      expect(p, `${AGENT_IDS[i]} portrait missing from manifest`).toBe(
+        `/agents/${AGENT_IDS[i]}.webp`,
+      );
+    }
+    expect(new Set(paths).size).toBe(AGENT_IDS.length);
+  });
+
+  it("every referenced production file exists, 640x800 4:5, under the 120KB budget", () => {
     for (const id of AGENT_IDS) {
-      expect(PORTRAIT_ASSETS[id]).toBeNull();
+      const file = fileURLToPath(new URL(`../../public/agents/${id}.webp`, import.meta.url));
+      expect(existsSync(file), `public/agents/${id}.webp missing`).toBe(true);
+      const buf = readFileSync(file);
+      expect(buf.length, `${id}.webp exceeds 120KB`).toBeLessThan(120 * 1024);
+      const { width, height } = webpDimensions(buf);
+      expect({ id, width, height }).toEqual({
+        id,
+        width: PORTRAIT_WIDTH,
+        height: PORTRAIT_HEIGHT,
+      });
+      expect(width / height).toBeCloseTo(4 / 5, 5);
     }
   });
 
-  it("the portrait specification document exists with exclusions and the swap procedure", () => {
+  it("renders a portrait for all ten agents and no monogram fallback, both locales", () => {
+    for (const html of [htmlEn, htmlAr]) {
+      const imgs = html.match(/<img[^>]*>/g) ?? [];
+      expect(imgs.length).toBe(10); // manager + 9 specialists in initial state
+      for (const img of imgs) {
+        expect(img).toMatch(/src="\/agents\/[a-z_]+\.webp"/);
+        expect(img).toContain('alt=""'); // decorative: name+role are adjacent text
+        expect(img).toContain(`width="${PORTRAIT_WIDTH}"`);
+        expect(img).toContain(`height="${PORTRAIT_HEIGHT}"`);
+      }
+      // Only the always-visible Manager loads eagerly; specialists are lazy.
+      expect(imgs.filter((i) => i.includes('loading="eager"')).length).toBe(1);
+      expect(imgs.filter((i) => i.includes('loading="lazy"')).length).toBe(9);
+      // The monogram fallback branch (its tonal gradient) must not render.
+      expect(html).not.toContain("linear-gradient(170deg");
+    }
+  });
+
+  it("portrait tiles keep stable dimensions and are never circular or stretched", () => {
+    // The Manager shows the complete 4:5 frame; specialist tiles are fixed
+    // squares with a face-biased cover crop. No rounded-full portrait exists.
+    expect(showcaseSrc).toMatch(/aspect-\[4\/5\] w-28 sm:w-36/);
+    expect(showcaseSrc).toMatch(/objectPosition: "50% 22%"/);
+    expect(htmlEn).toContain("object-cover");
+    for (const img of htmlEn.match(/<img[^>]*>/g) ?? []) {
+      expect(img).not.toContain("rounded-full");
+      expect(img).toContain("object-cover"); // cover, never stretch
+    }
+  });
+
+  it("the portrait specification document reflects the installed state", () => {
+    expect(portraitDoc).toMatch(/produced and installed/i);
     expect(portraitDoc).toMatch(/No robots/i);
     expect(portraitDoc).toMatch(/stock photography/i);
     expect(portraitDoc).toMatch(/public\/agents\/\{agentId\}\.webp/);
     expect(portraitDoc).toMatch(/PORTRAIT_ASSETS/);
     for (const id of AGENT_IDS) {
       expect(portraitDoc).toContain(`\`${id}\``);
-    }
-  });
-
-  it("no stock photograph or generic icon substitution ships", () => {
-    // The only <img> path is the commissioned-asset branch, gated on the
-    // manifest; with the manifest empty no raster renders at all.
-    for (const html of [htmlEn, htmlAr]) {
-      expect(html).not.toContain("<img");
     }
   });
 });
