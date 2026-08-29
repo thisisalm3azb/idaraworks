@@ -30,6 +30,8 @@ import type { AgentId } from "@/platform/agents/registry";
 import {
   effectiveCustomerSharing,
   askMaterialsStep,
+  canonicalIndustry,
+  INDUSTRY_INFO,
   type DraftAnswers,
   type DraftData,
   type WorkspaceEdits,
@@ -67,16 +69,14 @@ const yes = (v: string | undefined) => v === "yes";
 /** The deterministic module recommendation from the answers alone. */
 export function recommendModules(a: DraftAnswers): ModuleRecommendation[] {
   const patterns = a.work_patterns ?? [];
-  const physicalIndustry =
-    a.industry !== undefined && a.industry !== "other" && a.industry !== "retail_online";
+  const ind = canonicalIndustry(a.industry);
+  // H15.1 (Part D): field work follows DELIVERY patterns, never the industry
+  // alone. "Service" delivery counts as field work only for industries where
+  // service means being on site (a desk-based consulting business is never
+  // pushed into daily reports).
   const fieldWork =
     patterns.some((p) => p === "project" || p === "production") ||
-    a.industry === "construction" ||
-    a.industry === "marine" ||
-    a.industry === "field_services" ||
-    // "Service" work is field work only when the industry itself is physical
-    // (a desk-based consulting business is never pushed into daily reports).
-    (patterns.includes("service") && physicalIndustry);
+    (patterns.includes("service") && ind !== undefined && INDUSTRY_INFO[ind].fieldService);
   const team = a.employees_band !== undefined && a.employees_band !== "1-5";
   const bigTeam =
     a.employees_band === "21-50" || a.employees_band === "51-200" || a.employees_band === "200+";
@@ -442,16 +442,13 @@ export function recommendAgents(
 }
 
 // ── The blueprint ───────────────────────────────────────────────────────────
-const INDUSTRY_TOKEN: Record<string, string> = {
-  construction: "construction",
-  marine: "marine services",
-  manufacturing: "manufacturing",
-  field_services: "field services",
-  food_beverage: "food and beverage",
-  retail_online: "retail and online",
-  agriculture: "agriculture",
-  other: "general business",
-};
+/** The profile.industries token — legacy marine keeps its own wording so an
+ * existing draft's blueprint output stays what the founder saw. */
+function industryToken(industry: DraftAnswers["industry"]): string {
+  if (industry === "marine") return "marine services";
+  const ind = canonicalIndustry(industry);
+  return ind ? INDUSTRY_INFO[ind].token : "general business";
+}
 
 function businessModelOf(a: DraftAnswers): WorkspaceBlueprint["profile"]["businessModel"] {
   const p = a.work_patterns ?? [];
@@ -709,7 +706,7 @@ export function buildBlueprintFromDraft(data: DraftData, now: string): Workspace
     schemaVersion: 1,
     profile: {
       businessModel: businessModelOf(a),
-      industries: [INDUSTRY_TOKEN[a.industry ?? "other"] ?? "general business"],
+      industries: [industryToken(a.industry)],
       size: a.employees_band!,
       markets: [a.country!],
       customerTypes: (a.customer_types && a.customer_types.length > 0

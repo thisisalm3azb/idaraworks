@@ -33,7 +33,7 @@ import {
   EMPLOYEE_BANDS,
   FLOW_CURRENCIES,
   FLOW_TIMEZONES,
-  INDUSTRIES,
+  INDUSTRY_OPTIONS,
   LOCATION_BANDS,
   PRIORITY_FOCUS,
   REVENUE_CHOICES,
@@ -247,8 +247,7 @@ export function BusinessStep({ t, data, draftRev }: StepProps) {
   const a = data.answers;
   return (
     <Card>
-      <CardHeader title={t("onboarding.flow.business.title")} />
-      <form action={saveStepAction.bind(null, "business")} className="flex flex-col gap-4">
+      <form action={saveStepAction.bind(null, "business")} className="flex flex-col gap-5">
         <label className={field}>
           {t("onboarding.flow.business.name")}
           <input
@@ -275,11 +274,19 @@ export function BusinessStep({ t, data, draftRev }: StepProps) {
         </label>
         <label className={field}>
           {t("onboarding.flow.business.industry")}
+          <span className="font-normal text-ink">
+            {t("onboarding.flow.business.industry_prompt")}
+          </span>
           <select name="industry" required defaultValue={a.industry ?? ""} className={input}>
             <option value="" disabled>
               {t("onboarding.flow.business.industry_pick")}
             </option>
-            {INDUSTRIES.map((k) => (
+            {[
+              ...INDUSTRY_OPTIONS,
+              ...(a.industry && !(INDUSTRY_OPTIONS as readonly string[]).includes(a.industry)
+                ? [a.industry]
+                : []),
+            ].map((k) => (
               <option key={k} value={k}>
                 {t(`onboarding.flow.industry.${k}`)}
               </option>
@@ -289,6 +296,9 @@ export function BusinessStep({ t, data, draftRev }: StepProps) {
         </label>
         <label className={field}>
           {t("onboarding.flow.business.description")}
+          <span className="font-normal text-ink">
+            {t("onboarding.flow.business.description_prompt")}
+          </span>
           <textarea
             name="business_description"
             maxLength={600}
@@ -312,7 +322,7 @@ export function RegionStep({ t, locale, data, draftRev }: StepProps) {
   return (
     <Card>
       <CardHeader title={t("onboarding.flow.region.title")} />
-      <form action={saveStepAction.bind(null, "region")} className="flex flex-col gap-4">
+      <form action={saveStepAction.bind(null, "region")} className="flex flex-col gap-5">
         <RegionFields
           countries={Object.keys(COUNTRY_DEFAULTS).map((c) => ({
             value: c,
@@ -366,9 +376,8 @@ export function ScaleStep({ t, data, draftRev }: StepProps) {
   const a = data.answers;
   return (
     <Card>
-      <CardHeader title={t("onboarding.flow.scale.title")} />
       {/* `group` + has-[:checked] drive SKIP-1/SKIP-2 visually; flow.ts enforces them. */}
-      <form action={saveStepAction.bind(null, "scale")} className="group flex flex-col gap-4">
+      <form action={saveStepAction.bind(null, "scale")} className="group flex flex-col gap-5">
         <fieldset className="flex flex-col gap-1.5">
           <legend className="mb-1.5 text-sm font-medium text-ink">
             {t("onboarding.flow.scale.employees")}
@@ -461,7 +470,7 @@ export function WorkStep({ t, data, draftRev }: StepProps) {
   return (
     <Card>
       <CardHeader title={t("onboarding.flow.work.title")} />
-      <form action={saveStepAction.bind(null, "work")} className="group flex flex-col gap-4">
+      <form action={saveStepAction.bind(null, "work")} className="group flex flex-col gap-5">
         <fieldset className="flex flex-col gap-1.5">
           <legend className="mb-1.5 text-sm font-medium text-ink">
             {t("onboarding.flow.work.pattern")}
@@ -507,9 +516,8 @@ export function CustomersStep({ t, data, draftRev }: StepProps) {
   const a = data.answers;
   return (
     <Card>
-      <CardHeader title={t("onboarding.flow.customers.title")} />
       <p className={`mb-3 ${help}`}>{t("onboarding.flow.customers.why")}</p>
-      <form action={saveStepAction.bind(null, "customers")} className="flex flex-col gap-4">
+      <form action={saveStepAction.bind(null, "customers")} className="flex flex-col gap-5">
         <fieldset className="flex flex-col gap-1.5">
           <legend className="mb-1.5 text-sm font-medium text-ink">
             {t("onboarding.flow.customers.types")}
@@ -578,10 +586,9 @@ export function MaterialsStep({ t, data, draftRev }: StepProps) {
   const a = data.answers;
   return (
     <Card>
-      <CardHeader title={t("onboarding.flow.materials.title")} />
       <p className={`mb-3 ${help}`}>{t("onboarding.flow.materials.why")}</p>
       {/* SKIP-5 runs on :has() — deliveries show only after "buys materials: yes". */}
-      <form action={saveStepAction.bind(null, "materials")} className="group flex flex-col gap-4">
+      <form action={saveStepAction.bind(null, "materials")} className="group flex flex-col gap-5">
         <TriQuestion
           t={t}
           name="buys_materials"
@@ -620,10 +627,9 @@ export function MoneyStep({ t, data, draftRev }: StepProps) {
   const asksCosts = askTracksCosts(a);
   return (
     <Card>
-      <CardHeader title={t("onboarding.flow.money.title")} />
       <p className={`mb-3 ${help}`}>{t("onboarding.flow.money.why")}</p>
       {/* SKIP-6 runs on :has() — payments show only after "sends invoices: yes". */}
-      <form action={saveStepAction.bind(null, "money")} className="group flex flex-col gap-4">
+      <form action={saveStepAction.bind(null, "money")} className="group flex flex-col gap-5">
         <fieldset className="flex flex-col gap-1.5">
           <legend className="mb-1.5 text-sm font-medium text-ink">
             {t("onboarding.flow.money.revenue")}{" "}
@@ -702,9 +708,8 @@ export function PrioritiesStep({ t, data, draftRev }: StepProps) {
   const a = data.answers;
   return (
     <Card>
-      <CardHeader title={t("onboarding.flow.priorities.title")} />
       <p className={`mb-3 ${help}`}>{t("onboarding.flow.priorities.why")}</p>
-      <form action={saveStepAction.bind(null, "priorities")} className="flex flex-col gap-4">
+      <form action={saveStepAction.bind(null, "priorities")} className="flex flex-col gap-5">
         <fieldset className="flex flex-col gap-1.5">
           <legend className="mb-1.5 text-sm font-medium text-ink">
             {t("onboarding.flow.priorities.focus")}
@@ -849,7 +854,7 @@ export function TemplateStep({ t, locale, data }: StepProps) {
   const restAlternatives = alternatives.slice(3);
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-5">
       <Card>
         <CardHeader
           title={t("onboarding.flow.template.title")}
@@ -985,7 +990,7 @@ export function ProposalStep({ t, locale, data }: StepProps) {
   const templateJobAr = manifest?.terminology?.job?.ar?.singular ?? "";
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-5">
       <Card>
         <CardHeader title={t("onboarding.flow.proposal.title")} />
         <p className="mb-2 text-xs text-ink-muted">{t("onboarding.flow.proposal.note")}</p>
@@ -1011,7 +1016,7 @@ export function ProposalStep({ t, locale, data }: StepProps) {
         </ol>
       </Card>
 
-      <form action={saveProposalTermsAction} className="flex flex-col gap-4">
+      <form action={saveProposalTermsAction} className="flex flex-col gap-5">
         <Card>
           <CardHeader title={t("onboarding.flow.proposal.terminology")} />
           <p className="mb-2 text-sm text-ink">
@@ -1088,7 +1093,7 @@ export function PlanStep({ t, locale, data, view }: StepProps & { view: Selectio
             : null;
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-5">
       <Card>
         <CardHeader title={t("onboarding.flow.plan.title")} />
         <p className="text-sm text-ink">{t("onboarding.flow.plan.must_choose")}</p>
@@ -1167,7 +1172,7 @@ export function BrandingStep({ t, data }: StepProps) {
     LOGO_ERROR_CODES.map((c) => [c, t(`onboarding.flow.branding.error.${c}`)]),
   );
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-5">
       <Card>
         <CardHeader title={t("onboarding.flow.branding.title")} />
         <p className="text-xs text-ink-muted">{t("onboarding.flow.branding.note")}</p>
@@ -1195,7 +1200,7 @@ export function BrandingStep({ t, data }: StepProps) {
         />
       </Card>
 
-      <form action={saveBrandingStepAction} className="flex flex-col gap-4">
+      <form action={saveBrandingStepAction} className="flex flex-col gap-5">
         <Card>
           <CardHeader title={t("onboarding.flow.branding.accent")} />
           <div className="flex flex-wrap gap-2">
@@ -1335,7 +1340,7 @@ function WorkspaceProposal({
   const reasonOf = (m: ModuleRecommendation) => t(`onboarding.flow.reason.${m.reasonKey}`);
 
   return (
-    <form action={saveWorkspaceEditsAction} className="flex flex-col gap-4">
+    <form action={saveWorkspaceEditsAction} className="flex flex-col gap-5">
       <input type="hidden" name="draft_rev" value={draftRev} />
       <Card>
         <CardHeader title={t("onboarding.flow.ws.title")} />
@@ -1538,9 +1543,7 @@ export function ReviewStep({
   const templateName = ar ? summary.template.nameAr : summary.template.nameEn;
 
   return (
-    <div className="flex flex-col gap-4">
-      <h1 className="text-lg font-semibold text-ink">{t("onboarding.flow.review.title")}</h1>
-
+    <div className="flex flex-col gap-5">
       {partialConfirm ? (
         <p className="rounded-md bg-warning-soft p-3 text-sm text-warning" role="status">
           {t("onboarding.flow.review.resume_note")}

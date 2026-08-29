@@ -23,10 +23,8 @@ import {
   getDraft,
   resolveStep,
   sectionForStep,
+  stepNumberOf,
   stepProgressPct,
-  stepsRemaining,
-  JOURNEY_SECTIONS,
-  visibleSteps,
   type DraftData,
   type FlowStep,
 } from "@/modules/onboarding/service";
@@ -86,7 +84,7 @@ export default async function OnboardingFlowPage({
   const locale = await getServerLocale();
   const view = buildSelectionView();
   const pct = stepProgressPct(effectiveStep, data.answers);
-  const remaining = stepsRemaining(effectiveStep, data.answers);
+  const stepNo = stepNumberOf(effectiveStep, data.answers);
   const error = sp.error && ERROR_CODES.has(sp.error) ? sp.error : null;
   const retired = (sp.retired ?? "")
     .split(",")
@@ -96,13 +94,6 @@ export default async function OnboardingFlowPage({
   const draftRev = activeDraft?.updatedAt ?? "";
 
   const currentSection = sectionForStep(effectiveStep);
-  const sections = JOURNEY_SECTIONS.filter((s) =>
-    s.steps.some((x) => visibleSteps(data.answers).includes(x)),
-  );
-  const sectionIdx = Math.max(
-    0,
-    sections.findIndex((s) => s.key === currentSection),
-  );
 
   const stepProps = { t, locale, data, draftRev };
   const body = (() => {
@@ -147,27 +138,29 @@ export default async function OnboardingFlowPage({
       <div className={`mx-auto flex w-full flex-col gap-4 ${wide ? "max-w-6xl" : "max-w-2xl"}`}>
         {effectiveStep !== "welcome" ? (
           <div className="flex flex-col gap-1.5">
-            {/* Labeled journey progress (Part J): named sections, not dots. */}
-            <div className="flex items-center justify-between gap-3 text-xs text-ink-muted">
-              <span className="font-medium text-ink">
+            {/* H15.1: ONE progress model — the section as the page heading,
+                "Step X of Y" over the currently visible journey, one bar. */}
+            <div className="flex items-baseline justify-between gap-3">
+              <h1 className="text-lg font-semibold text-ink">
                 {currentSection ? t(`onboarding.flow.section.${currentSection}`) : ""}
-              </span>
-              <span>
-                {t("onboarding.flow.section_progress", {
-                  current: sectionIdx + 1,
-                  total: sections.length,
+              </h1>
+              <span className="text-xs text-ink-muted">
+                {t("onboarding.flow.progress", {
+                  current: stepNo.current,
+                  total: stepNo.total,
                 })}
               </span>
             </div>
             <div
               role="progressbar"
-              aria-valuenow={pct}
-              aria-valuemin={0}
-              aria-valuemax={100}
-              aria-label={t("onboarding.flow.section_progress", {
-                current: sectionIdx + 1,
-                total: sections.length,
+              aria-valuenow={stepNo.current}
+              aria-valuemin={1}
+              aria-valuemax={stepNo.total}
+              aria-valuetext={t("onboarding.flow.progress", {
+                current: stepNo.current,
+                total: stepNo.total,
               })}
+              aria-label={t("onboarding.flow.progress_label")}
               className="h-1.5 w-full overflow-hidden rounded-full bg-sunken"
             >
               <div
@@ -175,19 +168,12 @@ export default async function OnboardingFlowPage({
                 style={{ width: `${pct}%` }}
               />
             </div>
-            <div className="flex items-center justify-between gap-3 text-xs text-ink-muted">
-              {remaining > 0 ? (
-                <p>{t("onboarding.flow.remaining", { count: remaining })}</p>
-              ) : (
-                <span />
-              )}
-              {/* Calm autosave indicator (Part E): announced to screen readers. */}
-              {draftRev ? (
-                <p role="status" aria-live="polite">
-                  {t("onboarding.flow.saved_note")}
-                </p>
-              ) : null}
-            </div>
+            {/* Calm autosave indicator (Part E): announced to screen readers. */}
+            {draftRev ? (
+              <p role="status" aria-live="polite" className="text-end text-xs text-ink-muted">
+                {t("onboarding.flow.saved_note")}
+              </p>
+            ) : null}
           </div>
         ) : null}
 

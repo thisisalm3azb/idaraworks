@@ -22,17 +22,92 @@ import { selectTemplate } from "./provider";
 import { OnboardingIntakeSchema, SUPPORTED_COUNTRIES, type OnboardingIntake } from "./proposal";
 
 // ── Closed answer vocabularies (draft-side; never rendered raw — i18n keys map them) ──
-export const INDUSTRIES = [
+/**
+ * H15.1 primary-industry taxonomy: a user-friendly international set informed
+ * by established classifications (no codes, no bureaucratic wording). The
+ * OFFERED options are INDUSTRY_OPTIONS; the stored enum additionally accepts
+ * the LEGACY H15 values so existing drafts parse unchanged and are never
+ * silently reinterpreted — legacy keys resolve behavior through the explicit
+ * canonicalIndustry mapping (tested).
+ */
+export const INDUSTRY_OPTIONS = [
   "construction",
-  "marine",
+  "professional_services",
+  "retail_ecommerce",
+  "wholesale_distribution",
   "manufacturing",
+  "hospitality_food",
+  "real_estate",
+  "transport_logistics",
+  "healthcare",
+  "education",
+  "technology",
+  "financial_services",
+  "media_creative",
   "field_services",
-  "food_beverage",
-  "retail_online",
   "agriculture",
-  "other",
+  "nonprofit",
+  "other_mixed",
 ] as const;
+export type IndustryOption = (typeof INDUSTRY_OPTIONS)[number];
+
+/** H15 stored values no longer offered (kept valid for saved drafts). */
+export const LEGACY_INDUSTRIES = ["marine", "food_beverage", "retail_online", "other"] as const;
+export type LegacyIndustry = (typeof LEGACY_INDUSTRIES)[number];
+
+export const INDUSTRIES = [...INDUSTRY_OPTIONS, ...LEGACY_INDUSTRIES] as const;
 export type Industry = (typeof INDUSTRIES)[number];
+
+/** The explicit legacy-to-current mapping (compatibility, never rewriting). */
+export const LEGACY_INDUSTRY_MAP: Record<LegacyIndustry, IndustryOption> = {
+  marine: "manufacturing",
+  food_beverage: "hospitality_food",
+  retail_online: "retail_ecommerce",
+  other: "other_mixed",
+};
+
+export function canonicalIndustry(industry: Industry | undefined): IndustryOption | undefined {
+  if (industry === undefined) return undefined;
+  return (INDUSTRY_OPTIONS as readonly string[]).includes(industry)
+    ? (industry as IndustryOption)
+    : LEGACY_INDUSTRY_MAP[industry as LegacyIndustry];
+}
+
+/**
+ * Behavior flags per CURRENT industry (legacy values resolve through the map):
+ *  - physical: the business plausibly handles physical goods, so the
+ *    materials questions are ASKED (asking is not inferring — the founder's
+ *    answers still decide every module);
+ *  - fieldService: "service" delivery counts as field work for this industry
+ *    (a desk-based service business is never pushed into daily reports).
+ * Industry alone never enables inventory, purchasing, payroll or projects.
+ */
+export const INDUSTRY_INFO: Record<
+  IndustryOption,
+  { physical: boolean; fieldService: boolean; token: string }
+> = {
+  construction: { physical: true, fieldService: true, token: "construction and contracting" },
+  professional_services: { physical: false, fieldService: false, token: "professional services" },
+  retail_ecommerce: { physical: true, fieldService: false, token: "retail and e-commerce" },
+  wholesale_distribution: {
+    physical: true,
+    fieldService: false,
+    token: "wholesale and distribution",
+  },
+  manufacturing: { physical: true, fieldService: true, token: "manufacturing" },
+  hospitality_food: { physical: true, fieldService: false, token: "hospitality and food" },
+  real_estate: { physical: true, fieldService: true, token: "real estate and property services" },
+  transport_logistics: { physical: true, fieldService: true, token: "transport and logistics" },
+  healthcare: { physical: true, fieldService: false, token: "healthcare and wellness" },
+  education: { physical: false, fieldService: false, token: "education and training" },
+  technology: { physical: false, fieldService: false, token: "technology and software" },
+  financial_services: { physical: false, fieldService: false, token: "financial services" },
+  media_creative: { physical: false, fieldService: false, token: "media and creative services" },
+  field_services: { physical: true, fieldService: true, token: "maintenance and field services" },
+  agriculture: { physical: true, fieldService: true, token: "agriculture and food production" },
+  nonprofit: { physical: false, fieldService: false, token: "nonprofit organization" },
+  other_mixed: { physical: false, fieldService: false, token: "general business" },
+};
 
 export const EMPLOYEE_BANDS = ["1-5", "6-20", "21-50", "51-200", "200+"] as const;
 export const USER_BANDS = ["1-3", "4-10", "11-25", "26+"] as const;
@@ -349,11 +424,13 @@ export function sectionForStep(step: FlowStep): JourneySectionKey | null {
 
 // ── Step-level branching (Part D: adaptive, deterministic) ───────────────────
 /** BRANCH-1: the materials/purchasing step is asked only when the business
- * plausibly handles physical goods. A consulting-style business (industry
- * "other" with only service/recurring patterns) is never asked warehouse
- * questions. Deterministic in (answers, JOURNEY_VERSION). */
+ * plausibly handles physical goods (a physical industry, or physical work
+ * patterns). A consulting-style business is never asked warehouse questions.
+ * Asking is not inferring: the founder's answers decide every module.
+ * Deterministic in (answers, JOURNEY_VERSION). */
 export function askMaterialsStep(a: DraftAnswers): boolean {
-  if (a.industry !== undefined && a.industry !== "other") return true;
+  const ind = canonicalIndustry(a.industry);
+  if (ind !== undefined && ind !== "other_mixed" && INDUSTRY_INFO[ind].physical) return true;
   const p = a.work_patterns ?? [];
   return p.some((x) => x === "project" || x === "order" || x === "production" || x === "retail");
 }
@@ -387,9 +464,16 @@ export function stepProgressPct(step: FlowStep, a: DraftAnswers): number {
   return Math.round((i / (steps.length - 1)) * 100);
 }
 
-export function stepsRemaining(step: FlowStep, a: DraftAnswers): number {
-  const steps = visibleSteps(a);
-  return steps.length - 1 - Math.max(0, steps.indexOf(step));
+/**
+ * H15.1: ONE consistent progress model — "Step X of Y" over the currently
+ * VISIBLE journey (welcome is the doorway, not a step; hidden branched steps
+ * are never counted; review, where confirmation happens, is the last step).
+ * Branch changes re-derive the total automatically.
+ */
+export function stepNumberOf(step: FlowStep, a: DraftAnswers): { current: number; total: number } {
+  const steps: FlowStep[] = visibleSteps(a).filter((s) => s !== "welcome");
+  const i = steps.indexOf(step);
+  return { current: Math.max(1, i + 1), total: steps.length };
 }
 
 // ── Question-level skip rules (documented in docs/ux/ONBOARDING_FLOW.md) ─────
@@ -667,12 +751,26 @@ export function resolveStep(requested: string | undefined, data: DraftData): Flo
  * the industry answer is a strong signal, patterns/capabilities are light ones. */
 export const INDUSTRY_HINTS: Record<Industry, string> = {
   construction: "construction contracting",
-  marine: "marine boatyard",
+  professional_services: "consulting professional services office",
+  retail_ecommerce: "online store e-commerce retail",
+  wholesale_distribution: "wholesale distribution supply trading",
   manufacturing: "manufacturing fabrication workshop",
+  hospitality_food: "catering food production kitchen restaurant",
+  real_estate: "property real estate maintenance",
+  transport_logistics: "logistics transport fleet delivery",
+  healthcare: "clinic healthcare wellness",
+  education: "training education courses",
+  technology: "software technology digital",
+  financial_services: "financial services accounting office",
+  media_creative: "creative media studio design",
   field_services: "maintenance repair field service",
+  agriculture: "farm agriculture crops",
+  nonprofit: "organization nonprofit community",
+  other_mixed: "",
+  // Legacy stored values (H15 drafts) keep their original classifier hints.
+  marine: "marine boatyard",
   food_beverage: "catering food production kitchen",
   retail_online: "online store e-commerce fulfilment",
-  agriculture: "farm agriculture crops",
   other: "",
 };
 
