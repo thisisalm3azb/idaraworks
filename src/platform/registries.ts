@@ -91,6 +91,7 @@ export const AUDIT_ENTITY_TYPES = [
   "share_token", // S7 — mint/revoke of a public share link are audited
   "onboarding_session", // S8 — propose/apply/undo of a guided onboarding are audited config mutations
   "import_batch", // S8 — guided CSV imports (customers/employees/items) are audited
+  "workspace_blueprint", // H14 — blueprint lifecycle (draft/validate/approve/reject/apply/undo)
 ] as const;
 export type AuditEntityType = (typeof AUDIT_ENTITY_TYPES)[number];
 
