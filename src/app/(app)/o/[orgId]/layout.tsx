@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import type { CSSProperties } from "react";
 import { Icon, Menu, buildBottomNav, buildNavGroups, buildQuickCreate } from "@/platform/ui";
@@ -8,9 +9,15 @@ import { getSessionUser, listMyOrgs, resolveCtx } from "@/platform/auth/resolve"
 import { loadOrgTerminology, term } from "@/platform/terminology";
 import { can } from "@/platform/authz";
 import { resolveEntitlements } from "@/platform/entitlements";
+import {
+  filterGroupsByBlueprint,
+  navItemAllowedByBlueprint,
+  quickCreateAllowedByBlueprint,
+} from "@/platform/workspace";
 import { getAppBranding } from "@/modules/branding/service";
 import { logoutAction, setActiveLocaleAction } from "@/app/(auth)/actions";
 import { OrgLogo } from "./OrgLogo";
+import { resolveShell } from "./shell";
 import { SidebarNav } from "./nav/SidebarNav";
 import { MobileNav } from "./nav/MobileNav";
 import type { BottomItemVM, NavGroupVM } from "./nav/types";
@@ -58,33 +65,47 @@ export default async function OrgLayout({
     daily_report: term("daily_report", terms, "singular"),
     daily_reports: term("daily_report", terms, "plural"),
   };
+  // H16: the ONE shell resolution — the applied Intelligent Clay blueprint
+  // (null for legacy organizations, whose shell stays exactly as today) plus
+  // the member's organization-facing role label. The blueprint contributes
+  // only the approved-CONFIGURATION layer; can() and live entitlements keep
+  // deciding inside the builder (the H14 effective-access equation).
+  const shell = await resolveShell(resolved);
+
   const input = { orgId, archetype: a, features: ent.features };
-  const groups: NavGroupVM[] = buildNavGroups(input).map((g) => ({
-    key: g.key,
-    label: t(g.labelKey, navVars),
-    icon: g.icon,
-    items: g.items.map((i) => ({
+  const groups: NavGroupVM[] = filterGroupsByBlueprint(
+    buildNavGroups(input).map((g) => ({
+      key: g.key,
+      label: t(g.labelKey, navVars),
+      icon: g.icon,
+      items: g.items.map((i) => ({
+        key: i.key,
+        label: t(i.labelKey, navVars),
+        href: i.href,
+        icon: i.icon,
+        locked: i.locked,
+      })),
+    })),
+    shell.shape,
+  );
+  const bottomItems: BottomItemVM[] = buildBottomNav(input)
+    .filter((i) => navItemAllowedByBlueprint(i.key, shell.disabledModules))
+    .map((i) => ({
       key: i.key,
       label: t(i.labelKey, navVars),
       href: i.href,
       icon: i.icon,
       locked: i.locked,
-    })),
-  }));
-  const bottomItems: BottomItemVM[] = buildBottomNav(input).map((i) => ({
-    key: i.key,
-    label: t(i.labelKey, navVars),
-    href: i.href,
-    icon: i.icon,
-    locked: i.locked,
-    isMore: i.isMore,
-  }));
-  const quickCreate = buildQuickCreate(input).map((i) => ({
-    key: i.key,
-    label: t(i.labelKey, navVars),
-    href: i.href,
-    icon: i.icon,
-  }));
+      isMore: i.isMore,
+    }));
+  const quickCreate = buildQuickCreate(input)
+    .filter((i) => quickCreateAllowedByBlueprint(i.key, shell.disabledModules))
+    .map((i) => ({
+      key: i.key,
+      label: t(i.labelKey, navVars),
+      href: i.href,
+      icon: i.icon,
+    }));
 
   // U2 branding: tenant accent (only when feat.branding_app is on) drives the
   // --accent CSS variable; unset orgs keep the platform brand colour.
@@ -123,6 +144,9 @@ export default async function OrgLayout({
         ]
       : [];
 
+  // H16 role context: the shell states plainly who you are here (Part F/J) —
+  // the org's own role label in the active locale, never a technical key.
+  const roleLabel = locale === "ar" ? shell.roleLabel.ar : shell.roleLabel.en;
   const accountLinks: MenuSection["items"] = [
     { key: "account", label: t("auth.account.title"), href: "/account" },
   ];
@@ -140,7 +164,13 @@ export default async function OrgLayout({
       href: `/o/${orgId}/settings/members`,
     });
   }
-  const accountSections: MenuSection[] = [{ key: "account", items: accountLinks }];
+  const accountSections: MenuSection[] = [
+    {
+      key: "account",
+      heading: t("shell.role_context", { org: resolved.orgName, role: roleLabel }),
+      items: accountLinks,
+    },
+  ];
   if (orgs.length > 1) {
     accountSections.push({
       key: "workspace",
@@ -153,6 +183,10 @@ export default async function OrgLayout({
     items: [{ key: "logout", label: t("nav.logout"), icon: "logout", formAction: logoutAction }],
   });
 
+  // H16: sidebar collapse persists in a cookie so SSR renders the right
+  // width immediately (no layout shift, no flicker on slow connections).
+  const railCollapsed = (await cookies()).get("iw_sidebar")?.value === "rail";
+
   return (
     <div style={accentStyle} className="min-h-dvh md:flex">
       <SidebarNav
@@ -160,6 +194,9 @@ export default async function OrgLayout({
         brand={brand}
         lockedHint={t("nav.locked_hint")}
         navLabel={t("nav.primary")}
+        initialCollapsed={railCollapsed}
+        collapseLabel={t("nav.collapse")}
+        expandLabel={t("nav.expand")}
       />
 
       <div className="flex min-h-dvh min-w-0 flex-1 flex-col">

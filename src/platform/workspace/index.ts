@@ -71,6 +71,16 @@ export {
   type CompiledWarning,
 } from "./compiler";
 export {
+  getAppliedWorkspaceShape,
+  disabledModulesOf,
+  navItemAllowedByBlueprint,
+  quickCreateAllowedByBlueprint,
+  QUICK_CREATE_MODULE,
+  filterGroupsByBlueprint,
+  moduleStateOf,
+  type AppliedWorkspaceShape,
+} from "./shell";
+export {
   createBlueprintDraft,
   updateBlueprintDraft,
   validateBlueprintRevision,

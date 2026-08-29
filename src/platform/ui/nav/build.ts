@@ -276,6 +276,13 @@ const GROUPS: GroupSpec[] = [
         action: "onboarding.run",
       },
       {
+        key: "workspace",
+        labelKey: "nav.workspace",
+        path: "/settings/workspace",
+        icon: "sparkle",
+        action: "config.view",
+      },
+      {
         key: "configuration",
         labelKey: "nav.configuration",
         path: "/settings/configuration",

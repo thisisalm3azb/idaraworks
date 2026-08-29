@@ -255,10 +255,14 @@ from country. Packs carry no security surface (tested).
   owner's explicit confirm. The existing S8 proposal/artifact path stays
   intact until H15 migrates it. **This is the exact H15 integration
   point.**
-- **Workspace rendering (H16)**: reads `getAppliedWorkspace(ctx,
-  archetype)` and treats `null` as today's behavior (fail closed to the
-  current experience); navigation/terminology derive from the compiled
-  output intersected with `can()` at request time.
+- **Workspace rendering (H16 — SHIPPED)**: every member's shell reads
+  `getAppliedWorkspaceShape(ctx)` (the 0076 member-read policy: applied
+  revisions only) and treats `null` as today's behavior. The layout filters
+  the live nav builder's output through `filterGroupsByBlueprint` (the
+  approved-configuration layer only — `can()` and live entitlements keep
+  deciding), module segments enforce `moduleStateOf` server-side with a
+  calm organization-specific unavailable state, and owners/admins read the
+  plain-language shape at Settings → Workspace setup.
 - **Dashboards (H17)**: `composeToday` consumes the compiled per-role
   priorities the same way.
 - **Agents**: agent relevance narrows the canonical registry; the H12

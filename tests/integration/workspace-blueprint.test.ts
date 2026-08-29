@@ -22,6 +22,8 @@ import {
   applyBlueprintRevision,
   undoBlueprintApply,
   getAppliedWorkspace,
+  getAppliedWorkspaceShape,
+  filterGroupsByBlueprint,
   getBlueprintRevision,
   listBlueprintRevisions,
   BlueprintLifecycleError,
@@ -335,18 +337,21 @@ describe("H14 — organization isolation (RLS)", () => {
     expect((await listBlueprintRevisions(ctxB(), "owner")).length).toBe(0);
   });
 
-  it("a non-owner/admin member cannot read blueprint rows even inside the org (RLS gate)", async () => {
+  it("a non-owner/admin member reads ONLY the applied shape row (H16 0076 law)", async () => {
     // Seed a foreman membership for user B inside org A, then read as them.
     await owner`
       insert into public.membership (user_id, org_id, role_key)
       values (${userB}::uuid, ${orgA}::uuid, 'foreman')`;
-    const rows = await withCtx(ctxOf(orgA, userB), (tx) =>
+    const rows = (await withCtx(ctxOf(orgA, userB), (tx) =>
       tx.execute(sql`
-        select id from public.workspace_blueprint_revision where org_id = ${orgA}
+        select status from public.workspace_blueprint_revision where org_id = ${orgA}
       `),
-    );
-    expect((rows as unknown as unknown[]).length).toBe(0);
-    // And the app layer refuses the archetype before any query (law 3/5).
+    )) as unknown as Array<{ status: string }>;
+    // The org has drafts, rejected, superseded AND one applied revision —
+    // the member's shell read sees exactly the applied one, nothing else.
+    expect(rows.length).toBe(1);
+    expect(rows[0]!.status).toBe("applied");
+    // And the app layer still refuses the archetype on the config surface.
     await expect(listBlueprintRevisions(ctxOf(orgA, userB), "foreman")).rejects.toThrow();
   });
 
@@ -363,5 +368,47 @@ describe("H14 — organization isolation (RLS)", () => {
         expect(blueprintHash(rev.blueprint)).toBe(rev.blueprintHash);
       }
     }
+  });
+});
+
+describe("H16 — the member shell shape", () => {
+  it("a member's shape read returns the applied workspace; a legacy org returns null", async () => {
+    // Foreman (seeded above) reads org A's applied shape through the shell path.
+    const shape = await getAppliedWorkspaceShape(ctxOf(orgA, userB));
+    expect(shape).not.toBeNull();
+    expect(shape!.compiled.capabilities.length).toBeGreaterThan(0);
+    expect(shape!.compilerVersion).toBe("1.0.0");
+    // Org B never applied a blueprint: legacy fallback (null → shell unchanged).
+    expect(await getAppliedWorkspaceShape(ctxB())).toBeNull();
+    const groups = [{ key: "work", items: [{ key: "jobs" }, { key: "invoices" }] }];
+    expect(filterGroupsByBlueprint(groups, null)).toBe(groups);
+  });
+
+  it("a revision change is visible to the member shape immediately", async () => {
+    const before = await getAppliedWorkspaceShape(ctxOf(orgA, userB));
+    const next = await createBlueprintDraft(ctxA(), "owner", {
+      blueprint: scenarioContractor(),
+      source: "user_change",
+      reason: "Shell revision-change test",
+    });
+    await validateBlueprintRevision(ctxA(), "owner", next.id);
+    await approveBlueprintRevision(ctxA(), "owner", next.id, {
+      expectedHash: next.blueprintHash,
+    });
+    await applyBlueprintRevision(ctxA(), "owner", next.id);
+    const after = await getAppliedWorkspaceShape(ctxOf(orgA, userB));
+    expect(after!.revisionId).toBe(next.id);
+    expect(after!.revisionNo).toBeGreaterThan(before!.revisionNo);
+  });
+
+  it("cross-organization and removed-membership reads fail closed to null", async () => {
+    // A forged ctx claiming org A with a user who is NOT a member reads null.
+    const outsider = randomUUID();
+    expect(await getAppliedWorkspaceShape(ctxOf(orgA, outsider))).toBeNull();
+    // Deactivating the foreman removes the shape read too (active members only).
+    await owner`
+      update public.membership set deactivated_at = now()
+      where org_id = ${orgA}::uuid and user_id = ${userB}::uuid`;
+    expect(await getAppliedWorkspaceShape(ctxOf(orgA, userB))).toBeNull();
   });
 });
