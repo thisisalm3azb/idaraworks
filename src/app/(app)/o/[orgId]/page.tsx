@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { Badge, Button, Card, CardHeader, EmptyState, buildQuickCreate } from "@/platform/ui";
 import {
@@ -54,6 +55,15 @@ import { getOwnerDigest, type DigestSection } from "@/modules/digest/service";
 import { getInstalledTemplate } from "@/platform/config";
 import { formatDate, formatMoney, formatTime } from "@/platform/format";
 import type { CurrencyCode, Locale } from "@/platform/registries";
+import type { BlueprintArchetype } from "@/platform/workspace";
+import { disabledModulesOf } from "@/platform/workspace";
+import {
+  composeAdaptiveDashboard,
+  gatherDashboardData,
+  orgToday,
+} from "@/modules/dashboard/service";
+import { resolveShell } from "./shell";
+import { AdaptiveDashboard } from "./adaptive";
 import { dismissExceptionAction } from "./actions";
 
 const SEV_TONE: Record<string, "neutral" | "info" | "warning" | "danger"> = {
@@ -104,6 +114,88 @@ export default async function OrgHome({
         title={t("today.other_role.title")}
         description={t("today.other_role.description")}
       />
+    );
+  }
+
+  // ── H17: blueprint organizations get the adaptive, decision-led home. ─────
+  // Legacy organizations (no applied blueprint) fall through to the pre-H17
+  // composition below, byte-for-byte (the legacy law, pinned by tests).
+  const shell = await resolveShell(resolved);
+  if (shell.shape && a !== "worker_reserved_p3") {
+    const adaptiveLocale = await getServerLocale();
+    const terms = await loadOrgTerminology(resolved.ctx, adaptiveLocale);
+    const vars = {
+      job: term("job", terms, "singular"),
+      jobs: term("job", terms, "plural"),
+      daily_report: term("daily_report", terms, "singular"),
+      daily_reports: term("daily_report", terms, "plural"),
+      material_request: term("material_request", terms, "singular"),
+      material_requests: term("material_request", terms, "plural"),
+    };
+    const now = new Date();
+    const asOf = orgToday(now, resolved.timezone);
+    const [data, ent] = await Promise.all([
+      gatherDashboardData(resolved.ctx, a, { asOf, computedAt: now.toISOString() }),
+      resolveEntitlements(resolved.ctx),
+    ]);
+    const view = composeAdaptiveDashboard(
+      {
+        orgId,
+        archetype: a as BlueprintArchetype,
+        seesPrice: resolved.ctx.pricePrivileged,
+        features: ent.features,
+        disabledModules: disabledModulesOf(shell.shape.compiled),
+        compiledDashboard: shell.shape.compiled.dashboards[a as BlueprintArchetype] ?? null,
+        asOf,
+      },
+      data,
+    );
+    const cookieJar = await cookies();
+    const collapsed = new Set(
+      decodeURIComponent(cookieJar.get("iw_dash")?.value ?? "")
+        .split(",")
+        .filter(Boolean),
+    );
+    const welcomeLinksAdaptive = [
+      ...(can(a, "onboarding.run")
+        ? [
+            { key: "setup", label: t("onboarding.checklist.run"), href: `/o/${orgId}/onboarding` },
+            { key: "import", label: t("onboarding.checklist.import"), href: `/o/${orgId}/imports` },
+          ]
+        : []),
+      ...(can(a, "jobs.view")
+        ? [{ key: "jobs", label: t("nav.item.jobs", vars), href: `/o/${orgId}/jobs` }]
+        : []),
+    ];
+    return (
+      <>
+        {sp.welcome === "1" ? (
+          <div className="mb-4">
+            <WelcomeBanner
+              title={t("dashboard.welcome.title")}
+              body={t("dashboard.welcome.body")}
+              dismissLabel={t("dashboard.welcome.dismiss")}
+              links={welcomeLinksAdaptive}
+            />
+          </div>
+        ) : null}
+        <AdaptiveDashboard
+          t={t}
+          locale={adaptiveLocale}
+          orgId={orgId}
+          currency={resolved.baseCurrency as CurrencyCode}
+          timezone={resolved.timezone}
+          vars={vars}
+          view={view}
+          extras={data.extras}
+          myJobs={data.myJobs ?? []}
+          returnedReports={data.returnedReports ?? []}
+          collapsed={collapsed}
+          now={now}
+          orgName={resolved.orgName}
+          roleLabel={adaptiveLocale === "ar" ? shell.roleLabel.ar : shell.roleLabel.en}
+        />
+      </>
     );
   }
 
