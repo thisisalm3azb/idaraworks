@@ -21,8 +21,12 @@ import { listOpenExceptions } from "@/modules/exceptions/service";
 import { computeAR } from "@/modules/invoices/service";
 import { listInbox } from "@/modules/approvals/service";
 import { getDashboardExtras } from "@/modules/today/service";
+import { countMissingToday, countReviewQueue } from "@/modules/reports/service";
 import type { RoleArchetype } from "@/platform/registries";
 import type { DashboardData } from "./compose";
+
+// H18 canonical drill-down filter contracts (module public surface).
+export * from "./filters";
 
 export {
   composeAdaptiveDashboard,
@@ -76,7 +80,6 @@ export async function gatherDashboardData(
 ): Promise<DashboardData> {
   const failed: string[] = [];
   const foreman = archetype === "foreman";
-  const managerScoped = archetype === "manager";
 
   const [exceptions, extras, inbox, ar, field, reviewQueue] = await Promise.all([
     can(archetype, "exceptions.view")
@@ -91,7 +94,12 @@ export async function gatherDashboardData(
       : Promise.resolve(null),
     foreman ? guarded("field", failed, () => fieldQueues(ctx)) : Promise.resolve(null),
     can(archetype, "reports.review")
-      ? guarded("reports", failed, () => reviewQueueCounts(ctx, opts.asOf, managerScoped))
+      ? guarded("reports", failed, async () => ({
+          // The SAME service definitions the review page lists from (H18
+          // count-to-record parity by construction).
+          toReview: await countReviewQueue(ctx, archetype),
+          missingToday: await countMissingToday(ctx, archetype, opts.asOf),
+        }))
       : Promise.resolve(null),
   ]);
 
@@ -147,33 +155,6 @@ async function fieldQueues(ctx: Ctx) {
         reference: r.reference,
         reportDate: r.report_date,
       })),
-    };
-  });
-}
-
-/** Management review queue: submitted reports awaiting review, and active
- * jobs with no submitted/reviewed report for the org's TODAY (asOf) —
- * manager scope narrows to assigned jobs, mirroring the pre-H17 law. */
-async function reviewQueueCounts(ctx: Ctx, asOf: string, scoped: boolean) {
-  return withCtx(ctx, async (tx) => {
-    const scope = scoped ? sql`and ${assignedJobCondition(ctx)}` : sql``;
-    const rows = (await tx.execute(sql`
-      select
-        (select count(*)::int from public.daily_report r
-          join public.job j on j.id = r.job_id
-          where r.org_id = ${ctx.orgId} and r.status = 'submitted' ${scope}) as to_review,
-        (select count(*)::int from public.job j
-          where j.org_id = ${ctx.orgId} and j.status_category = 'active' and j.archived = false
-            ${scope}
-            and not exists (
-              select 1 from public.daily_report r
-              where r.job_id = j.id and r.org_id = ${ctx.orgId}
-                and r.status in ('submitted','reviewed') and r.report_date >= ${asOf}::date
-            )) as missing_today
-    `)) as unknown as Array<{ to_review: number; missing_today: number }>;
-    return {
-      toReview: Number(rows[0]?.to_review ?? 0),
-      missingToday: Number(rows[0]?.missing_today ?? 0),
     };
   });
 }

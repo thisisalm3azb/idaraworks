@@ -22,7 +22,7 @@ import {
   DAILY_REPORT_RETURNED,
 } from "@/platform/events";
 import { sql, withCtx, type Ctx, type TenantTx } from "@/platform/tenancy";
-import { isAssignedIn } from "@/modules/jobs/service";
+import { assignedJobCondition, isAssignedIn } from "@/modules/jobs/service";
 import type { RoleArchetype } from "@/platform/registries";
 
 // ── Typed errors (translatable at the surface) ──────────────────────────────
@@ -574,6 +574,14 @@ export type ReviewQueueRow = {
   submittedByName: string | null;
 };
 
+/** The ONE review-queue scope rule (H18 count-to-record parity): a manager
+ * reviews the assigned scope, owner/admin review the org. Shared by the
+ * queue list, the queue count, and the missing-today derivations, so the
+ * dashboard's numbers and the review page's records cannot drift. */
+function reviewScope(ctx: Ctx, archetype: RoleArchetype) {
+  return archetype === "manager" ? sql`and ${assignedJobCondition(ctx)}` : sql``;
+}
+
 export async function listReviewQueue(
   ctx: Ctx,
   archetype: RoleArchetype,
@@ -586,7 +594,7 @@ export async function listReviewQueue(
       from public.daily_report r
       join public.job j on j.id = r.job_id and j.org_id = r.org_id
       left join public.user_profile u on u.id = r.submitted_by
-      where r.org_id = ${ctx.orgId} and r.status = 'submitted'
+      where r.org_id = ${ctx.orgId} and r.status = 'submitted' ${reviewScope(ctx, archetype)}
       order by r.report_date asc, r.submitted_at asc
     `),
   )) as unknown as Array<{
@@ -605,6 +613,87 @@ export async function listReviewQueue(
     summary: r.summary,
     submittedByName: r.submitted_by_name,
   }));
+}
+
+export async function countReviewQueue(ctx: Ctx, archetype: RoleArchetype): Promise<number> {
+  assertCan(archetype, "reports.review");
+  const rows = (await withCtx(ctx, (tx) =>
+    tx.execute(sql`
+      select count(*)::int as n
+      from public.daily_report r
+      join public.job j on j.id = r.job_id and j.org_id = r.org_id
+      where r.org_id = ${ctx.orgId} and r.status = 'submitted' ${reviewScope(ctx, archetype)}
+    `),
+  )) as unknown as Array<{ n: number }>;
+  return Number(rows[0]?.n ?? 0);
+}
+
+export type MissingTodayRow = {
+  jobId: string;
+  reference: string;
+  name: string;
+  lastReport: string | null;
+};
+
+/** Active jobs (scoped like the review queue) with no submitted or reviewed
+ * report for the org's current day — the records behind the dashboard's
+ * "no report yet today" signal. asOf is the ORG-timezone date. */
+export async function listJobsMissingToday(
+  ctx: Ctx,
+  archetype: RoleArchetype,
+  asOf: string,
+): Promise<MissingTodayRow[]> {
+  assertCan(archetype, "reports.review");
+  const rows = (await withCtx(ctx, (tx) =>
+    tx.execute(sql`
+      select j.id::text as id, j.reference, j.name,
+             (select max(r.report_date)::text from public.daily_report r
+              where r.job_id = j.id and r.org_id = ${ctx.orgId}
+                and r.status in ('submitted','reviewed')) as last_report
+      from public.job j
+      where j.org_id = ${ctx.orgId} and j.status_category = 'active' and j.archived = false
+        ${reviewScope(ctx, archetype)}
+        and not exists (
+          select 1 from public.daily_report r
+          where r.job_id = j.id and r.org_id = ${ctx.orgId}
+            and r.status in ('submitted','reviewed') and r.report_date >= ${asOf}::date
+        )
+      order by j.reference
+    `),
+  )) as unknown as Array<{
+    id: string;
+    reference: string;
+    name: string;
+    last_report: string | null;
+  }>;
+  return rows.map((r) => ({
+    jobId: r.id,
+    reference: r.reference,
+    name: r.name,
+    lastReport: r.last_report,
+  }));
+}
+
+export async function countMissingToday(
+  ctx: Ctx,
+  archetype: RoleArchetype,
+  asOf: string,
+): Promise<number> {
+  assertCan(archetype, "reports.review");
+  const rows = (await withCtx(ctx, (tx) =>
+    tx.execute(sql`
+      select count(*)::int as n
+      from public.job j
+      where j.org_id = ${ctx.orgId} and j.status_category = 'active' and j.archived = false
+        ${reviewScope(ctx, archetype)}
+        and not exists (
+          select 1 from public.daily_report r
+          where r.job_id = j.id and r.org_id = ${ctx.orgId}
+            and r.status in ('submitted','reviewed') and r.report_date >= ${asOf}::date
+        )
+    `),
+  )) as unknown as Array<{ n: number }>;
+  return Number(rows[0]?.n ?? 0);
 }
 
 export type WorkLine = {

@@ -49,6 +49,16 @@ import type { ExceptionView } from "@/modules/exceptions/service";
 import type { ARSummary } from "@/modules/invoices/service";
 import type { InboxRow } from "@/modules/approvals/service";
 import type { DashboardExtras } from "@/modules/today/service";
+import {
+  arHref,
+  expensesHref,
+  issuesHref,
+  jobsHref,
+  mrHref,
+  poHref,
+  quotesHref,
+  reviewHref,
+} from "./filters";
 
 // ── The per-role compiled dashboard (shape.compiled.dashboards[archetype]) ──
 export type CompiledRoleDashboard = {
@@ -341,6 +351,9 @@ export function composeAdaptiveDashboard(
 ): AdaptiveDashboardView {
   const allowed = new Set(allowedCards(cx));
   const o = `/o/${cx.orgId}`;
+  // Managers' job aggregates are assigned-scoped; their drill-downs carry the
+  // same scope so count and destination agree (H18 filter contract).
+  const jobScope = cx.archetype === "manager" ? ("mine" as const) : null;
   const items: DashboardItem[] = [];
   const nextItems: DashboardItem[] = [];
   const exceptions = data.exceptions ?? [];
@@ -407,14 +420,14 @@ export function composeAdaptiveDashboard(
       `dashboard.why.${rule}`,
       jobHref ??
         (cardKey === "overdue_receivables"
-          ? `${o}/ar`
+          ? arHref(cx.orgId, "overdue")
           : cardKey === "invoices_to_issue"
             ? `${o}/invoices`
             : cardKey === "blockers"
-              ? `${o}/issues`
+              ? issuesHref(cx.orgId, true)
               : cardKey === "missing_reports"
-                ? `${o}/reports/review`
-                : `${o}/jobs?filter=overdue`),
+                ? reviewHref(cx.orgId, "missing")
+                : jobsHref(cx.orgId, { filter: "overdue", scope: jobScope })),
       {
         oldestDays: oldest,
         canAct: can(cx.archetype, EXCEPTION_ACT_ACTION[rule] ?? "exceptions.dismiss"),
@@ -433,7 +446,7 @@ export function composeAdaptiveDashboard(
       overdueJobs,
       "dashboard.signal.overdue_jobs",
       "dashboard.why.overdue_jobs",
-      `${o}/jobs?filter=overdue`,
+      jobsHref(cx.orgId, { filter: "overdue", scope: jobScope }),
       { key: "overdue_jobs" },
     );
   }
@@ -466,7 +479,7 @@ export function composeAdaptiveDashboard(
       queue.toReview,
       "dashboard.signal.reports_to_review",
       "dashboard.why.reports_to_review",
-      `${o}/reports/review`,
+      reviewHref(cx.orgId),
     );
   }
   if (queue && queue.missingToday > 0) {
@@ -477,7 +490,7 @@ export function composeAdaptiveDashboard(
       queue.missingToday,
       "dashboard.signal.missing_today",
       "dashboard.why.missing_today",
-      `${o}/reports/review`,
+      reviewHref(cx.orgId, "missing"),
     );
   }
 
@@ -522,7 +535,7 @@ export function composeAdaptiveDashboard(
       1,
       "dashboard.signal.over90",
       "dashboard.why.over90",
-      `${o}/ar`,
+      arHref(cx.orgId, "over90"),
       { key: "over90" },
     );
   }
@@ -537,7 +550,7 @@ export function composeAdaptiveDashboard(
       mrApproved,
       "dashboard.signal.mr_approved",
       "dashboard.why.mr_approved",
-      `${o}/material-requests`,
+      mrHref(cx.orgId, "approved"),
       { canAct: can(cx.archetype, "mr.convert") },
     );
   }
@@ -553,7 +566,7 @@ export function composeAdaptiveDashboard(
       withinHorizon.length,
       "dashboard.signal.due_soon",
       "dashboard.why.due_soon",
-      `${o}/week`,
+      jobsHref(cx.orgId, { filter: "due_soon", days: horizonDays, scope: jobScope }),
       { key: "due_soon", whyVars: { days: horizonDays } },
     );
   }
@@ -566,7 +579,7 @@ export function composeAdaptiveDashboard(
       quotesAwaiting,
       "dashboard.signal.quotes_awaiting",
       "dashboard.why.quotes_awaiting",
-      `${o}/quotes`,
+      quotesHref(cx.orgId, true),
       { key: "quotes_awaiting", canAct: can(cx.archetype, "quotes.manage") },
     );
   }
@@ -579,7 +592,7 @@ export function composeAdaptiveDashboard(
       poPartial,
       "dashboard.signal.po_partial",
       "dashboard.why.po_partial",
-      `${o}/purchase-orders`,
+      poHref(cx.orgId, "partially_received"),
       { key: "po_partial", canAct: can(cx.archetype, "grn.create") },
     );
   }
@@ -592,7 +605,7 @@ export function composeAdaptiveDashboard(
       unpaidExpenses,
       "dashboard.signal.expenses_unpaid",
       "dashboard.why.expenses_unpaid",
-      `${o}/expenses`,
+      expensesHref(cx.orgId, true),
       { key: "expenses_unpaid" },
     );
   }
@@ -653,7 +666,7 @@ export function composeAdaptiveDashboard(
       value: data.ar?.outstandingMinor ?? null,
       money: true,
       periodKey: "dashboard.period.invoiced_unpaid",
-      href: `${o}/ar`,
+      href: arHref(cx.orgId),
       unavailable: data.ar == null || data.ar.outstandingMinor == null,
     });
   }

@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Badge, Button, EmptyState } from "@/platform/ui";
+import { Badge, Button, EmptyState, FilterBar } from "@/platform/ui";
 import { getT } from "@/platform/i18n/server";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { can } from "@/platform/authz";
+import { parseQuotesSearch, quoteIsAwaiting, quotesHref } from "@/modules/dashboard/service";
 import { formatMoney } from "@/platform/format/money";
 import type { CurrencyCode } from "@/platform/registries";
 import { listQuotes } from "@/modules/quotes/service";
@@ -19,14 +20,25 @@ const TONE: Record<string, "neutral" | "info" | "success" | "warning" | "danger"
   expired: "neutral",
 };
 
-export default async function QuotesPage({ params }: { params: Promise<{ orgId: string }> }) {
+export default async function QuotesPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ orgId: string }>;
+  searchParams: Promise<{ status?: string }>;
+}) {
   const { orgId } = await params;
+  const sp = await searchParams;
   const resolved = await resolveCtx(orgId);
   if (typeof resolved === "string") redirect("/");
   if (!can(resolved.archetype, "quotes.view")) redirect(`/o/${orgId}`);
   const t = await getT();
   const currency = resolved.baseCurrency as CurrencyCode;
-  const rows = await listQuotes(resolved.ctx, resolved.archetype);
+  // H18 drill-down contract: ?status=awaiting = the dashboard rule (draft or
+  // pending approval); unknown values are safely ignored.
+  const { awaiting } = parseQuotesSearch(sp);
+  const all = await listQuotes(resolved.ctx, resolved.archetype);
+  const rows = awaiting ? all.filter((r) => quoteIsAwaiting(r)) : all;
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between gap-2">
@@ -37,8 +49,19 @@ export default async function QuotesPage({ params }: { params: Promise<{ orgId: 
           </Link>
         ) : null}
       </div>
+      {awaiting ? (
+        <FilterBar
+          summary={t("filters.quotes.awaiting")}
+          countLabel={t("filters.count", { count: rows.length })}
+          clearHref={quotesHref(orgId)}
+          clearLabel={t("jobs.filter_clear")}
+        />
+      ) : null}
       {rows.length === 0 ? (
-        <EmptyState title={t("quotes.empty")} />
+        <EmptyState
+          title={awaiting ? t("filters.empty") : t("quotes.empty")}
+          description={awaiting ? t("filters.empty_hint") : undefined}
+        />
       ) : (
         <ul className="flex flex-col gap-2">
           {rows.map((q) => (

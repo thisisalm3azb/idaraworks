@@ -55,6 +55,9 @@ export const JobCreatedData = z.object({
   ...orgScoped,
   jobId: z.string().uuid(),
   reference: z.string().min(1).max(40),
+  /** H18: the applied blueprint revision whose workflow supplied the stage
+   * snapshot (null/absent = legacy config.stage_template path). */
+  blueprintRevisionId: z.string().uuid().nullable().optional(),
 });
 export type JobCreatedData = z.infer<typeof JobCreatedData>;
 

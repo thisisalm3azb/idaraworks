@@ -236,7 +236,7 @@ export type IssueRow = {
 export async function listIssues(
   ctx: Ctx,
   archetype: RoleArchetype,
-  opts: { jobId?: string; status?: string } = {},
+  opts: { jobId?: string; status?: string; blocking?: boolean } = {},
 ): Promise<IssueRow[]> {
   assertCan(archetype, "issues.raise");
   const statusFilter =
@@ -260,6 +260,7 @@ export async function listIssues(
       where i.org_id = ${ctx.orgId}
         ${opts.jobId ? sql`and i.job_id = ${opts.jobId}` : sql``}
         ${statusFilter ? sql`and i.status = ${statusFilter}` : sql``}
+        ${opts.blocking ? sql`and i.is_blocker = true and i.status not in ('resolved','closed')` : sql``}
         ${foremanScope}
       order by i.is_blocker desc, i.created_at desc
       limit 500

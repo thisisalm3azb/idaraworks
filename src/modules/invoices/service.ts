@@ -382,6 +382,32 @@ const REDACTED_AR: ARSummary = {
   over90: null,
 };
 
+/** The ONE outstanding-invoice derivation (H18: shared by the AR aggregate
+ * and the drill-down list so summary and records can never disagree). Each
+ * credit note is attributed to the invoice it corrects (corrects_invoice_id)
+ * and reduces ONLY that invoice's net balance (floored at 0); age counts
+ * from the due date, falling back to the issue date. */
+function outstandingInvoiceCte(ctx: Ctx, asOf: string) {
+  return sql`
+    inv as (
+      select i.id,
+        greatest(0,
+          i.base_total_minor
+          - coalesce((select sum(p.base_amount_minor) from public.payment p
+                      where p.invoice_id = i.id and p.org_id = ${ctx.orgId}
+                        and p.status in ('recorded','confirmed')), 0)
+          - coalesce((select sum(cn.base_total_minor) from public.invoice cn
+                      where cn.corrects_invoice_id = i.id and cn.org_id = ${ctx.orgId}
+                        and cn.kind = 'credit_note' and cn.status <> 'cancelled'), 0)
+        ) as bal,
+        greatest(0, (${asOf}::date - coalesce(i.due_date, i.issued_at::date))) as age_days
+      from public.invoice i
+      where i.org_id = ${ctx.orgId} and i.kind = 'invoice'
+        and i.status in ('issued','partially_paid')
+    ),
+    outstanding as (select id, bal, age_days from inv where bal > 0)`;
+}
+
 export async function computeAR(
   ctx: Ctx,
   archetype: RoleArchetype,
@@ -390,28 +416,10 @@ export async function computeAR(
   assertCan(archetype, "ar.view");
   if (!ctx.pricePrivileged) return REDACTED_AR;
   return withCtx(ctx, async (tx) => {
-    // Each credit note is attributed to the invoice it corrects (corrects_invoice_id)
-    // and reduces ONLY that invoice's net balance (floored at 0) — the same net that
-    // feeds the aging buckets, so `outstanding` always equals the sum of its buckets,
-    // never goes negative, and a credit note never offsets an unrelated invoice.
+    // The buckets always sum to `outstanding` (the CTE floors each balance at
+    // 0 and a credit note never offsets an unrelated invoice).
     const rows = (await tx.execute(sql`
-      with inv as (
-        select i.id,
-          greatest(0,
-            i.base_total_minor
-            - coalesce((select sum(p.base_amount_minor) from public.payment p
-                        where p.invoice_id = i.id and p.org_id = ${ctx.orgId}
-                          and p.status in ('recorded','confirmed')), 0)
-            - coalesce((select sum(cn.base_total_minor) from public.invoice cn
-                        where cn.corrects_invoice_id = i.id and cn.org_id = ${ctx.orgId}
-                          and cn.kind = 'credit_note' and cn.status <> 'cancelled'), 0)
-          ) as bal,
-          greatest(0, (${asOf}::date - coalesce(i.due_date, i.issued_at::date))) as age_days
-        from public.invoice i
-        where i.org_id = ${ctx.orgId} and i.kind = 'invoice'
-          and i.status in ('issued','partially_paid')
-      ),
-      outstanding as (select id, bal, age_days from inv where bal > 0)
+      with ${outstandingInvoiceCte(ctx, asOf)}
       select
         coalesce(sum(o.bal),0)::bigint as outstanding,
         coalesce(sum(o.bal) filter (where o.age_days <= 0),0)::bigint as current,
@@ -430,6 +438,54 @@ export async function computeAR(
       d61_90: Number(r.d61_90),
       over90: Number(r.over90),
     };
+  });
+}
+
+export type OutstandingInvoiceRow = {
+  id: string;
+  reference: string;
+  customerName: string | null;
+  dueDate: string | null;
+  issuedAt: string | null;
+  /** Net outstanding balance in base-currency minor units. */
+  balanceMinor: number;
+  /** Whole days past due (0 = current). */
+  ageDays: number;
+};
+
+/** The invoice-level records behind the AR summary — the SAME derivation as
+ * computeAR (shared CTE), narrowed per view: all outstanding, past due
+ * (age >= 1), or more than 90 days past due. Null = price-redacted (the
+ * caller distinguishes redaction from an empty list). */
+export async function listOutstandingInvoices(
+  ctx: Ctx,
+  archetype: RoleArchetype,
+  asOf: string,
+  view: "all" | "overdue" | "over90" = "all",
+): Promise<OutstandingInvoiceRow[] | null> {
+  assertCan(archetype, "ar.view");
+  if (!ctx.pricePrivileged) return null;
+  const ageFloor = view === "over90" ? 90 : view === "overdue" ? 0 : -1;
+  return withCtx(ctx, async (tx) => {
+    const rows = (await tx.execute(sql`
+      with ${outstandingInvoiceCte(ctx, asOf)}
+      select o.id::text as id, i.reference, i.customer_name, i.due_date::text as due_date,
+             i.issued_at::text as issued_at, o.bal::bigint as bal, o.age_days::int as age_days
+      from outstanding o
+      join public.invoice i on i.id = o.id
+      where o.age_days > ${ageFloor}
+      order by o.age_days desc, i.due_date asc nulls last, i.reference
+      limit 500
+    `)) as unknown as Array<Record<string, unknown>>;
+    return rows.map((r) => ({
+      id: r.id as string,
+      reference: r.reference as string,
+      customerName: (r.customer_name as string | null) ?? null,
+      dueDate: (r.due_date as string | null) ?? null,
+      issuedAt: (r.issued_at as string | null) ?? null,
+      balanceMinor: Number(r.bal),
+      ageDays: Number(r.age_days),
+    }));
   });
 }
 

@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Badge, Button, EmptyState } from "@/platform/ui";
+import { Badge, Button, EmptyState, FilterBar } from "@/platform/ui";
 import { getT } from "@/platform/i18n/server";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { can } from "@/platform/authz";
+import { parsePoSearch, poHref } from "@/modules/dashboard/service";
 import { listPurchaseOrders } from "@/modules/supply/service";
 import { formatMoney } from "@/platform/format";
 import type { CurrencyCode } from "@/platform/registries";
@@ -19,16 +20,22 @@ const STATUS_TONE: Record<string, "neutral" | "info" | "success" | "warning"> = 
 
 export default async function PurchaseOrdersPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ orgId: string }>;
+  searchParams: Promise<{ status?: string }>;
 }) {
   const { orgId } = await params;
+  const sp = await searchParams;
   const resolved = await resolveCtx(orgId);
   if (typeof resolved === "string") redirect("/");
   const a = resolved.archetype;
   if (!can(a, "po.view")) redirect(`/o/${orgId}`);
   const t = await getT();
-  const rows = await listPurchaseOrders(resolved.ctx, a);
+  // H18 drill-down contract (see filters.ts); unknown values safely ignored.
+  const { status } = parsePoSearch(sp);
+  const all = await listPurchaseOrders(resolved.ctx, a);
+  const rows = status ? all.filter((r) => r.status === status) : all;
   const currency = resolved.baseCurrency as CurrencyCode;
 
   return (
@@ -41,8 +48,19 @@ export default async function PurchaseOrdersPage({
           </Link>
         ) : null}
       </div>
+      {status ? (
+        <FilterBar
+          summary={t("filters.po.partially_received")}
+          countLabel={t("filters.count", { count: rows.length })}
+          clearHref={poHref(orgId)}
+          clearLabel={t("jobs.filter_clear")}
+        />
+      ) : null}
       {rows.length === 0 ? (
-        <EmptyState title={t("po.empty")} />
+        <EmptyState
+          title={status ? t("filters.empty") : t("po.empty")}
+          description={status ? t("filters.empty_hint") : undefined}
+        />
       ) : (
         <ul className="flex flex-col gap-2">
           {rows.map((r) => (

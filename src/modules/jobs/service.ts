@@ -75,6 +75,45 @@ async function allocateSequence(
   return Number(rows[0]!.allocated);
 }
 
+/** H18 — the approved workflow's stage snapshot source (pure, defensive).
+ * Accepts the applied revision's blueprint jsonb (SERVER data only) and
+ * returns the 'job' workflow's stages, or null when no usable workflow
+ * exists (malformed shape → null → the legacy template path, fail safe).
+ * Stage identity, bilingual labels, weights and ORDER are preserved. */
+export function stagesFromBlueprint(
+  blueprint: unknown,
+): Array<{ stage_key: string; names: { en: string; ar: string }; weight: number }> | null {
+  if (typeof blueprint !== "object" || blueprint === null) return null;
+  const workflows = (blueprint as { workflows?: unknown }).workflows;
+  if (!Array.isArray(workflows)) return null;
+  const wf = workflows.find(
+    (w): w is { id: string; stages: unknown } =>
+      typeof w === "object" && w !== null && (w as { id?: unknown }).id === "job",
+  );
+  if (!wf || !Array.isArray(wf.stages) || wf.stages.length === 0) return null;
+  const out: Array<{ stage_key: string; names: { en: string; ar: string }; weight: number }> = [];
+  const seen = new Set<string>();
+  for (const raw of wf.stages) {
+    const st = raw as { key?: unknown; name?: { en?: unknown; ar?: unknown }; weight?: unknown };
+    if (
+      typeof st.key !== "string" ||
+      !/^[a-z][a-z0-9_]{0,39}$/.test(st.key) ||
+      seen.has(st.key) ||
+      typeof st.name?.en !== "string" ||
+      typeof st.name?.ar !== "string" ||
+      typeof st.weight !== "number" ||
+      !Number.isInteger(st.weight) ||
+      st.weight < 0 ||
+      st.weight > 100
+    ) {
+      return null; // any malformed stage disqualifies the whole workflow
+    }
+    seen.add(st.key);
+    out.push({ stage_key: st.key, names: { en: st.name.en, ar: st.name.ar }, weight: st.weight });
+  }
+  return out;
+}
+
 export async function createJobFromPreset(
   ctx: Ctx,
   archetype: RoleArchetype,
@@ -89,22 +128,31 @@ export async function createJobFromPreset(
   const result = await command(
     ctx,
     {
-      audit: (r: { reference: string }) => ({
+      audit: (r: { reference: string; blueprintRevisionId: string | null }) => ({
         action: "job.create",
         entityType: "job" as const,
         entityId: id,
         summary: `Created job ${r.reference}`,
       }),
-      activity: (r: { reference: string }) => ({
+      activity: (r: { reference: string; blueprintRevisionId: string | null }) => ({
         entityType: "job" as const,
         entityId: id,
         verb: "created",
         summary: `created ${r.reference} — ${data.name}`,
       }),
-      events: (r: { reference: string }) => [
+      events: (r: { reference: string; blueprintRevisionId: string | null }) => [
         {
           name: JOB_CREATED,
-          payload: { orgId: ctx.orgId, actorUserId: ctx.userId, jobId: id, reference: r.reference },
+          payload: {
+            orgId: ctx.orgId,
+            actorUserId: ctx.userId,
+            jobId: id,
+            reference: r.reference,
+            // H18: which applied blueprint revision supplied the stage
+            // snapshot (null = legacy template path). The events outbox is
+            // the safe existing metadata location for this provenance.
+            blueprintRevisionId: r.blueprintRevisionId,
+          },
         },
       ],
     },
@@ -187,14 +235,30 @@ export async function createJobFromPreset(
                 ${JSON.stringify(customValues)}::jsonb, ${ctx.userId})
       `);
 
-      // Seed job_stage SNAPSHOTS from the org stage template, preset skips
-      // applied (doc 11 DoD: 13S/18S auto-skip Upholstery); template edits
-      // never rewrite these rows.
-      const tmplRows = (await tx.execute(sql`
-        select value from public.app_settings
-        where org_id = ${ctx.orgId} and key = 'config.stage_template'
-      `)) as unknown as Array<{ value: StageTemplate | null }>;
-      const stages = tmplRows[0]?.value?.stages ?? [];
+      // Seed job_stage SNAPSHOTS (immutable; template/blueprint edits never
+      // rewrite these rows — versioning is snapshot_on_creation, H14 law 14).
+      //
+      // H18: organizations with an APPLIED Intelligent Clay blueprint adopt
+      // the approved 'job' workflow's stages (read server-side from the
+      // applied revision inside THIS transaction — never client input, never
+      // another organization's row: the org filter + 0076 RLS pin it).
+      // Legacy organizations keep the config.stage_template path unchanged.
+      const revRows = (await tx.execute(sql`
+        select id, blueprint from public.workspace_blueprint_revision
+        where org_id = ${ctx.orgId} and status = 'applied'
+      `)) as unknown as Array<{ id: string; blueprint: unknown }>;
+      const blueprintStages = stagesFromBlueprint(revRows[0]?.blueprint);
+      const blueprintRevisionId = blueprintStages ? revRows[0]!.id : null;
+      let stages: Array<{ stage_key: string; names: { en: string; ar: string }; weight: number }>;
+      if (blueprintStages) {
+        stages = blueprintStages;
+      } else {
+        const tmplRows = (await tx.execute(sql`
+          select value from public.app_settings
+          where org_id = ${ctx.orgId} and key = 'config.stage_template'
+        `)) as unknown as Array<{ value: StageTemplate | null }>;
+        stages = tmplRows[0]?.value?.stages ?? [];
+      }
       const skipped = new Set(preset.default_skipped_stage_keys ?? []);
       let firstActiveStageId: string | null = null;
       for (let i = 0; i < stages.length; i++) {
@@ -216,7 +280,7 @@ export async function createJobFromPreset(
           where org_id = ${ctx.orgId} and id = ${id}
         `);
       }
-      return { reference };
+      return { reference, blueprintRevisionId };
     },
   );
   return { id, reference: result.reference };
@@ -238,10 +302,18 @@ export type JobRow = {
   currentStageKey?: string | null;
 };
 
-export async function listJobs(ctx: Ctx, archetype: RoleArchetype): Promise<JobRow[]> {
+export async function listJobs(
+  ctx: Ctx,
+  archetype: RoleArchetype,
+  opts: {
+    /** H18 drill-down scope: narrow any role to its assigned jobs (the same
+     * resolver the dashboard's scoped aggregates use for managers). */
+    assignedOnly?: boolean;
+  } = {},
+): Promise<JobRow[]> {
   assertCan(archetype, "jobs.view");
-  // DoD (doc 06/F-6): the foreman sees ONLY assigned jobs.
-  const foreman = archetype === "foreman";
+  // DoD (doc 06/F-6): the foreman sees ONLY assigned jobs, always.
+  const scoped = archetype === "foreman" || opts.assignedOnly === true;
   const rows = (await withCtx(ctx, (tx) =>
     tx.execute(sql`
       select j.id::text as id, j.reference, j.name, j.status_key, j.status_category,
@@ -255,7 +327,7 @@ export async function listJobs(ctx: Ctx, archetype: RoleArchetype): Promise<JobR
       left join public.customer c on c.id = j.customer_id
       left join public.job_stage cs on cs.id = j.current_stage_id
       where j.org_id = ${ctx.orgId} and j.archived = false
-        ${foreman ? sql`and ${assignedJobCondition(ctx)}` : sql``}
+        ${scoped ? sql`and ${assignedJobCondition(ctx)}` : sql``}
       order by j.created_at desc
     `),
   )) as unknown as Array<{

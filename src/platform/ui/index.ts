@@ -4,6 +4,7 @@ export { BottomNav, type BottomNavItem } from "./BottomNav";
 export { Button, type ButtonProps } from "./Button";
 export { Card, CardHeader } from "./Card";
 export { EmptyState } from "./EmptyState";
+export { FilterBar } from "./FilterBar";
 export { OrgAvatar } from "./OrgAvatar";
 export { Dialog, type DialogProps } from "./Dialog";
 export { Field, type FieldProps } from "./Field";

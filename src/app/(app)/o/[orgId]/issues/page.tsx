@@ -1,11 +1,12 @@
 import { redirect } from "next/navigation";
-import { Badge, Button, Card, CardHeader, EmptyState } from "@/platform/ui";
+import { Badge, Button, Card, CardHeader, EmptyState, FilterBar } from "@/platform/ui";
 import { getT } from "@/platform/i18n/server";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { can } from "@/platform/authz";
 import { listIssues } from "@/modules/issues/service";
 import { ISSUE_SEVERITIES } from "@/platform/registries";
 import { raiseIssueAction, updateIssueStatusAction } from "./actions";
+import { issuesHref, parseIssuesSearch } from "@/modules/dashboard/service";
 
 const SEVERITY_TONE = {
   low: "neutral",
@@ -19,7 +20,7 @@ export default async function IssuesPage({
   searchParams,
 }: {
   params: Promise<{ orgId: string }>;
-  searchParams: Promise<{ ok?: string; error?: string }>;
+  searchParams: Promise<{ ok?: string; error?: string; view?: string }>;
 }) {
   const { orgId } = await params;
   const sp = await searchParams;
@@ -28,7 +29,10 @@ export default async function IssuesPage({
   const a = resolved.archetype;
   if (!can(a, "issues.raise")) redirect(`/o/${orgId}`);
   const t = await getT();
-  const issues = await listIssues(resolved.ctx, a, {});
+  // H18 drill-down contract: ?view=blocking shows exactly the open blocking
+  // issues behind the dashboard signal; unknown values are safely ignored.
+  const { blocking } = parseIssuesSearch(sp);
+  const issues = await listIssues(resolved.ctx, a, { blocking });
   const canResolve = can(a, "issues.resolve");
   const raise = raiseIssueAction.bind(null, orgId);
   const setStatus = updateIssueStatusAction.bind(null, orgId);
@@ -36,6 +40,14 @@ export default async function IssuesPage({
   return (
     <div className="flex flex-col gap-4">
       <h1 className="text-lg font-semibold text-ink">{t("issues.title")}</h1>
+      {blocking ? (
+        <FilterBar
+          summary={t("filters.issues.blocking")}
+          countLabel={t("filters.count", { count: issues.length })}
+          clearHref={issuesHref(orgId)}
+          clearLabel={t("jobs.filter_clear")}
+        />
+      ) : null}
       {sp.ok === "raised" ? (
         <p className="rounded-md bg-success-soft px-3 py-2 text-sm text-success">
           {t("issues.raised_notice")}
@@ -82,7 +94,10 @@ export default async function IssuesPage({
       </Card>
 
       {issues.length === 0 ? (
-        <EmptyState title={t("issues.empty")} />
+        <EmptyState
+          title={blocking ? t("filters.empty") : t("issues.empty")}
+          description={blocking ? t("filters.empty_hint") : undefined}
+        />
       ) : (
         <ul className="flex flex-col gap-2">
           {issues.map((i) => (
