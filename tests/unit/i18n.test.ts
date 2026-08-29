@@ -19,11 +19,12 @@ describe("catalog parity", () => {
     // S1: ICU placeholders are STRIPPED first — {job}/{jobs} argument names are
     // exactly the doc-07 mechanism; only LITERAL noun text is banned.
     const stripPlaceholders = (v: string) => v.replace(/\{[a-z_]+\}/gi, " ");
-    // H13: the homepage agent showcase and Business OS map are MARKETING copy
-    // naming canonical product surfaces ("Project Agent", "Projects, phases,
-    // tasks..."), not in-app strings a business can re-term. The doc-07 law
-    // covers workspace UI; these two namespaces are the documented exemption.
-    const EXEMPT = /^home\.(agents|os)\./;
+    // H13/H15: the homepage agent showcase, the Business OS map and the
+    // onboarding agent-name labels are copy naming canonical product surfaces
+    // ("Project Agent", "Projects, phases, tasks..."), not in-app strings a
+    // business can re-term. The doc-07 law covers workspace UI; these
+    // namespaces are the documented exemption.
+    const EXEMPT = /^(home\.(agents|os)|onboarding\.flow\.agent)\./;
     for (const [locale, cat] of [
       ["en", en],
       ["ar", ar],

@@ -66,21 +66,48 @@ export async function getDraft(userId: string): Promise<OnboardingDraft | null> 
   });
 }
 
+/** A guarded save found newer progress (another tab/session already moved the
+ * draft forward). The submitting screen's input is NOT silently merged — the
+ * caller reloads and shows the newest state with an explanation (Part E). */
+export class DraftConflictError extends Error {
+  constructor() {
+    super("the onboarding draft changed in another tab or session");
+    this.name = "DraftConflictError";
+  }
+}
+
 /** Upsert the draft (zod-validated) — the autosave on every step submit. Always
- * re-activates: a user restarting after completion gets a live draft again. */
+ * re-activates: a user restarting after completion gets a live draft again.
+ * When `expectedUpdatedAt` is passed, the save is OPTIMISTICALLY GUARDED: it
+ * only lands if the stored row is still the one the submitting screen saw —
+ * one browser tab can never silently overwrite newer progress from another. */
 export async function saveDraft(
   userId: string,
-  input: { data: DraftData; step: FlowStep },
+  input: { data: DraftData; step: FlowStep; expectedUpdatedAt?: string },
 ): Promise<void> {
   const data = DraftDataSchema.parse(input.data);
-  await withUserCtx(userId, (tx) =>
-    tx.execute(sql`
+  await withUserCtx(userId, async (tx) => {
+    if (input.expectedUpdatedAt) {
+      const updated = (await tx.execute(sql`
+        update public.onboarding_draft
+        set data = ${JSON.stringify(data)}::jsonb, step = ${input.step}, status = 'active'
+        where user_id = ${userId} and updated_at::text = ${input.expectedUpdatedAt}
+        returning user_id
+      `)) as unknown as Array<{ user_id: string }>;
+      if (updated.length > 0) return;
+      const exists = (await tx.execute(sql`
+        select 1 as x from public.onboarding_draft where user_id = ${userId}
+      `)) as unknown as Array<{ x: number }>;
+      if (exists.length > 0) throw new DraftConflictError();
+      // No row yet: fall through to the insert below (first save wins).
+    }
+    await tx.execute(sql`
       insert into public.onboarding_draft (user_id, data, step, status)
       values (${userId}, ${JSON.stringify(data)}::jsonb, ${input.step}, 'active')
       on conflict (user_id) do update
         set data = excluded.data, step = excluded.step, status = 'active'
-    `),
-  );
+    `);
+  });
 }
 
 export async function completeDraft(userId: string): Promise<void> {

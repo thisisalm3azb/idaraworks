@@ -20,20 +20,25 @@ import { BrandingError, LOGO_MAX_BYTES } from "@/modules/branding/service";
 import {
   applyStepAnswers,
   ConfirmChainError,
+  DraftConflictError,
   emptyDraftData,
   FlowValidationError,
   getDraft,
+  invalidatedAnswers,
   isFlowStep,
+  moduleFromSlug,
   nextStepAfter,
   removeDraftLogo,
   runConfirmChain,
   saveDraft,
   stashDraftLogo,
   TierSelectionSchema,
+  WorkspaceEditsSchema,
   type DraftData,
   type FlowStep,
   type OnboardingDraft,
 } from "@/modules/onboarding/service";
+import { configStringIssue } from "@/platform/config";
 
 const LOCALE_COOKIE_OPTS = { path: "/", sameSite: "lax" as const, maxAge: 60 * 60 * 24 * 365 };
 
@@ -50,8 +55,14 @@ async function loadDraftOrStart(userId: string): Promise<OnboardingDraft> {
   return { userId, data: emptyDraftData(), step: "welcome", status: "active", updatedAt: "" };
 }
 
-function toStep(step: FlowStep, error?: string): never {
-  redirect(`/onboarding?step=${step}${error ? `&error=${error}` : ""}`);
+function toStep(step: FlowStep, error?: string, extra?: string): never {
+  redirect(`/onboarding?step=${step}${error ? `&error=${error}` : ""}${extra ? `&${extra}` : ""}`);
+}
+
+/** The optimistic two-tab guard value posted with every step form (Part E). */
+function draftRev(formData: FormData): string | undefined {
+  const v = String(formData.get("draft_rev") ?? "").trim();
+  return v === "" ? undefined : v;
 }
 
 // ── Welcome → questionnaire ───────────────────────────────────────────────────
@@ -83,8 +94,21 @@ export async function saveStepAction(step: string, formData: FormData): Promise<
     throw err;
   }
 
-  const next = nextStepAfter(step);
-  await saveDraft(userId, { data, step: next });
+  // Part D: a changed earlier answer may retire later answers (a hidden
+  // branch). The retired keys are surfaced to the founder, never silent.
+  const retired = invalidatedAnswers(draft.data.answers, data.answers);
+
+  const next = nextStepAfter(step, data.answers);
+  try {
+    await saveDraft(userId, {
+      data,
+      step: next,
+      expectedUpdatedAt: draftRev(formData) ?? undefined,
+    });
+  } catch (err) {
+    if (err instanceof DraftConflictError) toStep(step, "stale_tab");
+    throw err;
+  }
 
   // Preferred-language answer flips the ACTIVE flow locale immediately (the
   // existing locale-cookie mechanism) and persists to the user profile.
@@ -97,7 +121,69 @@ export async function saveStepAction(step: string, formData: FormData): Promise<
       // Cookie already applied; profile persistence must not block the flow.
     });
   }
-  toStep(next);
+  toStep(next, undefined, retired.length > 0 ? `retired=${retired.join(",")}` : undefined);
+}
+
+// ── Review-step workspace edits (Part G: presentation and inclusion only) ─────
+export async function saveWorkspaceEditsAction(formData: FormData): Promise<void> {
+  const { userId } = await requireFlowUser();
+  const draft = await loadDraftOrStart(userId);
+
+  const modulesOff: string[] = [];
+  const modulesOn: string[] = [];
+  for (const key of new Set(formData.keys())) {
+    if (!key.startsWith("module:")) continue;
+    const slug = key.slice("module:".length);
+    if (!moduleFromSlug(slug)) toStep("review", "invalid");
+    if (String(formData.get(key)) === "on") modulesOn.push(slug);
+    else modulesOff.push(slug);
+  }
+  // Unchecked checkboxes are absent from FormData — the form posts a shadow
+  // field per rendered module so absence is distinguishable from off.
+  for (const key of new Set(formData.keys())) {
+    if (!key.startsWith("module_seen:")) continue;
+    const slug = key.slice("module_seen:".length);
+    if (!moduleFromSlug(slug)) toStep("review", "invalid");
+    if (!formData.has(`module:${slug}`) && !modulesOff.includes(slug)) modulesOff.push(slug);
+  }
+
+  const agentsOff: string[] = [];
+  for (const key of new Set(formData.keys())) {
+    if (!key.startsWith("agent_seen:")) continue;
+    const id = key.slice("agent_seen:".length);
+    if (!formData.has(`agent:${id}`)) agentsOff.push(id);
+  }
+
+  const roleNames: Record<string, { en?: string; ar?: string }> = {};
+  for (const key of new Set(formData.keys())) {
+    const m = /^role_(en|ar):([a-z_]{2,30})$/.exec(key);
+    if (!m) continue;
+    const value = String(formData.get(key) ?? "").trim();
+    if (value === "") continue;
+    if (value.length > 60 || configStringIssue(value, 60) !== null) toStep("review", "invalid");
+    roleNames[m[2]!] = { ...roleNames[m[2]!], [m[1]!]: value };
+  }
+
+  const parsed = WorkspaceEditsSchema.safeParse({
+    modules_off: modulesOff,
+    modules_on: modulesOn,
+    agents_off: agentsOff,
+    ...(Object.keys(roleNames).length > 0 ? { role_names: roleNames } : {}),
+  });
+  if (!parsed.success) toStep("review", "invalid");
+
+  const data: DraftData = { ...draft.data, workspace: parsed.data };
+  try {
+    await saveDraft(userId, {
+      data,
+      step: "review",
+      expectedUpdatedAt: draftRev(formData) ?? undefined,
+    });
+  } catch (err) {
+    if (err instanceof DraftConflictError) toStep("review", "stale_tab");
+    throw err;
+  }
+  toStep("review", undefined, "saved=1");
 }
 
 // ── Template selection ────────────────────────────────────────────────────────

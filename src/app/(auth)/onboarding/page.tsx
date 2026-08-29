@@ -1,15 +1,16 @@
 /**
- * U4 — the first-login experience: the full pre-org onboarding journey.
- * Welcome → questionnaire (business/region/scale/work/needs) → template
- * recommendation → configuration proposal → subscription selection → branding
- * → review → EXPLICIT CONFIRM (org + template application) → dashboard.
+ * H15 — the Intelligent Clay onboarding journey (first-login, pre-org).
+ * Welcome → about your business → customers → delivery → team → materials
+ * (branched) → money → priorities → template + terminology → plan → branding
+ * → review (the workspace proposal, editable) → EXPLICIT CONFIRM (org +
+ * template + H14 blueprint lifecycle) → workspace.
  *
- * The draft autosaves on every step submit (migration 0073 onboarding_draft,
- * user-scoped RLS) — refresh/logout/login resume to the saved step; ?step=
- * deep-links are clamped to what the answers actually allow. Users who already
- * have a workspace (e.g. invite acceptors) never see this flow — except a
- * founder whose confirm chain created the org but failed mid-way, who resumes
- * at review to finish honestly.
+ * The draft autosaves on every step submit (0073 onboarding_draft, user-scoped
+ * RLS) with an optimistic two-tab guard; refresh/logout/login resume to the
+ * saved step; ?step= deep-links are clamped to what the answers allow. Users
+ * who already have a workspace (invite acceptors) never see this flow — except
+ * a founder whose confirm chain created the org but failed mid-way, who
+ * resumes at review to finish honestly.
  */
 import { redirect } from "next/navigation";
 import { AppShell, Badge } from "@/platform/ui";
@@ -21,17 +22,22 @@ import {
   emptyDraftData,
   getDraft,
   resolveStep,
+  sectionForStep,
   stepProgressPct,
   stepsRemaining,
-  FLOW_STEPS,
+  JOURNEY_SECTIONS,
+  visibleSteps,
   type DraftData,
   type FlowStep,
 } from "@/modules/onboarding/service";
 import {
   BrandingStep,
   BusinessStep,
-  NeedsStep,
+  CustomersStep,
+  MaterialsStep,
+  MoneyStep,
   PlanStep,
+  PrioritiesStep,
   ProposalStep,
   RegionStep,
   ReviewStep,
@@ -48,12 +54,13 @@ const ERROR_CODES = new Set([
   "incomplete",
   "in_progress",
   "failed",
+  "stale_tab",
 ]);
 
 export default async function OnboardingFlowPage({
   searchParams,
 }: {
-  searchParams: Promise<{ step?: string; error?: string }>;
+  searchParams: Promise<{ step?: string; error?: string; retired?: string; saved?: string }>;
 }) {
   const sp = await searchParams;
   const user = await getSessionUser();
@@ -78,12 +85,26 @@ export default async function OnboardingFlowPage({
   const t = await getT();
   const locale = await getServerLocale();
   const view = buildSelectionView();
-  const idx = FLOW_STEPS.indexOf(effectiveStep);
-  const pct = stepProgressPct(effectiveStep);
-  const remaining = stepsRemaining(effectiveStep);
+  const pct = stepProgressPct(effectiveStep, data.answers);
+  const remaining = stepsRemaining(effectiveStep, data.answers);
   const error = sp.error && ERROR_CODES.has(sp.error) ? sp.error : null;
+  const retired = (sp.retired ?? "")
+    .split(",")
+    .filter((k) => /^[a-z_]{2,40}$/.test(k))
+    .slice(0, 6);
+  const saved = sp.saved === "1";
+  const draftRev = activeDraft?.updatedAt ?? "";
 
-  const stepProps = { t, locale, data };
+  const currentSection = sectionForStep(effectiveStep);
+  const sections = JOURNEY_SECTIONS.filter((s) =>
+    s.steps.some((x) => visibleSteps(data.answers).includes(x)),
+  );
+  const sectionIdx = Math.max(
+    0,
+    sections.findIndex((s) => s.key === currentSection),
+  );
+
+  const stepProps = { t, locale, data, draftRev };
   const body = (() => {
     switch (effectiveStep) {
       case "welcome":
@@ -92,12 +113,18 @@ export default async function OnboardingFlowPage({
         return <BusinessStep {...stepProps} />;
       case "region":
         return <RegionStep {...stepProps} />;
-      case "scale":
-        return <ScaleStep {...stepProps} />;
+      case "customers":
+        return <CustomersStep {...stepProps} />;
       case "work":
         return <WorkStep {...stepProps} />;
-      case "needs":
-        return <NeedsStep {...stepProps} />;
+      case "scale":
+        return <ScaleStep {...stepProps} />;
+      case "materials":
+        return <MaterialsStep {...stepProps} />;
+      case "money":
+        return <MoneyStep {...stepProps} />;
+      case "priorities":
+        return <PrioritiesStep {...stepProps} />;
       case "template":
         return <TemplateStep {...stepProps} />;
       case "proposal":
@@ -107,13 +134,12 @@ export default async function OnboardingFlowPage({
       case "branding":
         return <BrandingStep {...stepProps} />;
       case "review":
-        return <ReviewStep {...stepProps} view={view} />;
+        return <ReviewStep {...stepProps} view={view} saved={saved} />;
     }
   })();
 
-  // The plan step shows four side-by-side tier cards — it needs the full width the
-  // settings page has (review F1: max-w-2xl crushed the 4-up grid to ~148px columns
-  // on the founder's purchase screen). Every other step is a single-column form.
+  // The plan step shows four side-by-side tier cards — it needs the full width
+  // the settings page has; every other step is a single-column form.
   const wide = effectiveStep === "plan";
 
   return (
@@ -121,15 +147,16 @@ export default async function OnboardingFlowPage({
       <div className={`mx-auto flex w-full flex-col gap-4 ${wide ? "max-w-6xl" : "max-w-2xl"}`}>
         {effectiveStep !== "welcome" ? (
           <div className="flex flex-col gap-1.5">
-            <div className="flex items-center justify-between text-xs text-ink-muted">
-              <span>
-                {t("onboarding.flow.progress", {
-                  current: idx,
-                  total: FLOW_STEPS.length - 1,
-                })}
+            {/* Labeled journey progress (Part J): named sections, not dots. */}
+            <div className="flex items-center justify-between gap-3 text-xs text-ink-muted">
+              <span className="font-medium text-ink">
+                {currentSection ? t(`onboarding.flow.section.${currentSection}`) : ""}
               </span>
-              <span dir="ltr" className="font-mono">
-                {pct}%
+              <span>
+                {t("onboarding.flow.section_progress", {
+                  current: sectionIdx + 1,
+                  total: sections.length,
+                })}
               </span>
             </div>
             <div
@@ -137,22 +164,30 @@ export default async function OnboardingFlowPage({
               aria-valuenow={pct}
               aria-valuemin={0}
               aria-valuemax={100}
-              aria-label={t("onboarding.flow.progress", {
-                current: idx,
-                total: FLOW_STEPS.length - 1,
+              aria-label={t("onboarding.flow.section_progress", {
+                current: sectionIdx + 1,
+                total: sections.length,
               })}
               className="h-1.5 w-full overflow-hidden rounded-full bg-sunken"
             >
               <div
-                className="h-full rounded-full bg-brand transition-all"
+                className="h-full rounded-full bg-brand motion-safe:transition-all"
                 style={{ width: `${pct}%` }}
               />
             </div>
-            {remaining > 0 ? (
-              <p className="text-xs text-ink-muted">
-                {t("onboarding.flow.remaining", { count: remaining })}
-              </p>
-            ) : null}
+            <div className="flex items-center justify-between gap-3 text-xs text-ink-muted">
+              {remaining > 0 ? (
+                <p>{t("onboarding.flow.remaining", { count: remaining })}</p>
+              ) : (
+                <span />
+              )}
+              {/* Calm autosave indicator (Part E): announced to screen readers. */}
+              {draftRev ? (
+                <p role="status" aria-live="polite">
+                  {t("onboarding.flow.saved_note")}
+                </p>
+              ) : null}
+            </div>
           </div>
         ) : null}
 
@@ -160,6 +195,16 @@ export default async function OnboardingFlowPage({
           <div role="alert">
             <Badge tone="danger">{t(`onboarding.flow.error.${error}`)}</Badge>
           </div>
+        ) : null}
+
+        {retired.length > 0 ? (
+          <p role="status" className="rounded-md bg-warning-soft p-3 text-sm text-warning">
+            {t("onboarding.flow.retired_note", {
+              items: retired
+                .map((k) => t(`onboarding.journey.answer_name.${k}`))
+                .join(locale === "ar" ? "، " : ", "),
+            })}
+          </p>
         ) : null}
 
         {body}

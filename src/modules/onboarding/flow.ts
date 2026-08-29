@@ -94,6 +94,30 @@ export type CapabilityChip = (typeof CAPABILITY_CHIPS)[number];
 
 export const DEVICES = ["desktop", "mobile", "both"] as const;
 
+// ── H15 Intelligent Clay journey vocabularies ────────────────────────────────
+/** Mirrors the workspace registry's CUSTOMER_TYPES (parity-tested). */
+export const CUSTOMER_TYPE_CHOICES = ["businesses", "consumers", "government", "mixed"] as const;
+/** Mirrors the workspace registry's REVENUE_MODELS (parity-tested). */
+export const REVENUE_CHOICES = [
+  "fixed_price",
+  "time_and_materials",
+  "product_sales",
+  "recurring",
+  "milestone_billing",
+] as const;
+/** Three-state answer: "not_sure" always resolves to a safe recommendation. */
+export const TRI = ["yes", "no", "not_sure"] as const;
+export type Tri = (typeof TRI)[number];
+export const YESNO = ["yes", "no"] as const;
+/** Management-priority focus (drives the owner dashboard emphasis). */
+export const PRIORITY_FOCUS = ["delivery", "collections", "team", "customers", "costs"] as const;
+export type PriorityFocus = (typeof PRIORITY_FOCUS)[number];
+
+/** The version of the journey (question set + branching). Stored on every
+ * draft; a draft from an older journey resumes at its first incomplete step
+ * with every still-valid answer preserved (Part I: schema-change return). */
+export const JOURNEY_VERSION = 2;
+
 // ── Country-driven defaults (timezone / currency; the region step prefills) ──
 export const COUNTRY_DEFAULTS: Record<
   (typeof SUPPORTED_COUNTRIES)[number],
@@ -139,9 +163,58 @@ export const DraftAnswersSchema = z
     device: z.enum(DEVICES).optional(),
     customer_sharing: z.boolean().optional(),
     main_problem: z.string().trim().max(600).optional(),
+    // H15 journey answers (all optional until their step completes).
+    customer_types: z.array(z.enum(CUSTOMER_TYPE_CHOICES)).max(4).optional(),
+    revenue_models: z.array(z.enum(REVENUE_CHOICES)).max(REVENUE_CHOICES.length).optional(),
+    buys_materials: z.enum(TRI).optional(),
+    holds_stock: z.enum(TRI).optional(),
+    receives_deliveries: z.enum(TRI).optional(),
+    sends_quotes: z.enum(YESNO).optional(),
+    sends_invoices: z.enum(TRI).optional(),
+    collects_payments: z.enum(YESNO).optional(),
+    records_expenses: z.enum(YESNO).optional(),
+    tracks_costs: z.enum(TRI).optional(),
+    vat_registered_q: z.enum(TRI).optional(),
+    priority_focus: z.enum(PRIORITY_FOCUS).optional(),
   })
   .strict();
 export type DraftAnswers = z.infer<typeof DraftAnswersSchema>;
+
+/** Review-step workspace edits (Part G): presentation and inclusion choices
+ * only — nothing here can grant entitlements or permissions (the blueprint
+ * builder re-derives, the H14 validator re-checks, the compiler intersects). */
+export const WorkspaceEditsSchema = z
+  .object({
+    /** Module slugs (without the internal prefix) the founder switched OFF. */
+    modules_off: z
+      .array(z.string().regex(/^[a-z_]{2,40}$/))
+      .max(20)
+      .optional(),
+    /** Module slugs the founder switched ON beyond the recommendation. */
+    modules_on: z
+      .array(z.string().regex(/^[a-z_]{2,40}$/))
+      .max(20)
+      .optional(),
+    /** Agents the founder marked not relevant. */
+    agents_off: z
+      .array(z.string().regex(/^[a-z_]{2,40}$/))
+      .max(12)
+      .optional(),
+    /** Organization-facing role names (labels only; authority unchanged). */
+    role_names: z
+      .record(
+        z.string().regex(/^[a-z_]{2,30}$/),
+        z
+          .object({
+            en: z.string().trim().max(60).optional(),
+            ar: z.string().trim().max(60).optional(),
+          })
+          .strict(),
+      )
+      .optional(),
+  })
+  .strict();
+export type WorkspaceEdits = z.infer<typeof WorkspaceEditsSchema>;
 
 export const TierSelectionSchema = z
   .object({
@@ -186,6 +259,9 @@ export const ConfirmStateSchema = z
     org_id: z.string().uuid().optional(),
     session_id: z.string().uuid().optional(),
     applied: z.boolean().optional(),
+    /** H15: the H14 workspace-blueprint revision created from the answers. */
+    blueprint_revision_id: z.string().uuid().optional(),
+    blueprint_applied: z.boolean().optional(),
     tier_recorded: z.boolean().optional(),
     branding_saved: z.boolean().optional(),
   })
@@ -214,6 +290,10 @@ export const DraftDataSchema = z
     tier: TierSelectionSchema.optional(),
     branding: DraftBrandingSchema.default({}),
     confirm: ConfirmStateSchema.default({}),
+    /** H15 review-step workspace edits (Part G). */
+    workspace: WorkspaceEditsSchema.default({}),
+    /** The journey version this draft was last saved under (Part E). */
+    journey_version: z.number().int().min(1).max(99).default(JOURNEY_VERSION),
   })
   .strict();
 export type DraftData = z.infer<typeof DraftDataSchema>;
@@ -222,14 +302,17 @@ export function emptyDraftData(): DraftData {
   return DraftDataSchema.parse({});
 }
 
-// ── Step registry ─────────────────────────────────────────────────────────────
+// ── Step registry (H15 journey order) ────────────────────────────────────────
 export const FLOW_STEPS = [
   "welcome",
   "business",
   "region",
-  "scale",
+  "customers",
   "work",
-  "needs",
+  "scale",
+  "materials",
+  "money",
+  "priorities",
   "template",
   "proposal",
   "plan",
@@ -242,22 +325,71 @@ export function isFlowStep(v: unknown): v is FlowStep {
   return typeof v === "string" && (FLOW_STEPS as readonly string[]).includes(v);
 }
 
-export function nextStepAfter(step: FlowStep): FlowStep {
-  const i = FLOW_STEPS.indexOf(step);
-  return FLOW_STEPS[Math.min(i + 1, FLOW_STEPS.length - 1)]!;
+/** The outcome-oriented journey sections (Part B) — each groups flow steps.
+ * The confirm moment lives on the review screen. */
+export const JOURNEY_SECTIONS = [
+  { key: "about", steps: ["business", "region"] },
+  { key: "customers", steps: ["customers"] },
+  { key: "delivery", steps: ["work"] },
+  { key: "team", steps: ["scale"] },
+  { key: "materials", steps: ["materials"] },
+  { key: "money", steps: ["money"] },
+  { key: "priorities", steps: ["priorities"] },
+  { key: "language", steps: ["template", "proposal"] },
+  { key: "review", steps: ["plan", "branding", "review"] },
+] as const satisfies ReadonlyArray<{ key: string; steps: readonly FlowStep[] }>;
+export type JourneySectionKey = (typeof JOURNEY_SECTIONS)[number]["key"];
+
+export function sectionForStep(step: FlowStep): JourneySectionKey | null {
+  for (const s of JOURNEY_SECTIONS) {
+    if ((s.steps as readonly FlowStep[]).includes(step)) return s.key;
+  }
+  return null; // welcome
 }
 
-export function prevStepBefore(step: FlowStep): FlowStep {
-  const i = FLOW_STEPS.indexOf(step);
-  return FLOW_STEPS[Math.max(i - 1, 0)]!;
+// ── Step-level branching (Part D: adaptive, deterministic) ───────────────────
+/** BRANCH-1: the materials/purchasing step is asked only when the business
+ * plausibly handles physical goods. A consulting-style business (industry
+ * "other" with only service/recurring patterns) is never asked warehouse
+ * questions. Deterministic in (answers, JOURNEY_VERSION). */
+export function askMaterialsStep(a: DraftAnswers): boolean {
+  if (a.industry !== undefined && a.industry !== "other") return true;
+  const p = a.work_patterns ?? [];
+  return p.some((x) => x === "project" || x === "order" || x === "production" || x === "retail");
 }
 
-export function stepProgressPct(step: FlowStep): number {
-  return Math.round((FLOW_STEPS.indexOf(step) / (FLOW_STEPS.length - 1)) * 100);
+/** The steps this draft's answers actually produce, in order (branching). */
+export function visibleSteps(a: DraftAnswers): FlowStep[] {
+  return FLOW_STEPS.filter((s) => (s === "materials" ? askMaterialsStep(a) : true));
 }
 
-export function stepsRemaining(step: FlowStep): number {
-  return FLOW_STEPS.length - 1 - FLOW_STEPS.indexOf(step);
+export function nextStepAfter(step: FlowStep, a: DraftAnswers): FlowStep {
+  const steps = visibleSteps(a);
+  const i = steps.indexOf(step);
+  if (i === -1) {
+    // The step itself is branched away — continue at the next visible one.
+    const gi = FLOW_STEPS.indexOf(step);
+    return steps.find((s) => FLOW_STEPS.indexOf(s) > gi) ?? steps[steps.length - 1]!;
+  }
+  return steps[Math.min(i + 1, steps.length - 1)]!;
+}
+
+export function prevStepBefore(step: FlowStep, a: DraftAnswers): FlowStep {
+  const steps = visibleSteps(a);
+  const i = steps.indexOf(step);
+  if (i === -1) return "welcome";
+  return steps[Math.max(i - 1, 0)]!;
+}
+
+export function stepProgressPct(step: FlowStep, a: DraftAnswers): number {
+  const steps = visibleSteps(a);
+  const i = Math.max(0, steps.indexOf(step));
+  return Math.round((i / (steps.length - 1)) * 100);
+}
+
+export function stepsRemaining(step: FlowStep, a: DraftAnswers): number {
+  const steps = visibleSteps(a);
+  return steps.length - 1 - Math.max(0, steps.indexOf(step));
 }
 
 // ── Question-level skip rules (documented in docs/ux/ONBOARDING_FLOW.md) ─────
@@ -267,7 +399,8 @@ export function askUsersBand(a: DraftAnswers): boolean {
   return a.employees_band !== "1-5";
 }
 
-/** SKIP-2: a 1–5-person business is not asked to name departments. */
+/** SKIP-2: a 1–5-person business is not asked to name departments (a solo
+ * operator is never forced through department design). */
 export function askDepartments(a: DraftAnswers): boolean {
   return a.employees_band !== undefined && a.employees_band !== "1-5";
 }
@@ -279,11 +412,20 @@ export function askWorkflowDescription(a: DraftAnswers): boolean {
   return p.length > 0 && p.some((x) => x !== "retail" && x !== "recurring");
 }
 
-/** SKIP-4: external customer sharing is only asked when a customer-facing
- * capability (quotes / invoices / customer updates) was requested. */
-export function askCustomerSharing(a: DraftAnswers): boolean {
-  const c = a.capabilities ?? [];
-  return (["quotes", "invoices", "customer_updates"] as const).some((k) => c.includes(k));
+/** SKIP-5: deliveries are only asked about when the business buys materials. */
+export function askReceivesDeliveries(a: DraftAnswers): boolean {
+  return a.buys_materials === "yes";
+}
+
+/** SKIP-6: payment collection is only asked when invoices are sent. */
+export function askCollectsPayments(a: DraftAnswers): boolean {
+  return a.sends_invoices === "yes";
+}
+
+/** SKIP-7: per-work cost tracking only fits engagement-style work. */
+export function askTracksCosts(a: DraftAnswers): boolean {
+  const p = a.work_patterns ?? [];
+  return p.some((x) => x === "project" || x === "order" || x === "service" || x === "production");
 }
 
 // ── Per-step form application (validation + skip-consistency) ────────────────
@@ -361,28 +503,81 @@ export function applyStepAnswers(data: DraftData, step: FlowStep, form: StepForm
       }
       break;
     }
+    case "customers": {
+      const types = arr(form.customer_types) as DraftAnswers["customer_types"];
+      if (!types || types.length === 0) missing.push("customer_types");
+      answers.customer_types = types;
+      answers.work_intake = arr(form.work_intake) as DraftAnswers["work_intake"];
+      const sharing = str(form.customer_sharing);
+      if (sharing === undefined) missing.push("customer_sharing");
+      answers.customer_sharing = sharing === "yes";
+      break;
+    }
     case "work": {
       const patterns = arr(form.work_patterns) as WorkPattern[];
       if (patterns.length === 0) missing.push("work_patterns");
       answers.work_patterns = patterns;
-      answers.work_intake = arr(form.work_intake) as DraftAnswers["work_intake"];
       if (askWorkflowDescription(answers)) {
         answers.workflow_description = str(form.workflow_description);
       } else {
         delete answers.workflow_description; // SKIP-3
       }
+      // BRANCH-1 re-evaluation: if the changed patterns hide the materials
+      // step, its answers are dropped (recorded as invalidated by the journey
+      // engine and shown to the founder — never silently kept as stale truth).
+      if (!askMaterialsStep(answers)) {
+        delete answers.buys_materials;
+        delete answers.holds_stock;
+        delete answers.receives_deliveries;
+      }
       break;
     }
-    case "needs": {
-      answers.capabilities = arr(form.capabilities) as CapabilityChip[];
-      answers.device = need("device", str(form.device) as DraftAnswers["device"]);
-      if (askCustomerSharing(answers)) {
-        const v = str(form.customer_sharing);
-        if (v === undefined) missing.push("customer_sharing");
-        answers.customer_sharing = v === "yes";
+    case "materials": {
+      answers.buys_materials = need("buys_materials", str(form.buys_materials) as Tri | undefined);
+      answers.holds_stock = need("holds_stock", str(form.holds_stock) as Tri | undefined);
+      if (askReceivesDeliveries(answers)) {
+        answers.receives_deliveries = need(
+          "receives_deliveries",
+          str(form.receives_deliveries) as Tri | undefined,
+        );
       } else {
-        delete answers.customer_sharing; // SKIP-4: derived false
+        delete answers.receives_deliveries; // SKIP-5
       }
+      break;
+    }
+    case "money": {
+      answers.revenue_models = arr(form.revenue_models) as DraftAnswers["revenue_models"];
+      const q = str(form.sends_quotes);
+      if (q === undefined) missing.push("sends_quotes");
+      answers.sends_quotes = q as DraftAnswers["sends_quotes"];
+      answers.sends_invoices = need("sends_invoices", str(form.sends_invoices) as Tri | undefined);
+      if (askCollectsPayments(answers)) {
+        const p = str(form.collects_payments);
+        if (p === undefined) missing.push("collects_payments");
+        answers.collects_payments = p as DraftAnswers["collects_payments"];
+      } else {
+        delete answers.collects_payments; // SKIP-6
+      }
+      const e = str(form.records_expenses);
+      if (e === undefined) missing.push("records_expenses");
+      answers.records_expenses = e as DraftAnswers["records_expenses"];
+      if (askTracksCosts(answers)) {
+        answers.tracks_costs = need("tracks_costs", str(form.tracks_costs) as Tri | undefined);
+      } else {
+        delete answers.tracks_costs; // SKIP-7
+      }
+      answers.vat_registered_q = need(
+        "vat_registered_q",
+        str(form.vat_registered_q) as Tri | undefined,
+      );
+      break;
+    }
+    case "priorities": {
+      answers.priority_focus = need(
+        "priority_focus",
+        str(form.priority_focus) as PriorityFocus | undefined,
+      );
+      answers.device = need("device", str(form.device) as DraftAnswers["device"]);
       answers.main_problem = str(form.main_problem);
       break;
     }
@@ -405,12 +600,30 @@ export function stepComplete(step: FlowStep, data: DraftData): boolean {
       return !!a.business_name && !!a.industry;
     case "region":
       return !!a.country && !!a.timezone && !!a.base_currency && !!a.preferred_language;
-    case "scale":
-      return !!a.employees_band && !!a.locations_band && (!askUsersBand(a) || !!a.users_band);
+    case "customers":
+      return (a.customer_types ?? []).length > 0 && a.customer_sharing !== undefined;
     case "work":
       return (a.work_patterns ?? []).length > 0;
-    case "needs":
-      return !!a.device && (!askCustomerSharing(a) || a.customer_sharing !== undefined);
+    case "scale":
+      return !!a.employees_band && !!a.locations_band && (!askUsersBand(a) || !!a.users_band);
+    case "materials":
+      return (
+        !askMaterialsStep(a) ||
+        (!!a.buys_materials &&
+          !!a.holds_stock &&
+          (!askReceivesDeliveries(a) || !!a.receives_deliveries))
+      );
+    case "money":
+      return (
+        !!a.sends_quotes &&
+        !!a.sends_invoices &&
+        (!askCollectsPayments(a) || !!a.collects_payments) &&
+        !!a.records_expenses &&
+        (!askTracksCosts(a) || !!a.tracks_costs) &&
+        !!a.vat_registered_q
+      );
+    case "priorities":
+      return !!a.priority_focus && !!a.device;
     case "template":
       return !!data.template.selected_key && data.template.selected_key in TEMPLATES;
     case "proposal":
@@ -424,25 +637,29 @@ export function stepComplete(step: FlowStep, data: DraftData): boolean {
   }
 }
 
-/** The furthest step the founder may open: every screen BEFORE it must be
- * complete. Deep-linking further redirects here (resume lands here too). */
+/** The furthest step the founder may open: every VISIBLE screen BEFORE it
+ * must be complete. Deep-linking further redirects here (resume lands here). */
 export function firstIncompleteStep(data: DraftData): FlowStep {
-  for (const step of FLOW_STEPS) {
+  const steps = visibleSteps(data.answers);
+  for (const step of steps) {
     if (step === "welcome") continue;
-    const idx = FLOW_STEPS.indexOf(step);
-    const prior = FLOW_STEPS.slice(1, idx); // welcome never gates
+    const idx = steps.indexOf(step);
+    const prior = steps.slice(1, idx); // welcome never gates
     if (!prior.every((s) => stepComplete(s, data))) return step;
     if (!stepComplete(step, data) && step !== "review") return step;
   }
   return "review";
 }
 
-/** Clamp a requested step to what the draft's data actually allows. */
+/** Clamp a requested step to what the draft's data actually allows. A step
+ * branched away by the answers resolves to the gate (fail safe). */
 export function resolveStep(requested: string | undefined, data: DraftData): FlowStep {
   const target = isFlowStep(requested) ? requested : "welcome";
   if (target === "welcome") return "welcome";
+  const steps = visibleSteps(data.answers);
   const gate = firstIncompleteStep(data);
-  return FLOW_STEPS.indexOf(target) <= FLOW_STEPS.indexOf(gate) ? target : gate;
+  if (!steps.includes(target)) return gate;
+  return steps.indexOf(target) <= steps.indexOf(gate) ? target : gate;
 }
 
 // ── Answers → classifier input (the EXISTING classifier; input composition only) ──
@@ -485,6 +702,11 @@ export function buildClassifierText(a: DraftAnswers): string {
     a.industry ? INDUSTRY_HINTS[a.industry] : "",
     ...(a.work_patterns ?? []).map((p) => PATTERN_HINTS[p]),
     ...(a.capabilities ?? []).map((c) => CAPABILITY_HINTS[c] ?? ""),
+    // H15 journey signals (same honest, catalogue-aligned hint words).
+    a.buys_materials === "yes" ? "purchasing suppliers" : "",
+    a.holds_stock === "yes" ? "inventory stock" : "",
+    a.receives_deliveries === "yes" ? "goods receiving" : "",
+    a.tracks_costs === "yes" ? "costing" : "",
   ];
   return parts
     .filter((s) => s !== "")
@@ -571,7 +793,8 @@ export function draftToIntake(data: DraftData): OnboardingIntake {
     base_currency: a.base_currency!,
     languages: a.preferred_language === "ar" ? ["ar", "en"] : ["en", "ar"],
     six_day_week: false,
-    vat_registered: false,
+    // H15: asked on the money step; "not sure" resolves to the safe default.
+    vat_registered: a.vat_registered_q === "yes",
     ...(jobEn ? { job_term_en: jobEn } : {}),
     ...(jobAr ? { job_term_ar: jobAr } : {}),
     approval_auto_approve_below: {},
@@ -584,9 +807,9 @@ export function effectiveUsersBand(a: DraftAnswers): (typeof USER_BANDS)[number]
   return askUsersBand(a) ? a.users_band : "1-3";
 }
 
-/** Derived (never stored) customer-sharing answer when SKIP-4 applied. */
+/** The sharing answer with its safe default (asked on the customers step). */
 export function effectiveCustomerSharing(a: DraftAnswers): boolean {
-  return askCustomerSharing(a) ? (a.customer_sharing ?? false) : false;
+  return a.customer_sharing ?? false;
 }
 
 // ── Tier-selection recording shape (app_settings 'subscription.selected_tier') ──

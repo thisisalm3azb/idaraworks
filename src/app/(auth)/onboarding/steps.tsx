@@ -15,13 +15,19 @@ import type { Locale } from "@/platform/registries";
 import type { Translator } from "@/platform/i18n/server";
 import { getCatalogueEntry, TEMPLATES, type TemplateCatalogueEntry } from "@/platform/config";
 import {
+  buildBlueprintFromDraft,
   buildGroundedProposal,
   buildReviewSummary,
   draftToIntake,
+  modulesForDraft,
+  moduleSlug,
   prevStepBefore,
   recommendationForDraft,
-  CAPABILITY_CHIPS,
+  recommendAgents,
+  recommendRoles,
+  ROLE_DEFAULT_NAMES,
   COUNTRY_DEFAULTS,
+  CUSTOMER_TYPE_CHOICES,
   DEPARTMENTS,
   DEVICES,
   EMPLOYEE_BANDS,
@@ -29,12 +35,18 @@ import {
   FLOW_TIMEZONES,
   INDUSTRIES,
   LOCATION_BANDS,
+  PRIORITY_FOCUS,
+  REVENUE_CHOICES,
+  TRI,
   USER_BANDS,
   WORK_INTAKE,
   WORK_PATTERNS,
+  askTracksCosts,
   type DraftData,
   type FlowStep,
+  type ModuleRecommendation,
 } from "@/modules/onboarding/service";
+import { validateBlueprint } from "@/platform/workspace";
 import {
   chooseTemplateAction,
   confirmFlowAction,
@@ -42,6 +54,7 @@ import {
   saveBrandingStepAction,
   saveProposalTermsAction,
   saveStepAction,
+  saveWorkspaceEditsAction,
   selectCustomAction,
   selectFreeAction,
   selectTierFlowAction,
@@ -56,6 +69,8 @@ export type StepProps = {
   t: Translator;
   locale: Locale;
   data: DraftData;
+  /** The stored draft's updated_at — the optimistic two-tab guard (Part E). */
+  draftRev: string;
 };
 
 const field = "flex flex-col gap-1.5 text-sm font-medium text-ink";
@@ -71,14 +86,70 @@ function stepHref(step: FlowStep): string {
   return `/onboarding?step=${step}`;
 }
 
-function NavRow({ t, step, nextLabel }: { t: Translator; step: FlowStep; nextLabel?: string }) {
+function NavRow({
+  t,
+  step,
+  data,
+  draftRev,
+  nextLabel,
+}: {
+  t: Translator;
+  step: FlowStep;
+  data: DraftData;
+  draftRev?: string;
+  nextLabel?: string;
+}) {
   return (
     <div className="mt-2 flex items-center justify-between gap-3">
-      <Link href={stepHref(prevStepBefore(step))} className={backLinkCls}>
+      {draftRev !== undefined ? <input type="hidden" name="draft_rev" value={draftRev} /> : null}
+      <Link href={stepHref(prevStepBefore(step, data.answers))} className={backLinkCls}>
         {t("onboarding.flow.back")}
       </Link>
       <Button type="submit">{nextLabel ?? t("onboarding.flow.next")}</Button>
     </div>
+  );
+}
+
+/** A three-state (yes / no / not sure) or yes/no question as one fieldset. */
+function TriQuestion({
+  t,
+  name,
+  label,
+  helpText,
+  value,
+  options,
+  className,
+  markerClass,
+}: {
+  t: Translator;
+  name: string;
+  label: string;
+  helpText?: string;
+  value: string | undefined;
+  options: readonly string[];
+  className?: string;
+  markerClass?: string;
+}) {
+  return (
+    <fieldset className={`flex flex-col gap-1.5 ${className ?? ""}`}>
+      <legend className="mb-1.5 text-sm font-medium text-ink">{label}</legend>
+      <div className="flex flex-wrap gap-2">
+        {options.map((v) => (
+          <label key={v} className={chipCls}>
+            <input
+              type="radio"
+              name={name}
+              value={v}
+              defaultChecked={value === v}
+              required
+              className={`size-4 accent-current ${markerClass && v === "yes" ? markerClass : ""}`}
+            />
+            {t(`onboarding.flow.answer.${v}`)}
+          </label>
+        ))}
+      </div>
+      {helpText ? <span className={help}>{helpText}</span> : null}
+    </fieldset>
   );
 }
 
@@ -172,7 +243,7 @@ export function WelcomeStep({ t }: StepProps) {
 }
 
 // ── Business ──────────────────────────────────────────────────────────────────
-export function BusinessStep({ t, data }: StepProps) {
+export function BusinessStep({ t, data, draftRev }: StepProps) {
   const a = data.answers;
   return (
     <Card>
@@ -227,14 +298,14 @@ export function BusinessStep({ t, data }: StepProps) {
           />
           <span className={help}>{t("onboarding.flow.business.description_help")}</span>
         </label>
-        <NavRow t={t} step="business" />
+        <NavRow t={t} step="business" data={data} draftRev={draftRev} />
       </form>
     </Card>
   );
 }
 
 // ── Region ────────────────────────────────────────────────────────────────────
-export function RegionStep({ t, locale, data }: StepProps) {
+export function RegionStep({ t, locale, data, draftRev }: StepProps) {
   const a = data.answers;
   const country = a.country ?? "AE";
   const d = COUNTRY_DEFAULTS[country];
@@ -284,14 +355,14 @@ export function RegionStep({ t, locale, data }: StepProps) {
           </div>
           <span className={help}>{t("onboarding.flow.region.language_help")}</span>
         </fieldset>
-        <NavRow t={t} step="region" />
+        <NavRow t={t} step="region" data={data} draftRev={draftRev} />
       </form>
     </Card>
   );
 }
 
 // ── Scale ─────────────────────────────────────────────────────────────────────
-export function ScaleStep({ t, data }: StepProps) {
+export function ScaleStep({ t, data, draftRev }: StepProps) {
   const a = data.answers;
   return (
     <Card>
@@ -375,7 +446,7 @@ export function ScaleStep({ t, data }: StepProps) {
             ))}
           </div>
         </fieldset>
-        <NavRow t={t} step="scale" />
+        <NavRow t={t} step="scale" data={data} draftRev={draftRev} />
       </form>
     </Card>
   );
@@ -385,7 +456,7 @@ export function ScaleStep({ t, data }: StepProps) {
 /** Patterns with a start-to-finish flow (SKIP-3 counterparts). */
 const FLOWFUL_PATTERNS = new Set(["project", "order", "service", "production", "mixed"]);
 
-export function WorkStep({ t, data }: StepProps) {
+export function WorkStep({ t, data, draftRev }: StepProps) {
   const a = data.answers;
   return (
     <Card>
@@ -410,6 +481,52 @@ export function WorkStep({ t, data }: StepProps) {
           </div>
         </fieldset>
 
+        {/* SKIP-3: shown only when a chosen pattern has a start-to-finish flow. */}
+        <label className={`${field} hidden group-has-[.pattern-flowful:checked]:flex`}>
+          <span>
+            {t("onboarding.flow.work.workflow")}{" "}
+            <span className="font-normal text-ink-muted">({t("onboarding.flow.optional")})</span>
+          </span>
+          <textarea
+            name="workflow_description"
+            maxLength={600}
+            rows={3}
+            defaultValue={a.workflow_description ?? ""}
+            className={`${input} text-base`}
+          />
+          <span className={help}>{t("onboarding.flow.work.workflow_help")}</span>
+        </label>
+        <NavRow t={t} step="work" data={data} draftRev={draftRev} />
+      </form>
+    </Card>
+  );
+}
+
+// ── Customers (how you win customers) ─────────────────────────────────────────
+export function CustomersStep({ t, data, draftRev }: StepProps) {
+  const a = data.answers;
+  return (
+    <Card>
+      <CardHeader title={t("onboarding.flow.customers.title")} />
+      <p className={`mb-3 ${help}`}>{t("onboarding.flow.customers.why")}</p>
+      <form action={saveStepAction.bind(null, "customers")} className="flex flex-col gap-4">
+        <fieldset className="flex flex-col gap-1.5">
+          <legend className="mb-1.5 text-sm font-medium text-ink">
+            {t("onboarding.flow.customers.types")}
+          </legend>
+          <div className="flex flex-wrap gap-2">
+            {CUSTOMER_TYPE_CHOICES.map((k) => (
+              <Chip
+                key={k}
+                name="customer_types"
+                value={k}
+                label={t(`onboarding.flow.customer_type.${k}`)}
+                checked={(a.customer_types ?? []).includes(k)}
+              />
+            ))}
+          </div>
+        </fieldset>
+
         <fieldset className="flex flex-col gap-1.5">
           <legend className="mb-1.5 text-sm font-medium text-ink">
             {t("onboarding.flow.work.intake")}{" "}
@@ -428,50 +545,179 @@ export function WorkStep({ t, data }: StepProps) {
           </div>
         </fieldset>
 
-        {/* SKIP-3: shown only when a chosen pattern has a start-to-finish flow. */}
-        <label className={`${field} hidden group-has-[.pattern-flowful:checked]:flex`}>
-          <span>
-            {t("onboarding.flow.work.workflow")}{" "}
-            <span className="font-normal text-ink-muted">({t("onboarding.flow.optional")})</span>
-          </span>
-          <textarea
-            name="workflow_description"
-            maxLength={600}
-            rows={3}
-            defaultValue={a.workflow_description ?? ""}
-            className={`${input} text-base`}
-          />
-          <span className={help}>{t("onboarding.flow.work.workflow_help")}</span>
-        </label>
-        <NavRow t={t} step="work" />
+        <fieldset className="flex flex-col gap-1.5">
+          <legend className="mb-1.5 text-sm font-medium text-ink">
+            {t("onboarding.flow.customers.sharing")}
+          </legend>
+          <span className={`mb-1 ${help}`}>{t("onboarding.flow.customers.sharing_help")}</span>
+          <div className="flex flex-wrap gap-2">
+            <RadioChip
+              name="customer_sharing"
+              value="yes"
+              label={t("onboarding.flow.answer.yes")}
+              checked={a.customer_sharing === true}
+              required
+            />
+            <RadioChip
+              name="customer_sharing"
+              value="no"
+              label={t("onboarding.flow.answer.no")}
+              checked={a.customer_sharing === false}
+              required
+            />
+          </div>
+        </fieldset>
+        <NavRow t={t} step="customers" data={data} draftRev={draftRev} />
       </form>
     </Card>
   );
 }
 
-// ── Needs ─────────────────────────────────────────────────────────────────────
-const CUSTOMER_FACING = new Set(["quotes", "invoices", "customer_updates"]);
-
-export function NeedsStep({ t, data }: StepProps) {
+// ── Materials (asked only for businesses that handle physical goods) ──────────
+export function MaterialsStep({ t, data, draftRev }: StepProps) {
   const a = data.answers;
   return (
     <Card>
-      <CardHeader title={t("onboarding.flow.needs.title")} />
-      <form action={saveStepAction.bind(null, "needs")} className="group flex flex-col gap-4">
+      <CardHeader title={t("onboarding.flow.materials.title")} />
+      <p className={`mb-3 ${help}`}>{t("onboarding.flow.materials.why")}</p>
+      {/* SKIP-5 runs on :has() — deliveries show only after "buys materials: yes". */}
+      <form action={saveStepAction.bind(null, "materials")} className="group flex flex-col gap-4">
+        <TriQuestion
+          t={t}
+          name="buys_materials"
+          label={t("onboarding.flow.materials.buys")}
+          helpText={t("onboarding.flow.materials.buys_help")}
+          value={a.buys_materials}
+          options={TRI}
+          markerClass="buys-yes"
+        />
+        <TriQuestion
+          t={t}
+          name="holds_stock"
+          label={t("onboarding.flow.materials.stock")}
+          helpText={t("onboarding.flow.materials.stock_help")}
+          value={a.holds_stock}
+          options={TRI}
+        />
+        <div className="hidden group-has-[.buys-yes:checked]:block">
+          <TriQuestion
+            t={t}
+            name="receives_deliveries"
+            label={t("onboarding.flow.materials.receives")}
+            value={a.receives_deliveries}
+            options={TRI}
+          />
+        </div>
+        <NavRow t={t} step="materials" data={data} draftRev={draftRev} />
+      </form>
+    </Card>
+  );
+}
+
+// ── Money (invoicing, costs and money) ────────────────────────────────────────
+export function MoneyStep({ t, data, draftRev }: StepProps) {
+  const a = data.answers;
+  const asksCosts = askTracksCosts(a);
+  return (
+    <Card>
+      <CardHeader title={t("onboarding.flow.money.title")} />
+      <p className={`mb-3 ${help}`}>{t("onboarding.flow.money.why")}</p>
+      {/* SKIP-6 runs on :has() — payments show only after "sends invoices: yes". */}
+      <form action={saveStepAction.bind(null, "money")} className="group flex flex-col gap-4">
         <fieldset className="flex flex-col gap-1.5">
           <legend className="mb-1.5 text-sm font-medium text-ink">
-            {t("onboarding.flow.needs.capabilities")}
+            {t("onboarding.flow.money.revenue")}{" "}
+            <span className="font-normal text-ink-muted">({t("onboarding.flow.optional")})</span>
           </legend>
-          <span className={`mb-1 ${help}`}>{t("onboarding.flow.needs.capabilities_help")}</span>
           <div className="flex flex-wrap gap-2">
-            {CAPABILITY_CHIPS.map((k) => (
+            {REVENUE_CHOICES.map((k) => (
               <Chip
                 key={k}
-                name="capabilities"
+                name="revenue_models"
                 value={k}
-                label={t(`onboarding.flow.capability.${k}`)}
-                checked={(a.capabilities ?? []).includes(k)}
-                inputClass={CUSTOMER_FACING.has(k) ? "cap-customer" : undefined}
+                label={t(`onboarding.flow.revenue.${k}`)}
+                checked={(a.revenue_models ?? []).includes(k)}
+              />
+            ))}
+          </div>
+        </fieldset>
+        <TriQuestion
+          t={t}
+          name="sends_quotes"
+          label={t("onboarding.flow.money.quotes")}
+          value={a.sends_quotes}
+          options={["yes", "no"]}
+        />
+        <TriQuestion
+          t={t}
+          name="sends_invoices"
+          label={t("onboarding.flow.money.invoices")}
+          helpText={t("onboarding.flow.money.invoices_help")}
+          value={a.sends_invoices}
+          options={TRI}
+          markerClass="invoices-yes"
+        />
+        <div className="hidden group-has-[.invoices-yes:checked]:block">
+          <TriQuestion
+            t={t}
+            name="collects_payments"
+            label={t("onboarding.flow.money.payments")}
+            value={a.collects_payments}
+            options={["yes", "no"]}
+          />
+        </div>
+        <TriQuestion
+          t={t}
+          name="records_expenses"
+          label={t("onboarding.flow.money.expenses")}
+          value={a.records_expenses}
+          options={["yes", "no"]}
+        />
+        {asksCosts ? (
+          <TriQuestion
+            t={t}
+            name="tracks_costs"
+            label={t("onboarding.flow.money.costs")}
+            helpText={t("onboarding.flow.money.costs_help")}
+            value={a.tracks_costs}
+            options={TRI}
+          />
+        ) : null}
+        <TriQuestion
+          t={t}
+          name="vat_registered_q"
+          label={t("onboarding.flow.money.vat")}
+          helpText={t("onboarding.flow.money.vat_help")}
+          value={a.vat_registered_q}
+          options={TRI}
+        />
+        <NavRow t={t} step="money" data={data} draftRev={draftRev} />
+      </form>
+    </Card>
+  );
+}
+
+// ── Priorities (management priorities) ────────────────────────────────────────
+export function PrioritiesStep({ t, data, draftRev }: StepProps) {
+  const a = data.answers;
+  return (
+    <Card>
+      <CardHeader title={t("onboarding.flow.priorities.title")} />
+      <p className={`mb-3 ${help}`}>{t("onboarding.flow.priorities.why")}</p>
+      <form action={saveStepAction.bind(null, "priorities")} className="flex flex-col gap-4">
+        <fieldset className="flex flex-col gap-1.5">
+          <legend className="mb-1.5 text-sm font-medium text-ink">
+            {t("onboarding.flow.priorities.focus")}
+          </legend>
+          <div className="flex flex-col gap-2">
+            {PRIORITY_FOCUS.map((k) => (
+              <RadioChip
+                key={k}
+                name="priority_focus"
+                value={k}
+                label={t(`onboarding.flow.focus.${k}`)}
+                checked={a.priority_focus === k}
+                required
               />
             ))}
           </div>
@@ -495,27 +741,6 @@ export function NeedsStep({ t, data }: StepProps) {
           </div>
         </fieldset>
 
-        {/* SKIP-4: only asked when a customer-facing capability was picked. */}
-        <fieldset className="hidden flex-col gap-1.5 group-has-[.cap-customer:checked]:flex">
-          <legend className="mb-1.5 text-sm font-medium text-ink">
-            {t("onboarding.flow.needs.sharing")}
-          </legend>
-          <div className="flex flex-wrap gap-2">
-            <RadioChip
-              name="customer_sharing"
-              value="yes"
-              label={t("onboarding.flow.needs.sharing_yes")}
-              checked={a.customer_sharing === true}
-            />
-            <RadioChip
-              name="customer_sharing"
-              value="no"
-              label={t("onboarding.flow.needs.sharing_no")}
-              checked={a.customer_sharing === false}
-            />
-          </div>
-        </fieldset>
-
         <label className={field}>
           <span>
             {t("onboarding.flow.needs.problem")}{" "}
@@ -530,7 +755,7 @@ export function NeedsStep({ t, data }: StepProps) {
           />
           <span className={help}>{t("onboarding.flow.needs.problem_help")}</span>
         </label>
-        <NavRow t={t} step="needs" />
+        <NavRow t={t} step="priorities" data={data} draftRev={draftRev} />
       </form>
     </Card>
   );
@@ -726,7 +951,7 @@ export function TemplateStep({ t, locale, data }: StepProps) {
       </Card>
 
       <div className="flex items-center justify-between gap-3">
-        <Link href={stepHref("needs")} className={backLinkCls}>
+        <Link href={stepHref("priorities")} className={backLinkCls}>
           {t("onboarding.flow.back")}
         </Link>
         {selected ? (
@@ -837,7 +1062,7 @@ export function ProposalStep({ t, locale, data }: StepProps) {
           <p className="text-sm text-ink-muted">{t("onboarding.flow.proposal.approvals_note")}</p>
         </Card>
 
-        <NavRow t={t} step="proposal" />
+        <NavRow t={t} step="proposal" data={data} />
       </form>
     </div>
   );
@@ -1040,7 +1265,7 @@ export function BrandingStep({ t, data }: StepProps) {
           </div>
         </Card>
 
-        <NavRow t={t} step="branding" nextLabel={t("onboarding.flow.branding.save")} />
+        <NavRow t={t} step="branding" data={data} nextLabel={t("onboarding.flow.branding.save")} />
       </form>
 
       <form action={skipBrandingStepAction} className="self-center">
@@ -1070,11 +1295,237 @@ function EditLink({ t, step }: { t: Translator; step: FlowStep }) {
   );
 }
 
-export function ReviewStep({ t, locale, data, view }: StepProps & { view: SelectionView }) {
+/** One proposal line: what is recommended, and why (Part F). */
+function ProposalItem({
+  label,
+  on,
+  why,
+  onLabel,
+  offLabel,
+}: {
+  label: string;
+  on: boolean;
+  why: string;
+  onLabel: string;
+  offLabel: string;
+}) {
+  return (
+    <div className="flex flex-col gap-0.5 border-b border-line/60 py-2 text-sm last:border-b-0">
+      <div className="flex items-center justify-between gap-3">
+        <span className="font-medium text-ink">{label}</span>
+        <Badge tone={on ? "success" : "neutral"}>{on ? onLabel : offLabel}</Badge>
+      </div>
+      <span className="text-xs text-ink-muted">{why}</span>
+    </div>
+  );
+}
+
+/** The Intelligent Clay workspace proposal (Part F) + safe editing (Part G). */
+function WorkspaceProposal({
+  t,
+  locale,
+  data,
+  draftRev,
+  blocked,
+}: StepProps & { blocked: boolean }) {
+  const ar = locale === "ar";
+  const modules = modulesForDraft(data);
+  const roles = recommendRoles(data.answers, modules);
+  const agents = recommendAgents(data.answers, modules, roles, data.workspace);
+  const reasonOf = (m: ModuleRecommendation) => t(`onboarding.flow.reason.${m.reasonKey}`);
+
+  return (
+    <form action={saveWorkspaceEditsAction} className="flex flex-col gap-4">
+      <input type="hidden" name="draft_rev" value={draftRev} />
+      <Card>
+        <CardHeader title={t("onboarding.flow.ws.title")} />
+        <p className={`mb-3 ${help}`}>{t("onboarding.flow.ws.note")}</p>
+
+        {/* Included areas: the always-on core, stated plainly. */}
+        <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-ink-muted">
+          {t("onboarding.flow.ws.core")}
+        </p>
+        <div className="mb-3">
+          {modules
+            .filter((m) => m.core)
+            .map((m) => (
+              <ProposalItem
+                key={m.key}
+                label={t(`onboarding.flow.module.${moduleSlug(m.key)}`)}
+                on
+                why={reasonOf(m)}
+                onLabel={t("onboarding.flow.ws.included")}
+                offLabel={t("onboarding.flow.ws.not_included")}
+              />
+            ))}
+        </div>
+
+        {/* Adjustable areas: recognition over recall — toggle with the reason. */}
+        <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-ink-muted">
+          {t("onboarding.flow.ws.adjustable")}
+        </p>
+        <div className="flex flex-col">
+          {modules
+            .filter((m) => !m.core)
+            .map((m) => (
+              <label
+                key={m.key}
+                className="flex cursor-pointer items-start justify-between gap-3 border-b border-line/60 py-2 last:border-b-0"
+              >
+                <span className="flex flex-col gap-0.5 text-sm">
+                  <span className="font-medium text-ink">
+                    {t(`onboarding.flow.module.${moduleSlug(m.key)}`)}
+                  </span>
+                  <span className="text-xs text-ink-muted">
+                    {reasonOf(m)}
+                    {m.cascadedFrom
+                      ? ` ${t("onboarding.flow.ws.with", { area: t(`onboarding.flow.module.${moduleSlug(m.cascadedFrom)}`) })}`
+                      : ""}
+                  </span>
+                </span>
+                <input type="hidden" name={`module_seen:${moduleSlug(m.key)}`} value="1" />
+                <input
+                  type="checkbox"
+                  name={`module:${moduleSlug(m.key)}`}
+                  value="on"
+                  defaultChecked={m.enabled}
+                  className="mt-1 size-5 shrink-0 accent-current"
+                  aria-label={t(`onboarding.flow.module.${moduleSlug(m.key)}`)}
+                />
+              </label>
+            ))}
+        </div>
+      </Card>
+
+      <Card>
+        <CardHeader title={t("onboarding.flow.ws.roles_title")} />
+        <p className={`mb-3 ${help}`}>{t("onboarding.flow.ws.roles_note")}</p>
+        <div className="flex flex-col gap-3">
+          {roles.map((r) => (
+            <div key={r.archetype} className="rounded-md border border-line p-3">
+              <div className="mb-1 flex items-center justify-between gap-2">
+                <span className="text-sm font-semibold text-ink">
+                  {data.workspace.role_names?.[r.archetype]?.[ar ? "ar" : "en"] ??
+                    (ar
+                      ? (ROLE_DEFAULT_NAMES[r.archetype]?.ar ?? r.archetype)
+                      : (ROLE_DEFAULT_NAMES[r.archetype]?.en ?? r.archetype))}
+                </span>
+                <span className="text-xs text-ink-muted">
+                  {t(`onboarding.flow.reason.${r.reasonKey}`)}
+                </span>
+              </div>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <label className={field}>
+                  <span className="text-xs">{t("onboarding.flow.ws.role_name_en")}</span>
+                  <input
+                    name={`role_en:${r.archetype}`}
+                    maxLength={60}
+                    dir="ltr"
+                    defaultValue={data.workspace.role_names?.[r.archetype]?.en ?? ""}
+                    placeholder={ROLE_DEFAULT_NAMES[r.archetype]?.en ?? ""}
+                    className={input}
+                  />
+                </label>
+                <label className={field}>
+                  <span className="text-xs">{t("onboarding.flow.ws.role_name_ar")}</span>
+                  <input
+                    name={`role_ar:${r.archetype}`}
+                    maxLength={60}
+                    dir="rtl"
+                    defaultValue={data.workspace.role_names?.[r.archetype]?.ar ?? ""}
+                    placeholder={ROLE_DEFAULT_NAMES[r.archetype]?.ar ?? ""}
+                    className={input}
+                  />
+                </label>
+              </div>
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      <Card>
+        <CardHeader title={t("onboarding.flow.ws.agents_title")} />
+        <p className={`mb-3 ${help}`}>{t("onboarding.flow.ws.agents_note")}</p>
+        <div className="flex flex-col">
+          {agents.map((x) => (
+            <label
+              key={x.agentId}
+              className="flex cursor-pointer items-start justify-between gap-3 border-b border-line/60 py-2 last:border-b-0"
+            >
+              <span className="flex flex-col gap-0.5 text-sm">
+                <span className="font-medium text-ink">
+                  {t(`onboarding.flow.agent.${x.agentId}`)}
+                </span>
+                <span className="text-xs text-ink-muted">
+                  {t(`onboarding.flow.reason.${x.reasonKey}`)}
+                </span>
+              </span>
+              <input type="hidden" name={`agent_seen:${x.agentId}`} value="1" />
+              <input
+                type="checkbox"
+                name={`agent:${x.agentId}`}
+                value="on"
+                defaultChecked
+                className="mt-1 size-5 shrink-0 accent-current"
+                aria-label={t(`onboarding.flow.agent.${x.agentId}`)}
+              />
+            </label>
+          ))}
+        </div>
+        <p className={`mt-2 ${help}`}>{t("onboarding.flow.ws.agents_authority")}</p>
+      </Card>
+
+      {blocked ? null : (
+        <div className="flex justify-end">
+          <Button type="submit" variant="secondary">
+            {t("onboarding.flow.ws.save_changes")}
+          </Button>
+        </div>
+      )}
+    </form>
+  );
+}
+
+export function ReviewStep({
+  t,
+  locale,
+  data,
+  view,
+  draftRev,
+  saved,
+}: StepProps & { view: SelectionView; saved?: boolean }) {
   const ar = locale === "ar";
   const summary = buildReviewSummary(data, view);
   const currency: SelectionCurrency = summary.business.currency === "AED" ? "AED" : "USD";
   const notSet = t("onboarding.flow.review.not_set");
+  // The H14 blueprint validation gates the confirm (errors block; warnings
+  // show). Raw validator messages are INTERNAL (English, registry keys) — the
+  // founder sees localized per-code copy, never internal identifiers.
+  const KNOWN_WARN = new Set([
+    "missing_recommendation",
+    "card_module_disabled",
+    "agent_module_disabled",
+    "hidden_enabled_module",
+    "non_default_currency",
+  ]);
+  let blueprintIssues: { errors: string[]; warnings: string[] } = { errors: [], warnings: [] };
+  try {
+    const bp = buildBlueprintFromDraft(data, "2026-01-01T00:00:00.000Z");
+    const v = validateBlueprint(bp);
+    const warnCodes = [...new Set(v.warnings.map((w) => w.code))];
+    blueprintIssues = {
+      errors:
+        v.errors.length > 0
+          ? [t("onboarding.flow.review.errors_generic", { count: v.errors.length })]
+          : [],
+      warnings: warnCodes.map((code) =>
+        t(`onboarding.flow.warn.${KNOWN_WARN.has(code) ? code : "generic"}`),
+      ),
+    };
+  } catch {
+    blueprintIssues = { errors: [t("onboarding.flow.review.blueprint_incomplete")], warnings: [] };
+  }
+  const blocked = blueprintIssues.errors.length > 0;
   const tierName =
     summary.tier.mode === "free"
       ? t("subscription.plan.free")
@@ -1237,18 +1688,71 @@ export function ReviewStep({ t, locale, data, view }: StepProps & { view: Select
         )}
       </Card>
 
+      {saved ? (
+        <p role="status" className="rounded-md bg-success-soft p-3 text-sm text-success">
+          {t("onboarding.flow.ws.saved")}
+        </p>
+      ) : null}
+
+      <WorkspaceProposal
+        t={t}
+        locale={locale}
+        data={data}
+        draftRev={draftRev}
+        blocked={partialConfirm}
+      />
+
+      {blueprintIssues.warnings.length > 0 ? (
+        <div role="status" className="rounded-md bg-warning-soft p-3 text-sm text-warning">
+          <p className="mb-1 font-medium">{t("onboarding.flow.review.warnings_title")}</p>
+          <ul className="ms-4 list-disc">
+            {blueprintIssues.warnings.slice(0, 6).map((w) => (
+              <li key={w}>{w}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {blocked ? (
+        <div role="alert" className="rounded-md bg-danger-soft p-3 text-sm text-danger">
+          <p className="mb-1 font-medium">{t("onboarding.flow.review.errors_title")}</p>
+          <ul className="ms-4 list-disc">
+            {blueprintIssues.errors.slice(0, 6).map((e) => (
+              <li key={e}>{e}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
       <Card>
         <CardHeader title={t("onboarding.flow.review.confirm_title")} />
         <p className="mb-3 text-sm leading-relaxed text-ink">
           {t("onboarding.flow.review.confirm_explain", { template: templateName })}
         </p>
-        <form action={confirmFlowAction}>
-          <Button type="submit" size="lg" className="w-full">
-            {partialConfirm
-              ? t("onboarding.flow.review.confirm_resume")
-              : t("onboarding.flow.review.confirm")}
-          </Button>
-        </form>
+        {/* Part H: what happens, what does not, and what stays in your hands. */}
+        <ul className="mb-3 flex flex-col gap-1.5 text-sm text-ink">
+          {(["will", "wont", "later", "authority"] as const).map((k) => (
+            <li key={k} className="flex items-start gap-2">
+              <span aria-hidden className="mt-0.5 text-brand">
+                ✓
+              </span>
+              {t(`onboarding.flow.review.promise_${k}`)}
+            </li>
+          ))}
+        </ul>
+        {blocked ? (
+          <p role="alert" className="text-sm font-medium text-danger">
+            {t("onboarding.flow.review.blocked")}
+          </p>
+        ) : (
+          <form action={confirmFlowAction}>
+            <Button type="submit" size="lg" className="w-full">
+              {partialConfirm
+                ? t("onboarding.flow.review.confirm_resume")
+                : t("onboarding.flow.review.confirm")}
+            </Button>
+          </form>
+        )}
       </Card>
 
       <div className="flex items-center">

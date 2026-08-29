@@ -65,6 +65,19 @@ function completeDraftData(name: string): DraftData {
       device: "both",
       customer_sharing: true,
       main_problem: "updates scattered across chats",
+      // H15 journey answers.
+      customer_types: ["businesses"],
+      revenue_models: ["fixed_price"],
+      buys_materials: "yes",
+      holds_stock: "no",
+      receives_deliveries: "yes",
+      sends_quotes: "yes",
+      sends_invoices: "yes",
+      collects_payments: "yes",
+      records_expenses: "yes",
+      tracks_costs: "yes",
+      vat_registered_q: "no",
+      priority_focus: "delivery",
     },
     template: { selected_key: "service_business_v1", recommended_key: "service_business_v1" },
     terms: { job_term_en: "Callout" }, // typed term → terminology override applies
@@ -199,7 +212,54 @@ describe("full confirm chain (functions, no HTTP)", () => {
       )) as unknown as Array<{ n: number }>;
       expect(Number(rows[0]!.n)).toBe(0);
     }
+
+    // H15: the workspace blueprint went through the REAL H14 lifecycle at the
+    // same confirm — one APPLIED revision, sourced from the answers, audited.
+    const bpRows = await owner`
+      select status, proposed_source, applied_by, compiled
+      from public.workspace_blueprint_revision where org_id = ${orgId}`;
+    expect(bpRows.length).toBe(1);
+    expect(bpRows[0]!.status).toBe("applied");
+    expect(bpRows[0]!.proposed_source).toBe("onboarding_answer");
+    expect(bpRows[0]!.applied_by).toBe(userA);
+    const compiled = bpRows[0]!.compiled as {
+      capabilities: Array<{ key: string; configEnabled: boolean }>;
+    };
+    expect(compiled.capabilities.length).toBeGreaterThan(0);
+    expect(compiled.capabilities.find((c) => c.key === "cap.invoicing")?.configEnabled).toBe(true);
+    expect(draft!.data.confirm.blueprint_applied).toBe(true);
+    const bpAudit = await owner`
+      select action from public.audit_log
+      where org_id = ${orgId} and entity_type = 'workspace_blueprint' order by created_at`;
+    for (const action of ["blueprint.draft", "blueprint.approve", "blueprint.apply"]) {
+      expect(bpAudit.map((r) => r.action)).toContain(action);
+    }
   }, 120_000);
+
+  it("the two-tab guard refuses a stale save and keeps the newest progress (Part E)", async () => {
+    // Simulate two tabs: both loaded the same draft revision; tab 1 saves.
+    await saveDraft(userB, {
+      data: DraftDataSchema.parse({ answers: { business_name: `Tabs ${run}` } }),
+      step: "business",
+    });
+    const before = await getDraft(userB);
+    const rev = before!.updatedAt;
+    await saveDraft(userB, {
+      data: { ...before!.data, answers: { ...before!.data.answers, business_name: "Tab One" } },
+      step: "business",
+      expectedUpdatedAt: rev,
+    });
+    // Tab 2 (stale) tries to save over it and is refused, never merged.
+    await expect(
+      saveDraft(userB, {
+        data: { ...before!.data, answers: { ...before!.data.answers, business_name: "Tab Two" } },
+        step: "business",
+        expectedUpdatedAt: rev,
+      }),
+    ).rejects.toMatchObject({ name: "DraftConflictError" });
+    const after = await getDraft(userB);
+    expect(after!.data.answers.business_name).toBe("Tab One");
+  }, 60_000);
 
   it("double-confirm is idempotent: same org, no duplicates", async () => {
     const first = await getDraft(userA);

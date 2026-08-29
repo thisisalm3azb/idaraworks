@@ -9,8 +9,11 @@ import { describe, expect, it } from "vitest";
 import { buildSelectionView } from "@/modules/subscription/selection";
 import {
   applyStepAnswers,
-  askCustomerSharing,
+  askCollectsPayments,
   askDepartments,
+  askMaterialsStep,
+  askReceivesDeliveries,
+  askTracksCosts,
   askUsersBand,
   askWorkflowDescription,
   buildReviewSummary,
@@ -30,6 +33,7 @@ import {
   TierSelectionSchema,
   tierSettingValue,
   TIER_SETTING_KEY,
+  visibleSteps,
   type DraftAnswers,
   type DraftData,
 } from "@/modules/onboarding/flow";
@@ -54,6 +58,19 @@ const fullAnswers: DraftAnswers = {
   device: "both",
   customer_sharing: true,
   main_problem: "updates scattered across chats",
+  // H15 journey answers.
+  customer_types: ["businesses", "consumers"],
+  revenue_models: ["fixed_price"],
+  buys_materials: "yes",
+  holds_stock: "no",
+  receives_deliveries: "yes",
+  sends_quotes: "yes",
+  sends_invoices: "yes",
+  collects_payments: "yes",
+  records_expenses: "yes",
+  tracks_costs: "yes",
+  vat_registered_q: "no",
+  priority_focus: "delivery",
 };
 
 function fullDraft(): DraftData {
@@ -114,11 +131,29 @@ describe("skip-logic matrix (SKIP-1..SKIP-4)", () => {
     expect(askWorkflowDescription({ work_patterns: [] })).toBe(false);
   });
 
-  it("SKIP-4: customer sharing only with a customer-facing capability", () => {
-    expect(askCustomerSharing({ capabilities: ["purchasing", "inventory"] })).toBe(false);
-    expect(askCustomerSharing({ capabilities: ["quotes"] })).toBe(true);
-    expect(askCustomerSharing({ capabilities: ["customer_updates"] })).toBe(true);
-    expect(effectiveCustomerSharing({ capabilities: [] })).toBe(false); // derived false
+  it("SKIP-5/6/7 + BRANCH-1: the H15 conditional questions", () => {
+    // SKIP-5: deliveries only when materials are bought.
+    expect(askReceivesDeliveries({ buys_materials: "yes" })).toBe(true);
+    expect(askReceivesDeliveries({ buys_materials: "no" })).toBe(false);
+    expect(askReceivesDeliveries({ buys_materials: "not_sure" })).toBe(false);
+    // SKIP-6: payments only when invoices are sent.
+    expect(askCollectsPayments({ sends_invoices: "yes" })).toBe(true);
+    expect(askCollectsPayments({ sends_invoices: "not_sure" })).toBe(false);
+    // SKIP-7: cost tracking only for engagement-style work.
+    expect(askTracksCosts({ work_patterns: ["project"] })).toBe(true);
+    expect(askTracksCosts({ work_patterns: ["retail"] })).toBe(false);
+    // BRANCH-1: the materials STEP disappears for a consulting-shaped business.
+    expect(askMaterialsStep({ industry: "other", work_patterns: ["service", "recurring"] })).toBe(
+      false,
+    );
+    expect(askMaterialsStep({ industry: "construction" })).toBe(true);
+    expect(askMaterialsStep({ industry: "other", work_patterns: ["order"] })).toBe(true);
+    expect(visibleSteps({ industry: "other", work_patterns: ["service"] })).not.toContain(
+      "materials",
+    );
+    expect(visibleSteps(fullAnswers)).toContain("materials");
+    // Sharing is always asked; its safe default is false.
+    expect(effectiveCustomerSharing({})).toBe(false);
   });
 
   it("applyStepAnswers drops answers a skip rule made irrelevant", () => {
@@ -139,13 +174,25 @@ describe("skip-logic matrix (SKIP-1..SKIP-4)", () => {
       workflow_description: "stale text",
     });
     expect(worked.answers.workflow_description).toBeUndefined();
-    // Capabilities lose the customer-facing set: sharing answer dropped.
-    const needs = applyStepAnswers(base, "needs", {
-      capabilities: ["inventory"],
-      device: "mobile",
-      customer_sharing: "yes",
+    // BRANCH-1 re-evaluation: an industry-other business whose patterns turn
+    // non-physical loses the retired materials answers (never kept as stale).
+    const consulting = DraftDataSchema.parse({
+      answers: { ...fullAnswers, industry: "other" },
     });
-    expect(needs.answers.customer_sharing).toBeUndefined();
+    const rebranched = applyStepAnswers(consulting, "work", { work_patterns: ["service"] });
+    expect(rebranched.answers.buys_materials).toBeUndefined();
+    expect(rebranched.answers.holds_stock).toBeUndefined();
+    expect(rebranched.answers.receives_deliveries).toBeUndefined();
+    // SKIP-6 consistency inside the money step: invoices "no" drops payments.
+    const money = applyStepAnswers(base, "money", {
+      sends_quotes: "yes",
+      sends_invoices: "no",
+      collects_payments: "yes",
+      records_expenses: "yes",
+      tracks_costs: "yes",
+      vat_registered_q: "no",
+    });
+    expect(money.answers.collects_payments).toBeUndefined();
   });
 
   it("applyStepAnswers enforces conditionally-required fields", () => {
@@ -154,10 +201,20 @@ describe("skip-logic matrix (SKIP-1..SKIP-4)", () => {
     expect(() =>
       applyStepAnswers(base, "scale", { employees_band: "6-20", locations_band: "1" }),
     ).toThrow(FlowValidationError);
-    // Customer-facing capability chosen: sharing answer required.
+    // Invoices sent: the payments answer is required.
     expect(() =>
-      applyStepAnswers(base, "needs", { capabilities: ["quotes"], device: "both" }),
+      applyStepAnswers(base, "money", {
+        sends_quotes: "yes",
+        sends_invoices: "yes",
+        records_expenses: "yes",
+        tracks_costs: "yes",
+        vat_registered_q: "no",
+      }),
     ).toThrow(FlowValidationError);
+    // Customers step: at least one customer type + the sharing answer.
+    expect(() => applyStepAnswers(base, "customers", { customer_types: ["businesses"] })).toThrow(
+      FlowValidationError,
+    );
     // Work needs at least one pattern.
     expect(() => applyStepAnswers(base, "work", {})).toThrow(FlowValidationError);
   });
@@ -188,13 +245,17 @@ describe("step gating + resume", () => {
     expect(resolveStep("review", fullDraft())).toBe("review");
   });
 
-  it("stepComplete / progress helpers agree with the registry", () => {
+  it("stepComplete / progress helpers agree with the registry (answers-aware)", () => {
     expect(FLOW_STEPS[0]).toBe("welcome");
-    expect(nextStepAfter("welcome")).toBe("business");
-    expect(nextStepAfter("review")).toBe("review"); // clamped at the end
-    expect(stepProgressPct("welcome")).toBe(0);
-    expect(stepProgressPct("review")).toBe(100);
+    expect(nextStepAfter("welcome", fullAnswers)).toBe("business");
+    expect(nextStepAfter("review", fullAnswers)).toBe("review"); // clamped at the end
+    expect(stepProgressPct("welcome", fullAnswers)).toBe(0);
+    expect(stepProgressPct("review", fullAnswers)).toBe(100);
     expect(stepComplete("branding", DraftDataSchema.parse({}))).toBe(true); // skippable
+    // Branched navigation skips the hidden materials step in both directions.
+    const consulting: DraftAnswers = { industry: "other", work_patterns: ["service"] };
+    expect(nextStepAfter("scale", consulting)).toBe("money");
+    expect(nextStepAfter("materials", consulting)).toBe("money"); // step itself hidden
   });
 });
 

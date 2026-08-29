@@ -22,6 +22,7 @@ import { getOnboardingProvider } from "./provider";
 import { validateProposal } from "./validate";
 import { OnboardingIntakeSchema, ConfigProposalSchema, type ConfigProposal } from "./proposal";
 import { draftToIntake, DraftIncompleteError, type ConfirmState } from "./flow";
+import { buildBlueprintFromDraft } from "./blueprint-map";
 import {
   applyDraftBranding,
   claimDraftConfirm,
@@ -42,6 +43,7 @@ export {
   applyDraftBranding,
   stashDraftLogo,
   removeDraftLogo,
+  DraftConflictError,
   type OnboardingDraft,
 } from "./draft";
 export {
@@ -66,7 +68,20 @@ export {
   askUsersBand,
   askDepartments,
   askWorkflowDescription,
-  askCustomerSharing,
+  askMaterialsStep,
+  askReceivesDeliveries,
+  askCollectsPayments,
+  askTracksCosts,
+  visibleSteps,
+  sectionForStep,
+  JOURNEY_SECTIONS,
+  JOURNEY_VERSION,
+  CUSTOMER_TYPE_CHOICES,
+  REVENUE_CHOICES,
+  PRIORITY_FOCUS,
+  TRI,
+  YESNO,
+  WorkspaceEditsSchema,
   DraftDataSchema,
   DraftAnswersSchema,
   TierSelectionSchema,
@@ -93,9 +108,36 @@ export {
   type FlowStep,
   type FlowRecommendation,
   type ReviewSummary,
+  type WorkspaceEdits,
+  type JourneySectionKey,
 } from "./flow";
 export { selectTemplate, buildGroundedProposal } from "./provider";
 export { validateProposal } from "./validate";
+export {
+  QUESTIONS,
+  questionsForStep,
+  visibleQuestions,
+  invalidatedAnswers,
+  unknownAnswerKeys,
+  type QuestionDef,
+  type QuestionKey,
+} from "./journey";
+export {
+  buildBlueprintFromDraft,
+  modulesForDraft,
+  recommendModules,
+  applyModuleEdits,
+  recommendRoles,
+  recommendAgents,
+  moduleSlug,
+  moduleFromSlug,
+  CORE_MODULES,
+  ROLE_DEFAULT_NAMES,
+  BlueprintMapError,
+  type ModuleRecommendation,
+  type RoleRecommendation,
+  type AgentRecommendation,
+} from "./blueprint-map";
 
 // Bind a JS array into an array COLUMN safely. Drizzle interpolates a bare `${jsArray}` as a
 // SQL value LIST — `()` for an empty array (a syntax error), `(a,b)` otherwise — never an array
@@ -514,6 +556,59 @@ export async function runConfirmChain(userId: string): Promise<ConfirmChainResul
         if (!(err instanceof OnboardingError && /already applied/i.test(err.message))) throw err;
       }
       await stash({ applied: true });
+    }
+
+    // 2.5 — the H15 Intelligent Clay blueprint through the REAL H14 lifecycle
+    // (draft → validate → approve → apply), idempotent per link. The applied
+    // blueprint is stored for H16 consumers; nothing renders from it yet, so
+    // current workspace behavior is unchanged. Approval is the founder's
+    // explicit confirm (this chain runs only from confirmFlowAction).
+    if (!confirm.blueprint_applied) {
+      const {
+        createBlueprintDraft,
+        validateBlueprintRevision,
+        approveBlueprintRevision,
+        applyBlueprintRevision,
+        getBlueprintRevision,
+      } = await import("@/platform/workspace");
+      const blueprint = buildBlueprintFromDraft(draft.data, new Date().toISOString());
+      let revisionId = confirm.blueprint_revision_id;
+      if (!revisionId) {
+        const created = await createBlueprintDraft(ctx, "owner", {
+          blueprint,
+          source: "onboarding_answer",
+          reason: "Workspace blueprint created from the onboarding answers",
+        });
+        if (!created.validation.ok) {
+          throw new OnboardingError(
+            `blueprint invalid: ${created.validation.errors.map((e) => e.message).join("; ")}`,
+          );
+        }
+        revisionId = created.id;
+        await stash({ blueprint_revision_id: revisionId });
+      }
+      // Resume-safe state walk: validated → approved → applied.
+      let rev = await getBlueprintRevision(ctx, "owner", revisionId);
+      if (!rev) throw new OnboardingError("blueprint revision disappeared");
+      if (rev.status === "draft") {
+        const v = await validateBlueprintRevision(ctx, "owner", revisionId);
+        if (!v.ok) {
+          throw new OnboardingError(
+            `blueprint invalid: ${v.errors.map((e) => e.message).join("; ")}`,
+          );
+        }
+        rev = await getBlueprintRevision(ctx, "owner", revisionId);
+      }
+      if (rev && rev.status === "validated") {
+        await approveBlueprintRevision(ctx, "owner", revisionId, {
+          expectedHash: rev.blueprintHash,
+        });
+        rev = await getBlueprintRevision(ctx, "owner", revisionId);
+      }
+      if (rev && rev.status === "approved") {
+        await applyBlueprintRevision(ctx, "owner", revisionId);
+      }
+      await stash({ blueprint_applied: true });
     }
 
     // 3 — record the tier selection (app_settings only — never entitlements).
