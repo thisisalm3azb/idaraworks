@@ -11,7 +11,7 @@ import {
   listAssignableMembers,
   listJobs,
 } from "@/modules/jobs/service";
-import { listCustomers } from "@/modules/masters/service";
+import { getCustomer, listCustomers } from "@/modules/masters/service";
 import { createJobAction } from "./actions";
 import {
   jobIsDueSoon,
@@ -54,13 +54,20 @@ export default async function JobsPage({
   const jobTerm = term("job", terms, "singular");
   const jobsTerm = term("job", terms, "plural");
 
-  // H18 canonical filter contract: server-validated params, the SAME
-  // inclusion rules and ORG-timezone day boundary the dashboard uses, and
-  // scope=mine narrowing via the same assignment resolver as the aggregates.
+  // H18/H19 canonical filter contract: server-validated params, the SAME
+  // inclusion rules and ORG-timezone day boundary the dashboard uses,
+  // scope=mine via the aggregate's assignment resolver, and ?customer=
+  // narrowing SQL-side (H19: the param now FILTERS the list and still
+  // preselects the create form below). A foreign or unknown customer id
+  // yields the same honest empty list as any random uuid.
   const f = parseJobsSearch(sp);
   const allJobs = await listJobs(resolved.ctx, resolved.archetype, {
     assignedOnly: f.scope === "mine",
+    customerId: f.customerId ?? undefined,
   });
+  const filterCustomer = f.customerId
+    ? await getCustomer(resolved.ctx, resolved.archetype, f.customerId).catch(() => null)
+    : null;
   const asOf = orgToday(new Date(), resolved.timezone);
   const jobs = allJobs.filter((j) => {
     if (f.stage && j.currentStageKey !== f.stage) return false;
@@ -68,7 +75,8 @@ export default async function JobsPage({
     if (f.filter === "due_soon") return jobIsDueSoon(j, asOf, f.days ?? 7);
     return true;
   });
-  const filtered = f.filter !== null || f.stage !== null || f.scope !== null;
+  const filtered =
+    f.filter !== null || f.stage !== null || f.scope !== null || f.customerId !== null;
   const filterSummary = !filtered
     ? null
     : [
@@ -79,6 +87,11 @@ export default async function JobsPage({
             : null,
         f.stage ? t("filters.jobs.stage") : null,
         f.scope === "mine" ? t("filters.scope_mine") : null,
+        f.customerId
+          ? filterCustomer
+            ? t("filters.customer", { name: filterCustomer.name })
+            : t("filters.customer_generic", { customer: term("customer", terms, "singular") })
+          : null,
       ]
         .filter(Boolean)
         .join(locale === "ar" ? "، " : " · ");

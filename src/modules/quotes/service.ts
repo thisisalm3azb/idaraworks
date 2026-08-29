@@ -408,16 +408,18 @@ export type QuoteRow = {
 export async function listQuotes(
   ctx: Ctx,
   archetype: RoleArchetype,
-  opts: { limit?: number } = {},
+  opts: { limit?: number; customerId?: string } = {},
 ): Promise<QuoteRow[]> {
   assertCan(archetype, "quotes.view");
   const seesPrice = ctx.pricePrivileged;
   const limit = Math.min(opts.limit ?? 200, 500);
+  const customerId = opts.customerId ?? null;
   return withCtx(ctx, async (tx) => {
     const rows = (await tx.execute(sql`
       select id::text as id, reference, customer_name, status, currency,
              total_minor, created_at::text as created_at
       from public.quote where org_id = ${ctx.orgId}
+        and (${customerId}::uuid is null or customer_id = ${customerId}::uuid)
       order by created_at desc limit ${limit}
     `)) as unknown as Array<Record<string, unknown>>;
     return rows.map((r) => ({
@@ -433,6 +435,7 @@ export async function listQuotes(
 }
 
 export type QuoteDetail = QuoteRow & {
+  customerId: string | null;
   exchangeRate: number;
   subtotalMinor: number | null;
   vatAmountMinor: number | null;
@@ -460,7 +463,8 @@ export async function getQuote(
   const seesPrice = ctx.pricePrivileged;
   return withCtx(ctx, async (tx) => {
     const q = (await tx.execute(sql`
-      select id::text as id, reference, customer_name, status, currency, exchange_rate,
+      select id::text as id, reference, customer_id::text as customer_id, customer_name, status,
+             currency, exchange_rate,
              subtotal_minor, vat_amount_minor, total_minor, terms, valid_until::text as valid_until,
              converted_job_id::text as converted_job_id, created_at::text as created_at
       from public.quote where id = ${id} and org_id = ${ctx.orgId}
@@ -474,6 +478,7 @@ export async function getQuote(
     return {
       id: r.id as string,
       reference: r.reference as string,
+      customerId: (r.customer_id as string | null) ?? null,
       customerName: (r.customer_name as string | null) ?? null,
       status: r.status as string,
       currency: r.currency as string,

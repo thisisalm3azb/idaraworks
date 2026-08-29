@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { Badge, Button, Card, CardHeader } from "@/platform/ui";
 import { getT } from "@/platform/i18n/server";
@@ -49,6 +50,16 @@ export default async function InvoiceDetailPage({
       {sp.ok ? <Badge tone="success">{t("common.saved")}</Badge> : null}
       {sp.error ? <Badge tone="danger">{t("common.error")}</Badge> : null}
       <Card>
+        {inv.customerId && can(resolved.archetype, "customers.view") ? (
+          <p className="mb-2 text-sm">
+            <Link
+              href={`/o/${orgId}/customers/${inv.customerId}`}
+              className="text-brand hover:underline"
+            >
+              {t("crm.back_to_customer")}
+            </Link>
+          </p>
+        ) : null}
         <CardHeader
           title={inv.customerName ?? "—"}
           meta={

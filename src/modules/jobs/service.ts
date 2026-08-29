@@ -294,6 +294,8 @@ export type JobRow = {
   statusCategory: string;
   presetCode: string | null;
   customerName: string | null;
+  /** H19: present on getJob reads (the 360 back-link). */
+  customerId?: string | null;
   createdAt: string;
   dueDate?: string | null;
   progress?: number | null;
@@ -309,11 +311,14 @@ export async function listJobs(
     /** H18 drill-down scope: narrow any role to its assigned jobs (the same
      * resolver the dashboard's scoped aggregates use for managers). */
     assignedOnly?: boolean;
+    /** H19: narrow to one customer's work (validated upstream). */
+    customerId?: string;
   } = {},
 ): Promise<JobRow[]> {
   assertCan(archetype, "jobs.view");
   // DoD (doc 06/F-6): the foreman sees ONLY assigned jobs, always.
   const scoped = archetype === "foreman" || opts.assignedOnly === true;
+  const customerId = opts.customerId ?? null;
   const rows = (await withCtx(ctx, (tx) =>
     tx.execute(sql`
       select j.id::text as id, j.reference, j.name, j.status_key, j.status_category,
@@ -328,6 +333,7 @@ export async function listJobs(
       left join public.job_stage cs on cs.id = j.current_stage_id
       where j.org_id = ${ctx.orgId} and j.archived = false
         ${scoped ? sql`and ${assignedJobCondition(ctx)}` : sql``}
+        and (${customerId}::uuid is null or j.customer_id = ${customerId}::uuid)
       order by j.created_at desc
     `),
   )) as unknown as Array<{
@@ -382,7 +388,8 @@ async function listJobsById(ctx: Ctx, jobId: string): Promise<JobRow[]> {
   const rows = (await withCtx(ctx, (tx) =>
     tx.execute(sql`
       select j.id::text as id, j.reference, j.name, j.status_key, j.status_category,
-             p.code as preset_code, c.name as customer_name, j.created_at::text as created_at,
+             p.code as preset_code, j.customer_id::text as customer_id, c.name as customer_name,
+             j.created_at::text as created_at,
              j.due_date::text as due_date, j.progress_override,
              (select coalesce(json_agg(json_build_object('weight', s.weight, 'status', s.status)), '[]'::json)
                 from public.job_stage s where s.job_id = j.id) as stages
@@ -398,6 +405,7 @@ async function listJobsById(ctx: Ctx, jobId: string): Promise<JobRow[]> {
     status_key: string;
     status_category: string;
     preset_code: string | null;
+    customer_id: string | null;
     customer_name: string | null;
     created_at: string;
     due_date: string | null;
@@ -411,6 +419,7 @@ async function listJobsById(ctx: Ctx, jobId: string): Promise<JobRow[]> {
     statusKey: r.status_key,
     statusCategory: r.status_category,
     presetCode: r.preset_code,
+    customerId: r.customer_id,
     customerName: r.customer_name,
     createdAt: r.created_at,
     dueDate: r.due_date,

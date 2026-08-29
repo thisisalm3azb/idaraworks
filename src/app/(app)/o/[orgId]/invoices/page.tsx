@@ -1,12 +1,15 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Badge, Button, EmptyState } from "@/platform/ui";
-import { getT } from "@/platform/i18n/server";
+import { Badge, Button, EmptyState, FilterBar } from "@/platform/ui";
+import { getT, getServerLocale } from "@/platform/i18n/server";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { can } from "@/platform/authz";
 import { formatMoney } from "@/platform/format/money";
 import type { CurrencyCode } from "@/platform/registries";
 import { listInvoices } from "@/modules/invoices/service";
+import { getCustomer } from "@/modules/masters/service";
+import { invoicesHref, parseInvoicesSearch } from "@/modules/dashboard/service";
+import { loadOrgTerminology, term } from "@/platform/terminology";
 
 const TONE: Record<string, "neutral" | "info" | "success" | "warning" | "danger"> = {
   draft: "neutral",
@@ -16,14 +19,31 @@ const TONE: Record<string, "neutral" | "info" | "success" | "warning" | "danger"
   cancelled: "danger",
 };
 
-export default async function InvoicesPage({ params }: { params: Promise<{ orgId: string }> }) {
+export default async function InvoicesPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ orgId: string }>;
+  searchParams: Promise<{ customer?: string }>;
+}) {
   const { orgId } = await params;
+  const sp = await searchParams;
   const resolved = await resolveCtx(orgId);
   if (typeof resolved === "string") redirect("/");
   if (!can(resolved.archetype, "invoices.view")) redirect(`/o/${orgId}`);
   const t = await getT();
+  const locale = await getServerLocale();
+  const terms = await loadOrgTerminology(resolved.ctx, locale);
   const currency = resolved.baseCurrency as CurrencyCode;
-  const rows = await listInvoices(resolved.ctx, resolved.archetype);
+  // H19 drill-down contract: ?customer=<uuid> narrows SQL-side, org-scoped —
+  // a foreign or unknown id yields the same honest empty list.
+  const { customerId } = parseInvoicesSearch(sp);
+  const rows = await listInvoices(resolved.ctx, resolved.archetype, {
+    customerId: customerId ?? undefined,
+  });
+  const filterCustomer = customerId
+    ? await getCustomer(resolved.ctx, resolved.archetype, customerId).catch(() => null)
+    : null;
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between gap-2">
@@ -34,8 +54,23 @@ export default async function InvoicesPage({ params }: { params: Promise<{ orgId
           </Link>
         ) : null}
       </div>
+      {customerId ? (
+        <FilterBar
+          summary={
+            filterCustomer
+              ? t("filters.customer", { name: filterCustomer.name })
+              : t("filters.customer_generic", { customer: term("customer", terms, "singular") })
+          }
+          countLabel={t("filters.count", { count: rows.length })}
+          clearHref={invoicesHref(orgId)}
+          clearLabel={t("jobs.filter_clear")}
+        />
+      ) : null}
       {rows.length === 0 ? (
-        <EmptyState title={t("invoices.empty")} />
+        <EmptyState
+          title={customerId ? t("filters.empty") : t("invoices.empty")}
+          description={customerId ? t("filters.empty_hint") : undefined}
+        />
       ) : (
         <ul className="flex flex-col gap-2">
           {rows.map((i) => (

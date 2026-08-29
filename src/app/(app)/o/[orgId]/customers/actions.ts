@@ -3,7 +3,12 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { resolveCtxForAction } from "@/platform/auth/resolve";
-import { createCustomer, setCustomerActive, updateCustomer } from "@/modules/masters/service";
+import {
+  createCustomer,
+  findPossibleDuplicates,
+  setCustomerActive,
+  updateCustomer,
+} from "@/modules/masters/service";
 import { classifyMasterDataError, failMasterDataAction } from "@/platform/http/actionError";
 import { currentRequestId } from "@/platform/observability";
 import { requestLogger } from "@/platform/logger";
@@ -60,6 +65,35 @@ export async function createCustomerAction(orgId: string, formData: FormData): P
     email: String(formData.get("email") ?? ""),
     tax_reg_no: String(formData.get("tax_reg_no") ?? ""),
   };
+  // H19 Part K — conservative duplicate warning: same-org matches on
+  // normalized email/phone or exact name pause creation once (never block,
+  // never merge). Only opaque candidate IDs travel in the URL — email and
+  // phone stay out of query strings, matching the established echo pattern.
+  if (formData.get("confirm_duplicate") !== "1") {
+    try {
+      const dups = await findPossibleDuplicates(resolved.ctx, resolved.archetype, {
+        name: values.name,
+        email: String(formData.get("email") ?? ""),
+        phone: String(formData.get("phone") ?? ""),
+      });
+      if (dups.length > 0) {
+        const q = new URLSearchParams({
+          dup: dups
+            .map((d) => d.id)
+            .slice(0, 3)
+            .join(","),
+          name: values.name,
+          contact_name: String(formData.get("contact_name") ?? ""),
+          country: values.country,
+          notes: String(formData.get("notes") ?? ""),
+        });
+        redirect(`${base}?${q.toString()}#add-customer`);
+      }
+    } catch (err) {
+      // NEXT_REDIRECT must propagate; a failed dup-probe must not block creation.
+      if (err && typeof err === "object" && "digest" in err) throw err;
+    }
+  }
   let id = "";
   try {
     ({ id } = await createCustomer(resolved.ctx, resolved.archetype, customerInput(formData)));

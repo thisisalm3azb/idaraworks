@@ -239,7 +239,7 @@ describe("H18 — workflow stage adoption", () => {
     const bad = structuredClone(good[0]!.value);
     (bad.stages[0]! as { weight: number }).weight = 101;
     await owner`
-      update public.app_settings set value = ${owner.json(bad)}
+      update public.app_settings set value = ${owner.json(bad as unknown as Parameters<typeof owner.json>[0])}
       where org_id = ${orgB} and key = 'config.stage_template'`;
     const verify = (await owner`
       select value->'stages'->0->>'weight' as w from public.app_settings
@@ -260,7 +260,7 @@ describe("H18 — workflow stage adoption", () => {
     }>;
     expect(afterCount[0]!.n).toBe(beforeCount[0]!.n); // rolled back, no orphan
     await owner`
-      update public.app_settings set value = ${owner.json(good[0]!.value)}
+      update public.app_settings set value = ${owner.json(good[0]!.value as unknown as Parameters<typeof owner.json>[0])}
       where org_id = ${orgB} and key = 'config.stage_template'`;
   });
 });

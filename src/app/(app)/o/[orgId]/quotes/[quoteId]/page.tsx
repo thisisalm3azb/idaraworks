@@ -43,6 +43,16 @@ export default async function QuoteDetailPage({
       {sp.error ? <Badge tone="danger">{t("common.error")}</Badge> : null}
       <Card>
         <CardHeader title={q.customerName ?? "—"} meta={money(q.totalMinor)} />
+        {q.customerId && can(resolved.archetype, "customers.view") ? (
+          <p className="mb-2 text-sm">
+            <Link
+              href={`/o/${orgId}/customers/${q.customerId}`}
+              className="text-brand hover:underline"
+            >
+              {t("crm.back_to_customer")}
+            </Link>
+          </p>
+        ) : null}
         <ul className="flex flex-col gap-1 text-sm">
           {q.lines.map((l) => (
             <li

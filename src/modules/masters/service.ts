@@ -514,6 +514,237 @@ export async function setCustomerActive(
   ).then((r) => ({ changed: r.changed }));
 }
 
+// ── customer contacts (H19 — the minimal normalized model, 0077) ─────────────
+// The legacy embedded contact (customer.contact_name/phone/email) is
+// PRESERVED: presentPrimaryContact() below adapts it as a virtual primary
+// whenever a customer has no normalized rows, so nothing is migrated and
+// imported records are never rewritten.
+
+export const ContactInput = z.object({
+  name: name(120),
+  roleTitle: opt(80),
+  email: z
+    .string()
+    .trim()
+    .email()
+    .max(254)
+    .optional()
+    .or(z.literal("").transform(() => undefined)),
+  phone: opt(32),
+  preferredMethod: z.enum(["phone", "email"]).default("phone"),
+  isPrimary: z.boolean().default(false),
+});
+
+export type CustomerContactRow = {
+  id: string;
+  name: string;
+  roleTitle: string | null;
+  email: string | null;
+  phone: string | null;
+  preferredMethod: "phone" | "email";
+  isPrimary: boolean;
+  active: boolean;
+  /** True only for the legacy embedded-contact adapter row (not editable). */
+  legacy?: boolean;
+};
+
+export async function listCustomerContacts(
+  ctx: Ctx,
+  archetype: RoleArchetype,
+  customerId: string,
+): Promise<CustomerContactRow[]> {
+  assertCan(archetype, "customers.view");
+  if (!z.string().uuid().safeParse(customerId).success) return [];
+  const rows = (await withCtx(ctx, (tx) =>
+    tx.execute(sql`
+      select id::text as id, name, role_title, email, phone, preferred_method,
+             is_primary, active
+      from public.customer_contact
+      where org_id = ${ctx.orgId} and customer_id = ${customerId} and active = true
+      order by is_primary desc, name
+    `),
+  )) as unknown as Array<Record<string, string | boolean | null>>;
+  return rows.map((r) => ({
+    id: r.id as string,
+    name: r.name as string,
+    roleTitle: (r.role_title as string) ?? null,
+    email: (r.email as string) ?? null,
+    phone: (r.phone as string) ?? null,
+    preferredMethod: r.preferred_method as "phone" | "email",
+    isPrimary: r.is_primary as boolean,
+    active: r.active as boolean,
+  }));
+}
+
+export async function addCustomerContact(
+  ctx: Ctx,
+  archetype: RoleArchetype,
+  customerId: string,
+  input: unknown,
+): Promise<{ id: string }> {
+  assertCan(archetype, "customers.manage");
+  const data = ContactInput.parse(input);
+  if (!z.string().uuid().safeParse(customerId).success) {
+    throw new Error("invalid customer id");
+  }
+  const id = randomUUID();
+  await command(
+    ctx,
+    {
+      audit: {
+        action: "customer.contact_add",
+        entityType: "customer",
+        entityId: customerId,
+        summary: `Added contact ${data.name}`,
+      },
+    },
+    async (tx) => {
+      // The org filter re-asserts tenancy even before RLS; a foreign
+      // customer id inserts nothing and the FK/exists check throws.
+      const exists = (await tx.execute(sql`
+        select 1 from public.customer where org_id = ${ctx.orgId} and id = ${customerId}
+      `)) as unknown as Array<unknown>;
+      if (exists.length === 0) throw new Error("customer not found");
+      if (data.isPrimary) {
+        await tx.execute(sql`
+          update public.customer_contact set is_primary = false, updated_at = now()
+          where org_id = ${ctx.orgId} and customer_id = ${customerId} and is_primary = true
+        `);
+      }
+      await tx.execute(sql`
+        insert into public.customer_contact
+          (id, org_id, customer_id, name, role_title, email, phone, preferred_method, is_primary)
+        values (${id}, ${ctx.orgId}, ${customerId}, ${data.name}, ${data.roleTitle ?? null},
+                ${data.email ?? null}, ${data.phone ?? null}, ${data.preferredMethod},
+                ${data.isPrimary})
+      `);
+    },
+  );
+  return { id };
+}
+
+export async function deactivateCustomerContact(
+  ctx: Ctx,
+  archetype: RoleArchetype,
+  customerId: string,
+  contactId: string,
+): Promise<void> {
+  assertCan(archetype, "customers.manage");
+  if (
+    !z.string().uuid().safeParse(customerId).success ||
+    !z.string().uuid().safeParse(contactId).success
+  ) {
+    throw new Error("invalid id");
+  }
+  await command(
+    ctx,
+    {
+      audit: {
+        action: "customer.contact_remove",
+        entityType: "customer",
+        entityId: customerId,
+        summary: "Removed a contact",
+      },
+    },
+    (tx) =>
+      tx.execute(sql`
+        update public.customer_contact
+        set active = false, is_primary = false, updated_at = now()
+        where org_id = ${ctx.orgId} and customer_id = ${customerId} and id = ${contactId}
+      `),
+  );
+}
+
+/** The compatibility adapter (H19 Part I): the customer's primary contact for
+ * presentation — the first normalized primary (or first active row), else the
+ * legacy embedded contact as a read-only virtual row, else null. */
+export function presentPrimaryContact(
+  customer: Pick<CustomerDetail, "contactName" | "phone" | "email">,
+  contacts: CustomerContactRow[],
+): CustomerContactRow | null {
+  const primary = contacts.find((c) => c.isPrimary) ?? contacts[0] ?? null;
+  if (primary) return primary;
+  if (customer.contactName || customer.phone || customer.email) {
+    return {
+      id: "legacy",
+      name: customer.contactName ?? "",
+      roleTitle: null,
+      email: customer.email,
+      phone: customer.phone,
+      preferredMethod: "phone",
+      isPrimary: true,
+      active: true,
+      legacy: true,
+    };
+  }
+  return null;
+}
+
+// ── duplicate safety (H19 Part K) ────────────────────────────────────────────
+export type DuplicateCandidate = {
+  id: string;
+  name: string;
+  active: boolean;
+  matchedOn: "email" | "phone" | "name";
+};
+
+/** Normalize ONLY for comparison — stored values are never rewritten. */
+export function normalizeEmailForMatch(email: string | null | undefined): string | null {
+  const v = (email ?? "").trim().toLowerCase();
+  return v.length > 0 ? v : null;
+}
+export function normalizePhoneForMatch(phone: string | null | undefined): string | null {
+  const digits = (phone ?? "").replace(/[^0-9]/g, "");
+  // Compare on the last 7 digits (the subscriber number) so +971 4 555 0100
+  // and 04-555-0100 match — the country code and the trunk 0 replace each
+  // other asymmetrically, so longer suffixes miss real duplicates.
+  return digits.length >= 7 ? digits.slice(-7) : null;
+}
+
+/** Conservative possible-duplicate lookup inside the acting organization
+ * (same-org names are already visible to customers.manage holders — nothing
+ * inaccessible is revealed). Never blocks and never merges. */
+export async function findPossibleDuplicates(
+  ctx: Ctx,
+  archetype: RoleArchetype,
+  probe: { name?: string | null; email?: string | null; phone?: string | null },
+): Promise<DuplicateCandidate[]> {
+  assertCan(archetype, "customers.manage");
+  const email = normalizeEmailForMatch(probe.email);
+  const phone = normalizePhoneForMatch(probe.phone);
+  const nm = (probe.name ?? "").trim().toLowerCase();
+  if (!email && !phone && nm.length < 3) return [];
+  const rows = (await withCtx(ctx, (tx) =>
+    tx.execute(sql`
+      select id::text as id, name, active, email, phone
+      from public.customer
+      where org_id = ${ctx.orgId}
+        and ((${email}::text is not null and lower(trim(coalesce(email,''))) = ${email})
+          or (${phone}::text is not null
+              and right(regexp_replace(coalesce(phone,''), '[^0-9]', '', 'g'), 7) = ${phone})
+          or (${nm}::text <> '' and lower(name) = ${nm}))
+      limit 5
+    `),
+  )) as unknown as Array<{
+    id: string;
+    name: string;
+    active: boolean;
+    email: string | null;
+    phone: string | null;
+  }>;
+  return rows.map((r) => ({
+    id: r.id,
+    name: r.name,
+    active: r.active,
+    matchedOn:
+      email && normalizeEmailForMatch(r.email) === email
+        ? ("email" as const)
+        : phone && normalizePhoneForMatch(r.phone) === phone
+          ? ("phone" as const)
+          : ("name" as const),
+  }));
+}
+
 // ── suppliers ────────────────────────────────────────────────────────────────
 export const SupplierInput = z.object({
   name: name(160),

@@ -6,7 +6,9 @@ import { resolveCtx } from "@/platform/auth/resolve";
 import { can } from "@/platform/authz";
 import { formatDate, formatMoney } from "@/platform/format";
 import type { CurrencyCode } from "@/platform/registries";
-import { computeAR, listOutstandingInvoices } from "@/modules/invoices/service";
+import { computeAR, customerMoney, listOutstandingInvoices } from "@/modules/invoices/service";
+import { getCustomer } from "@/modules/masters/service";
+import { loadOrgTerminology, term } from "@/platform/terminology";
 import { arHref, orgToday, parseArSearch, type ArView } from "@/modules/dashboard/service";
 
 /**
@@ -22,7 +24,7 @@ export default async function ArPage({
   searchParams,
 }: {
   params: Promise<{ orgId: string }>;
-  searchParams: Promise<{ view?: string }>;
+  searchParams: Promise<{ view?: string; customer?: string }>;
 }) {
   const { orgId } = await params;
   const sp = await searchParams;
@@ -31,24 +33,41 @@ export default async function ArPage({
   if (!can(resolved.archetype, "ar.view")) redirect(`/o/${orgId}`);
   const t = await getT();
   const locale = await getServerLocale();
+  const terms = await loadOrgTerminology(resolved.ctx, locale);
   const currency = resolved.baseCurrency as CurrencyCode;
-  const { view } = parseArSearch(sp);
+  // H19: ?customer=<uuid> narrows every number and row on this page to one
+  // customer, using the SAME shared derivation (org-scoped; a foreign or
+  // unknown id shows the same honest zeros as any random uuid).
+  const { view, customerId } = parseArSearch(sp);
   const asOf = orgToday(new Date(), resolved.timezone);
-  const [ar, invoices] = await Promise.all([
-    computeAR(resolved.ctx, resolved.archetype, asOf),
-    listOutstandingInvoices(resolved.ctx, resolved.archetype, asOf, view),
+  const [ar, custMoney, invoices, filterCustomer] = await Promise.all([
+    customerId ? null : computeAR(resolved.ctx, resolved.archetype, asOf),
+    customerId ? customerMoney(resolved.ctx, resolved.archetype, customerId, asOf) : null,
+    listOutstandingInvoices(resolved.ctx, resolved.archetype, asOf, view, {
+      customerId: customerId ?? undefined,
+    }),
+    customerId ? getCustomer(resolved.ctx, resolved.archetype, customerId).catch(() => null) : null,
   ]);
   const redacted = !resolved.ctx.pricePrivileged;
   const money = (v: number | null) =>
     v === null ? t("ar.redacted") : formatMoney(v, currency, { locale });
-  const overdueTotal =
-    ar.d1_30 === null
+  const overdueTotal = customerId
+    ? (custMoney?.overdueMinor ?? null)
+    : ar!.d1_30 === null
       ? null
-      : (ar.d1_30 ?? 0) + (ar.d31_60 ?? 0) + (ar.d61_90 ?? 0) + (ar.over90 ?? 0);
+      : (ar!.d1_30 ?? 0) + (ar!.d31_60 ?? 0) + (ar!.d61_90 ?? 0) + (ar!.over90 ?? 0);
   const views: Array<{ key: ArView; label: string; amount: number | null }> = [
-    { key: "all", label: t("ar.view.all"), amount: ar.outstandingMinor },
+    {
+      key: "all",
+      label: t("ar.view.all"),
+      amount: customerId ? (custMoney?.outstandingMinor ?? null) : ar!.outstandingMinor,
+    },
     { key: "overdue", label: t("ar.view.overdue"), amount: overdueTotal },
-    { key: "over90", label: t("ar.view.over90"), amount: ar.over90 },
+    {
+      key: "over90",
+      label: t("ar.view.over90"),
+      amount: customerId ? (custMoney?.over90Minor ?? null) : ar!.over90,
+    },
   ];
   const activeView = views.find((v) => v.key === view)!;
 
@@ -61,12 +80,24 @@ export default async function ArPage({
         </p>
       </div>
 
+      {customerId ? (
+        <FilterBar
+          summary={
+            filterCustomer
+              ? t("filters.customer", { name: filterCustomer.name })
+              : t("filters.customer_generic", { customer: term("customer", terms, "singular") })
+          }
+          countLabel={t("filters.count", { count: invoices?.length ?? 0 })}
+          clearHref={arHref(orgId, view)}
+          clearLabel={t("jobs.filter_clear")}
+        />
+      ) : null}
       {/* The three views: distinct, linkable, one financial definition. */}
       <div role="group" aria-label={t("ar.view.label")} className="flex flex-wrap gap-2">
         {views.map((v) => (
           <Link
             key={v.key}
-            href={arHref(orgId, v.key)}
+            href={arHref(orgId, v.key, customerId)}
             aria-current={view === v.key ? "page" : undefined}
             className={`flex min-h-11 flex-col justify-center rounded-lg border px-4 py-2 ${
               view === v.key
@@ -88,7 +119,7 @@ export default async function ArPage({
           <FilterBar
             summary={activeView.label}
             countLabel={t("filters.count", { count: invoices?.length ?? 0 })}
-            clearHref={arHref(orgId)}
+            clearHref={arHref(orgId, "all", customerId)}
             clearLabel={t("ar.view.show_all")}
           />
         ) : (
@@ -140,30 +171,32 @@ export default async function ArPage({
         )}
       </Card>
 
-      <Card>
-        <CardHeader title={t("ar.aging")} />
-        <div className="flex flex-col">
-          {(
-            [
-              [t("ar.bucket.current"), ar.current],
-              [t("ar.bucket.d1_30"), ar.d1_30],
-              [t("ar.bucket.d31_60"), ar.d31_60],
-              [t("ar.bucket.d61_90"), ar.d61_90],
-              [t("ar.bucket.over90"), ar.over90],
-            ] as Array<[string, number | null]>
-          ).map(([label, v]) => (
-            <div
-              key={label}
-              className="flex items-center justify-between gap-2 border-b border-line py-2 text-sm last:border-0"
-            >
-              <span className="text-ink-muted">{label}</span>
-              <span className="font-mono text-ink" dir="ltr">
-                {money(v)}
-              </span>
-            </div>
-          ))}
-        </div>
-      </Card>
+      {customerId ? null : (
+        <Card>
+          <CardHeader title={t("ar.aging")} />
+          <div className="flex flex-col">
+            {(
+              [
+                [t("ar.bucket.current"), ar!.current],
+                [t("ar.bucket.d1_30"), ar!.d1_30],
+                [t("ar.bucket.d31_60"), ar!.d31_60],
+                [t("ar.bucket.d61_90"), ar!.d61_90],
+                [t("ar.bucket.over90"), ar!.over90],
+              ] as Array<[string, number | null]>
+            ).map(([label, v]) => (
+              <div
+                key={label}
+                className="flex items-center justify-between gap-2 border-b border-line py-2 text-sm last:border-0"
+              >
+                <span className="text-ink-muted">{label}</span>
+                <span className="font-mono text-ink" dir="ltr">
+                  {money(v)}
+                </span>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
     </div>
   );
 }

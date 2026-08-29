@@ -6,7 +6,11 @@ import { resolveCtx } from "@/platform/auth/resolve";
 import { loadOrgTerminology, term } from "@/platform/terminology";
 import { can } from "@/platform/authz";
 import { cn } from "@/lib/cn";
-import { listCustomers } from "@/modules/masters/service";
+import { getCustomer, listCustomers } from "@/modules/masters/service";
+import { customerOutstandingMap } from "@/modules/invoices/service";
+import { orgToday } from "@/modules/dashboard/service";
+import { formatMoney } from "@/platform/format";
+import type { CurrencyCode } from "@/platform/registries";
 import { isMasterDataErrorCode } from "@/platform/http/actionError";
 import { createCustomerAction } from "./actions";
 
@@ -31,6 +35,7 @@ export default async function CustomersPage({
     country?: string;
     contact_name?: string;
     notes?: string;
+    dup?: string;
   }>;
 }) {
   const { orgId } = await params;
@@ -56,6 +61,30 @@ export default async function CustomersPage({
 
   const canManage = can(resolved.archetype, "customers.manage");
   const addWithOrg = createCustomerAction.bind(null, orgId);
+
+  // H19 Part J — outstanding-balance indicator for price-authorized roles
+  // (one grouped query over the shared derivation; null = restricted, and a
+  // failed read simply hides the chips — never fake zeros).
+  const currency = resolved.baseCurrency as CurrencyCode;
+  const balances =
+    can(resolved.archetype, "ar.view") && resolved.ctx.pricePrivileged
+      ? await customerOutstandingMap(
+          resolved.ctx,
+          resolved.archetype,
+          orgToday(new Date(), resolved.timezone),
+        ).catch(() => null)
+      : null;
+
+  // H19 Part K — possible-duplicate pause: opaque candidate ids from the
+  // create action, resolved to names server-side (org-scoped; ≤3).
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const dupIds = (sp.dup ?? "")
+    .split(",")
+    .filter((x) => UUID_RE.test(x))
+    .slice(0, 3);
+  const dupCandidates = (
+    await Promise.all(dupIds.map((id) => getCustomer(resolved.ctx, resolved.archetype, id)))
+  ).filter((c): c is NonNullable<typeof c> => c !== null);
 
   const errorCode = isMasterDataErrorCode(sp.error) ? sp.error : undefined;
   const errorMsg = errorCode ? t(`masterdata.error.${errorCode}`) : null;
@@ -147,9 +176,16 @@ export default async function CustomersPage({
                       {[c.contactName, c.phone, c.country].filter(Boolean).join(" · ")}
                     </p>
                   </div>
-                  <Badge tone={c.active ? "success" : "neutral"}>
-                    {c.active ? t("common.active") : t("customers.archived")}
-                  </Badge>
+                  <span className="flex shrink-0 items-center gap-2">
+                    {balances && (balances.get(c.id) ?? 0) > 0 ? (
+                      <span dir="ltr" className="font-mono text-xs font-medium text-warning">
+                        {formatMoney(balances.get(c.id)!, currency, { locale })}
+                      </span>
+                    ) : null}
+                    <Badge tone={c.active ? "success" : "neutral"}>
+                      {c.active ? t("common.active") : t("customers.archived")}
+                    </Badge>
+                  </span>
                 </Link>
               </li>
             ))}
@@ -158,8 +194,27 @@ export default async function CustomersPage({
       </Card>
 
       {canManage ? (
-        <Card>
+        <Card id="add-customer" className="scroll-mt-20">
           <CardHeader title={t("customers.add", { customer: customerT })} />
+          {dupCandidates.length > 0 ? (
+            <div role="alert" className="mb-3 rounded-md bg-warning-soft p-3 text-sm text-ink">
+              <p className="font-medium">{t("crm.dup.title", { customer: customerT })}</p>
+              <ul className="mt-1 list-inside list-disc">
+                {dupCandidates.map((d) => (
+                  <li key={d.id}>
+                    <Link
+                      href={`/o/${orgId}/customers/${d.id}`}
+                      className="text-brand hover:underline"
+                    >
+                      {d.name}
+                    </Link>{" "}
+                    {d.active ? null : <Badge tone="neutral">{t("customers.archived")}</Badge>}
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-1 text-xs text-ink-secondary">{t("crm.dup.hint")}</p>
+            </div>
+          ) : null}
           {errorMsg ? (
             <div className="mb-3 rounded-md bg-danger-soft p-3 text-sm text-danger" role="alert">
               <p>{errorMsg}</p>
@@ -171,6 +226,9 @@ export default async function CustomersPage({
             </div>
           ) : null}
           <form action={addWithOrg} className="flex flex-col gap-4">
+            {dupCandidates.length > 0 ? (
+              <input type="hidden" name="confirm_duplicate" value="1" />
+            ) : null}
             <Field
               label={t("common.name")}
               name="name"
@@ -204,7 +262,9 @@ export default async function CustomersPage({
             />
             <Field label={t("customers.tax_no")} name="tax_reg_no" defaultValue="" />
             <Field label={t("common.notes")} name="notes" defaultValue={sp.notes ?? ""} />
-            <Button type="submit">{t("common.add")}</Button>
+            <Button type="submit">
+              {dupCandidates.length > 0 ? t("crm.dup.create_anyway") : t("common.add")}
+            </Button>
           </form>
         </Card>
       ) : null}

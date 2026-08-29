@@ -47,12 +47,14 @@ describe("H18 — filter parsing (server-validated, unknown safely ignored)", ()
       days: null,
       stage: null,
       scope: null,
+      customerId: null,
     });
     expect(parseJobsSearch({ filter: "due_soon", days: "3", scope: "mine" })).toEqual({
       filter: "due_soon",
       days: 3,
       stage: null,
       scope: "mine",
+      customerId: null,
     });
     // Unknown/malformed → ignored, never an error.
     expect(parseJobsSearch({ filter: "DROP TABLE", days: "-4", scope: "yours" })).toEqual({
@@ -60,6 +62,7 @@ describe("H18 — filter parsing (server-validated, unknown safely ignored)", ()
       days: null,
       stage: null,
       scope: null,
+      customerId: null,
     });
     expect(parseJobsSearch({ filter: "due_soon", days: "9999" }).days).toBe(7); // clamped default
     expect(parseJobsSearch({ stage: "Mould Prep!" }).stage).toBeNull(); // shape-invalid
@@ -90,6 +93,7 @@ describe("H18 — filter parsing (server-validated, unknown safely ignored)", ()
       days: 5,
       stage: null,
       scope: "mine",
+      customerId: null,
     });
     expect(
       parseArSearch({

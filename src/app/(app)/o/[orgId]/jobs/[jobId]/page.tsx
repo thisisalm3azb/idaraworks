@@ -86,6 +86,16 @@ export default async function JobPage({
   return (
     <div className="flex flex-col gap-4">
       <Card>
+        {job.customerId && can(a, "customers.view") ? (
+          <p className="mb-1 text-sm">
+            <Link
+              href={`/o/${orgId}/customers/${job.customerId}`}
+              className="text-brand hover:underline"
+            >
+              {job.customerName ?? t("crm.back_to_customer")}
+            </Link>
+          </p>
+        ) : null}
         <CardHeader
           title={`${job.reference} — ${job.name}`}
           meta={

@@ -8,6 +8,9 @@ import { parseQuotesSearch, quoteIsAwaiting, quotesHref } from "@/modules/dashbo
 import { formatMoney } from "@/platform/format/money";
 import type { CurrencyCode } from "@/platform/registries";
 import { listQuotes } from "@/modules/quotes/service";
+import { getCustomer } from "@/modules/masters/service";
+import { loadOrgTerminology, term } from "@/platform/terminology";
+import { getServerLocale } from "@/platform/i18n/server";
 
 const TONE: Record<string, "neutral" | "info" | "success" | "warning" | "danger"> = {
   draft: "neutral",
@@ -25,7 +28,7 @@ export default async function QuotesPage({
   searchParams,
 }: {
   params: Promise<{ orgId: string }>;
-  searchParams: Promise<{ status?: string }>;
+  searchParams: Promise<{ status?: string; customer?: string }>;
 }) {
   const { orgId } = await params;
   const sp = await searchParams;
@@ -33,12 +36,31 @@ export default async function QuotesPage({
   if (typeof resolved === "string") redirect("/");
   if (!can(resolved.archetype, "quotes.view")) redirect(`/o/${orgId}`);
   const t = await getT();
+  const locale = await getServerLocale();
+  const terms = await loadOrgTerminology(resolved.ctx, locale);
   const currency = resolved.baseCurrency as CurrencyCode;
-  // H18 drill-down contract: ?status=awaiting = the dashboard rule (draft or
-  // pending approval); unknown values are safely ignored.
-  const { awaiting } = parseQuotesSearch(sp);
-  const all = await listQuotes(resolved.ctx, resolved.archetype);
+  // H18/H19 drill-down contract: ?status=awaiting (the dashboard rule) and
+  // ?customer=<uuid> (SQL-side, org-scoped — a foreign or unknown id yields
+  // the same honest empty list); unknown values are safely ignored.
+  const { awaiting, customerId } = parseQuotesSearch(sp);
+  const all = await listQuotes(resolved.ctx, resolved.archetype, {
+    customerId: customerId ?? undefined,
+  });
   const rows = awaiting ? all.filter((r) => quoteIsAwaiting(r)) : all;
+  const filterCustomer = customerId
+    ? await getCustomer(resolved.ctx, resolved.archetype, customerId).catch(() => null)
+    : null;
+  const filtered = awaiting || customerId !== null;
+  const summary = [
+    awaiting ? t("filters.quotes.awaiting") : null,
+    customerId
+      ? filterCustomer
+        ? t("filters.customer", { name: filterCustomer.name })
+        : t("filters.customer_generic", { customer: term("customer", terms, "singular") })
+      : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between gap-2">
@@ -49,9 +71,9 @@ export default async function QuotesPage({
           </Link>
         ) : null}
       </div>
-      {awaiting ? (
+      {filtered ? (
         <FilterBar
-          summary={t("filters.quotes.awaiting")}
+          summary={summary}
           countLabel={t("filters.count", { count: rows.length })}
           clearHref={quotesHref(orgId)}
           clearLabel={t("jobs.filter_clear")}
@@ -59,8 +81,8 @@ export default async function QuotesPage({
       ) : null}
       {rows.length === 0 ? (
         <EmptyState
-          title={awaiting ? t("filters.empty") : t("quotes.empty")}
-          description={awaiting ? t("filters.empty_hint") : undefined}
+          title={filtered ? t("filters.empty") : t("quotes.empty")}
+          description={filtered ? t("filters.empty_hint") : undefined}
         />
       ) : (
         <ul className="flex flex-col gap-2">

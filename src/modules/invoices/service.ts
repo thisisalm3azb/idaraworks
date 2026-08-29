@@ -462,10 +462,12 @@ export async function listOutstandingInvoices(
   archetype: RoleArchetype,
   asOf: string,
   view: "all" | "overdue" | "over90" = "all",
+  opts: { customerId?: string } = {},
 ): Promise<OutstandingInvoiceRow[] | null> {
   assertCan(archetype, "ar.view");
   if (!ctx.pricePrivileged) return null;
   const ageFloor = view === "over90" ? 90 : view === "overdue" ? 0 : -1;
+  const customerId = opts.customerId ?? null;
   return withCtx(ctx, async (tx) => {
     const rows = (await tx.execute(sql`
       with ${outstandingInvoiceCte(ctx, asOf)}
@@ -474,6 +476,7 @@ export async function listOutstandingInvoices(
       from outstanding o
       join public.invoice i on i.id = o.id
       where o.age_days > ${ageFloor}
+        and (${customerId}::uuid is null or i.customer_id = ${customerId}::uuid)
       order by o.age_days desc, i.due_date asc nulls last, i.reference
       limit 500
     `)) as unknown as Array<Record<string, unknown>>;
@@ -486,6 +489,88 @@ export async function listOutstandingInvoices(
       balanceMinor: Number(r.bal),
       ageDays: Number(r.age_days),
     }));
+  });
+}
+
+// ── Customer 360 money (H19 Part D — the SAME definitions as /ar) ────────────
+export type CustomerMoney = {
+  /** Lifetime issued invoice value (base currency; excludes drafts and
+   * cancellations; credit notes NOT netted here — invoiced ≠ outstanding). */
+  invoicedMinor: number;
+  /** Payments recorded/confirmed against this customer's invoices. */
+  paidMinor: number;
+  /** From the shared outstanding CTE: net of allocations + credit notes. */
+  outstandingMinor: number;
+  overdueMinor: number;
+  over90Minor: number;
+  invoiceCount: number;
+};
+
+/** Per-customer financial truth, one query over the shared CTE. Returns null
+ * when price-redacted — callers render "restricted", never zeros. */
+export async function customerMoney(
+  ctx: Ctx,
+  archetype: RoleArchetype,
+  customerId: string,
+  asOf: string,
+): Promise<CustomerMoney | null> {
+  assertCan(archetype, "ar.view");
+  if (!ctx.pricePrivileged) return null;
+  return withCtx(ctx, async (tx) => {
+    const rows = (await tx.execute(sql`
+      with ${outstandingInvoiceCte(ctx, asOf)}
+      select
+        (select coalesce(sum(i.base_total_minor),0)::bigint from public.invoice i
+          where i.org_id = ${ctx.orgId} and i.customer_id = ${customerId}
+            and i.kind = 'invoice' and i.status in ('issued','partially_paid','paid')) as invoiced,
+        (select count(*)::int from public.invoice i
+          where i.org_id = ${ctx.orgId} and i.customer_id = ${customerId}
+            and i.kind = 'invoice' and i.status in ('issued','partially_paid','paid')) as invoice_count,
+        (select coalesce(sum(p.base_amount_minor),0)::bigint from public.payment p
+          join public.invoice i on i.id = p.invoice_id
+          where p.org_id = ${ctx.orgId} and i.customer_id = ${customerId}
+            and p.status in ('recorded','confirmed')) as paid,
+        coalesce((select sum(o.bal) from outstanding o
+          join public.invoice i on i.id = o.id
+          where i.customer_id = ${customerId}),0)::bigint as outstanding,
+        coalesce((select sum(o.bal) from outstanding o
+          join public.invoice i on i.id = o.id
+          where i.customer_id = ${customerId} and o.age_days >= 1),0)::bigint as overdue,
+        coalesce((select sum(o.bal) from outstanding o
+          join public.invoice i on i.id = o.id
+          where i.customer_id = ${customerId} and o.age_days > 90),0)::bigint as over90
+    `)) as unknown as Array<Record<string, string | number>>;
+    const r = rows[0]!;
+    return {
+      invoicedMinor: Number(r.invoiced),
+      paidMinor: Number(r.paid),
+      outstandingMinor: Number(r.outstanding),
+      overdueMinor: Number(r.overdue),
+      over90Minor: Number(r.over90),
+      invoiceCount: Number(r.invoice_count),
+    };
+  });
+}
+
+/** Outstanding balance per customer (H19 list indicator) — ONE grouped query
+ * over the shared CTE; null when price-redacted (never zeros). */
+export async function customerOutstandingMap(
+  ctx: Ctx,
+  archetype: RoleArchetype,
+  asOf: string,
+): Promise<Map<string, number> | null> {
+  assertCan(archetype, "ar.view");
+  if (!ctx.pricePrivileged) return null;
+  return withCtx(ctx, async (tx) => {
+    const rows = (await tx.execute(sql`
+      with ${outstandingInvoiceCte(ctx, asOf)}
+      select i.customer_id::text as customer_id, sum(o.bal)::bigint as bal
+      from outstanding o
+      join public.invoice i on i.id = o.id
+      where i.customer_id is not null
+      group by 1
+    `)) as unknown as Array<{ customer_id: string; bal: string }>;
+    return new Map(rows.map((r) => [r.customer_id, Number(r.bal)]));
   });
 }
 
@@ -505,16 +590,18 @@ export type InvoiceRow = {
 export async function listInvoices(
   ctx: Ctx,
   archetype: RoleArchetype,
-  opts: { limit?: number } = {},
+  opts: { limit?: number; customerId?: string } = {},
 ): Promise<InvoiceRow[]> {
   assertCan(archetype, "invoices.view");
   const seesPrice = ctx.pricePrivileged;
   const limit = Math.min(opts.limit ?? 200, 500);
+  const customerId = opts.customerId ?? null;
   return withCtx(ctx, async (tx) => {
     const rows = (await tx.execute(sql`
       select id::text as id, reference, kind, customer_name, status, currency, total_minor,
              due_date::text as due_date, issued_at::text as issued_at
       from public.invoice where org_id = ${ctx.orgId}
+        and (${customerId}::uuid is null or customer_id = ${customerId}::uuid)
       order by created_at desc limit ${limit}
     `)) as unknown as Array<Record<string, unknown>>;
     return rows.map((r) => ({
@@ -532,6 +619,7 @@ export async function listInvoices(
 }
 
 export type InvoiceDetail = InvoiceRow & {
+  customerId: string | null;
   isExport: boolean;
   subtotalMinor: number | null;
   vatAmountMinor: number | null;
@@ -558,7 +646,8 @@ export async function getInvoice(
   const seesPrice = ctx.pricePrivileged;
   return withCtx(ctx, async (tx) => {
     const q = (await tx.execute(sql`
-      select i.id::text as id, i.reference, i.kind, i.customer_name, i.customer_tax_reg_no, i.status,
+      select i.id::text as id, i.reference, i.kind, i.customer_id::text as customer_id,
+             i.customer_name, i.customer_tax_reg_no, i.status,
              i.currency, i.is_export, i.subtotal_minor, i.vat_amount_minor, i.total_minor,
              i.due_date::text as due_date, i.issued_at::text as issued_at,
              i.corrects_invoice_id::text as corrects_invoice_id,
@@ -575,6 +664,7 @@ export async function getInvoice(
       id: r.id as string,
       reference: r.reference as string,
       kind: r.kind as string,
+      customerId: (r.customer_id as string | null) ?? null,
       customerName: (r.customer_name as string | null) ?? null,
       customerTaxRegNo: (r.customer_tax_reg_no as string | null) ?? null,
       status: r.status as string,

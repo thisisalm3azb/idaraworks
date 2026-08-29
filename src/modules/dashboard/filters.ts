@@ -19,6 +19,17 @@
  * assignment resolver the aggregates use.
  */
 
+// ── Customer parameter (H19 Part E — shared by every destination) ───────────
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Server-side customer-id validation: a well-formed uuid or null. The
+ * destination applies it inside its org-scoped query, so a foreign or
+ * unknown id yields the SAME honest empty list as any random uuid — the
+ * URL never reveals whether a customer exists. */
+export function parseCustomerParam(sp: { customer?: string }): { customerId: string | null } {
+  return { customerId: sp.customer && UUID_RE.test(sp.customer) ? sp.customer : null };
+}
+
 // ── Jobs (/jobs) ────────────────────────────────────────────────────────────
 export const JOB_LIST_FILTERS = ["overdue", "due_soon"] as const;
 export type JobListFilter = (typeof JOB_LIST_FILTERS)[number];
@@ -33,6 +44,8 @@ export type JobsSearch = {
   /** "mine" narrows to the caller's assigned scope (the same resolver the
    * dashboard aggregates use for managers). */
   scope: "mine" | null;
+  /** H19: narrow the list to one customer's work (validated uuid). */
+  customerId: string | null;
 };
 
 const STAGE_KEY_RE = /^[a-z][a-z0-9_]{0,39}$/;
@@ -42,6 +55,7 @@ export function parseJobsSearch(sp: {
   days?: string;
   stage?: string;
   scope?: string;
+  customer?: string;
 }): JobsSearch {
   const filter = (JOB_LIST_FILTERS as readonly string[]).includes(sp.filter ?? "")
     ? (sp.filter as JobListFilter)
@@ -56,18 +70,20 @@ export function parseJobsSearch(sp: {
     days,
     stage: sp.stage && STAGE_KEY_RE.test(sp.stage) ? sp.stage : null,
     scope: sp.scope === "mine" ? "mine" : null,
+    customerId: parseCustomerParam(sp).customerId,
   };
 }
 
 export function jobsHref(
   orgId: string,
-  f: Partial<Pick<JobsSearch, "filter" | "days" | "stage" | "scope">> = {},
+  f: Partial<Pick<JobsSearch, "filter" | "days" | "stage" | "scope" | "customerId">> = {},
 ): string {
   const q = new URLSearchParams();
   if (f.filter) q.set("filter", f.filter);
   if (f.filter === "due_soon" && f.days) q.set("days", String(f.days));
   if (f.stage) q.set("stage", f.stage);
   if (f.scope) q.set("scope", f.scope);
+  if (f.customerId) q.set("customer", f.customerId);
   const qs = q.toString();
   return `/o/${orgId}/jobs${qs ? `?${qs}` : ""}`;
 }
@@ -119,14 +135,31 @@ export function reviewHref(orgId: string, focus: ReviewFocus = "queue"): string 
 export const AR_VIEWS = ["all", "overdue", "over90"] as const;
 export type ArView = (typeof AR_VIEWS)[number];
 
-export function parseArSearch(sp: { view?: string }): { view: ArView } {
+export function parseArSearch(sp: { view?: string; customer?: string }): {
+  view: ArView;
+  customerId: string | null;
+} {
   return {
     view: (AR_VIEWS as readonly string[]).includes(sp.view ?? "") ? (sp.view as ArView) : "all",
+    customerId: parseCustomerParam(sp).customerId,
   };
 }
 
-export function arHref(orgId: string, view: ArView = "all"): string {
-  return `/o/${orgId}/ar${view === "all" ? "" : `?view=${view}`}`;
+export function arHref(orgId: string, view: ArView = "all", customerId?: string | null): string {
+  const q = new URLSearchParams();
+  if (view !== "all") q.set("view", view);
+  if (customerId) q.set("customer", customerId);
+  const qs = q.toString();
+  return `/o/${orgId}/ar${qs ? `?${qs}` : ""}`;
+}
+
+// ── Invoices (/invoices) ────────────────────────────────────────────────────
+export function parseInvoicesSearch(sp: { customer?: string }): { customerId: string | null } {
+  return parseCustomerParam(sp);
+}
+
+export function invoicesHref(orgId: string, customerId?: string | null): string {
+  return `/o/${orgId}/invoices${customerId ? `?customer=${customerId}` : ""}`;
 }
 
 // ── Issues (/issues) ────────────────────────────────────────────────────────
@@ -189,12 +222,19 @@ export function expenseIsUnpaid(e: { paymentStatus: string; voidedAt: string | n
 /** The dashboard's "awaiting action" quote statuses (extras.quotesAwaiting). */
 export const QUOTE_AWAITING_STATUSES = ["draft", "pending_approval"] as const;
 
-export function parseQuotesSearch(sp: { status?: string }): { awaiting: boolean } {
-  return { awaiting: sp.status === "awaiting" };
+export function parseQuotesSearch(sp: { status?: string; customer?: string }): {
+  awaiting: boolean;
+  customerId: string | null;
+} {
+  return { awaiting: sp.status === "awaiting", customerId: parseCustomerParam(sp).customerId };
 }
 
-export function quotesHref(orgId: string, awaiting = false): string {
-  return `/o/${orgId}/quotes${awaiting ? "?status=awaiting" : ""}`;
+export function quotesHref(orgId: string, awaiting = false, customerId?: string | null): string {
+  const q = new URLSearchParams();
+  if (awaiting) q.set("status", "awaiting");
+  if (customerId) q.set("customer", customerId);
+  const qs = q.toString();
+  return `/o/${orgId}/quotes${qs ? `?${qs}` : ""}`;
 }
 
 export function quoteIsAwaiting(q: { status: string }): boolean {
