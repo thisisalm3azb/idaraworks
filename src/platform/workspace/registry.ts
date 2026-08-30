@@ -257,6 +257,9 @@ export const NAV_ITEM_KEYS = [
   "costing",
   "ar",
   "customers",
+  "leads",
+  "opportunities",
+  "sales",
   "customer_updates",
   "people",
   "members",
@@ -370,6 +373,21 @@ export const NAV_ITEM_INFO: Record<NavItemKey, NavItemInfo> = {
     module: "cap.customers",
     alwaysVisible: false,
   },
+  // H20 sales CRM rides the customers module (no new cap.* key — leads,
+  // opportunities and the sales overview are relationship surfaces).
+  leads: { action: "leads.view", feature: null, module: "cap.customers", alwaysVisible: false },
+  opportunities: {
+    action: "opportunities.view",
+    feature: null,
+    module: "cap.customers",
+    alwaysVisible: false,
+  },
+  sales: {
+    action: "opportunities.view",
+    feature: null,
+    module: "cap.customers",
+    alwaysVisible: false,
+  },
   customer_updates: {
     action: "customer_updates.draft",
     feature: "cap.customer_updates",
@@ -413,6 +431,11 @@ export const DASHBOARD_CARD_KEYS = [
   "collections",
   "approved_mrs",
   "open_pos",
+  // H20 sales CRM (adaptive dashboard only; legacy composeToday untouched).
+  "overdue_followups",
+  "opportunities_closing",
+  "quotes_expiring",
+  "pipeline_value",
 ] as const;
 export type DashboardCardKey = (typeof DASHBOARD_CARD_KEYS)[number];
 export function isDashboardCardKey(x: string): x is DashboardCardKey {
@@ -439,6 +462,10 @@ export const DASHBOARD_CARD_MODULE: Record<DashboardCardKey, WorkspaceModuleKey 
   collections: "cap.invoicing",
   approved_mrs: "cap.material_requests",
   open_pos: "cap.purchase_orders",
+  overdue_followups: "cap.customers",
+  opportunities_closing: "cap.customers",
+  quotes_expiring: "cap.quoting",
+  pipeline_value: "cap.customers",
 };
 
 export const TIME_HORIZONS = ["today", "this_week", "this_month", "this_quarter"] as const;

@@ -89,7 +89,13 @@ export type Action =
   | "imports.manage"
   | "data.export"
   | "billing.view"
-  | "billing.manage";
+  | "billing.manage"
+  // ── H20 "Sell" — the sales CRM (leads → opportunities → quotation) ────────
+  | "leads.view"
+  | "leads.manage"
+  | "opportunities.view"
+  | "opportunities.manage"
+  | "pipeline.configure";
 
 type Grantable = Exclude<RoleArchetype, "worker_reserved_p3">;
 
@@ -245,4 +251,15 @@ export const MATRIX: Record<Action, readonly Grantable[]> = {
   // CSVs are redacted per the caller's cost/price privilege at the export boundary (F-23), so a
   // non-money-privileged holder exports operational data without seeing cost/selling figures.
   "data.export": ["owner", "admin", "accounts"],
+
+  // ── H20 "Sell" (sales CRM). Leads/opportunities are commercial records:
+  // owner/admin/manager work them (the manager archetype is the selling
+  // seat — it already drafts quotes); accounts gets read-only opportunity
+  // visibility for forecast context (amounts still ride pricePrivileged);
+  // pipeline configuration is org configuration → owner/admin only.
+  "leads.view": ["owner", "admin", "manager"],
+  "leads.manage": ["owner", "admin", "manager"],
+  "opportunities.view": ["owner", "admin", "manager", "accounts"],
+  "opportunities.manage": ["owner", "admin", "manager"],
+  "pipeline.configure": ["owner", "admin"],
 };

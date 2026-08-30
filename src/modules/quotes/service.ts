@@ -51,6 +51,8 @@ const QuoteLineInput = z.object({
 });
 export const CreateQuoteInput = z.object({
   customerId: z.string().uuid().optional(),
+  /** H20: link the new quotation to an OPEN opportunity, atomically. */
+  opportunityId: z.string().uuid().optional(),
   presetId: z.string().uuid().optional(),
   currency: z.enum(CURRENCY_CODES as unknown as [string, ...string[]]).optional(),
   exchangeRate: z.number().positive().default(1),
@@ -137,6 +139,22 @@ export async function createQuote(
         returning id::text as id
       `)) as unknown as Array<{ id: string }>;
       const id = rows[0]!.id;
+      // H20: bidirectional opportunity link in the SAME transaction. The org
+      // filter + open-status guard make a foreign or closed opportunity a
+      // hard error (no silent drop, no cross-organization linking).
+      if (input.opportunityId) {
+        const linked = (await tx.execute(sql`
+          update public.opportunity set quote_id = ${id}, updated_at = now()
+          where org_id = ${ctx.orgId} and id = ${input.opportunityId}
+            and status = 'open' and archived = false
+          returning id
+        `)) as unknown as Array<unknown>;
+        if (linked.length === 0) throw new InvalidQuoteInputError("opportunity not open");
+        await tx.execute(sql`
+          insert into public.sales_activity (org_id, opportunity_id, kind, actor_user_id)
+          values (${ctx.orgId}, ${input.opportunityId}, 'quote_created', ${ctx.userId})
+        `);
+      }
       for (let i = 0; i < input.lines.length; i++) {
         const l = input.lines[i]!;
         const c = totals.lines[i]!;
@@ -341,6 +359,23 @@ export async function acceptQuote(
         returning id
       `)) as unknown as Array<{ id: string }>;
       if (!rows[0]) throw new QuoteStateError("quote is no longer acceptable");
+      // H20: the linked opportunity is WON exactly when its quotation
+      // converts to work — atomic with the conversion mark, and idempotent
+      // by construction (the 'converting' claim runs exactly once; the
+      // status guard below makes replays no-ops). Acceptance alone decides
+      // this; creating or sending a quotation never wins an opportunity.
+      const wonOpp = (await tx.execute(sql`
+        update public.opportunity
+        set status = 'won', stage_key = 'won', won_at = now(), updated_at = now()
+        where org_id = ${ctx.orgId} and quote_id = ${quoteId} and status = 'open'
+        returning id::text as id
+      `)) as unknown as Array<{ id: string }>;
+      if (wonOpp[0]) {
+        await tx.execute(sql`
+          insert into public.sales_activity (org_id, opportunity_id, kind, actor_user_id)
+          values (${ctx.orgId}, ${wonOpp[0].id}, 'won', ${ctx.userId})
+        `);
+      }
       return { jobId: job.id };
     },
   );
@@ -403,6 +438,8 @@ export type QuoteRow = {
   currency: string;
   totalMinor: number | null;
   createdAt: string;
+  /** Expiry date (YYYY-MM-DD) — feeds the H20 expiring-quotes drill-down. */
+  validUntil: string | null;
 };
 
 export async function listQuotes(
@@ -417,7 +454,8 @@ export async function listQuotes(
   return withCtx(ctx, async (tx) => {
     const rows = (await tx.execute(sql`
       select id::text as id, reference, customer_name, status, currency,
-             total_minor, created_at::text as created_at
+             total_minor, created_at::text as created_at,
+             valid_until::text as valid_until
       from public.quote where org_id = ${ctx.orgId}
         and (${customerId}::uuid is null or customer_id = ${customerId}::uuid)
       order by created_at desc limit ${limit}
@@ -430,6 +468,7 @@ export async function listQuotes(
       currency: r.currency as string,
       totalMinor: seesPrice ? Number(r.total_minor) : null,
       createdAt: r.created_at as string,
+      validUntil: (r.valid_until as string | null)?.slice(0, 10) ?? null,
     }));
   });
 }

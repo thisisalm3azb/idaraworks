@@ -55,9 +55,11 @@ import {
   issuesHref,
   jobsHref,
   mrHref,
+  opportunitiesHref,
   poHref,
   quotesHref,
   reviewHref,
+  salesHref,
 } from "./filters";
 
 // ── The per-role compiled dashboard (shape.compiled.dashboards[archetype]) ──
@@ -88,6 +90,11 @@ export const CARD_ACTION: Record<DashboardCardKey, Action> = {
   collections: "ar.view",
   approved_mrs: "po.view",
   open_pos: "po.view",
+  // H20 sales CRM.
+  overdue_followups: "opportunities.view",
+  opportunities_closing: "opportunities.view",
+  quotes_expiring: "quotes.view",
+  pipeline_value: "opportunities.view",
 };
 
 /** Role relevance when the blueprint does not configure a role's dashboard.
@@ -112,6 +119,12 @@ export const CARD_ROLES: Record<DashboardCardKey, readonly BlueprintArchetype[]>
   collections: ["owner", "admin", "accounts"],
   approved_mrs: ["owner", "admin", "procurement"],
   open_pos: ["owner", "admin", "manager", "procurement"],
+  // H20 sales CRM: managers run the pipeline; the forecast total additionally
+  // requires price privilege (pulse gate), so it never leaks through roles.
+  overdue_followups: ["owner", "admin", "manager"],
+  opportunities_closing: ["owner", "admin", "manager"],
+  quotes_expiring: ["owner", "admin", "manager"],
+  pipeline_value: ["owner", "admin"],
 };
 
 /** H14 TIME_HORIZONS → the "Next" window in days. */
@@ -173,6 +186,15 @@ export type DashboardData = {
   /** Manager review queue (reports.review holders): submitted reports waiting
    * for review + active jobs with no report yet today (scoped like today). */
   reviewQueue: { toReview: number; missingToday: number } | null;
+  /** H20 salesDashboardCounts — opportunities.view holders; forecast value
+   * self-redacts to null without price privilege. */
+  sales: {
+    overdueFollowUps: number;
+    closingSoon: number;
+    quotesExpiring: number;
+    openPipelineMinor: number | null;
+    openPipelineCount: number;
+  } | null;
   /** Source keys that FAILED (threw) — rendered as honest unavailability. */
   failed: readonly string[];
 };
@@ -266,6 +288,12 @@ const CATEGORY_WEIGHT: Record<DashboardCardKey, number> = {
   at_risk: 8,
   approved_mrs: 6,
   open_pos: 4,
+  // H20: a stalled promise to a person (8) outranks calendar proximity (6/6);
+  // the pipeline total is pulse-grade context (4).
+  overdue_followups: 8,
+  opportunities_closing: 6,
+  quotes_expiring: 6,
+  pipeline_value: 4,
 };
 
 function band(n: number, max: number): number {
@@ -282,6 +310,8 @@ const MONEY_CARDS: ReadonlySet<DashboardCardKey> = new Set([
   "ar_summary",
   "payments_week",
   "expenses_queue",
+  // H20: forecast value is money-adjacent — same clamp, never outranks blockers.
+  "pipeline_value",
 ]);
 
 export function priorityOf(input: {
@@ -540,6 +570,21 @@ export function composeAdaptiveDashboard(
     );
   }
 
+  // H20: overdue sales follow-ups — a promise to a person that has slipped.
+  const salesCounts = data.sales;
+  if (salesCounts && salesCounts.overdueFollowUps > 0) {
+    add(
+      "overdue_followups",
+      "attention",
+      "warning",
+      salesCounts.overdueFollowUps,
+      "dashboard.signal.overdue_followups",
+      "dashboard.why.overdue_followups",
+      salesHref(cx.orgId),
+      { canAct: can(cx.archetype, "opportunities.manage") },
+    );
+  }
+
   // Purchasing exceptions: approved requests waiting to become orders.
   const mrApproved = data.extras?.mrOpen?.approved ?? 0;
   if (mrApproved > 0) {
@@ -594,6 +639,32 @@ export function composeAdaptiveDashboard(
       "dashboard.why.po_partial",
       poHref(cx.orgId, "partially_received"),
       { key: "po_partial", canAct: can(cx.archetype, "grn.create") },
+    );
+  }
+  // H20: opportunities expecting to close inside the horizon, and quotes whose
+  // validity runs out — both drill to the exact records via the same window.
+  if (salesCounts && salesCounts.closingSoon > 0) {
+    add(
+      "opportunities_closing",
+      "next",
+      "info",
+      salesCounts.closingSoon,
+      "dashboard.signal.opps_closing",
+      "dashboard.why.opps_closing",
+      opportunitiesHref(cx.orgId, { closing: horizonDays, view: "list" }),
+      { whyVars: { days: horizonDays }, canAct: can(cx.archetype, "opportunities.manage") },
+    );
+  }
+  if (salesCounts && salesCounts.quotesExpiring > 0) {
+    add(
+      "quotes_expiring",
+      "next",
+      "info",
+      salesCounts.quotesExpiring,
+      "dashboard.signal.quotes_expiring",
+      "dashboard.why.quotes_expiring",
+      quotesHref(cx.orgId, false, null, horizonDays),
+      { whyVars: { days: horizonDays }, canAct: can(cx.archetype, "quotes.manage") },
     );
   }
   const unpaidExpenses = data.extras?.unpaidExpenses ?? 0;
@@ -668,6 +739,18 @@ export function composeAdaptiveDashboard(
       periodKey: "dashboard.period.invoiced_unpaid",
       href: arHref(cx.orgId),
       unavailable: data.ar == null || data.ar.outstandingMinor == null,
+    });
+  }
+  if (allowed.has("pipeline_value") && cx.seesPrice) {
+    // FORECAST value of open opportunities — never revenue, cash, or AR.
+    pulse.push({
+      key: "pipeline_value",
+      labelKey: "dashboard.kpi.pipeline",
+      value: data.sales?.openPipelineMinor ?? null,
+      money: true,
+      periodKey: "dashboard.period.open_forecast",
+      href: opportunitiesHref(cx.orgId),
+      unavailable: data.sales == null || data.sales.openPipelineMinor == null,
     });
   }
   if (allowed.has("payments_week") && cx.seesPrice) {

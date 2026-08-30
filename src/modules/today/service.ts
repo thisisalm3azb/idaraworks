@@ -397,3 +397,17 @@ async function procurementCards(
 
 // Microstep 002B: the pure Owner Home composer (module public surface).
 export { composeOwnerHome, type OwnerHomeInputs } from "./owner-home";
+
+/**
+ * H20: card keys that exist ONLY on the adaptive dashboard (blueprint
+ * organizations — composed in src/modules/dashboard/compose.ts). They are
+ * listed here because this file is the registry's parity source for dashboard
+ * card keys (tests/unit/workspace-laws.test.ts scrapes it); legacy
+ * composeToday never renders them, and the legacy screens stay byte-for-byte.
+ */
+export const ADAPTIVE_ONLY_CARDS = [
+  { key: "overdue_followups" },
+  { key: "opportunities_closing" },
+  { key: "quotes_expiring" },
+  { key: "pipeline_value" },
+] as const;

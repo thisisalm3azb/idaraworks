@@ -13,6 +13,7 @@ import { presentCustomer } from "@/modules/crm/service";
 import {
   normalizeEmailForMatch,
   normalizePhoneForMatch,
+  phonesMatch,
   presentPrimaryContact,
   type CustomerContactRow,
   type CustomerDetail,
@@ -105,12 +106,62 @@ describe("H19 — duplicate normalization (comparison only, never rewrites)", ()
     expect(normalizeEmailForMatch(null)).toBeNull();
   });
 
-  it("phone: digits only, last 7 subscriber digits match across forms", () => {
-    expect(normalizePhoneForMatch("+971 50 123 4567")).toBe("1234567");
-    expect(normalizePhoneForMatch("050-123-4567")).toBe("1234567");
-    expect(normalizePhoneForMatch("+971 4 555 0100")).toBe("5550100");
-    expect(normalizePhoneForMatch("04-555-0100")).toBe("5550100");
+  it("phone: international prefix normalizes to E.164; local keeps national digits", () => {
+    expect(normalizePhoneForMatch("+971 50 123 4567")).toEqual({
+      kind: "e164",
+      value: "971501234567",
+    });
+    expect(normalizePhoneForMatch("00971 50 123 4567")).toEqual({
+      kind: "e164",
+      value: "971501234567",
+    });
+    expect(normalizePhoneForMatch("050-123-4567")).toEqual({
+      kind: "national",
+      value: "501234567",
+    });
+    // A country hint upgrades a local number to E.164.
+    expect(normalizePhoneForMatch("050-123-4567", "AE")).toEqual({
+      kind: "e164",
+      value: "971501234567",
+    });
+    expect(normalizePhoneForMatch("04-555-0100")).toEqual({ kind: "national", value: "45550100" });
+  });
+
+  it("phone: malformed and empty values normalize to null (never compared)", () => {
     expect(normalizePhoneForMatch("12345")).toBeNull(); // too short to judge
+    expect(normalizePhoneForMatch("+12")).toBeNull(); // impossible E.164 length
+    expect(normalizePhoneForMatch("+1234567890123456")).toBeNull(); // 16 digits, over E.164
+    expect(normalizePhoneForMatch("")).toBeNull();
+    expect(normalizePhoneForMatch("   ")).toBeNull();
+    expect(normalizePhoneForMatch(null)).toBeNull();
+    expect(normalizePhoneForMatch(undefined)).toBeNull();
+  });
+
+  it("phonesMatch: UAE local and international forms of the same line match", () => {
+    const m = (a: string, b: string, hintA?: string, hintB?: string) =>
+      phonesMatch(normalizePhoneForMatch(a, hintA), normalizePhoneForMatch(b, hintB));
+    expect(m("+971 50 123 4567", "050-123-4567")).toBe(true); // e164 vs national
+    expect(m("+971 4 555 0100", "04-555-0100")).toBe(true); // landline, trunk 0
+    expect(m("+971501234567", "+971 50 123 4567")).toBe(true); // formatting only
+    expect(m("050 123 4567", "0501234567")).toBe(true); // national vs national
+    expect(m("050-123-4567", "+971 50 123 4567", "AE")).toBe(true); // hinted e164 both sides
+  });
+
+  it("phonesMatch: unrelated international numbers sharing a suffix NEVER match", () => {
+    const m = (a: string, b: string) =>
+      phonesMatch(normalizePhoneForMatch(a), normalizePhoneForMatch(b));
+    // Same last seven digits, different countries — the old contract's failure.
+    expect(m("+1 415 555 1234", "+968 9555 1234")).toBe(false);
+    expect(m("+971 50 555 1234", "+966 50 555 1234")).toBe(false);
+    // Different subscriber numbers in the same country.
+    expect(m("+971 50 123 4567", "+971 50 123 4568")).toBe(false);
+    // National forms must equal in FULL, never by suffix.
+    expect(m("050 123 4567", "123 4567")).toBe(false);
+    // E.164 vs national only matches when the remainder is a plausible calling code (1..4 digits).
+    expect(m("+99999 123 4567", "123 4567")).toBe(false); // suffix matches but 5-digit remainder
+    // Null inputs never match anything.
+    expect(phonesMatch(null, normalizePhoneForMatch("+971 50 123 4567"))).toBe(false);
+    expect(phonesMatch(null, null)).toBe(false);
   });
 });
 
@@ -132,7 +183,13 @@ describe("H19 — customer filter contracts", () => {
       parseQuotesSearch(
         Object.fromEntries(new URL(`http://x${quotesHref("o", true, id)}`).searchParams),
       ),
-    ).toEqual({ awaiting: true, customerId: id });
+    ).toEqual({ awaiting: true, customerId: id, expiringDays: null });
+    // H20: the expiring window round-trips too.
+    expect(
+      parseQuotesSearch(
+        Object.fromEntries(new URL(`http://x${quotesHref("o", false, null, 14)}`).searchParams),
+      ),
+    ).toEqual({ awaiting: false, customerId: null, expiringDays: 14 });
     expect(
       parseInvoicesSearch(
         Object.fromEntries(new URL(`http://x${invoicesHref("o", id)}`).searchParams),

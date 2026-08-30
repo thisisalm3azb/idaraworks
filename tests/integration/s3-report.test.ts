@@ -108,11 +108,15 @@ beforeAll(async () => {
     insert into public.item (id, org_id, sku, name, category_key, unit, unit_cost_minor, active)
     values (${itemId}, ${orgId}, ${`RESIN-${run}`}, 'Epoxy Resin', 'raw_material', 'L', 5000, true)`;
 
-  // Two jobs; the foreman is crewed onto jobAssigned only.
+  // Two jobs; the foreman is crewed onto jobAssigned only. The manager is
+  // its assigned manager — since H18, a manager's review queue is scoped to
+  // assigned work (reviewScope → assignedJobCondition), so the fixture must
+  // reflect the real assignment for the review-loop expectations to hold.
   jobAssigned = (
     await createJobFromPreset(ownerCtx(), "owner", {
       presetId: presetIds["13S"]!,
       name: "Assigned",
+      managerUserId: managerUser,
     })
   ).id;
   jobOther = (

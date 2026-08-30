@@ -693,37 +693,93 @@ export function normalizeEmailForMatch(email: string | null | undefined): string
   const v = (email ?? "").trim().toLowerCase();
   return v.length > 0 ? v : null;
 }
-export function normalizePhoneForMatch(phone: string | null | undefined): string | null {
-  const digits = (phone ?? "").replace(/[^0-9]/g, "");
-  // Compare on the last 7 digits (the subscriber number) so +971 4 555 0100
-  // and 04-555-0100 match — the country code and the trunk 0 replace each
-  // other asymmetrically, so longer suffixes miss real duplicates.
-  return digits.length >= 7 ? digits.slice(-7) : null;
+
+/** Calling codes for the countries this product ships country packs for,
+ * used to localize an explicit country hint. Numbers outside this map still
+ * compare safely through the generic E.164 rules below. */
+const CALLING_CODES: Record<string, string> = {
+  AE: "971",
+  SA: "966",
+  KW: "965",
+  BH: "973",
+  OM: "968",
+  QA: "974",
+};
+
+export type NormalizedPhone =
+  | { kind: "e164"; value: string } // full international digits, no plus
+  | { kind: "national"; value: string }; // local digits with the trunk 0 removed
+
+/** H20 Part B — the international phone comparison contract. An explicit
+ * international prefix (+ or 00) yields an E.164 comparison value; a local
+ * number yields its national digits (trunk 0 stripped), upgraded to E.164
+ * when a country hint provides the calling code. Malformed and too-short
+ * values normalize to null (never compared). */
+export function normalizePhoneForMatch(
+  phone: string | null | undefined,
+  countryHint?: string | null,
+): NormalizedPhone | null {
+  const raw = (phone ?? "").trim();
+  if (!raw) return null;
+  const hasPlus = raw.startsWith("+") || raw.startsWith("00");
+  const digitsAll = raw.replace(/[^0-9]/g, "");
+  const digits = raw.startsWith("00") ? digitsAll.slice(2) : digitsAll;
+  if (hasPlus) {
+    // E.164 is 8..15 digits including the calling code.
+    return digits.length >= 8 && digits.length <= 15 ? { kind: "e164", value: digits } : null;
+  }
+  const national = digits.replace(/^0/, "");
+  if (national.length < 7) return null;
+  const cc = countryHint ? CALLING_CODES[countryHint.toUpperCase()] : undefined;
+  if (cc) return { kind: "e164", value: cc + national };
+  return { kind: "national", value: national };
+}
+
+/** Two normalized phones refer to the same line only when:
+ *  - both are E.164 and exactly equal, or
+ *  - both are national and exactly equal (full digits, never a suffix), or
+ *  - one is E.164 and the other national, and the E.164 value is exactly a
+ *    1..4 digit calling code followed by the ENTIRE national number.
+ * Unrelated international numbers that merely share a suffix never match. */
+export function phonesMatch(a: NormalizedPhone | null, b: NormalizedPhone | null): boolean {
+  if (!a || !b) return false;
+  if (a.kind === b.kind) return a.value === b.value;
+  const e = a.kind === "e164" ? a : b;
+  const n = a.kind === "national" ? a : b;
+  if (!e.value.endsWith(n.value)) return false;
+  const ccLen = e.value.length - n.value.length;
+  return ccLen >= 1 && ccLen <= 4;
 }
 
 /** Conservative possible-duplicate lookup inside the acting organization
  * (same-org names are already visible to customers.manage holders — nothing
- * inaccessible is revealed). Never blocks and never merges. */
+ * inaccessible is revealed). Advisory only: never blocks, never merges.
+ * Email and name match in SQL; phone comparison runs the E.164 contract in
+ * app code over a bounded org-scoped candidate set. */
 export async function findPossibleDuplicates(
   ctx: Ctx,
   archetype: RoleArchetype,
-  probe: { name?: string | null; email?: string | null; phone?: string | null },
+  probe: {
+    name?: string | null;
+    email?: string | null;
+    phone?: string | null;
+    country?: string | null;
+  },
 ): Promise<DuplicateCandidate[]> {
   assertCan(archetype, "customers.manage");
   const email = normalizeEmailForMatch(probe.email);
-  const phone = normalizePhoneForMatch(probe.phone);
+  const phone = normalizePhoneForMatch(probe.phone, probe.country);
   const nm = (probe.name ?? "").trim().toLowerCase();
   if (!email && !phone && nm.length < 3) return [];
   const rows = (await withCtx(ctx, (tx) =>
     tx.execute(sql`
-      select id::text as id, name, active, email, phone
+      select id::text as id, name, active, email, phone, country
       from public.customer
       where org_id = ${ctx.orgId}
         and ((${email}::text is not null and lower(trim(coalesce(email,''))) = ${email})
-          or (${phone}::text is not null
-              and right(regexp_replace(coalesce(phone,''), '[^0-9]', '', 'g'), 7) = ${phone})
+          or (${phone !== null} and phone is not null)
           or (${nm}::text <> '' and lower(name) = ${nm}))
-      limit 5
+      limit 500
     `),
   )) as unknown as Array<{
     id: string;
@@ -731,18 +787,23 @@ export async function findPossibleDuplicates(
     active: boolean;
     email: string | null;
     phone: string | null;
+    country: string | null;
   }>;
-  return rows.map((r) => ({
-    id: r.id,
-    name: r.name,
-    active: r.active,
-    matchedOn:
-      email && normalizeEmailForMatch(r.email) === email
-        ? ("email" as const)
-        : phone && normalizePhoneForMatch(r.phone) === phone
-          ? ("phone" as const)
-          : ("name" as const),
-  }));
+  const out: DuplicateCandidate[] = [];
+  for (const r of rows) {
+    if (email && normalizeEmailForMatch(r.email) === email) {
+      out.push({ id: r.id, name: r.name, active: r.active, matchedOn: "email" });
+    } else if (
+      phone &&
+      phonesMatch(phone, normalizePhoneForMatch(r.phone, r.country ?? probe.country))
+    ) {
+      out.push({ id: r.id, name: r.name, active: r.active, matchedOn: "phone" });
+    } else if (nm.length >= 3 && r.name.trim().toLowerCase() === nm) {
+      out.push({ id: r.id, name: r.name, active: r.active, matchedOn: "name" });
+    }
+    if (out.length >= 5) break;
+  }
+  return out;
 }
 
 // ── suppliers ────────────────────────────────────────────────────────────────

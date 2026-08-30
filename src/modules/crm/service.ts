@@ -31,6 +31,10 @@ import {
   type CustomerDetail,
 } from "@/modules/masters/service";
 import { customerMoney, type CustomerMoney } from "@/modules/invoices/service";
+import { listOpportunities, type OpportunityRow } from "./sales";
+
+// H20 — the sales CRM engine (module public surface).
+export * from "./sales";
 
 // ── The canonical customer presentation model (H19 Part B) ──────────────────
 // Honest to the real schema: the customer table has no organization vs
@@ -114,6 +118,8 @@ export type Customer360 = {
   customer: CustomerPresentation;
   quotes: CustomerQuoteRow[] | null;
   jobs: CustomerJobRow[] | null;
+  /** H20: this customer's opportunities (opportunities.view holders). */
+  opportunities: OpportunityRow[] | null;
   money: CustomerMoney | null;
   /** Distinguishes redaction from failure: 'restricted' | 'failed' | 'ok'. */
   moneyState: "ok" | "restricted" | "failed" | "hidden";
@@ -296,7 +302,7 @@ export async function gatherCustomer360(
   const failed: string[] = [];
   const seeQuotes = can(archetype, "quotes.view");
   const seeMoney = can(archetype, "ar.view");
-  const [contacts, quotes, jobs, money, timeline] = await Promise.all([
+  const [contacts, quotes, jobs, money, timeline, opportunities] = await Promise.all([
     guarded("contacts", failed, () => listCustomerContacts(ctx, archetype, customerId)),
     seeQuotes
       ? guarded("quotes", failed, () => customerQuotes(ctx, customerId))
@@ -308,6 +314,11 @@ export async function gatherCustomer360(
       ? guarded("money", failed, () => customerMoney(ctx, archetype, customerId, opts.asOf))
       : Promise.resolve(null),
     guarded("timeline", failed, () => listCustomerTimeline(ctx, archetype, customerId)),
+    can(archetype, "opportunities.view")
+      ? guarded("opportunities", failed, () =>
+          listOpportunities(ctx, archetype, { customerId, status: "all", limit: 25 }),
+        )
+      : Promise.resolve(null),
   ]);
   const moneyState: Customer360["moneyState"] = !seeMoney
     ? "hidden"
@@ -331,6 +342,7 @@ export async function gatherCustomer360(
     customer: presentCustomer(detail, contacts ?? []),
     quotes,
     jobs,
+    opportunities,
     money,
     moneyState,
     timeline,

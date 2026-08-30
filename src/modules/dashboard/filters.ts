@@ -222,21 +222,178 @@ export function expenseIsUnpaid(e: { paymentStatus: string; voidedAt: string | n
 /** The dashboard's "awaiting action" quote statuses (extras.quotesAwaiting). */
 export const QUOTE_AWAITING_STATUSES = ["draft", "pending_approval"] as const;
 
-export function parseQuotesSearch(sp: { status?: string; customer?: string }): {
+export function parseQuotesSearch(sp: { status?: string; customer?: string; expiring?: string }): {
   awaiting: boolean;
   customerId: string | null;
+  /** H20: only sendable quotes (approved/sent) whose validity ends within N
+   * days (1..90); null = no expiry narrowing. */
+  expiringDays: number | null;
 } {
-  return { awaiting: sp.status === "awaiting", customerId: parseCustomerParam(sp).customerId };
+  const n = Number.parseInt(sp.expiring ?? "", 10);
+  return {
+    awaiting: sp.status === "awaiting",
+    customerId: parseCustomerParam(sp).customerId,
+    expiringDays: Number.isInteger(n) && n >= 1 && n <= 90 ? n : null,
+  };
 }
 
-export function quotesHref(orgId: string, awaiting = false, customerId?: string | null): string {
+export function quotesHref(
+  orgId: string,
+  awaiting = false,
+  customerId?: string | null,
+  expiringDays?: number | null,
+): string {
   const q = new URLSearchParams();
   if (awaiting) q.set("status", "awaiting");
   if (customerId) q.set("customer", customerId);
+  if (expiringDays) q.set("expiring", String(expiringDays));
   const qs = q.toString();
   return `/o/${orgId}/quotes${qs ? `?${qs}` : ""}`;
 }
 
 export function quoteIsAwaiting(q: { status: string }): boolean {
   return (QUOTE_AWAITING_STATUSES as readonly string[]).includes(q.status);
+}
+
+/** The dashboard's expiring-quote rule: still actionable (approved or sent),
+ * has an expiry date, and that date falls inside [asOf, asOf + days]. */
+export function quoteIsExpiring(
+  q: { status: string; validUntil: string | null },
+  asOf: string,
+  days: number,
+): boolean {
+  if (q.status !== "approved" && q.status !== "sent") return false;
+  if (!q.validUntil || q.validUntil < asOf) return false;
+  const until = Date.parse(`${q.validUntil.slice(0, 10)}T00:00:00Z`);
+  const from = Date.parse(`${asOf}T00:00:00Z`);
+  return (until - from) / 86_400_000 <= days;
+}
+
+// ── Leads (/leads) — H20 ────────────────────────────────────────────────────
+export const LEAD_FILTER_STATUSES = [
+  "new",
+  "contacted",
+  "qualified",
+  "disqualified",
+  "converted",
+] as const;
+export type LeadFilterStatus = (typeof LEAD_FILTER_STATUSES)[number];
+
+export type LeadsSearch = {
+  q: string | null;
+  status: LeadFilterStatus | null;
+  /** Owner user id (validated uuid). */
+  owner: string | null;
+  source: string | null;
+  /** Only leads with an overdue, uncompleted follow-up. */
+  overdue: boolean;
+  archived: boolean;
+};
+
+export function parseLeadsSearch(sp: {
+  q?: string;
+  status?: string;
+  owner?: string;
+  source?: string;
+  focus?: string;
+  view?: string;
+}): LeadsSearch {
+  const q = (sp.q ?? "").trim().slice(0, 120);
+  const source = (sp.source ?? "").trim().slice(0, 80);
+  return {
+    q: q.length > 0 ? q : null,
+    status: (LEAD_FILTER_STATUSES as readonly string[]).includes(sp.status ?? "")
+      ? (sp.status as LeadFilterStatus)
+      : null,
+    owner: sp.owner && UUID_RE.test(sp.owner) ? sp.owner : null,
+    source: source.length > 0 ? source : null,
+    overdue: sp.focus === "overdue",
+    archived: sp.view === "archived",
+  };
+}
+
+export function leadsHref(
+  orgId: string,
+  f: Partial<Pick<LeadsSearch, "q" | "status" | "owner" | "source" | "overdue" | "archived">> = {},
+): string {
+  const q = new URLSearchParams();
+  if (f.q) q.set("q", f.q);
+  if (f.status) q.set("status", f.status);
+  if (f.owner) q.set("owner", f.owner);
+  if (f.source) q.set("source", f.source);
+  if (f.overdue) q.set("focus", "overdue");
+  if (f.archived) q.set("view", "archived");
+  const qs = q.toString();
+  return `/o/${orgId}/leads${qs ? `?${qs}` : ""}`;
+}
+
+// ── Opportunities (/opportunities) — H20 ────────────────────────────────────
+export type OpportunitiesSearch = {
+  /** Board (grouped by open stage) is the default; list is the alternative. */
+  view: "board" | "list";
+  /** Stage-key filter (shape-validated; unknown keys give an honest empty). */
+  stage: string | null;
+  owner: string | null;
+  customerId: string | null;
+  /** Open opportunities whose expected close falls within N days (1..365). */
+  closing: number | null;
+  /** Only opportunities with an overdue, uncompleted follow-up. */
+  followup: boolean;
+  status: "open" | "won" | "lost" | null;
+  archived: boolean;
+};
+
+export function parseOpportunitiesSearch(sp: {
+  view?: string;
+  stage?: string;
+  owner?: string;
+  customer?: string;
+  closing?: string;
+  focus?: string;
+  status?: string;
+}): OpportunitiesSearch {
+  const n = Number.parseInt(sp.closing ?? "", 10);
+  return {
+    view: sp.view === "list" ? "list" : "board",
+    stage: sp.stage && STAGE_KEY_RE.test(sp.stage) ? sp.stage : null,
+    owner: sp.owner && UUID_RE.test(sp.owner) ? sp.owner : null,
+    customerId: parseCustomerParam(sp).customerId,
+    closing: Number.isInteger(n) && n >= 1 && n <= 365 ? n : null,
+    followup: sp.focus === "followup",
+    status: sp.status === "open" || sp.status === "won" || sp.status === "lost" ? sp.status : null,
+    archived: sp.view === "archived",
+  };
+}
+
+export function opportunitiesHref(
+  orgId: string,
+  f: Partial<
+    Pick<
+      OpportunitiesSearch,
+      "view" | "stage" | "owner" | "customerId" | "closing" | "followup" | "status"
+    >
+  > = {},
+): string {
+  const q = new URLSearchParams();
+  if (f.view === "list") q.set("view", "list");
+  if (f.stage) q.set("stage", f.stage);
+  if (f.owner) q.set("owner", f.owner);
+  if (f.customerId) q.set("customer", f.customerId);
+  if (f.closing) q.set("closing", String(f.closing));
+  if (f.followup) q.set("focus", "followup");
+  if (f.status) q.set("status", f.status);
+  const qs = q.toString();
+  return `/o/${orgId}/opportunities${qs ? `?${qs}` : ""}`;
+}
+
+// ── Sales overview (/sales) — H20 ───────────────────────────────────────────
+export const SALES_PERIODS = [7, 30, 90] as const;
+
+export function parseSalesSearch(sp: { days?: string }): { days: number } {
+  const n = Number.parseInt(sp.days ?? "", 10);
+  return { days: (SALES_PERIODS as readonly number[]).includes(n) ? n : 30 };
+}
+
+export function salesHref(orgId: string, days?: number): string {
+  return `/o/${orgId}/sales${days && days !== 30 ? `?days=${days}` : ""}`;
 }

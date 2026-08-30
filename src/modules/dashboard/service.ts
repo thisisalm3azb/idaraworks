@@ -22,6 +22,7 @@ import { computeAR } from "@/modules/invoices/service";
 import { listInbox } from "@/modules/approvals/service";
 import { getDashboardExtras } from "@/modules/today/service";
 import { countMissingToday, countReviewQueue } from "@/modules/reports/service";
+import { salesDashboardCounts } from "@/modules/crm/service";
 import type { RoleArchetype } from "@/platform/registries";
 import type { DashboardData } from "./compose";
 
@@ -76,12 +77,12 @@ async function guarded<T>(
 export async function gatherDashboardData(
   ctx: Ctx,
   archetype: RoleArchetype,
-  opts: { asOf: string; computedAt: string },
+  opts: { asOf: string; computedAt: string; horizonDays?: number },
 ): Promise<DashboardData> {
   const failed: string[] = [];
   const foreman = archetype === "foreman";
 
-  const [exceptions, extras, inbox, ar, field, reviewQueue] = await Promise.all([
+  const [exceptions, extras, inbox, ar, field, reviewQueue, sales] = await Promise.all([
     can(archetype, "exceptions.view")
       ? guarded("exceptions", failed, () => listOpenExceptions(ctx, archetype, { limit: 200 }))
       : Promise.resolve(null),
@@ -101,6 +102,16 @@ export async function gatherDashboardData(
           missingToday: await countMissingToday(ctx, archetype, opts.asOf),
         }))
       : Promise.resolve(null),
+    // H20: sales pipeline counts — same horizon the composer's "Next" section
+    // uses, so every count drills to exactly its records.
+    can(archetype, "opportunities.view")
+      ? guarded("sales", failed, () =>
+          salesDashboardCounts(ctx, archetype, {
+            asOf: opts.asOf,
+            horizonDays: opts.horizonDays ?? 7,
+          }),
+        )
+      : Promise.resolve(null),
   ]);
 
   return {
@@ -111,6 +122,7 @@ export async function gatherDashboardData(
     myJobs: field?.myJobs ?? null,
     returnedReports: field?.returned ?? null,
     reviewQueue,
+    sales,
     failed,
   };
 }

@@ -92,6 +92,9 @@ export const AUDIT_ENTITY_TYPES = [
   "onboarding_session", // S8 — propose/apply/undo of a guided onboarding are audited config mutations
   "import_batch", // S8 — guided CSV imports (customers/employees/items) are audited
   "workspace_blueprint", // H14 — blueprint lifecycle (draft/validate/approve/reject/apply/undo)
+  "lead", // H20 — pre-customer sales records (create/update/status/convert/archive)
+  "opportunity", // H20 — pipeline records (create/update/stage/won/lost/quote-link)
+  "sales_activity", // H20 — follow-up completion is an audited mutation
 ] as const;
 export type AuditEntityType = (typeof AUDIT_ENTITY_TYPES)[number];
 

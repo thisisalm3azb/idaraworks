@@ -84,6 +84,12 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
     "data.export",
     "billing.view",
     "billing.manage",
+    // H20 Sell: full sales CRM + pipeline configuration.
+    "leads.view",
+    "leads.manage",
+    "opportunities.view",
+    "opportunities.manage",
+    "pipeline.configure",
   ],
   admin: [
     "members.view",
@@ -154,6 +160,12 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
     "imports.manage",
     "data.export",
     "billing.view",
+    // H20 Sell: full sales CRM + pipeline configuration.
+    "leads.view",
+    "leads.manage",
+    "opportunities.view",
+    "opportunities.manage",
+    "pipeline.configure",
   ],
   // Manager (doc 08: the Workshop Manager variant): masters M, jobs/reports, NO
   // config, NO salary/HR side-tables, no invite/deactivate/legal-hold.
@@ -210,6 +222,11 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
     "customer_updates.share",
     "customer_updates.revoke",
     "imports.manage",
+    // H20 Sell: the selling seat works leads and opportunities (no pipeline config).
+    "leads.view",
+    "leads.manage",
+    "opportunities.view",
+    "opportunities.manage",
   ],
   // Field seat (doc 06 literal row): assigned jobs (v) + own reports. NO
   // employee/catalog/member/customer/config surfaces — S3's report form gets
@@ -300,6 +317,8 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
     "billing.view",
     // S10: accounts can run the self-service data export (doc 10 #42).
     "data.export",
+    // H20 Sell: read-only forecast context (amounts still ride pricePrivileged).
+    "opportunities.view",
   ],
   // Viewer (doc 06): jobs v (redacted) + week view + attendance V — other rows −.
   // today.view added (adversarial review): read-only Today composed ONLY from

@@ -174,6 +174,7 @@ describe("H18 — dashboard link generation uses the contracts", () => {
     myJobs: null,
     returnedReports: null,
     reviewQueue: { toReview: 1, missingToday: 1 },
+    sales: null,
     failed: [],
     ...over,
   });

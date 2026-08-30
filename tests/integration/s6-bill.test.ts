@@ -436,42 +436,48 @@ describe("S6 review regressions", () => {
     expect(after!.status).toBe("void"); // NOT resurrected to 'confirmed'
   });
 
-  it("#5 concurrent acceptQuote creates exactly one job (no orphan)", async () => {
-    const q = await createQuote(ownerCtx(), "owner", {
-      customerId,
-      presetId,
-      lines: [{ description: "race", qty: 1, unit: "ea", unitPriceMinor: 800000, vatRate: 0 }],
-    });
-    const { approvalId } = await submitQuote(ownerCtx(), "owner", q.id);
-    // The prior test installed a quote_send auto-approve rule, so the quote may
-    // already be 'approved' at submit — only decide if it's still pending.
-    const [submitted] =
-      (await owner`select status from public.quote where id = ${q.id}`) as unknown as Array<{
-        status: string;
-      }>;
-    if (submitted!.status === "pending_approval") {
-      await decideApproval(ownerCtx(), "owner", { approvalId, decision: "approved" });
-    }
-    await markQuoteSent(ownerCtx(), "owner", q.id);
+  // Five concurrent accept attempts serialize on the hosted DB's claim row —
+  // under a loaded full-suite run the tail attempt can exceed the default 30s.
+  it(
+    "#5 concurrent acceptQuote creates exactly one job (no orphan)",
+    { timeout: 60_000 },
+    async () => {
+      const q = await createQuote(ownerCtx(), "owner", {
+        customerId,
+        presetId,
+        lines: [{ description: "race", qty: 1, unit: "ea", unitPriceMinor: 800000, vatRate: 0 }],
+      });
+      const { approvalId } = await submitQuote(ownerCtx(), "owner", q.id);
+      // The prior test installed a quote_send auto-approve rule, so the quote may
+      // already be 'approved' at submit — only decide if it's still pending.
+      const [submitted] =
+        (await owner`select status from public.quote where id = ${q.id}`) as unknown as Array<{
+          status: string;
+        }>;
+      if (submitted!.status === "pending_approval") {
+        await decideApproval(ownerCtx(), "owner", { approvalId, decision: "approved" });
+      }
+      await markQuoteSent(ownerCtx(), "owner", q.id);
 
-    const [before] =
-      (await owner`select count(*)::int as n from public.job where org_id = ${orgId}`) as unknown as Array<{
-        n: number;
-      }>;
-    const results = await Promise.allSettled([
-      acceptQuote(ownerCtx(), "owner", q.id, {}),
-      acceptQuote(ownerCtx(), "owner", q.id, {}),
-    ]);
-    const [after] =
-      (await owner`select count(*)::int as n from public.job where org_id = ${orgId}`) as unknown as Array<{
-        n: number;
-      }>;
-    expect(after!.n - before!.n).toBe(1); // exactly one job, no orphan
-    expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
-    const [conv] =
-      (await owner`select status from public.quote where id = ${q.id}`) as unknown as Array<{
-        status: string;
-      }>;
-    expect(conv!.status).toBe("converted");
-  });
+      const [before] =
+        (await owner`select count(*)::int as n from public.job where org_id = ${orgId}`) as unknown as Array<{
+          n: number;
+        }>;
+      const results = await Promise.allSettled([
+        acceptQuote(ownerCtx(), "owner", q.id, {}),
+        acceptQuote(ownerCtx(), "owner", q.id, {}),
+      ]);
+      const [after] =
+        (await owner`select count(*)::int as n from public.job where org_id = ${orgId}`) as unknown as Array<{
+          n: number;
+        }>;
+      expect(after!.n - before!.n).toBe(1); // exactly one job, no orphan
+      expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+      const [conv] =
+        (await owner`select status from public.quote where id = ${q.id}`) as unknown as Array<{
+          status: string;
+        }>;
+      expect(conv!.status).toBe("converted");
+    },
+  );
 });

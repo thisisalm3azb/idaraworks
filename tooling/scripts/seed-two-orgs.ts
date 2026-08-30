@@ -453,6 +453,48 @@ export const SEEDERS: Record<string, Seeder> = {
             values (${org}, ${b}, 1, '{"name":"Bleed"}'::jsonb, 'valid')`;
   },
 
+  // H19 normalized contacts (registry gap closed during H20).
+  customer_contact: async (o, org) => {
+    const c = randomUUID();
+    await o`insert into public.customer (id, org_id, name, active)
+            values (${c}, ${org}, 'Bleed contact customer', true)`;
+    await o`insert into public.customer_contact (org_id, customer_id, name)
+            values (${org}, ${c}, 'Bleed contact')`;
+  },
+  // H14 workspace blueprint (registry gap closed during H20).
+  workspace_blueprint_revision: async (o, org, u) => {
+    await o`insert into public.workspace_blueprint_revision
+              (org_id, revision_no, status, schema_version, blueprint, blueprint_hash,
+               proposed_source, created_by)
+            values (${org}, ${500 + Math.floor(Math.random() * 400)}, 'draft', 1,
+                    '{}'::jsonb, ${"ab".repeat(32)}, 'user_change', ${u})`;
+  },
+
+  // H20 sales CRM.
+  pipeline_stage: async (o, org) => {
+    await o`insert into public.pipeline_stage (org_id, key, label, sort, category)
+            values (${org}, ${"bleed_" + randomUUID().slice(0, 8)},
+                    '{"en":"Bleed stage","ar":"مرحلة"}'::jsonb, 90, 'open')`;
+  },
+  lead: async (o, org, u) => {
+    await o`insert into public.lead (org_id, name, status, created_by)
+            values (${org}, 'Bleed lead', 'new', ${u})`;
+  },
+  opportunity: async (o, org, u) => {
+    const stage = "bleedopp_" + randomUUID().slice(0, 8);
+    await o`insert into public.pipeline_stage (org_id, key, label, sort, category)
+            values (${org}, ${stage}, '{"en":"Bleed opp stage","ar":"مرحلة"}'::jsonb, 91, 'open')`;
+    await o`insert into public.opportunity (org_id, name, stage_key, status, created_by)
+            values (${org}, 'Bleed opportunity', ${stage}, 'open', ${u})`;
+  },
+  sales_activity: async (o, org, u) => {
+    const lead = randomUUID();
+    await o`insert into public.lead (id, org_id, name, status, created_by)
+            values (${lead}, ${org}, 'Bleed activity lead', 'new', ${u})`;
+    await o`insert into public.sales_activity (org_id, lead_id, kind, body, actor_user_id)
+            values (${org}, ${lead}, 'note', 'Bleed note', ${u})`;
+  },
+
   // Seeded under the org's OWN user (not the shared recipient): sign_in_log's
   // policy is user-OR-org, so a shared user would be visible cross-org by design
   // (the user's own events). Using a disjoint user tests the cross-USER isolation.

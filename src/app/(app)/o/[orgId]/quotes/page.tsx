@@ -4,7 +4,13 @@ import { Badge, Button, EmptyState, FilterBar } from "@/platform/ui";
 import { getT } from "@/platform/i18n/server";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { can } from "@/platform/authz";
-import { parseQuotesSearch, quoteIsAwaiting, quotesHref } from "@/modules/dashboard/service";
+import {
+  orgToday,
+  parseQuotesSearch,
+  quoteIsAwaiting,
+  quoteIsExpiring,
+  quotesHref,
+} from "@/modules/dashboard/service";
 import { formatMoney } from "@/platform/format/money";
 import type { CurrencyCode } from "@/platform/registries";
 import { listQuotes } from "@/modules/quotes/service";
@@ -28,7 +34,7 @@ export default async function QuotesPage({
   searchParams,
 }: {
   params: Promise<{ orgId: string }>;
-  searchParams: Promise<{ status?: string; customer?: string }>;
+  searchParams: Promise<{ status?: string; customer?: string; expiring?: string }>;
 }) {
   const { orgId } = await params;
   const sp = await searchParams;
@@ -42,17 +48,24 @@ export default async function QuotesPage({
   // H18/H19 drill-down contract: ?status=awaiting (the dashboard rule) and
   // ?customer=<uuid> (SQL-side, org-scoped — a foreign or unknown id yields
   // the same honest empty list); unknown values are safely ignored.
-  const { awaiting, customerId } = parseQuotesSearch(sp);
+  const { awaiting, customerId, expiringDays } = parseQuotesSearch(sp);
   const all = await listQuotes(resolved.ctx, resolved.archetype, {
     customerId: customerId ?? undefined,
   });
-  const rows = awaiting ? all.filter((r) => quoteIsAwaiting(r)) : all;
+  const asOf = orgToday(new Date(), resolved.timezone);
+  let rows = awaiting ? all.filter((r) => quoteIsAwaiting(r)) : all;
+  // H20 drill-down: ?expiring=N narrows to sendable quotes whose validity
+  // ends within N days (the same rule the dashboard counted with).
+  if (expiringDays !== null) {
+    rows = rows.filter((r) => quoteIsExpiring(r, asOf, expiringDays));
+  }
   const filterCustomer = customerId
     ? await getCustomer(resolved.ctx, resolved.archetype, customerId).catch(() => null)
     : null;
-  const filtered = awaiting || customerId !== null;
+  const filtered = awaiting || customerId !== null || expiringDays !== null;
   const summary = [
     awaiting ? t("filters.quotes.awaiting") : null,
+    expiringDays !== null ? t("filters.quotes.expiring", { days: expiringDays }) : null,
     customerId
       ? filterCustomer
         ? t("filters.customer", { name: filterCustomer.name })

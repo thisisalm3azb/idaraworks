@@ -31,10 +31,12 @@ export async function createQuoteAction(
   const currency = resolved.baseCurrency as CurrencyCode;
   const presetId = String(formData.get("preset_id") ?? "").trim();
   const customerId = String(formData.get("customer_id") ?? "").trim();
+  const opportunityId = String(formData.get("opportunity_id") ?? "").trim();
   try {
     const { id } = await createQuote(resolved.ctx, resolved.archetype, {
       customerId: customerId || undefined,
       presetId: presetId || undefined,
+      opportunityId: opportunityId || undefined,
       currency,
       terms: String(formData.get("terms") ?? "") || undefined,
       lines: [

@@ -208,6 +208,28 @@ const GROUPS: GroupSpec[] = [
         icon: "users",
         action: "customers.view",
       },
+      // H20 sales CRM — rides the customers module (no separate cap.* key).
+      {
+        key: "leads",
+        labelKey: "nav.leads",
+        path: "/leads",
+        icon: "user",
+        action: "leads.view",
+      },
+      {
+        key: "opportunities",
+        labelKey: "nav.opportunities",
+        path: "/opportunities",
+        icon: "trendUp",
+        action: "opportunities.view",
+      },
+      {
+        key: "sales",
+        labelKey: "nav.sales",
+        path: "/sales",
+        icon: "chart",
+        action: "opportunities.view",
+      },
       {
         key: "customer_updates",
         labelKey: "nav.customer_updates",

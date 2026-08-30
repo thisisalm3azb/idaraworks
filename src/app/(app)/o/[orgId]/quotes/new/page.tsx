@@ -6,6 +6,7 @@ import { resolveCtx } from "@/platform/auth/resolve";
 import { loadOrgTerminology, term } from "@/platform/terminology";
 import { can } from "@/platform/authz";
 import { listQuoteFormOptions } from "@/modules/quotes/service";
+import { getOpportunity } from "@/modules/crm/service";
 import { createCustomerInlineAction } from "../../customers/actions";
 import { createQuoteAction } from "../actions";
 import { QuoteForm } from "./QuoteForm";
@@ -15,7 +16,7 @@ export default async function NewQuotePage({
   searchParams,
 }: {
   params: Promise<{ orgId: string }>;
-  searchParams: Promise<{ customer?: string }>;
+  searchParams: Promise<{ customer?: string; opportunity?: string }>;
 }) {
   const { orgId } = await params;
   const sp = await searchParams;
@@ -34,9 +35,24 @@ export default async function NewQuotePage({
   // ?customer= continuity (from the customer detail page): honored ONLY when
   // the id is in the org's own ACTIVE option list — a foreign or archived id
   // silently falls back to no selection (and the service re-validates anyway).
-  const defaultCustomerId = opts.customers.some((c) => c.id === sp.customer)
+  let defaultCustomerId = opts.customers.some((c) => c.id === sp.customer)
     ? sp.customer
     : undefined;
+  // H20: ?opportunity= continuity — honored ONLY when the id resolves to one
+  // of the org's own OPEN opportunities (the service re-validates the link
+  // inside the create transaction anyway). Its customer wins the preselect.
+  let opportunityId: string | undefined;
+  if (sp.opportunity && can(resolved.archetype, "opportunities.view")) {
+    const opp = await getOpportunity(resolved.ctx, resolved.archetype, sp.opportunity).catch(
+      () => null,
+    );
+    if (opp && opp.status === "open" && !opp.archived) {
+      opportunityId = opp.id;
+      if (opp.customerId && opts.customers.some((c) => c.id === opp.customerId)) {
+        defaultCustomerId = opp.customerId;
+      }
+    }
+  }
   const canCreateCustomer = can(resolved.archetype, "customers.manage");
 
   return (
@@ -49,6 +65,7 @@ export default async function NewQuotePage({
           customers={opts.customers.map((c) => ({ id: c.id, label: c.name }))}
           presets={opts.presets}
           defaultCustomerId={defaultCustomerId}
+          opportunityId={opportunityId}
           canCreateCustomer={canCreateCustomer}
           createAction={createCustomerInlineAction.bind(null, orgId)}
           submitAction={createQuoteAction.bind(null, orgId)}

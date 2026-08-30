@@ -45,6 +45,7 @@ export function QuoteForm({
   customers,
   presets,
   defaultCustomerId,
+  opportunityId,
   canCreateCustomer,
   createAction,
   submitAction,
@@ -55,6 +56,8 @@ export function QuoteForm({
   customers: RelationshipOption[];
   presets: Array<{ id: string; name: string }>;
   defaultCustomerId?: string;
+  /** H20: server-validated open opportunity to link the quotation to. */
+  opportunityId?: string;
   canCreateCustomer: boolean;
   createAction: (formData: FormData) => Promise<RelationshipCreateResult>;
   submitAction: (formData: FormData) => Promise<CreateQuoteResult>;
@@ -85,6 +88,8 @@ export function QuoteForm({
           {error}
         </p>
       ) : null}
+
+      {opportunityId ? <input type="hidden" name="opportunity_id" value={opportunityId} /> : null}
 
       <RelationshipField
         label={dict.customer}

@@ -90,6 +90,7 @@ function data(over: Partial<DashboardData> = {}): DashboardData {
     myJobs: null,
     returnedReports: null,
     reviewQueue: null,
+    sales: null,
     failed: [],
     ...over,
   };

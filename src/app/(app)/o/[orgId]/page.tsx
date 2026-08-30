@@ -61,6 +61,7 @@ import {
   composeAdaptiveDashboard,
   gatherDashboardData,
   orgToday,
+  HORIZON_DAYS,
 } from "@/modules/dashboard/service";
 import { resolveShell } from "./shell";
 import { AdaptiveDashboard } from "./adaptive";
@@ -134,8 +135,12 @@ export default async function OrgHome({
     };
     const now = new Date();
     const asOf = orgToday(now, resolved.timezone);
+    // The compiled horizon feeds the gather too, so window-bounded counts
+    // (closing opportunities, expiring quotes) match their drill-downs.
+    const compiledDash = shell.shape.compiled.dashboards[a as BlueprintArchetype] ?? null;
+    const horizonDays = HORIZON_DAYS[compiledDash?.timeHorizon ?? ""] ?? 7;
     const [data, ent] = await Promise.all([
-      gatherDashboardData(resolved.ctx, a, { asOf, computedAt: now.toISOString() }),
+      gatherDashboardData(resolved.ctx, a, { asOf, computedAt: now.toISOString(), horizonDays }),
       resolveEntitlements(resolved.ctx),
     ]);
     const view = composeAdaptiveDashboard(
@@ -145,7 +150,7 @@ export default async function OrgHome({
         seesPrice: resolved.ctx.pricePrivileged,
         features: ent.features,
         disabledModules: disabledModulesOf(shell.shape.compiled),
-        compiledDashboard: shell.shape.compiled.dashboards[a as BlueprintArchetype] ?? null,
+        compiledDashboard: compiledDash,
         asOf,
       },
       data,

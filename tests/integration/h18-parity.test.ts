@@ -166,50 +166,57 @@ describe("H18 — workflow stage adoption", () => {
     expect(stages.map((s) => s.stage_key)).toEqual(FIXTURE_STAGES.map((s) => s.key));
   });
 
-  it("a new applied revision changes FUTURE work only (historical safety)", async () => {
-    const before = await createJobFromPreset(ctxOf(orgA, userA), "owner", {
-      presetId: presetA,
-      name: "Before revision",
-    });
-    const beforeStages = await jobStages(before.id);
-    const twoStage = makeBlueprint({
-      capabilities: scenarioContractor().capabilities,
-      workflows: [
-        {
-          ...scenarioContractor().workflows[0]!,
-          stages: [
-            {
-              key: "build",
-              name: { en: "Build", ar: "بناء" },
-              weight: 70,
-              phaseSemantic: "production" as const,
-            },
-            {
-              key: "handover_new",
-              name: { en: "Handover", ar: "تسليم" },
-              weight: 30,
-              phaseSemantic: "handover" as const,
-            },
-          ],
-          transitions: [{ from: "build", to: "handover_new" }],
-          requiredApprovals: [],
-          responsibilities: [],
-          exceptionPaths: [],
-        },
-      ],
-      dashboards: scenarioContractor().dashboards,
-    });
-    await applyBlueprint(ctxOf(orgA, userA), twoStage);
-    const after = await createJobFromPreset(ctxOf(orgA, userA), "owner", {
-      presetId: presetA,
-      name: "After revision",
-    });
-    const afterStages = await jobStages(after.id);
-    expect(afterStages.map((s) => s.stage_key)).toEqual(["build", "handover_new"]);
-    // The pre-revision job's snapshot is untouched.
-    const beforeAgain = await jobStages(before.id);
-    expect(beforeAgain).toEqual(beforeStages);
-  });
+  // A full blueprint lifecycle (draft → validate → approve → apply) plus two
+  // job creations against the hosted DB sits right at the default 30s cap —
+  // give the heaviest test in the file the same headroom the fixtures get.
+  it(
+    "a new applied revision changes FUTURE work only (historical safety)",
+    { timeout: 60_000 },
+    async () => {
+      const before = await createJobFromPreset(ctxOf(orgA, userA), "owner", {
+        presetId: presetA,
+        name: "Before revision",
+      });
+      const beforeStages = await jobStages(before.id);
+      const twoStage = makeBlueprint({
+        capabilities: scenarioContractor().capabilities,
+        workflows: [
+          {
+            ...scenarioContractor().workflows[0]!,
+            stages: [
+              {
+                key: "build",
+                name: { en: "Build", ar: "بناء" },
+                weight: 70,
+                phaseSemantic: "production" as const,
+              },
+              {
+                key: "handover_new",
+                name: { en: "Handover", ar: "تسليم" },
+                weight: 30,
+                phaseSemantic: "handover" as const,
+              },
+            ],
+            transitions: [{ from: "build", to: "handover_new" }],
+            requiredApprovals: [],
+            responsibilities: [],
+            exceptionPaths: [],
+          },
+        ],
+        dashboards: scenarioContractor().dashboards,
+      });
+      await applyBlueprint(ctxOf(orgA, userA), twoStage);
+      const after = await createJobFromPreset(ctxOf(orgA, userA), "owner", {
+        presetId: presetA,
+        name: "After revision",
+      });
+      const afterStages = await jobStages(after.id);
+      expect(afterStages.map((s) => s.stage_key)).toEqual(["build", "handover_new"]);
+      // The pre-revision job's snapshot is untouched.
+      const beforeAgain = await jobStages(before.id);
+      expect(beforeAgain).toEqual(beforeStages);
+    },
+  );
 
   it("duplicate creation retries produce independent complete snapshots", async () => {
     const a = await createJobFromPreset(ctxOf(orgA, userA), "owner", {

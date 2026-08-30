@@ -8,7 +8,14 @@ import { can } from "@/platform/authz";
 import { formatDate, formatMoney } from "@/platform/format";
 import type { CurrencyCode } from "@/platform/registries";
 import { gatherCustomer360 } from "@/modules/crm/service";
-import { arHref, invoicesHref, jobsHref, orgToday, quotesHref } from "@/modules/dashboard/service";
+import {
+  arHref,
+  invoicesHref,
+  jobsHref,
+  opportunitiesHref,
+  orgToday,
+  quotesHref,
+} from "@/modules/dashboard/service";
 import { setCustomerActiveAction } from "../actions";
 import { addContactAction, removeContactAction } from "./actions";
 import { CustomerLifecycle } from "./CustomerLifecycle";
@@ -315,6 +322,59 @@ export default async function CustomerDetailPage({
                       {q.totalMinor !== null ? (
                         <span dir="ltr" className="font-mono text-sm text-ink">
                           {formatMoney(q.totalMinor, currency, { locale })}
+                        </span>
+                      ) : null}
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+      ) : null}
+
+      {/* H20 — Sales pipeline (opportunities for this customer) */}
+      {view.opportunities !== null || view.failed.includes("opportunities") ? (
+        <Card>
+          <CardHeader
+            title={t("crm.opps.title")}
+            meta={
+              view.opportunities && view.opportunities.length > 0 ? (
+                <Link
+                  href={opportunitiesHref(orgId, { customerId: c.id, view: "list" })}
+                  className="text-sm text-brand hover:underline"
+                >
+                  {t("dashboard.view_all")}
+                </Link>
+              ) : undefined
+            }
+          />
+          {view.failed.includes("opportunities") ? (
+            <p className="text-sm text-ink-muted">{t("crm.section_unavailable")}</p>
+          ) : view.opportunities!.length === 0 ? (
+            <p className="text-sm text-ink-muted">{t("crm.opps.empty")}</p>
+          ) : (
+            <ul className="divide-y divide-line">
+              {view.opportunities!.slice(0, 6).map((o) => (
+                <li key={o.id}>
+                  <Link
+                    href={`/o/${orgId}/opportunities/${o.id}`}
+                    className="flex min-h-11 flex-wrap items-center justify-between gap-3 py-2"
+                  >
+                    <span className="min-w-0 flex-1 truncate text-sm font-medium text-ink">
+                      {o.name}
+                    </span>
+                    <span className="flex items-center gap-2">
+                      <Badge
+                        tone={
+                          o.status === "won" ? "success" : o.status === "lost" ? "neutral" : "info"
+                        }
+                      >
+                        {t(`opps.status.${o.status}`)}
+                      </Badge>
+                      {o.estimatedValueMinor !== null ? (
+                        <span dir="ltr" className="font-mono text-sm text-ink">
+                          {formatMoney(o.estimatedValueMinor, currency, { locale })}
                         </span>
                       ) : null}
                     </span>

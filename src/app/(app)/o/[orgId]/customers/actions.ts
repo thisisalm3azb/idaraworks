@@ -75,6 +75,7 @@ export async function createCustomerAction(orgId: string, formData: FormData): P
         name: values.name,
         email: String(formData.get("email") ?? ""),
         phone: String(formData.get("phone") ?? ""),
+        country: values.country || null,
       });
       if (dups.length > 0) {
         const q = new URLSearchParams({
