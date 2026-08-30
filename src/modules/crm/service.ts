@@ -32,6 +32,7 @@ import {
 } from "@/modules/masters/service";
 import { customerMoney, type CustomerMoney } from "@/modules/invoices/service";
 import { listOpportunities, type OpportunityRow } from "./sales";
+import { customerWork } from "@/modules/jobs/service";
 
 // H20 — the sales CRM engine (module public surface).
 export * from "./sales";
@@ -120,6 +121,8 @@ export type Customer360 = {
   jobs: CustomerJobRow[] | null;
   /** H20: this customer's opportunities (opportunities.view holders). */
   opportunities: OpportunityRow[] | null;
+  /** H21: delivery for this customer (jobs.view holders). */
+  work: Awaited<ReturnType<typeof customerWork>> | null;
   money: CustomerMoney | null;
   /** Distinguishes redaction from failure: 'restricted' | 'failed' | 'ok'. */
   moneyState: "ok" | "restricted" | "failed" | "hidden";
@@ -302,7 +305,7 @@ export async function gatherCustomer360(
   const failed: string[] = [];
   const seeQuotes = can(archetype, "quotes.view");
   const seeMoney = can(archetype, "ar.view");
-  const [contacts, quotes, jobs, money, timeline, opportunities] = await Promise.all([
+  const [contacts, quotes, jobs, money, timeline, opportunities, work] = await Promise.all([
     guarded("contacts", failed, () => listCustomerContacts(ctx, archetype, customerId)),
     seeQuotes
       ? guarded("quotes", failed, () => customerQuotes(ctx, customerId))
@@ -318,6 +321,9 @@ export async function gatherCustomer360(
       ? guarded("opportunities", failed, () =>
           listOpportunities(ctx, archetype, { customerId, status: "all", limit: 25 }),
         )
+      : Promise.resolve(null),
+    can(archetype, "jobs.view")
+      ? guarded("work", failed, () => customerWork(ctx, archetype, customerId, opts.asOf))
       : Promise.resolve(null),
   ]);
   const moneyState: Customer360["moneyState"] = !seeMoney
@@ -343,6 +349,7 @@ export async function gatherCustomer360(
     quotes,
     jobs,
     opportunities,
+    work,
     money,
     moneyState,
     timeline,

@@ -470,6 +470,26 @@ export const SEEDERS: Record<string, Seeder> = {
                     '{}'::jsonb, ${"ab".repeat(32)}, 'user_change', ${u})`;
   },
 
+  // H21 work management. A dependency needs two tasks, which need a job.
+  task_dependency: async (o, org, u) => {
+    const job = randomUUID();
+    const preset = randomUUID();
+    await o`insert into public.job_preset (id, org_id, code, names, billing_points)
+            values (${preset}, ${org}, ${("BL" + randomUUID().slice(0, 6)).toUpperCase()},
+                    '{"en":"Bleed preset","ar":"قالب"}'::jsonb, '[]'::jsonb)`;
+    await o`insert into public.job (id, org_id, reference, name, preset_id, status_key,
+                                    status_category, created_by)
+            values (${job}, ${org}, ${"BLJ-" + randomUUID().slice(0, 8)}, 'Bleed work',
+                    ${preset}, 'draft', 'draft', ${u})`;
+    const a = randomUUID();
+    const b = randomUUID();
+    await o`insert into public.task (id, org_id, job_id, title, created_by)
+            values (${a}, ${org}, ${job}, 'Bleed task A', ${u}),
+                   (${b}, ${org}, ${job}, 'Bleed task B', ${u})`;
+    await o`insert into public.task_dependency (org_id, task_id, depends_on_task_id, created_by)
+            values (${org}, ${b}, ${a}, ${u})`;
+  },
+
   // H20 sales CRM.
   pipeline_stage: async (o, org) => {
     await o`insert into public.pipeline_stage (org_id, key, label, sort, category)

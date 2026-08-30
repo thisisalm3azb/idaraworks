@@ -30,6 +30,7 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
     "catalog.view",
     "catalog.manage",
     "jobs.view",
+    "tasks.view",
     "jobs.create",
     "jobs.edit",
     "jobs.price.manage",
@@ -38,6 +39,8 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
     "stages.update",
     "stages.request_complete",
     "stages.reopen",
+    "jobs.reopen",
+    "jobs.archive",
     "tasks.manage",
     "tasks.update_status",
     "crew.manage",
@@ -108,6 +111,7 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
     "catalog.view",
     "catalog.manage",
     "jobs.view",
+    "tasks.view",
     "jobs.create",
     "jobs.edit",
     "jobs.price.manage",
@@ -115,6 +119,8 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
     "stages.update",
     "stages.request_complete",
     "stages.reopen",
+    "jobs.reopen",
+    "jobs.archive",
     "tasks.manage",
     "tasks.update_status",
     "crew.manage",
@@ -179,12 +185,14 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
     "catalog.view",
     "catalog.manage",
     "jobs.view",
+    "tasks.view",
     "jobs.create",
     "jobs.edit",
     "jobs.progress.override",
     "stages.update",
     "stages.request_complete",
     "stages.reopen",
+    "jobs.reopen",
     "tasks.manage",
     "tasks.update_status",
     "crew.manage",
@@ -233,6 +241,7 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
   // its scoped lookups with its slice.
   foreman: [
     "jobs.view",
+    "tasks.view",
     "stages.request_complete",
     "tasks.update_status",
     "week.view",
@@ -256,6 +265,7 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
     "catalog.view",
     "catalog.manage",
     "jobs.view",
+    "tasks.view",
     "week.view",
     "comments.create",
     // "Issues: raise" C for procurement (materials problems → tickets).
@@ -284,6 +294,7 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
     "customers.view",
     "catalog.view",
     "jobs.view",
+    "tasks.view",
     "week.view",
     "comments.create",
     // "Issues: raise" C + "Attendance: view" V (payroll input, D-6.2 cost-priv
@@ -323,5 +334,5 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
   // Viewer (doc 06): jobs v (redacted) + week view + attendance V — other rows −.
   // today.view added (adversarial review): read-only Today composed ONLY from
   // the viewer's own read grants above (no money, no queues).
-  viewer: ["members.view", "jobs.view", "week.view", "attendance.view", "today.view"],
+  viewer: ["members.view", "jobs.view", "tasks.view", "week.view", "attendance.view", "today.view"],
 };

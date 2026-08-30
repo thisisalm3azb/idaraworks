@@ -110,6 +110,15 @@ const SUBJECTS: Record<string, SubjectConfig> = {
     onReject: "rejected",
     onWithdraw: "recorded",
   },
+  // H21: a task marked requires_approval waits here. Rejection returns it to
+  // in_progress — an explicit, workable state, never a dead end.
+  task_completion: {
+    table: "task",
+    live: "awaiting_approval",
+    onApprove: "completed",
+    onReject: "in_progress",
+    onWithdraw: "in_progress",
+  },
 };
 
 // ── role escalation (F-4): one step up until a non-requester decider exists ───
@@ -244,7 +253,14 @@ export async function validateRules(
 
 // ── rule management (owner/admin; org-editable, config-audited) ──────────────
 export const CreateRuleInput = z.object({
-  subjectType: z.enum(["material_request", "expense", "quote_send", "purchase_order", "payment"]),
+  subjectType: z.enum([
+    "material_request",
+    "expense",
+    "quote_send",
+    "purchase_order",
+    "payment",
+    "task_completion",
+  ]),
   conditionKind: z.enum(["always", "amount_gte", "urgency_in"]),
   amountGteMinor: z.number().int().min(0).optional(),
   urgencyIn: z.array(z.string().min(1).max(20)).optional(),
@@ -554,7 +570,12 @@ export async function decideApproval(
         summary: `Approval ${r.outcome}${r.selfApproved ? " (self-approved)" : ""} (${r.subjectType})`,
       }),
       activity: (r) => ({
-        entityType: r.subjectType === "purchase_order" ? "purchase_order" : "material_request",
+        entityType:
+          r.subjectType === "purchase_order"
+            ? "purchase_order"
+            : r.subjectType === "task_completion"
+              ? "task"
+              : "material_request",
         entityId: r.subjectId,
         verb: r.outcome === "approved" ? "approved" : "rejected",
         summary: `${r.outcome} the ${r.subjectType.replace("_", " ")}${r.selfApproved ? " (self-approved)" : ""}`,
@@ -620,12 +641,22 @@ export async function decideApproval(
         const extra =
           row.subject_type === "purchase_order" && input.decision === "approved"
             ? sql`, approved_at = now()`
-            : sql``;
+            : // H21: an approved task completion carries its completion time, the
+              // same stamp the direct path writes.
+              row.subject_type === "task_completion" && input.decision === "approved"
+              ? sql`, completed_at = coalesce(completed_at, now())`
+              : sql``;
         const moved = (await tx.execute(
           sql`update public.${sql.raw(cfg.table)} set status = ${newStatus}${extra}, updated_at = now()
               where id = ${row.subject_id} and org_id = ${ctx.orgId} and status = ${cfg.live}
               returning id`,
         )) as unknown as Array<{ id: string }>;
+        // H21 note: an approved task completion does NOT recompute its
+        // dependents' stored status here — the approval engine must not import
+        // another module's internals. Readiness is derived from the live
+        // dependency edges wherever tasks are read or started, so a dependent
+        // is never misreported and never wrongly startable.
+        //
         // A newly-approved PO triggers the LPO PDF worker (needs the real ref) — only
         // if the subject actually transitioned (guard above matched a live row).
         if (moved[0] && row.subject_type === "purchase_order" && input.decision === "approved") {
@@ -784,6 +815,8 @@ export async function listInbox(ctx: Ctx, archetype: RoleArchetype): Promise<Inb
   const amountFor = (subjectType: string, amount: string | null): string | null => {
     if (subjectType === "quote_send") return ctx.pricePrivileged ? amount : null;
     if (subjectType === "payment") return seesPayments ? amount : null;
+    // A task completion carries no money; never borrow a purchasing permission for it.
+    if (subjectType === "task_completion") return null;
     return seesPo ? amount : null; // material_request, purchase_order, expense
   };
   return rows.map((r) => ({

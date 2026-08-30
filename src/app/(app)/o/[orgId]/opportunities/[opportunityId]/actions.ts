@@ -12,6 +12,7 @@ import {
   updateOpportunity,
   winOpportunity,
   USER_ACTIVITY_KINDS,
+  startWorkFromOpportunity,
 } from "@/modules/crm/service";
 
 type Resolved = Exclude<Awaited<ReturnType<typeof resolveCtxForAction>>, string>;
@@ -128,4 +129,35 @@ export async function oppFollowUpDoneAction(
   await run(orgId, id, "followup_done", (r) =>
     completeFollowUp(r.ctx, r.archetype, String(formData.get("activity_id") ?? "")),
   );
+}
+
+/**
+ * H21 Part J.2 — the explicit start of delivery. Winning a sale never creates
+ * work by itself; this action is the only path, and it is idempotent, so a
+ * second press lands on the same work record rather than a duplicate.
+ */
+export async function startWorkAction(
+  orgId: string,
+  id: string,
+  formData: FormData,
+): Promise<void> {
+  const resolved = await resolveOr(orgId);
+  const back = backTo(orgId, id);
+  let jobId = "";
+  try {
+    ({ jobId } = await startWorkFromOpportunity(resolved.ctx, resolved.archetype, id, {
+      presetId: String(formData.get("preset_id") ?? ""),
+      name: String(formData.get("name") ?? ""),
+      startDate: (formData.get("start_date") as string) || undefined,
+      dueDate: (formData.get("due_date") as string) || undefined,
+      priority: (formData.get("priority") as "low" | "normal" | "high" | "urgent") || "normal",
+      description: (formData.get("description") as string) || undefined,
+      location: (formData.get("location") as string) || undefined,
+    }));
+  } catch (err) {
+    if (err && typeof err === "object" && "digest" in err) throw err;
+    redirect(`${back}?error=start_work`);
+  }
+  revalidatePath(back);
+  redirect(`/o/${orgId}/jobs/${jobId}`);
 }

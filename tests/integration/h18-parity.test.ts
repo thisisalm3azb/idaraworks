@@ -274,10 +274,15 @@ describe("H18 — workflow stage adoption", () => {
 
 describe("H18 — count-to-record parity", () => {
   it("overdue work: aggregate equals the filtered destination list", async () => {
+    // H21: held work must say why (job_hold_reason_ck), so this seed supplies
+    // the reason the product would have captured on the transition.
     await owner`
-      insert into public.job (org_id, reference, name, status_key, status_category, created_by, due_date)
-      values (${orgA}, 'J-OVD-1', 'Overdue one', 'active', 'active', ${userA}, (${asOf}::date - 4)),
-             (${orgA}, 'J-OVD-2', 'Overdue two', 'on_hold', 'on_hold', ${userA}, (${asOf}::date - 1))`;
+      insert into public.job (org_id, reference, name, status_key, status_category, created_by,
+                              due_date, on_hold_reason)
+      values (${orgA}, 'J-OVD-1', 'Overdue one', 'active', 'active', ${userA},
+              (${asOf}::date - 4), null),
+             (${orgA}, 'J-OVD-2', 'Overdue two', 'on_hold', 'on_hold', ${userA},
+              (${asOf}::date - 1), 'Seeded on hold for the parity fixture')`;
     const ctx = ctxOf(orgA, userA);
     const agg = (await owner`
       select count(*)::int as n from public.job

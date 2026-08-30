@@ -73,6 +73,13 @@ const GROUPS: GroupSpec[] = [
         icon: "briefcase",
         action: "jobs.view",
       },
+      {
+        key: "my_work",
+        labelKey: "nav.my_work",
+        path: "/my-work",
+        icon: "check",
+        action: "jobs.view",
+      },
       { key: "week", labelKey: "nav.week", path: "/week", icon: "calendar", action: "week.view" },
       {
         key: "report_new",

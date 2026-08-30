@@ -44,7 +44,15 @@ describe("registries (phase2 closed vocabularies)", () => {
 
   it("approvable registry matches doc 05 final (OP-7 closure)", () => {
     expect([...APPROVABLE_TYPES].sort()).toEqual(
-      ["expense", "material_request", "payment", "purchase_order", "quote_send"].sort(),
+      [
+        "expense",
+        "material_request",
+        "payment",
+        "purchase_order",
+        "quote_send",
+        // H21: a task marked requires_approval finishes through the inbox.
+        "task_completion",
+      ].sort(),
     );
     // invoice_issue is explicitly OUT of the MVP enum (audit C-1)
     expect(APPROVABLE_TYPES).not.toContain("invoice_issue");

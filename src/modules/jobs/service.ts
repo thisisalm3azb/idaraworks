@@ -17,6 +17,7 @@ import { createComment } from "@/platform/comments";
 import { signUpload, type SignedUpload } from "@/platform/files";
 import type { FieldDefinitionSet, StageTemplate, JobPreset } from "@/platform/config";
 import { assignedJobCondition, isAssigned } from "./assigned";
+import { changeWorkStatus } from "./lifecycle";
 import { computeProgress, type StageForProgress } from "./progress";
 import { sql, withCtx, type Ctx, type TenantTx } from "@/platform/tenancy";
 import type { RoleArchetype } from "@/platform/registries";
@@ -45,6 +46,15 @@ export const CreateJobInput = z.object({
     .regex(/^\d{4}-\d{2}-\d{2}$/)
     .optional(),
   customValues: z.record(z.string(), z.unknown()).optional(),
+  // H21 — the work record's own fields.
+  ownerUserId: z.string().uuid().optional(),
+  priority: z.enum(["low", "normal", "high", "urgent"]).default("normal"),
+  description: z.string().trim().max(4000).optional(),
+  location: z.string().trim().max(200).optional(),
+  /** How this work came to exist. Set by the calling PATH, never by a form. */
+  origin: z.enum(["quotation", "opportunity", "direct"]).default("direct"),
+  /** Only meaningful with origin 'opportunity'; validated in-transaction. */
+  sourceOpportunityId: z.string().uuid().optional(),
 });
 
 type PresetRow = { code: string; retired_at: string | null };
@@ -80,9 +90,26 @@ async function allocateSequence(
  * returns the 'job' workflow's stages, or null when no usable workflow
  * exists (malformed shape → null → the legacy template path, fail safe).
  * Stage identity, bilingual labels, weights and ORDER are preserved. */
-export function stagesFromBlueprint(
-  blueprint: unknown,
-): Array<{ stage_key: string; names: { en: string; ar: string }; weight: number }> | null {
+export type SnapshotStage = {
+  stage_key: string;
+  names: { en: string; ar: string };
+  weight: number;
+  /** H21: snapshotted so a job's own stage rows can answer the engine
+   * predicates (isReportable / isPreFinal). Null when the source declared
+   * none — never a reason to reject a workflow. */
+  phase_semantic?: string | null;
+};
+
+/** The phase vocabulary a snapshot may carry (registries.PHASE_SEMANTICS). */
+const PHASE_SEMANTIC_VALUES = new Set([
+  "preparation",
+  "production",
+  "finishing",
+  "verification",
+  "handover",
+]);
+
+export function stagesFromBlueprint(blueprint: unknown): SnapshotStage[] | null {
   if (typeof blueprint !== "object" || blueprint === null) return null;
   const workflows = (blueprint as { workflows?: unknown }).workflows;
   if (!Array.isArray(workflows)) return null;
@@ -91,10 +118,15 @@ export function stagesFromBlueprint(
       typeof w === "object" && w !== null && (w as { id?: unknown }).id === "job",
   );
   if (!wf || !Array.isArray(wf.stages) || wf.stages.length === 0) return null;
-  const out: Array<{ stage_key: string; names: { en: string; ar: string }; weight: number }> = [];
+  const out: SnapshotStage[] = [];
   const seen = new Set<string>();
   for (const raw of wf.stages) {
-    const st = raw as { key?: unknown; name?: { en?: unknown; ar?: unknown }; weight?: unknown };
+    const st = raw as {
+      key?: unknown;
+      name?: { en?: unknown; ar?: unknown };
+      weight?: unknown;
+      phaseSemantic?: unknown;
+    };
     if (
       typeof st.key !== "string" ||
       !/^[a-z][a-z0-9_]{0,39}$/.test(st.key) ||
@@ -109,7 +141,15 @@ export function stagesFromBlueprint(
       return null; // any malformed stage disqualifies the whole workflow
     }
     seen.add(st.key);
-    out.push({ stage_key: st.key, names: { en: st.name.en, ar: st.name.ar }, weight: st.weight });
+    out.push({
+      stage_key: st.key,
+      names: { en: st.name.en, ar: st.name.ar },
+      weight: st.weight,
+      phase_semantic:
+        typeof st.phaseSemantic === "string" && PHASE_SEMANTIC_VALUES.has(st.phaseSemantic)
+          ? st.phaseSemantic
+          : null,
+    });
   }
   return out;
 }
@@ -226,13 +266,17 @@ export async function createJobFromPreset(
         insert into public.job
           (id, org_id, reference, name, preset_id, customer_id, status_key, status_category,
            foreman_user_id, manager_user_id, start_date, due_date,
-           billing_points, custom_values, created_by)
+           billing_points, custom_values, created_by,
+           owner_user_id, priority, description, location, origin, source_opportunity_id)
         values (${id}, ${ctx.orgId}, ${reference}, ${data.name}, ${data.presetId},
                 ${data.customerId ?? null}, ${initial.status_key}, ${initial.semantic_category},
                 ${data.foremanUserId ?? null}, ${data.managerUserId ?? null},
                 ${data.startDate ?? null}, ${data.dueDate ?? null},
                 ${JSON.stringify(preset.billing_points)}::jsonb,
-                ${JSON.stringify(customValues)}::jsonb, ${ctx.userId})
+                ${JSON.stringify(customValues)}::jsonb, ${ctx.userId},
+                ${data.ownerUserId ?? data.managerUserId ?? null}, ${data.priority},
+                ${data.description ?? null}, ${data.location ?? null}, ${data.origin},
+                ${data.sourceOpportunityId ?? null})
       `);
 
       // Seed job_stage SNAPSHOTS (immutable; template/blueprint edits never
@@ -249,7 +293,7 @@ export async function createJobFromPreset(
       `)) as unknown as Array<{ id: string; blueprint: unknown }>;
       const blueprintStages = stagesFromBlueprint(revRows[0]?.blueprint);
       const blueprintRevisionId = blueprintStages ? revRows[0]!.id : null;
-      let stages: Array<{ stage_key: string; names: { en: string; ar: string }; weight: number }>;
+      let stages: SnapshotStage[];
       if (blueprintStages) {
         stages = blueprintStages;
       } else {
@@ -268,10 +312,10 @@ export async function createJobFromPreset(
         if (!isSkipped && firstActiveStageId === null) firstActiveStageId = stageId;
         await tx.execute(sql`
           insert into public.job_stage
-            (id, org_id, job_id, stage_key, name, weight, sort, status)
+            (id, org_id, job_id, stage_key, name, weight, sort, status, phase_semantic)
           values (${stageId}, ${ctx.orgId}, ${id}, ${st.stage_key},
                   ${JSON.stringify(st.names)}::jsonb, ${st.weight}, ${i},
-                  ${isSkipped ? "skipped" : "not_started"})
+                  ${isSkipped ? "skipped" : "not_started"}, ${st.phase_semantic ?? null})
         `);
       }
       if (firstActiveStageId) {
@@ -302,6 +346,10 @@ export type JobRow = {
   progressOverridden?: boolean;
   /** Current stage key (U5 dashboard deep-links filter the list by it). */
   currentStageKey?: string | null;
+  /** H21 lifecycle state (present on getJob reads). */
+  archived?: boolean;
+  onHoldReason?: string | null;
+  cancellationReason?: string | null;
 };
 
 export async function listJobs(
@@ -391,6 +439,7 @@ async function listJobsById(ctx: Ctx, jobId: string): Promise<JobRow[]> {
              p.code as preset_code, j.customer_id::text as customer_id, c.name as customer_name,
              j.created_at::text as created_at,
              j.due_date::text as due_date, j.progress_override,
+             j.archived, j.on_hold_reason, j.cancellation_reason,
              (select coalesce(json_agg(json_build_object('weight', s.weight, 'status', s.status)), '[]'::json)
                 from public.job_stage s where s.job_id = j.id) as stages
       from public.job j
@@ -410,6 +459,9 @@ async function listJobsById(ctx: Ctx, jobId: string): Promise<JobRow[]> {
     created_at: string;
     due_date: string | null;
     progress_override: number | null;
+    archived: boolean;
+    on_hold_reason: string | null;
+    cancellation_reason: string | null;
     stages: StageForProgress[];
   }>;
   return rows.map((r) => ({
@@ -423,6 +475,10 @@ async function listJobsById(ctx: Ctx, jobId: string): Promise<JobRow[]> {
     customerName: r.customer_name,
     createdAt: r.created_at,
     dueDate: r.due_date,
+    // H21 lifecycle state — the detail page's controls depend on these.
+    archived: r.archived,
+    onHoldReason: r.on_hold_reason,
+    cancellationReason: r.cancellation_reason,
     progress:
       r.progress_override !== null ? Number(r.progress_override) : computeProgress(r.stages),
     progressOverridden: r.progress_override !== null,
@@ -550,54 +606,20 @@ export async function updateJobCore(
   );
 }
 
+/**
+ * H21: the original status writer, kept as a thin delegate so no unguarded
+ * path to job status survives. Every caller now goes through the validated
+ * lifecycle — legal transitions only, reasons where the structure demands one,
+ * and terminal work that refuses to move without an authorized reopen. Callers
+ * needing to supply a reason should use changeWorkStatus directly.
+ */
 export async function updateJobStatus(
   ctx: Ctx,
   archetype: RoleArchetype,
   jobId: string,
   statusKey: string,
 ): Promise<void> {
-  assertCan(archetype, "jobs.edit");
-  await command(
-    ctx,
-    {
-      audit: (r: { reference: string }) => ({
-        action: "job.status",
-        entityType: "job" as const,
-        entityId: jobId,
-        summary: `${r.reference} -> ${statusKey}`,
-      }),
-      activity: (r: { reference: string }) => ({
-        entityType: "job" as const,
-        entityId: jobId,
-        verb: "moved",
-        summary: `moved ${r.reference} to ${statusKey}`,
-      }),
-    },
-    async (tx) => {
-      const rows = (await tx.execute(sql`
-        select reference from public.job where org_id = ${ctx.orgId} and id = ${jobId}
-      `)) as unknown as Array<{ reference: string }>;
-      if (!rows[0]) throw new Error("job not found");
-      // Status must exist in the org status set; the SEMANTIC ANCHOR moves
-      // with it (v1 §15 discipline — engine logic reads the category).
-      const sets = (await tx.execute(sql`
-        select value from public.app_settings
-        where org_id = ${ctx.orgId} and key = 'config.status_set.job'
-      `)) as unknown as Array<{
-        value: { statuses: Array<{ status_key: string; semantic_category: string }> } | null;
-      }>;
-      const status = (sets[0]?.value?.statuses ?? []).find((x) => x.status_key === statusKey);
-      if (!status) throw new Error(`unknown status "${statusKey}"`);
-      await tx.execute(sql`
-        update public.job
-        set status_key = ${statusKey}, status_category = ${status.semantic_category},
-            completed_date = ${status.semantic_category === "done" ? sql`coalesce(completed_date, current_date)` : sql`completed_date`},
-            updated_at = now()
-        where org_id = ${ctx.orgId} and id = ${jobId}
-      `);
-      return { reference: rows[0].reference };
-    },
-  );
+  await changeWorkStatus(ctx, archetype, jobId, { statusKey });
 }
 
 export const PricingInput = z.object({
@@ -966,6 +988,54 @@ export async function signJobPhotoUpload(
 // ── module public surface re-exports (Bible §3.2) ────────────────────────────
 export { computeProgress, displayProgress, currentStage } from "./progress";
 export { isAssigned, isAssignedIn, assignedJobCondition } from "./assigned";
+// H21 — work lifecycle, task micro-steps and dependencies (module surface).
+export {
+  WORK_CATEGORIES,
+  WORK_TRANSITIONS,
+  canTransition,
+  isTerminalCategory,
+  changeWorkStatus,
+  reopenJob,
+  setJobArchived,
+  assertWorkMutableIn,
+  WorkTransitionError,
+  WorkReasonRequiredError,
+  WorkImmutableError,
+  type WorkCategory,
+} from "./lifecycle";
+export {
+  addDependency,
+  removeDependency,
+  getTaskDependencies,
+  blockerCountsForJob,
+  countUnfinishedBlockersIn,
+  DEPENDENCY_KINDS,
+  DependencyCycleError,
+  DependencyScopeError,
+  TaskBlockedError,
+  type DependencyEdge,
+  type DependencyKind,
+} from "./dependencies";
+export {
+  listWork,
+  workCountsByCategory,
+  getMyWork,
+  getSchedule,
+  getWorkload,
+  workDashboardCounts,
+  customerWork,
+  seesWorkMoney,
+  WORK_PRIORITIES,
+  type WorkRow,
+  type WorkListFilters,
+  type WorkPriority,
+  type MyWorkView,
+  type MyTask,
+  type ScheduleItem,
+  type ScheduleView,
+  type WorkloadRow,
+  type WorkDashboardCounts,
+} from "./work";
 export {
   listStages,
   startStage,
@@ -974,6 +1044,24 @@ export {
   reopenStage,
   type StageRow,
 } from "./stages";
-export { createTask, updateTaskStatus, listJobTasks, TASK_STATUSES, type TaskRow } from "./tasks";
+export {
+  createTask,
+  updateTask,
+  updateTaskStatus,
+  setTaskArchived,
+  listJobTasks,
+  getTask,
+  TASK_STATUSES,
+  TASK_PRIORITIES,
+  TASK_OPEN_STATUSES,
+  MAX_TASK_DEPTH,
+  TaskTransitionError,
+  TaskChildrenOpenError,
+  TaskDepthError,
+  TaskReasonRequiredError,
+  type TaskRow,
+  type TaskStatus,
+  type TaskPriority,
+} from "./tasks";
 export { addCrewMember, removeCrewMember, listCrew, type CrewRow } from "./crew";
 export { getWeekView, type WeekJob } from "./week";

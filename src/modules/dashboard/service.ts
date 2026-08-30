@@ -23,6 +23,7 @@ import { listInbox } from "@/modules/approvals/service";
 import { getDashboardExtras } from "@/modules/today/service";
 import { countMissingToday, countReviewQueue } from "@/modules/reports/service";
 import { salesDashboardCounts } from "@/modules/crm/service";
+import { workDashboardCounts } from "@/modules/jobs/service";
 import type { RoleArchetype } from "@/platform/registries";
 import type { DashboardData } from "./compose";
 
@@ -82,7 +83,7 @@ export async function gatherDashboardData(
   const failed: string[] = [];
   const foreman = archetype === "foreman";
 
-  const [exceptions, extras, inbox, ar, field, reviewQueue, sales] = await Promise.all([
+  const [exceptions, extras, inbox, ar, field, reviewQueue, sales, work] = await Promise.all([
     can(archetype, "exceptions.view")
       ? guarded("exceptions", failed, () => listOpenExceptions(ctx, archetype, { limit: 200 }))
       : Promise.resolve(null),
@@ -112,6 +113,14 @@ export async function gatherDashboardData(
           }),
         )
       : Promise.resolve(null),
+    // H21: delivery counts, on the SAME horizon the composer's Next section
+    // uses, so every count drills to exactly its records.
+    guarded("work", failed, () =>
+      workDashboardCounts(ctx, archetype, {
+        asOf: opts.asOf,
+        horizonDays: opts.horizonDays ?? 7,
+      }),
+    ),
   ]);
 
   return {
@@ -123,6 +132,7 @@ export async function gatherDashboardData(
     returnedReports: field?.returned ?? null,
     reviewQueue,
     sales,
+    work,
     failed,
   };
 }

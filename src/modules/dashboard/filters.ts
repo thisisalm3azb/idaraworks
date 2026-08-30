@@ -397,3 +397,116 @@ export function parseSalesSearch(sp: { days?: string }): { days: number } {
 export function salesHref(orgId: string, days?: number): string {
   return `/o/${orgId}/sales${days && days !== 30 ? `?days=${days}` : ""}`;
 }
+
+// ── Work hub (/jobs) — H21 ──────────────────────────────────────────────────
+export const WORK_VIEWS = ["list", "board", "schedule"] as const;
+export type WorkView = (typeof WORK_VIEWS)[number];
+
+export const WORK_CATEGORY_FILTERS = ["draft", "active", "on_hold", "done", "cancelled"] as const;
+export const WORK_PRIORITY_FILTERS = ["low", "normal", "high", "urgent"] as const;
+export const WORK_ORIGIN_FILTERS = ["quotation", "opportunity", "direct"] as const;
+
+export type WorkSearch = {
+  view: WorkView;
+  q: string | null;
+  category: string | null;
+  priority: string | null;
+  origin: string | null;
+  stage: string | null;
+  owner: string | null;
+  assignee: string | null;
+  customerId: string | null;
+  dueFrom: string | null;
+  dueTo: string | null;
+  overdue: boolean;
+  archived: boolean;
+  scope: "mine" | null;
+};
+
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+export function parseWorkSearch(sp: {
+  view?: string;
+  q?: string;
+  category?: string;
+  priority?: string;
+  origin?: string;
+  stage?: string;
+  owner?: string;
+  assignee?: string;
+  customer?: string;
+  from?: string;
+  to?: string;
+  focus?: string;
+  scope?: string;
+}): WorkSearch {
+  const q = (sp.q ?? "").trim().slice(0, 120);
+  const pick = (v: string | undefined, allowed: readonly string[]) =>
+    v && allowed.includes(v) ? v : null;
+  return {
+    view: (WORK_VIEWS as readonly string[]).includes(sp.view ?? "")
+      ? (sp.view as WorkView)
+      : "list",
+    q: q.length > 0 ? q : null,
+    category: pick(sp.category, WORK_CATEGORY_FILTERS),
+    priority: pick(sp.priority, WORK_PRIORITY_FILTERS),
+    origin: pick(sp.origin, WORK_ORIGIN_FILTERS),
+    stage: sp.stage && STAGE_KEY_RE.test(sp.stage) ? sp.stage : null,
+    owner: sp.owner && UUID_RE.test(sp.owner) ? sp.owner : null,
+    assignee: sp.assignee && UUID_RE.test(sp.assignee) ? sp.assignee : null,
+    customerId: parseCustomerParam(sp).customerId,
+    dueFrom: sp.from && DATE_RE.test(sp.from) ? sp.from : null,
+    dueTo: sp.to && DATE_RE.test(sp.to) ? sp.to : null,
+    overdue: sp.focus === "overdue",
+    archived: sp.focus === "archived",
+    scope: sp.scope === "mine" ? "mine" : null,
+  };
+}
+
+export function workHref(
+  orgId: string,
+  f: Partial<Omit<WorkSearch, "view">> & { view?: WorkView } = {},
+): string {
+  const q = new URLSearchParams();
+  if (f.view && f.view !== "list") q.set("view", f.view);
+  if (f.q) q.set("q", f.q);
+  if (f.category) q.set("category", f.category);
+  if (f.priority) q.set("priority", f.priority);
+  if (f.origin) q.set("origin", f.origin);
+  if (f.stage) q.set("stage", f.stage);
+  if (f.owner) q.set("owner", f.owner);
+  if (f.assignee) q.set("assignee", f.assignee);
+  if (f.customerId) q.set("customer", f.customerId);
+  if (f.dueFrom) q.set("from", f.dueFrom);
+  if (f.dueTo) q.set("to", f.dueTo);
+  if (f.overdue) q.set("focus", "overdue");
+  else if (f.archived) q.set("focus", "archived");
+  if (f.scope) q.set("scope", f.scope);
+  const qs = q.toString();
+  return `/o/${orgId}/jobs${qs ? `?${qs}` : ""}`;
+}
+
+// ── My Work (/my-work) — H21 ────────────────────────────────────────────────
+export const MY_WORK_FOCUS = ["now", "overdue", "today", "blocked", "approvals", "next"] as const;
+export type MyWorkFocus = (typeof MY_WORK_FOCUS)[number];
+
+export function parseMyWorkSearch(sp: { focus?: string }): { focus: MyWorkFocus } {
+  return {
+    focus: (MY_WORK_FOCUS as readonly string[]).includes(sp.focus ?? "")
+      ? (sp.focus as MyWorkFocus)
+      : "now",
+  };
+}
+
+export function myWorkHref(orgId: string, focus: MyWorkFocus = "now"): string {
+  return `/o/${orgId}/my-work${focus === "now" ? "" : `?focus=${focus}`}`;
+}
+
+/** The overdue rule for a task, shared by every surface that shows one. */
+export function taskIsOverdue(
+  t: { status: string; dueDate: string | null },
+  asOf: string,
+): boolean {
+  if (t.dueDate === null || t.dueDate >= asOf) return false;
+  return t.status !== "completed" && t.status !== "cancelled";
+}

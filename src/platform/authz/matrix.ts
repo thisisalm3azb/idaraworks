@@ -44,6 +44,9 @@ export type Action =
   | "stages.reopen"
   | "tasks.manage"
   | "tasks.update_status"
+  | "tasks.view"
+  | "jobs.reopen"
+  | "jobs.archive"
   | "crew.manage"
   | "week.view"
   | "comments.create"
@@ -146,6 +149,14 @@ export const MATRIX: Record<Action, readonly Grantable[]> = {
   // "Tasks: manage / update own status" M M M; foreman C (assigned).
   "tasks.manage": ["owner", "admin", "manager"],
   "tasks.update_status": ["owner", "admin", "manager", "foreman"],
+  // H21. Reading the steps inside work follows reading the work itself; a
+  // foreman still only reaches work assigned to them (assignedJobCondition).
+  "tasks.view": ["owner", "admin", "manager", "foreman", "procurement", "accounts", "viewer"],
+  // H21. Reopening finished work and archiving it are narrow authorities, the
+  // same shape as stages.reopen one level up. Archival is owner/admin only
+  // because it removes work from every working view.
+  "jobs.reopen": ["owner", "admin", "manager"],
+  "jobs.archive": ["owner", "admin"],
   // job_crew membership management rides the job-planning surface (O/A/M).
   "crew.manage": ["owner", "admin", "manager"],
   // "Week plan: view published" = V for every archetype (the plan ENTITY was

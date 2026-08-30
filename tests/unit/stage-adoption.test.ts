@@ -26,9 +26,26 @@ describe("H18 — stagesFromBlueprint (pure selector)", () => {
   it("returns the job workflow's stages with identity, labels, weights and order", () => {
     const stages = stagesFromBlueprint(goodBlueprint);
     expect(stages).toEqual([
-      { stage_key: "planning", names: { en: "Planning", ar: "التخطيط" }, weight: 20 },
-      { stage_key: "execution", names: { en: "Execution", ar: "التنفيذ" }, weight: 60 },
-      { stage_key: "handover", names: { en: "Handover", ar: "التسليم" }, weight: 20 },
+      // H21: the snapshot also carries phase_semantic — null here because this
+      // fixture declares none, which must never disqualify a workflow.
+      {
+        stage_key: "planning",
+        names: { en: "Planning", ar: "التخطيط" },
+        weight: 20,
+        phase_semantic: null,
+      },
+      {
+        stage_key: "execution",
+        names: { en: "Execution", ar: "التنفيذ" },
+        weight: 60,
+        phase_semantic: null,
+      },
+      {
+        stage_key: "handover",
+        names: { en: "Handover", ar: "التسليم" },
+        weight: 20,
+        phase_semantic: null,
+      },
     ]);
   });
 

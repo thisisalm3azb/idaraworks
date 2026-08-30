@@ -20,6 +20,7 @@ import { command } from "@/platform/audit";
 import { assertCan, can } from "@/platform/authz";
 import { sql, withCtx, type Ctx, type TenantTx } from "@/platform/tenancy";
 import type { RoleArchetype } from "@/platform/registries";
+import { createJobFromPreset } from "@/modules/jobs/service";
 
 // ── Pipeline defaults (stable keys; labels are presentation) ────────────────
 export const DEFAULT_PIPELINE_STAGES = [
@@ -1326,4 +1327,154 @@ export async function salesDashboardCounts(
       openPipelineCount: Number(r.pipeline_n),
     };
   });
+}
+
+// ── H21 Part J.2 — starting work from a won opportunity ─────────────────────
+/**
+ * Winning an opportunity NEVER creates work on its own: a sale being agreed is
+ * not the same event as delivery beginning, and inventing a work record at that
+ * moment would put a job on the floor that nobody planned. Work starts only
+ * through this explicit command.
+ *
+ * It requires a customer and a title, records the opportunity as the origin,
+ * and routes through the SAME canonical factory that accepted quotations use,
+ * so blueprint phases, reference allocation, plan limits and provenance behave
+ * identically. One work record per opportunity is guaranteed by a partial
+ * unique index, so a repeated press returns the existing work instead of a
+ * second one.
+ */
+export type StartWorkResult = { jobId: string; reference: string; deduped: boolean };
+
+export const StartWorkInput = z.object({
+  presetId: z.string().uuid(),
+  name: z.string().trim().min(1).max(160),
+  startDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
+  dueDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
+  priority: z.enum(["low", "normal", "high", "urgent"]).default("normal"),
+  description: z.string().trim().max(4000).optional(),
+  location: z.string().trim().max(200).optional(),
+  ownerUserId: z.string().uuid().optional(),
+});
+
+export class OpportunityNotWonError extends Error {
+  constructor() {
+    super("only a won opportunity can start work");
+    this.name = "OpportunityNotWonError";
+  }
+}
+export class OpportunityCustomerRequiredError extends Error {
+  constructor() {
+    super("link a customer to this opportunity before starting work");
+    this.name = "OpportunityCustomerRequiredError";
+  }
+}
+
+/** The work record already created from this opportunity, if any. */
+export async function workForOpportunity(
+  ctx: Ctx,
+  archetype: RoleArchetype,
+  opportunityId: string,
+): Promise<{ jobId: string; reference: string; statusCategory: string } | null> {
+  assertCan(archetype, "jobs.view");
+  const rows = (await withCtx(ctx, (tx) =>
+    tx.execute(sql`
+      select id::text as id, reference, status_category from public.job
+      where org_id = ${ctx.orgId} and source_opportunity_id = ${opportunityId}
+    `),
+  )) as unknown as Array<{ id: string; reference: string; status_category: string }>;
+  return rows[0]
+    ? { jobId: rows[0].id, reference: rows[0].reference, statusCategory: rows[0].status_category }
+    : null;
+}
+
+/** Work records started from opportunities, for the pipeline list (one query). */
+export async function workByOpportunity(
+  ctx: Ctx,
+  archetype: RoleArchetype,
+  opportunityIds: readonly string[],
+): Promise<Map<string, { jobId: string; reference: string }>> {
+  assertCan(archetype, "jobs.view");
+  if (opportunityIds.length === 0) return new Map();
+  const rows = (await withCtx(ctx, (tx) =>
+    tx.execute(sql`
+      select id::text as id, reference, source_opportunity_id::text as opp
+      from public.job
+      where org_id = ${ctx.orgId} and source_opportunity_id = any(string_to_array(${opportunityIds.join(",")}, ',')::uuid[])
+    `),
+  )) as unknown as Array<{ id: string; reference: string; opp: string }>;
+  return new Map(rows.map((r) => [r.opp, { jobId: r.id, reference: r.reference }]));
+}
+
+export async function startWorkFromOpportunity(
+  ctx: Ctx,
+  archetype: RoleArchetype,
+  opportunityId: string,
+  input: unknown,
+): Promise<StartWorkResult> {
+  assertCan(archetype, "opportunities.manage");
+  assertCan(archetype, "jobs.create");
+  const data = StartWorkInput.parse(input);
+
+  // Idempotent by construction: if work already exists for this opportunity we
+  // hand back the same record rather than starting a second delivery.
+  const existing = await workForOpportunity(ctx, archetype, opportunityId);
+  if (existing) {
+    return { jobId: existing.jobId, reference: existing.reference, deduped: true };
+  }
+
+  const opp = await getOpportunity(ctx, archetype, opportunityId);
+  if (!opp) throw new Error("opportunity not found");
+  if (opp.status !== "won") throw new OpportunityNotWonError();
+  if (!opp.customerId) throw new OpportunityCustomerRequiredError();
+
+  let created: { id: string; reference: string };
+  try {
+    created = await createJobFromPreset(ctx, archetype, {
+      presetId: data.presetId,
+      name: data.name,
+      customerId: opp.customerId,
+      startDate: data.startDate,
+      dueDate: data.dueDate,
+      priority: data.priority,
+      description: data.description,
+      location: data.location,
+      ownerUserId: data.ownerUserId ?? opp.ownerUserId ?? undefined,
+      origin: "opportunity",
+      sourceOpportunityId: opportunityId,
+    });
+  } catch (err) {
+    // Lost the race against a concurrent press: the partial unique index held,
+    // so the other transaction's work record is the answer.
+    const raced = await workForOpportunity(ctx, archetype, opportunityId);
+    if (raced) return { jobId: raced.jobId, reference: raced.reference, deduped: true };
+    throw err;
+  }
+
+  // Record the transition on the opportunity's own history so the sales side
+  // shows when delivery began, and audit it against the opportunity too.
+  await command(
+    ctx,
+    {
+      audit: {
+        action: "opportunity.work_started",
+        entityType: "opportunity",
+        entityId: opportunityId,
+        summary: `Started work ${created.reference}`,
+      },
+    },
+    (tx) =>
+      tx.execute(sql`
+        insert into public.sales_activity (org_id, opportunity_id, kind, body, actor_user_id)
+        values (${ctx.orgId}, ${opportunityId}, 'note',
+                ${"Work started: " + created.reference}, ${ctx.userId})
+      `),
+  );
+
+  return { jobId: created.id, reference: created.reference, deduped: false };
 }

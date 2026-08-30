@@ -60,6 +60,7 @@ import {
   quotesHref,
   reviewHref,
   salesHref,
+  workHref,
 } from "./filters";
 
 // ── The per-role compiled dashboard (shape.compiled.dashboards[archetype]) ──
@@ -95,6 +96,12 @@ export const CARD_ACTION: Record<DashboardCardKey, Action> = {
   opportunities_closing: "opportunities.view",
   quotes_expiring: "quotes.view",
   pipeline_value: "opportunities.view",
+  // H21 adaptive work.
+  work_at_risk: "jobs.view",
+  overdue_tasks: "tasks.view",
+  blocked_tasks: "tasks.view",
+  work_due_soon: "jobs.view",
+  unassigned_urgent: "jobs.edit",
 };
 
 /** Role relevance when the blueprint does not configure a role's dashboard.
@@ -125,6 +132,13 @@ export const CARD_ROLES: Record<DashboardCardKey, readonly BlueprintArchetype[]>
   opportunities_closing: ["owner", "admin", "manager"],
   quotes_expiring: ["owner", "admin", "manager"],
   pipeline_value: ["owner", "admin"],
+  // H21: delivery signals reach the people who run delivery, including the
+  // foreman for their own assigned work.
+  work_at_risk: ["owner", "admin", "manager"],
+  overdue_tasks: ["owner", "admin", "manager", "foreman"],
+  blocked_tasks: ["owner", "admin", "manager", "foreman"],
+  work_due_soon: ["owner", "admin", "manager", "foreman"],
+  unassigned_urgent: ["owner", "admin", "manager"],
 };
 
 /** H14 TIME_HORIZONS → the "Next" window in days. */
@@ -194,6 +208,15 @@ export type DashboardData = {
     quotesExpiring: number;
     openPipelineMinor: number | null;
     openPipelineCount: number;
+  } | null;
+  /** H21 workDashboardCounts — jobs.view holders; foreman narrowed to assigned. */
+  work: {
+    activeWork: number;
+    overdueWork: number;
+    workDueSoon: number;
+    overdueTasks: number;
+    blockedTasks: number;
+    unassignedUrgentWork: number;
   } | null;
   /** Source keys that FAILED (threw) — rendered as honest unavailability. */
   failed: readonly string[];
@@ -294,6 +317,12 @@ const CATEGORY_WEIGHT: Record<DashboardCardKey, number> = {
   opportunities_closing: 6,
   quotes_expiring: 6,
   pipeline_value: 4,
+  // Delivery at risk is blocking-grade; a blocked task stops a person working.
+  work_at_risk: 12,
+  blocked_tasks: 12,
+  overdue_tasks: 8,
+  unassigned_urgent: 10,
+  work_due_soon: 6,
 };
 
 function band(n: number, max: number): number {
@@ -570,6 +599,58 @@ export function composeAdaptiveDashboard(
     );
   }
 
+  // H21: delivery signals. Work past its target date and blocked tasks are
+  // blocking-grade; every count drills to the exact records behind it.
+  const work = data.work;
+  if (work && work.overdueWork > 0) {
+    add(
+      "work_at_risk",
+      "attention",
+      "critical",
+      work.overdueWork,
+      "dashboard.signal.work_at_risk",
+      "dashboard.why.work_at_risk",
+      workHref(cx.orgId, { overdue: true, scope: jobScope }),
+      { canAct: can(cx.archetype, "jobs.edit") },
+    );
+  }
+  if (work && work.blockedTasks > 0) {
+    add(
+      "blocked_tasks",
+      "attention",
+      "warning",
+      work.blockedTasks,
+      "dashboard.signal.blocked_tasks",
+      "dashboard.why.blocked_tasks",
+      `${o}/my-work?focus=blocked`,
+      { canAct: can(cx.archetype, "tasks.update_status") },
+    );
+  }
+  if (work && work.overdueTasks > 0) {
+    add(
+      "overdue_tasks",
+      "attention",
+      "warning",
+      work.overdueTasks,
+      "dashboard.signal.overdue_tasks",
+      "dashboard.why.overdue_tasks",
+      `${o}/my-work?focus=overdue`,
+      { canAct: can(cx.archetype, "tasks.update_status") },
+    );
+  }
+  if (work && work.unassignedUrgentWork > 0) {
+    add(
+      "unassigned_urgent",
+      "decision",
+      "warning",
+      work.unassignedUrgentWork,
+      "dashboard.signal.unassigned_urgent",
+      "dashboard.why.unassigned_urgent",
+      workHref(cx.orgId, { priority: "urgent" }),
+      { canAct: can(cx.archetype, "jobs.edit") },
+    );
+  }
+
   // H20: overdue sales follow-ups — a promise to a person that has slipped.
   const salesCounts = data.sales;
   if (salesCounts && salesCounts.overdueFollowUps > 0) {
@@ -641,6 +722,21 @@ export function composeAdaptiveDashboard(
       { key: "po_partial", canAct: can(cx.archetype, "grn.create") },
     );
   }
+  // H21: work approaching its target date — not late yet, and bounded by the
+  // organization's own horizon so the window and the destination agree.
+  if (work && work.workDueSoon > 0) {
+    add(
+      "work_due_soon",
+      "next",
+      "info",
+      work.workDueSoon,
+      "dashboard.signal.work_due_soon",
+      "dashboard.why.work_due_soon",
+      workHref(cx.orgId, { dueFrom: cx.asOf, scope: jobScope }),
+      { whyVars: { days: horizonDays }, canAct: can(cx.archetype, "jobs.edit") },
+    );
+  }
+
   // H20: opportunities expecting to close inside the horizon, and quotes whose
   // validity runs out — both drill to the exact records via the same window.
   if (salesCounts && salesCounts.closingSoon > 0) {

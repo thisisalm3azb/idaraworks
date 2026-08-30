@@ -410,4 +410,9 @@ export const ADAPTIVE_ONLY_CARDS = [
   { key: "opportunities_closing" },
   { key: "quotes_expiring" },
   { key: "pipeline_value" },
+  { key: "work_at_risk" },
+  { key: "overdue_tasks" },
+  { key: "blocked_tasks" },
+  { key: "work_due_soon" },
+  { key: "unassigned_urgent" },
 ] as const;

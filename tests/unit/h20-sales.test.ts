@@ -173,6 +173,7 @@ const data = (over: Partial<DashboardData> = {}): DashboardData => ({
     openPipelineMinor: 500000,
     openPipelineCount: 4,
   },
+  work: null,
   failed: [],
   ...over,
 });

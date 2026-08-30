@@ -17,6 +17,8 @@ import {
   listAssignableMembers,
   listCrew,
   listJobTasks,
+  blockerCountsForJob,
+  getTaskDependencies,
   listStages,
   type StageRow,
 } from "@/modules/jobs/service";
@@ -32,7 +34,9 @@ import {
   clearOverrideAction,
   completeStageAction,
   createTaskAction,
-  jobStatusAction,
+  workStatusAction,
+  reopenWorkAction,
+  archiveWorkAction,
   overrideAction,
   pricingAction,
   removeCrewAction,
@@ -40,6 +44,8 @@ import {
   requestCompleteAction,
   startStageAction,
   taskStatusAction,
+  taskDependencyAddAction,
+  taskDependencyRemoveAction,
   updateJobCoreAction,
 } from "./actions";
 import { submitReportAction } from "../actions";
@@ -158,6 +164,10 @@ export default async function JobPage({
           statusLabels={statusLabels}
           derived={derived}
           notice={sp.notice}
+          statusCategory={job.statusCategory}
+          archived={job.archived === true}
+          onHoldReason={job.onHoldReason ?? null}
+          cancellationReason={job.cancellationReason ?? null}
         />
       ) : null}
       {tab === "stages" ? (
@@ -192,6 +202,11 @@ async function OverviewTab(props: {
   statusLabels: Record<string, string>;
   derived: number | null;
   notice?: string;
+  // H21 lifecycle state, resolved by the page.
+  statusCategory: string;
+  archived: boolean;
+  onHoldReason: string | null;
+  cancellationReason: string | null;
 }) {
   const { orgId, jobId, resolved } = props;
   const t = await getT();
@@ -220,7 +235,12 @@ async function OverviewTab(props: {
   const pricing = canPricing ? await getJobPricing(resolved.ctx, a, jobId) : null;
   const fields = await listJobFields(resolved.ctx, a);
 
-  const statusForm = jobStatusAction.bind(null, orgId, jobId);
+  const statusForm = workStatusAction.bind(null, orgId, jobId);
+  const reopenForm = reopenWorkAction.bind(null, orgId, jobId);
+  const archiveForm = archiveWorkAction.bind(null, orgId, jobId);
+  const canReopen = can(a, "jobs.reopen");
+  const canArchive = can(a, "jobs.archive");
+  const terminal = props.statusCategory === "done" || props.statusCategory === "cancelled";
   const coreForm = updateJobCoreAction.bind(null, orgId, jobId);
   const crewAdd = addCrewAction.bind(null, orgId, jobId);
   const crewRemove = removeCrewAction.bind(null, orgId, jobId);
@@ -233,11 +253,44 @@ async function OverviewTab(props: {
 
   return (
     <div className="flex flex-col gap-4">
-      {canEdit ? (
+      {/* H21 — the validated lifecycle. Holding or cancelling asks why, closed
+          work refuses ordinary edits, and reopening is its own authorized act. */}
+      {props.archived ? (
+        <Card>
+          <p className="text-sm text-ink-secondary">{t("work.lifecycle.archived_note")}</p>
+          {canArchive ? (
+            <form action={archiveForm} className="mt-3">
+              <input type="hidden" name="archived" value="0" />
+              <Button type="submit" variant="secondary">
+                {t("work.lifecycle.restore")}
+              </Button>
+            </form>
+          ) : null}
+        </Card>
+      ) : null}
+      {props.onHoldReason ? (
+        <Card>
+          <p className="text-sm text-warning">
+            {t("work.lifecycle.on_hold_note", { reason: props.onHoldReason })}
+          </p>
+        </Card>
+      ) : null}
+      {props.cancellationReason ? (
+        <Card>
+          <p className="text-sm text-ink-secondary">
+            {t("work.lifecycle.cancelled_note", { reason: props.cancellationReason })}
+          </p>
+        </Card>
+      ) : null}
+      {canEdit && !props.archived && !terminal ? (
         <Card>
           <CardHeader title={t("jobs.status.change")} />
-          <form action={statusForm} className="flex items-end gap-2">
+          <form action={statusForm} className="flex flex-wrap items-end gap-2">
+            <label className="sr-only" htmlFor="status_key">
+              {t("work.lifecycle.status")}
+            </label>
             <select
+              id="status_key"
               name="status_key"
               defaultValue={props.statusKey}
               className="min-h-11 flex-1 rounded-md border border-line-strong bg-card px-3 text-base text-ink"
@@ -248,10 +301,63 @@ async function OverviewTab(props: {
                 </option>
               ))}
             </select>
+            <div className="min-w-40 flex-1">
+              <Field
+                label={t("work.lifecycle.reason")}
+                name="reason"
+                maxLength={500}
+                hint={t("work.lifecycle.hold_reason")}
+              />
+            </div>
             <Button type="submit" variant="secondary">
               {t("common.save")}
             </Button>
           </form>
+        </Card>
+      ) : null}
+      {terminal && !props.archived ? (
+        <Card>
+          <CardHeader title={t("work.lifecycle.immutable")} />
+          <div className="flex flex-wrap items-end gap-2">
+            {canReopen ? (
+              <form action={reopenForm} className="flex flex-wrap items-end gap-2">
+                <label className="sr-only" htmlFor="reopen_status">
+                  {t("work.lifecycle.status")}
+                </label>
+                <select
+                  id="reopen_status"
+                  name="status_key"
+                  defaultValue={props.statusKey}
+                  className="min-h-11 rounded-md border border-line-strong bg-card px-3 text-base text-ink"
+                >
+                  {Object.entries(props.statusLabels).map(([key, label]) => (
+                    <option key={key} value={key}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+                <div className="min-w-40 flex-1">
+                  <Field
+                    label={t("work.lifecycle.reopen_reason")}
+                    name="reason"
+                    required
+                    maxLength={500}
+                  />
+                </div>
+                <Button type="submit" variant="secondary">
+                  {t("work.lifecycle.reopen")}
+                </Button>
+              </form>
+            ) : null}
+            {canArchive ? (
+              <form action={archiveForm}>
+                <input type="hidden" name="archived" value="1" />
+                <Button type="submit" variant="ghost">
+                  {t("work.lifecycle.archive")}
+                </Button>
+              </form>
+            ) : null}
+          </div>
         </Card>
       ) : null}
 
@@ -637,8 +743,16 @@ async function TasksTab(props: {
   const terms = await loadOrgTerminology(props.resolved.ctx, props.locale);
   const tasks = await listJobTasks(props.resolved.ctx, props.jobId);
   const employees = canTasks ? await listEmployees(props.resolved.ctx, a) : [];
+  // H21: live blocker counts for every step in ONE grouped query.
+  const blockers = await blockerCountsForJob(props.resolved.ctx, props.jobId);
   const create = createTaskAction.bind(null, props.orgId, props.jobId);
   const setStatus = taskStatusAction.bind(null, props.orgId, props.jobId);
+  const addDep = taskDependencyAddAction.bind(null, props.orgId, props.jobId);
+  const removeDep = taskDependencyRemoveAction.bind(null, props.orgId, props.jobId);
+  const deps = await Promise.all(
+    tasks.map((task) => getTaskDependencies(props.resolved.ctx, a, task.id)),
+  );
+  const depsByTask = new Map(tasks.map((task, i) => [task.id, deps[i]!]));
 
   return (
     <div className="flex flex-col gap-4">
@@ -647,49 +761,159 @@ async function TasksTab(props: {
           <EmptyState title={t("common.none")} />
         ) : (
           <ul className="divide-y divide-line">
-            {tasks.map((task) => (
-              <li key={task.id} className="flex min-h-14 items-center justify-between gap-2 py-2">
-                <div>
-                  <p
-                    className={`text-sm ${
-                      task.status === "completed" ? "text-ink-muted line-through" : "text-ink"
-                    }`}
-                  >
-                    {task.title}
-                  </p>
-                  <p className="text-xs text-ink-muted">
-                    {task.assigneeName ?? ""}
-                    {task.dueDate ? ` · ${formatDate(task.dueDate, { locale: props.locale })}` : ""}
-                  </p>
-                </div>
-                {canTaskStatus ? (
-                  <form action={setStatus} className="flex items-center gap-1">
-                    <input type="hidden" name="task_id" value={task.id} />
-                    <select
-                      name="status"
-                      defaultValue={task.status}
-                      className="min-h-11 rounded-md border border-line-strong bg-card px-2 text-sm text-ink"
-                    >
-                      {(canTasks
-                        ? (["pending", "in_progress", "completed", "cancelled"] as const)
-                        : (["pending", "in_progress", "completed"] as const)
-                      ).map((st) => (
-                        <option key={st} value={st}>
-                          {t(`tasks.status.${st}`)}
-                        </option>
+            {tasks.map((task) => {
+              const edges = depsByTask.get(task.id);
+              const waiting = blockers.get(task.id) ?? 0;
+              const upstream = (edges?.blockedBy ?? []).filter((e) => !e.satisfied);
+              const downstream = edges?.blocks ?? [];
+              return (
+                <li key={task.id} className="flex flex-col gap-1.5 py-2.5">
+                  <div className="flex min-h-11 flex-wrap items-center gap-x-3 gap-y-1">
+                    <span className="min-w-0 flex-1">
+                      <span
+                        className={
+                          task.status === "completed"
+                            ? "block text-sm text-ink-muted line-through"
+                            : "block text-sm text-ink"
+                        }
+                      >
+                        {task.parentTaskId ? "· " : ""}
+                        {task.title}
+                      </span>
+                      <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-ink-muted">
+                        {task.assigneeName ? <span>{task.assigneeName}</span> : null}
+                        {task.dueDate ? (
+                          <span dir="ltr">
+                            {formatDate(task.dueDate, { locale: props.locale })}
+                          </span>
+                        ) : null}
+                        {waiting > 0 ? (
+                          <span className="text-warning">
+                            {t("tasks.blocked_by", { count: waiting })}
+                          </span>
+                        ) : null}
+                        {downstream.length > 0 ? (
+                          <span>{t("tasks.blocks", { count: downstream.length })}</span>
+                        ) : null}
+                        {task.requiresApproval ? <span>{t("tasks.requires_approval")}</span> : null}
+                      </span>
+                      {task.blockedReason ? (
+                        <span className="mt-0.5 block text-xs text-warning">
+                          {task.blockedReason}
+                        </span>
+                      ) : null}
+                    </span>
+                    {task.priority !== "normal" && task.priority !== "low" ? (
+                      <Badge tone={task.priority === "urgent" ? "danger" : "warning"}>
+                        {t("work.priority." + task.priority)}
+                      </Badge>
+                    ) : null}
+                    {canTaskStatus ? (
+                      <form action={setStatus} className="flex flex-wrap items-center gap-1">
+                        <input type="hidden" name="task_id" value={task.id} />
+                        <label className="sr-only" htmlFor={"ts-" + task.id}>
+                          {t("tasks.move_to")}
+                        </label>
+                        <select
+                          id={"ts-" + task.id}
+                          name="status"
+                          defaultValue={task.status}
+                          className="min-h-11 rounded-md border border-line-strong bg-card px-2 text-sm text-ink"
+                        >
+                          {(canTasks
+                            ? ([
+                                "pending",
+                                "ready",
+                                "in_progress",
+                                "blocked",
+                                "completed",
+                                "cancelled",
+                              ] as const)
+                            : (["pending", "ready", "in_progress", "blocked", "completed"] as const)
+                          ).map((st) => (
+                            <option key={st} value={st}>
+                              {t("tasks.status." + st)}
+                            </option>
+                          ))}
+                        </select>
+                        <input
+                          name="reason"
+                          placeholder={t("tasks.blocked_reason")}
+                          maxLength={500}
+                          className="min-h-11 w-36 rounded-md border border-line bg-card px-2 text-sm text-ink"
+                        />
+                        <Button type="submit" variant="ghost">
+                          {t("tasks.apply")}
+                        </Button>
+                      </form>
+                    ) : (
+                      <Badge tone={task.status === "completed" ? "success" : "neutral"}>
+                        {t("tasks.status." + task.status)}
+                      </Badge>
+                    )}
+                  </div>
+                  {upstream.length > 0 ? (
+                    <ul className="flex flex-wrap items-center gap-2 ps-4">
+                      {upstream.map((e) => (
+                        <li
+                          key={e.id}
+                          className="flex items-center gap-1 text-xs text-ink-secondary"
+                        >
+                          <span>
+                            {t("tasks.dependency_label")}: {e.dependsOnTitle}
+                          </span>
+                          {canTasks ? (
+                            <form action={removeDep}>
+                              <input type="hidden" name="dependency_id" value={e.id} />
+                              <Button type="submit" variant="ghost">
+                                {t("tasks.remove_dependency")}
+                              </Button>
+                            </form>
+                          ) : null}
+                        </li>
                       ))}
-                    </select>
-                    <Button type="submit" variant="ghost">
-                      ✓
-                    </Button>
-                  </form>
-                ) : (
-                  <Badge tone={task.status === "completed" ? "success" : "neutral"}>
-                    {t(`tasks.status.${task.status}`)}
-                  </Badge>
-                )}
-              </li>
-            ))}
+                    </ul>
+                  ) : null}
+                  {/* Progressive disclosure: the prerequisite control stays out
+                      of the way until asked for. A native details element keeps
+                      it keyboard-reachable with no client script. */}
+                  {canTasks && tasks.length > 1 && task.status !== "completed" ? (
+                    <details className="ps-4">
+                      <summary className="inline-flex min-h-11 cursor-pointer items-center text-xs text-ink-secondary hover:text-ink">
+                        {t("tasks.add_dependency")}
+                      </summary>
+                      <form action={addDep} className="mt-1 flex flex-wrap items-center gap-2">
+                        <input type="hidden" name="task_id" value={task.id} />
+                        <label className="sr-only" htmlFor={"dep-" + task.id}>
+                          {t("tasks.dependency_label")}
+                        </label>
+                        <select
+                          id={"dep-" + task.id}
+                          name="depends_on_task_id"
+                          defaultValue=""
+                          required
+                          className="min-h-11 rounded-md border border-line bg-card px-2 text-xs text-ink"
+                        >
+                          <option value="" disabled>
+                            {t("tasks.dependency_pick")}
+                          </option>
+                          {tasks
+                            .filter((other) => other.id !== task.id)
+                            .map((other) => (
+                              <option key={other.id} value={other.id}>
+                                {other.title}
+                              </option>
+                            ))}
+                        </select>
+                        <Button type="submit" variant="secondary">
+                          {t("tasks.apply")}
+                        </Button>
+                      </form>
+                    </details>
+                  ) : null}
+                </li>
+              );
+            })}
           </ul>
         )}
       </Card>

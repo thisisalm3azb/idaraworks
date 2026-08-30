@@ -12,8 +12,10 @@ import {
   listSalesActivities,
   LOSS_REASONS,
   USER_ACTIVITY_KINDS,
+  workForOpportunity,
 } from "@/modules/crm/service";
 import { listCustomers } from "@/modules/masters/service";
+import { listActivePresets } from "@/modules/jobs/service";
 import { orgToday } from "@/modules/dashboard/service";
 import {
   loseOpportunityAction,
@@ -22,6 +24,7 @@ import {
   oppFollowUpDoneAction,
   updateOpportunityAction,
   winOpportunityAction,
+  startWorkAction,
 } from "./actions";
 
 /** H20 — opportunity detail. Forecast value only (never revenue); win is an
@@ -52,6 +55,18 @@ export default async function OpportunityDetailPage({
   const asOf = orgToday(new Date(), resolved.timezone);
   const canManage = can(resolved.archetype, "opportunities.manage");
   const canQuote = can(resolved.archetype, "quotes.manage");
+  // H21: delivery. Work is never implied by a win — it is started explicitly.
+  const canStartWork =
+    can(resolved.archetype, "jobs.create") && can(resolved.archetype, "opportunities.manage");
+  const existingWork =
+    opp.status === "won"
+      ? await workForOpportunity(resolved.ctx, resolved.archetype, opportunityId)
+      : null;
+  const presets =
+    opp.status === "won" && canStartWork && !existingWork
+      ? await listActivePresets(resolved.ctx, resolved.archetype)
+      : [];
+  const startWork = startWorkAction.bind(null, orgId, opportunityId);
   const open = opp.status === "open" && !opp.archived;
   const openStages = stages.filter((s) => s.category === "open" && s.active);
   const stageLabel = (key: string) => {
@@ -193,6 +208,66 @@ export default async function OpportunityDetailPage({
             </div>
           ) : null}
         </dl>
+
+        {/* H21 — delivery. A won opportunity says honestly whether work has
+            started; starting it is an explicit act with real inputs, never a
+            side effect of winning. */}
+        {opp.status === "won" ? (
+          <div className="mt-4 border-t border-line pt-4">
+            {existingWork ? (
+              <p className="text-sm">
+                <span className="me-2 text-ink-secondary">{t("work.start.exists")}</span>
+                <Link
+                  href={`/o/${orgId}/jobs/${existingWork.jobId}`}
+                  className="font-medium text-ink underline underline-offset-2"
+                >
+                  {existingWork.reference}
+                </Link>
+              </p>
+            ) : canStartWork && presets.length > 0 ? (
+              <form action={startWork} className="flex flex-col gap-3">
+                <div>
+                  <p className="text-sm font-medium text-ink">{t("work.start.title")}</p>
+                  <p className="text-xs text-ink-secondary">{t("work.start.hint")}</p>
+                </div>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <Field
+                    label={t("work.start.name")}
+                    name="name"
+                    required
+                    maxLength={160}
+                    defaultValue={opp.name}
+                  />
+                  <label className="flex flex-col gap-1.5 text-sm font-medium text-ink">
+                    {t("work.start.preset")}
+                    <select name="preset_id" required defaultValue="" className={selectCls}>
+                      <option value="" disabled>
+                        {t("work.start.preset")}
+                      </option>
+                      {presets.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {locale === "ar" ? p.names.ar : p.names.en}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <Field label={t("work.start_date")} name="start_date" type="date" />
+                  <Field
+                    label={t("work.target_date")}
+                    name="due_date"
+                    type="date"
+                    defaultValue={opp.expectedCloseDate ?? ""}
+                  />
+                </div>
+                <div>
+                  <Button type="submit">{t("work.start.cta")}</Button>
+                </div>
+              </form>
+            ) : (
+              <p className="text-sm text-ink-secondary">{t("work.start.not_started")}</p>
+            )}
+          </div>
+        ) : null}
 
         <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-line pt-4 text-sm">
           {opp.quoteId ? (

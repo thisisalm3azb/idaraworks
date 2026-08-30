@@ -240,6 +240,7 @@ export const MODULE_INFO: Record<WorkspaceModuleKey, ModuleInfo> = {
 export const NAV_ITEM_KEYS = [
   "today",
   "jobs",
+  "my_work",
   "week",
   "report_new",
   "reports_review",
@@ -291,6 +292,8 @@ export type NavItemInfo = {
 export const NAV_ITEM_INFO: Record<NavItemKey, NavItemInfo> = {
   today: { action: null, feature: null, module: null, alwaysVisible: true },
   jobs: { action: "jobs.view", feature: null, module: "cap.jobs", alwaysVisible: false },
+  // H21 — one person's own execution view; rides the work module.
+  my_work: { action: "jobs.view", feature: null, module: "cap.jobs", alwaysVisible: false },
   week: { action: "week.view", feature: null, module: "cap.jobs", alwaysVisible: false },
   report_new: {
     action: "reports.create",
@@ -436,6 +439,12 @@ export const DASHBOARD_CARD_KEYS = [
   "opportunities_closing",
   "quotes_expiring",
   "pipeline_value",
+  // H21 adaptive work (adaptive dashboard only; legacy composeToday untouched).
+  "work_at_risk",
+  "overdue_tasks",
+  "blocked_tasks",
+  "work_due_soon",
+  "unassigned_urgent",
 ] as const;
 export type DashboardCardKey = (typeof DASHBOARD_CARD_KEYS)[number];
 export function isDashboardCardKey(x: string): x is DashboardCardKey {
@@ -466,6 +475,11 @@ export const DASHBOARD_CARD_MODULE: Record<DashboardCardKey, WorkspaceModuleKey 
   opportunities_closing: "cap.customers",
   quotes_expiring: "cap.quoting",
   pipeline_value: "cap.customers",
+  work_at_risk: "cap.jobs",
+  overdue_tasks: "cap.jobs",
+  blocked_tasks: "cap.jobs",
+  work_due_soon: "cap.jobs",
+  unassigned_urgent: "cap.jobs",
 };
 
 export const TIME_HORIZONS = ["today", "this_week", "this_month", "this_quarter"] as const;

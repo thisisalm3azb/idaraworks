@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { Badge, Button, Card, CardHeader, EmptyState, Field, FilterBar } from "@/platform/ui";
+import { Button, Card, CardHeader, Field, FilterBar } from "@/platform/ui";
 import { getT, getServerLocale } from "@/platform/i18n/server";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { loadOrgTerminology, term } from "@/platform/terminology";
@@ -10,6 +10,8 @@ import {
   listActivePresets,
   listAssignableMembers,
   listJobs,
+  listWork,
+  getSchedule,
 } from "@/modules/jobs/service";
 import { getCustomer, listCustomers } from "@/modules/masters/service";
 import { createJobAction } from "./actions";
@@ -19,15 +21,12 @@ import {
   jobsHref,
   orgToday,
   parseJobsSearch,
+  parseWorkSearch,
+  workHref,
+  WORK_CATEGORY_FILTERS,
 } from "@/modules/dashboard/service";
-
-const STATUS_TONE = {
-  draft: "neutral",
-  active: "info",
-  on_hold: "warning",
-  done: "success",
-  cancelled: "neutral",
-} as const;
+import { cn } from "@/lib/cn";
+import { WorkList, WorkBoard, WorkSchedule, type WorkViewsDict } from "./WorkViews";
 
 export default async function JobsPage({
   params,
@@ -41,6 +40,17 @@ export default async function JobsPage({
     days?: string;
     scope?: string;
     customer?: string;
+    // H21 work hub.
+    view?: string;
+    q?: string;
+    category?: string;
+    priority?: string;
+    origin?: string;
+    owner?: string;
+    assignee?: string;
+    from?: string;
+    to?: string;
+    focus?: string;
   }>;
 }) {
   const { orgId } = await params;
@@ -75,6 +85,44 @@ export default async function JobsPage({
     if (f.filter === "due_soon") return jobIsDueSoon(j, asOf, f.days ?? 7);
     return true;
   });
+
+  // H21 — the work hub reads over the SAME records with richer rollups. The
+  // H18 drill-down params keep working by mapping onto the work filters, so a
+  // dashboard link lands on exactly the records it counted.
+  const w = parseWorkSearch(sp);
+  const workRows = await listWork(resolved.ctx, resolved.archetype, {
+    q: w.q ?? undefined,
+    category: w.category ?? undefined,
+    // The parser already whitelisted these against the same closed vocabularies.
+    priority: (w.priority as "low" | "normal" | "high" | "urgent" | null) ?? undefined,
+    origin: (w.origin as "quotation" | "opportunity" | "direct" | null) ?? undefined,
+    stageKey: w.stage ?? f.stage ?? undefined,
+    ownerUserId: w.owner ?? undefined,
+    assigneeEmployeeId: w.assignee ?? undefined,
+    customerId: f.customerId ?? undefined,
+    dueFrom: w.dueFrom ?? undefined,
+    dueTo:
+      w.dueTo ??
+      (f.filter === "due_soon"
+        ? new Date(Date.parse(`${asOf}T00:00:00Z`) + (f.days ?? 7) * 86_400_000)
+            .toISOString()
+            .slice(0, 10)
+        : undefined),
+    overdue: w.overdue || f.filter === "overdue" ? asOf : undefined,
+    archived: w.archived,
+    scope: w.scope ?? f.scope ?? undefined,
+  });
+  const schedule =
+    w.view === "schedule"
+      ? await getSchedule(resolved.ctx, resolved.archetype, {
+          from: asOf,
+          to: new Date(Date.parse(`${asOf}T00:00:00Z`) + 60 * 86_400_000)
+            .toISOString()
+            .slice(0, 10),
+          asOf,
+          scope: w.scope ?? undefined,
+        })
+      : null;
   const filtered =
     f.filter !== null || f.stage !== null || f.scope !== null || f.customerId !== null;
   const filterSummary = !filtered
@@ -96,6 +144,7 @@ export default async function JobsPage({
         .filter(Boolean)
         .join(locale === "ar" ? "، " : " · ");
   const statusLabels = await getJobStatusLabels(resolved.ctx, locale);
+  const viewsDict: WorkViewsDict = { t, locale, orgId, asOf, statusLabels, jobsTerm };
   const canCreate = can(resolved.archetype, "jobs.create");
   const presets = canCreate ? await listActivePresets(resolved.ctx, resolved.archetype) : [];
   const members = canCreate ? await listAssignableMembers(resolved.ctx, resolved.archetype) : [];
@@ -125,44 +174,92 @@ export default async function JobsPage({
             {t("common.error")}
           </p>
         ) : null}
-        {jobs.length === 0 ? (
-          <EmptyState
-            title={filtered ? t("filters.empty") : t("jobs.empty", { jobs: jobsTerm })}
-            description={filtered ? t("filters.empty_hint") : undefined}
-          />
-        ) : (
-          <ul className="divide-y divide-line">
-            {jobs.map((j) => (
-              <li key={j.id}>
-                <Link
-                  href={`/o/${orgId}/jobs/${j.id}`}
-                  className="flex min-h-14 items-center justify-between gap-3 py-2"
-                >
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-ink">
-                      {j.reference} — {j.name}
-                    </p>
-                    <p className="text-xs text-ink-muted">
-                      {j.presetCode ?? ""} {j.customerName ? `· ${j.customerName}` : ""}
-                      {j.progress !== null && j.progress !== undefined ? ` · ${j.progress}%` : ""}
-                    </p>
-                    {j.progress !== null && j.progress !== undefined ? (
-                      <div className="mt-1 h-1.5 w-full max-w-48 overflow-hidden rounded-full bg-sunken">
-                        <div className="h-full bg-brand" style={{ width: `${j.progress}%` }} />
-                      </div>
-                    ) : null}
-                  </div>
-                  <Badge
-                    tone={STATUS_TONE[j.statusCategory as keyof typeof STATUS_TONE] ?? "neutral"}
-                  >
-                    {statusLabels[j.statusKey] ?? j.statusKey}
-                  </Badge>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        )}
+        {/* H21 — search, view toggle and filter chips, all URL-backed. */}
+        <form method="get" className="mt-3 flex flex-wrap items-end gap-2" role="search">
+          {w.category ? <input type="hidden" name="category" value={w.category} /> : null}
+          {w.view !== "list" ? <input type="hidden" name="view" value={w.view} /> : null}
+          <div className="min-w-48 flex-1">
+            <Field label={t("common.search")} name="q" defaultValue={w.q ?? ""} maxLength={120} />
+          </div>
+          <Button type="submit" variant="secondary">
+            {t("common.search")}
+          </Button>
+        </form>
+        <div className="mt-3 flex flex-wrap gap-2" role="group" aria-label={t("work.filter.label")}>
+          {(["list", "board", "schedule"] as const).map((v) => (
+            <Link
+              key={v}
+              href={workHref(orgId, { ...w, view: v })}
+              aria-current={w.view === v ? "true" : undefined}
+              className={cn(
+                "inline-flex min-h-9 items-center rounded-full border px-3 text-xs font-medium",
+                w.view === v
+                  ? "border-ink bg-ink text-card"
+                  : "border-line bg-card text-ink-secondary",
+              )}
+            >
+              {t(`work.view.${v}`)}
+            </Link>
+          ))}
+        </div>
+        <div className="mt-2 flex flex-wrap gap-2" role="group" aria-label={t("work.filter.label")}>
+          {[
+            { key: null as string | null, label: t("work.filter.all") },
+            ...WORK_CATEGORY_FILTERS.map((c) => ({ key: c, label: t(`work.category.${c}`) })),
+          ].map((chip) => (
+            <Link
+              key={chip.key ?? "all"}
+              href={workHref(orgId, { ...w, category: chip.key, overdue: false, archived: false })}
+              aria-current={
+                w.category === chip.key && !w.overdue && !w.archived ? "true" : undefined
+              }
+              className={cn(
+                "inline-flex min-h-9 items-center rounded-full border px-3 text-xs font-medium",
+                w.category === chip.key && !w.overdue && !w.archived
+                  ? "border-ink bg-ink text-card"
+                  : "border-line bg-card text-ink-secondary",
+              )}
+            >
+              {chip.label}
+            </Link>
+          ))}
+          <Link
+            href={workHref(orgId, { ...w, category: null, overdue: true, archived: false })}
+            aria-current={w.overdue ? "true" : undefined}
+            className={cn(
+              "inline-flex min-h-9 items-center rounded-full border px-3 text-xs font-medium",
+              w.overdue ? "border-ink bg-ink text-card" : "border-line bg-card text-ink-secondary",
+            )}
+          >
+            {t("work.filter.overdue")}
+          </Link>
+          <Link
+            href={workHref(orgId, { ...w, category: null, overdue: false, archived: true })}
+            aria-current={w.archived ? "true" : undefined}
+            className={cn(
+              "inline-flex min-h-9 items-center rounded-full border px-3 text-xs font-medium",
+              w.archived ? "border-ink bg-ink text-card" : "border-line bg-card text-ink-secondary",
+            )}
+          >
+            {t("work.filter.archived")}
+          </Link>
+        </div>
       </Card>
+
+      {w.view === "board" ? (
+        <WorkBoard rows={workRows} d={viewsDict} />
+      ) : w.view === "schedule" && schedule ? (
+        <WorkSchedule items={schedule.items} unscheduled={schedule.unscheduled} d={viewsDict} />
+      ) : (
+        <Card>
+          <WorkList
+            rows={workRows}
+            d={viewsDict}
+            emptyTitle={filtered ? t("filters.empty") : t("work.empty.title")}
+            emptyHint={filtered ? t("filters.empty_hint") : t("work.empty.hint")}
+          />
+        </Card>
+      )}
 
       {canCreate && presets.length > 0 ? (
         <Card>

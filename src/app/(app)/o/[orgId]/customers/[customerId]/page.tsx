@@ -333,6 +333,76 @@ export default async function CustomerDetailPage({
         </Card>
       ) : null}
 
+      {/* H21 — Delivery: what is being built for this customer right now. */}
+      {view.work !== null || view.failed.includes("work") ? (
+        <Card>
+          <CardHeader
+            title={t("crm.work.title")}
+            meta={
+              view.work && view.work.rows.length > 0 ? (
+                <span className="flex flex-wrap items-center gap-2">
+                  <span className="text-sm text-ink-muted">
+                    {t("crm.work.summary", {
+                      active: view.work.activeCount,
+                      completed: view.work.completedCount,
+                    })}
+                  </span>
+                  <Link
+                    href={jobsHref(orgId, { customerId: c.id })}
+                    className="text-sm text-brand hover:underline"
+                  >
+                    {t("dashboard.view_all")}
+                  </Link>
+                </span>
+              ) : undefined
+            }
+          />
+          {view.failed.includes("work") ? (
+            <p className="text-sm text-ink-muted">{t("crm.section_unavailable")}</p>
+          ) : view.work!.rows.length === 0 ? (
+            <p className="text-sm text-ink-muted">{t("crm.work.empty")}</p>
+          ) : (
+            <ul className="divide-y divide-line">
+              {view.work!.rows.slice(0, 6).map((w) => (
+                <li key={w.id}>
+                  <Link
+                    href={`/o/${orgId}/jobs/${w.id}`}
+                    className="flex min-h-11 flex-wrap items-center justify-between gap-3 py-2"
+                  >
+                    <span className="min-w-0 flex-1 truncate text-sm font-medium text-ink">
+                      {w.reference} · {w.name}
+                    </span>
+                    <span className="flex flex-wrap items-center gap-2">
+                      {w.currentStageName ? (
+                        <span className="text-xs text-ink-secondary">
+                          {locale === "ar" ? w.currentStageName.ar : w.currentStageName.en}
+                        </span>
+                      ) : null}
+                      {w.dueDate ? (
+                        <span
+                          className={
+                            w.dueDate < asOf &&
+                            ["draft", "active", "on_hold"].includes(w.statusCategory)
+                              ? "text-xs font-medium text-danger"
+                              : "text-xs text-ink-secondary"
+                          }
+                          dir="ltr"
+                        >
+                          {formatDate(w.dueDate, { locale })}
+                        </span>
+                      ) : null}
+                      <Badge tone={w.statusCategory === "done" ? "success" : "info"}>
+                        {t(`work.category.${w.statusCategory}`)}
+                      </Badge>
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+      ) : null}
+
       {/* H20 — Sales pipeline (opportunities for this customer) */}
       {view.opportunities !== null || view.failed.includes("opportunities") ? (
         <Card>

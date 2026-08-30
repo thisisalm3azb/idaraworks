@@ -43,6 +43,7 @@ export const APPROVABLE_TYPES = [
   "quote_send",
   "purchase_order", // MR-less or over-threshold only (audit F-3)
   "payment", // org-configurable modes: none / always / amount_gte (OP-7)
+  "task_completion", // H21 — a task marked requires_approval finishes through the inbox
   // P3 (with QC): "stage_signoff", "qc_delivery_override"
 ] as const;
 export type ApprovableType = (typeof APPROVABLE_TYPES)[number];

@@ -22,7 +22,13 @@ import {
   updateJobCore,
   updateJobPricing,
   updateJobStatus,
+  changeWorkStatus,
+  reopenJob,
+  setJobArchived,
   updateTaskStatus,
+  setTaskArchived,
+  addDependency,
+  removeDependency,
 } from "@/modules/jobs/service";
 import { confirmUpload, type SignedUpload } from "@/platform/files";
 
@@ -82,16 +88,39 @@ export const createTaskAction = jobAction("tasks", async (r, _o, jobId, f) => {
   await createTask(r.ctx, r.archetype, {
     jobId,
     title: String(f.get("title") ?? ""),
+    description: (f.get("description") as string) || undefined,
     stageId: (f.get("stage_id") as string) || undefined,
     assigneeEmployeeId: (f.get("assignee_employee_id") as string) || undefined,
+    priority: (f.get("priority") as "low" | "normal" | "high" | "urgent") || "normal",
+    startDate: (f.get("start_date") as string) || undefined,
     dueDate: (f.get("due_date") as string) || undefined,
+    estimatedMinutes: f.get("estimated_minutes") ? Number(f.get("estimated_minutes")) : undefined,
+    parentTaskId: (f.get("parent_task_id") as string) || undefined,
+    requiresApproval: f.get("requires_approval") === "1",
   });
 });
-export const taskStatusAction = jobAction("tasks", async (r, _o, _j, f) =>
-  updateTaskStatus(r.ctx, r.archetype, String(f.get("task_id")), {
+export const taskStatusAction = jobAction("tasks", async (r, _o, _j, f) => {
+  // H21: the command decides the landing state (a task that requires approval
+  // moves to awaiting_approval, not completed); the tab reload shows it.
+  await updateTaskStatus(r.ctx, r.archetype, String(f.get("task_id")), {
     status: String(f.get("status")),
-  }),
-);
+    reason: (f.get("reason") as string) || undefined,
+    actualMinutes: f.get("actual_minutes") ? Number(f.get("actual_minutes")) : undefined,
+  });
+});
+export const taskDependencyAddAction = jobAction("tasks", async (r, _o, _j, f) => {
+  await addDependency(r.ctx, r.archetype, {
+    taskId: String(f.get("task_id")),
+    dependsOnTaskId: String(f.get("depends_on_task_id")),
+    kind: "finish_to_start",
+  });
+});
+export const taskDependencyRemoveAction = jobAction("tasks", async (r, _o, _j, f) => {
+  await removeDependency(r.ctx, r.archetype, String(f.get("dependency_id")));
+});
+export const taskArchiveAction = jobAction("tasks", async (r, _o, _j, f) => {
+  await setTaskArchived(r.ctx, r.archetype, String(f.get("task_id")), f.get("archived") === "1");
+});
 
 // ── crew ─────────────────────────────────────────────────────────────────────
 export const addCrewAction = jobAction("overview", async (r, _o, jobId, f) =>
@@ -175,3 +204,21 @@ export async function confirmJobUploadAction(orgId: string, fileId: string): Pro
   await confirmUpload(resolved.ctx, fileId);
   revalidatePath(`/o/${orgId}/jobs`);
 }
+
+// ── H21 work lifecycle ───────────────────────────────────────────────────────
+/** Status changes now carry a reason where the structure demands one. */
+export const workStatusAction = jobAction("overview", async (r, _o, jobId, f) => {
+  await changeWorkStatus(r.ctx, r.archetype, jobId, {
+    statusKey: String(f.get("status_key")),
+    reason: (f.get("reason") as string) || undefined,
+  });
+});
+export const reopenWorkAction = jobAction("overview", async (r, _o, jobId, f) => {
+  await reopenJob(r.ctx, r.archetype, jobId, {
+    statusKey: String(f.get("status_key")),
+    reason: String(f.get("reason") ?? ""),
+  });
+});
+export const archiveWorkAction = jobAction("overview", async (r, _o, jobId, f) => {
+  await setJobArchived(r.ctx, r.archetype, jobId, f.get("archived") === "1");
+});
