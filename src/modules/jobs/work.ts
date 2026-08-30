@@ -26,7 +26,12 @@ export type WorkListFilters = {
   /** Employee id — work whose crew or tasks include this person. */
   assigneeEmployeeId?: string;
   customerId?: string;
-  priority?: WorkPriority;
+  /** One priority or a set of them. */
+  priority?: WorkPriority | readonly WorkPriority[];
+  /** Only work with no owner assigned. */
+  unowned?: boolean;
+  /** Only work still open (draft, active or on hold). */
+  openOnly?: boolean;
   origin?: "quotation" | "opportunity" | "direct";
   /** Target date window (inclusive, org calendar dates). */
   dueFrom?: string;
@@ -113,6 +118,12 @@ export async function listWork(
   // A foreman is ALWAYS narrowed to assigned work, whatever the caller asked.
   const assignedOnly = archetype === "foreman" || filters.scope === "mine";
   const asOf = filters.overdue ?? null;
+  // A bound JS array becomes a row constructor, not an array literal, so the set
+  // travels as a comma string and is split server-side. Values are closed
+  // vocabulary, already whitelisted by the parser.
+  const priorities = filters.priority
+    ? (Array.isArray(filters.priority) ? filters.priority : [filters.priority]).join(",")
+    : null;
 
   const rows = (await withCtx(ctx, (tx) =>
     tx.execute(sql`
@@ -144,7 +155,10 @@ export async function listWork(
       where j.org_id = ${ctx.orgId}
         and j.archived = ${filters.archived === true}
         and (${filters.category ?? null}::text is null or j.status_category = ${filters.category ?? null})
-        and (${filters.priority ?? null}::text is null or j.priority = ${filters.priority ?? null})
+        and (${priorities}::text is null
+             or j.priority = any(string_to_array(${priorities}, ',')))
+        and (${!filters.unowned} or j.owner_user_id is null)
+        and (${!filters.openOnly} or j.status_category in ('draft', 'active', 'on_hold'))
         and (${filters.origin ?? null}::text is null or j.origin = ${filters.origin ?? null})
         and (${filters.customerId ?? null}::uuid is null or j.customer_id = ${filters.customerId ?? null}::uuid)
         and (${filters.ownerUserId ?? null}::uuid is null or j.owner_user_id = ${filters.ownerUserId ?? null}::uuid)
@@ -522,6 +536,12 @@ export async function workDashboardCounts(
 ): Promise<WorkDashboardCounts> {
   assertCan(archetype, "jobs.view");
   const assignedOnly = archetype === "foreman";
+  // The two STEP counts drill into My Work, which shows only the viewer's own
+  // assigned steps, so they are counted the same way: same employee resolution,
+  // same bucket predicates. Counted org-wide they were a number whose records
+  // the link could not reach - an admin saw "7 steps are blocked" and landed on
+  // an empty page. The WORK counts stay org-wide because their link, the work
+  // hub, is org-wide too (a foreman is narrowed on both sides).
   const rows = (await withCtx(ctx, (tx) =>
     tx.execute(sql`
       with scoped as (
@@ -529,6 +549,23 @@ export async function workDashboardCounts(
         from public.job j
         where j.org_id = ${ctx.orgId} and j.archived = false
           and (${!assignedOnly} or ${assignedJobCondition(ctx)})
+      ),
+      me as (
+        select id from public.employee
+        where org_id = ${ctx.orgId} and user_id = ${ctx.userId} and active = true
+      ),
+      my_tasks as (
+        select t.id, t.status, t.due_date,
+               (select count(*)::int from public.task_dependency d
+                 join public.task up on up.id = d.depends_on_task_id and up.org_id = d.org_id
+                 where d.org_id = t.org_id and d.task_id = t.id and d.removed_at is null
+                   and up.status not in ('completed', 'cancelled')) as blockers
+        from public.task t
+        join public.job j on j.id = t.job_id and j.org_id = t.org_id
+        where t.org_id = ${ctx.orgId}
+          and t.assignee_employee_id in (select id from me)
+          and t.archived = false and j.archived = false
+          and t.status in ${OPEN_TASK_SQL}
       )
       select
         (select count(*)::int from scoped where status_category = 'active') as active_work,
@@ -542,15 +579,11 @@ export async function workDashboardCounts(
         (select count(*)::int from scoped
           where status_category in ('draft', 'active') and priority in ('high', 'urgent')
             and owner_user_id is null) as unassigned_urgent,
-        (select count(*)::int from public.task t
-          join scoped s on s.id = t.job_id
-          where t.org_id = ${ctx.orgId} and t.archived = false
-            and t.status in ${OPEN_TASK_SQL}
-            and t.due_date is not null and t.due_date < ${opts.asOf}::date) as overdue_tasks,
-        (select count(*)::int from public.task t
-          join scoped s on s.id = t.job_id
-          where t.org_id = ${ctx.orgId} and t.archived = false
-            and t.status = 'blocked') as blocked_tasks
+        (select count(*)::int from my_tasks
+          where due_date is not null and due_date < ${opts.asOf}::date
+            and status <> 'awaiting_approval') as overdue_tasks,
+        (select count(*)::int from my_tasks
+          where status = 'blocked' or blockers > 0) as blocked_tasks
     `),
   )) as unknown as Array<Record<string, string | number>>;
   const r = rows[0]!;
@@ -573,17 +606,33 @@ export async function customerWork(
 ): Promise<{ rows: WorkRow[]; activeCount: number; completedCount: number; overdueCount: number }> {
   assertCan(archetype, "jobs.view");
   const rows = await listWork(ctx, archetype, { customerId, limit: 25 });
-  const activeCount = rows.filter((r) =>
-    ["draft", "active", "on_hold"].includes(r.statusCategory),
-  ).length;
-  const completedCount = rows.filter((r) => r.statusCategory === "done").length;
-  const overdueCount = rows.filter(
-    (r) =>
-      r.dueDate !== null &&
-      r.dueDate < asOf &&
-      ["draft", "active", "on_hold"].includes(r.statusCategory),
-  ).length;
-  return { rows, activeCount, completedCount, overdueCount };
+  // The counts are the customer's TOTALS, so they are aggregated over every
+  // matching row rather than over the 25 shown. Deriving them from the page made
+  // the header understate any customer with more work than fits on it, while the
+  // adjacent "view all" link opened a longer list than the summary claimed.
+  // Same org scope and same foreman narrowing as the list above.
+  const assignedOnly = archetype === "foreman";
+  const [totals] = (await withCtx(ctx, (tx) =>
+    tx.execute(sql`
+      select
+        count(*) filter (where j.status_category in ('draft', 'active', 'on_hold'))::int as active,
+        count(*) filter (where j.status_category = 'done')::int as completed,
+        count(*) filter (where j.status_category in ('draft', 'active', 'on_hold')
+                           and j.due_date is not null
+                           and j.due_date < ${asOf}::date)::int as overdue
+      from public.job j
+      where j.org_id = ${ctx.orgId}
+        and j.archived = false
+        and j.customer_id = ${customerId}::uuid
+        and (${!assignedOnly} or ${assignedJobCondition(ctx)})
+    `),
+  )) as unknown as Array<{ active: number; completed: number; overdue: number }>;
+  return {
+    rows,
+    activeCount: Number(totals?.active ?? 0),
+    completedCount: Number(totals?.completed ?? 0),
+    overdueCount: Number(totals?.overdue ?? 0),
+  };
 }
 
 /** True when this archetype may see money on work surfaces. */

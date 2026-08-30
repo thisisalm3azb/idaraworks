@@ -213,6 +213,20 @@ export async function removeDependency(
       }),
     },
     async (tx) => {
+      // Resolve the owning work BEFORE writing: removing an edge rewrites the
+      // recorded sequencing and can promote a task to ready, so it is exactly as
+      // much of a mutation as adding one and answers to the same immutability
+      // rule. Without this, prerequisites could be deleted from work that was
+      // closed months ago.
+      const owner = (await tx.execute(sql`
+        select t.job_id::text as job_id
+        from public.task_dependency d
+        join public.task t on t.id = d.task_id and t.org_id = d.org_id
+        where d.org_id = ${ctx.orgId} and d.id = ${dependencyId} and d.removed_at is null
+      `)) as unknown as Array<{ job_id: string }>;
+      if (!owner[0]) throw new Error("dependency not found");
+      await assertWorkMutableIn(tx, ctx, owner[0].job_id);
+
       const rows = (await tx.execute(sql`
         update public.task_dependency
         set removed_at = now(), removed_by = ${ctx.userId}

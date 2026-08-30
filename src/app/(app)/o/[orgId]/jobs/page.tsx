@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { Button, Card, CardHeader, Field, FilterBar } from "@/platform/ui";
+import { Badge, Button, Card, CardHeader, Field, FilterBar } from "@/platform/ui";
 import { getT, getServerLocale } from "@/platform/i18n/server";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { loadOrgTerminology, term } from "@/platform/terminology";
@@ -12,6 +12,7 @@ import {
   listJobs,
   listWork,
   getSchedule,
+  getWorkload,
 } from "@/modules/jobs/service";
 import { getCustomer, listCustomers } from "@/modules/masters/service";
 import { createJobAction } from "./actions";
@@ -48,6 +49,8 @@ export default async function JobsPage({
     origin?: string;
     owner?: string;
     assignee?: string;
+    unowned?: string;
+    open?: string;
     from?: string;
     to?: string;
     focus?: string;
@@ -94,7 +97,9 @@ export default async function JobsPage({
     q: w.q ?? undefined,
     category: w.category ?? undefined,
     // The parser already whitelisted these against the same closed vocabularies.
-    priority: (w.priority as "low" | "normal" | "high" | "urgent" | null) ?? undefined,
+    priority: (w.priority as ("low" | "normal" | "high" | "urgent")[] | null) ?? undefined,
+    unowned: w.unowned || undefined,
+    openOnly: w.open || undefined,
     origin: (w.origin as "quotation" | "opportunity" | "direct" | null) ?? undefined,
     stageKey: w.stage ?? f.stage ?? undefined,
     ownerUserId: w.owner ?? undefined,
@@ -123,6 +128,20 @@ export default async function JobsPage({
           scope: w.scope ?? undefined,
         })
       : null;
+  // Scheduled load per person (Part G). Behind progressive disclosure so the hub
+  // stays a list of work rather than a wall of panels, and only for roles that
+  // may see people at all.
+  const workload = can(resolved.archetype, "employees.view")
+    ? await getWorkload(resolved.ctx, resolved.archetype, asOf)
+    : [];
+  // "High" is stated RELATIVE TO THIS TEAM, never as a capacity verdict: the
+  // product does not know anyone's working hours. Twice the team average, and
+  // only once there is a team to average over.
+  const loadMean =
+    workload.length > 0 ? workload.reduce((s, r) => s + r.openTasks, 0) / workload.length : 0;
+  const highLoad = (openTasks: number) =>
+    workload.length >= 3 && openTasks > 0 && openTasks >= 2 * loadMean;
+
   const filtered =
     f.filter !== null || f.stage !== null || f.scope !== null || f.customerId !== null;
   const filterSummary = !filtered
@@ -260,6 +279,33 @@ export default async function JobsPage({
           />
         </Card>
       )}
+
+      {workload.length > 0 ? (
+        <Card>
+          <details>
+            <summary className="flex min-h-11 cursor-pointer items-center text-sm font-medium text-ink">
+              {t("work.workload.title")}
+            </summary>
+            <p className="mt-2 text-xs text-ink-muted">{t("work.workload.hint")}</p>
+            <ul className="mt-3 divide-y divide-line">
+              {workload.map((r) => (
+                <li key={r.employeeId} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2">
+                  <span className="min-w-32 flex-1 text-sm text-ink">{r.name}</span>
+                  <span className="text-xs text-ink-secondary">
+                    {t("work.workload.open_tasks")}: {r.openTasks}
+                  </span>
+                  <span className="text-xs text-ink-secondary">
+                    {t("work.workload.assigned_work")}: {r.assignedWork}
+                  </span>
+                  {highLoad(r.openTasks) ? (
+                    <Badge tone="warning">{t("work.workload.high_load")}</Badge>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          </details>
+        </Card>
+      ) : null}
 
       {canCreate && presets.length > 0 ? (
         <Card>

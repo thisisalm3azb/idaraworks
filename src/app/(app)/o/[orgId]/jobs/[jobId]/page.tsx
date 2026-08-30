@@ -8,6 +8,7 @@ import { loadOrgTerminology, term } from "@/platform/terminology";
 import { can } from "@/platform/authz";
 import {
   computeProgress,
+  WORK_PRIORITIES,
   getJob,
   getJobDetail,
   getJobPricing,
@@ -48,6 +49,7 @@ import {
   taskDependencyRemoveAction,
   updateJobCoreAction,
 } from "./actions";
+import { WORK_ERROR_KEYS } from "./errors";
 import { submitReportAction } from "../actions";
 import { JobPhotoUpload } from "./JobPhotoUpload";
 
@@ -151,7 +153,9 @@ export default async function JobPage({
       </nav>
 
       {sp.error ? (
-        <p className="rounded-md bg-danger-soft p-3 text-sm text-danger">{t("common.error")}</p>
+        <p className="rounded-md bg-danger-soft p-3 text-sm text-danger">
+          {WORK_ERROR_KEYS[sp.error] ? t(WORK_ERROR_KEYS[sp.error]!) : t("common.error")}
+        </p>
       ) : null}
 
       {tab === "overview" ? (
@@ -363,7 +367,10 @@ async function OverviewTab(props: {
 
       <Card>
         <CardHeader title={t("fields.title")} />
-        {canEdit ? (
+        {/* Closed and archived work refuses core edits server-side, so the form
+            is not offered either: a control that can only fail is worse than no
+            control. The reopen card above is the way back. */}
+        {canEdit && !terminal && !props.archived ? (
           <form action={coreForm} className="flex flex-col gap-4">
             <Field label={t("common.name")} name="name" defaultValue={props.jobName} required />
             <Field
@@ -378,6 +385,23 @@ async function OverviewTab(props: {
               type="date"
               defaultValue={d.dueDate ?? ""}
             />
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="priority" className="text-sm font-medium text-ink">
+                {t("work.priority_label")}
+              </label>
+              <select
+                id="priority"
+                name="priority"
+                defaultValue={d.priority}
+                className="min-h-11 rounded-md border border-line-strong bg-card px-3 text-base text-ink"
+              >
+                {WORK_PRIORITIES.map((p) => (
+                  <option key={p} value={p}>
+                    {t(`work.priority.${p}`)}
+                  </option>
+                ))}
+              </select>
+            </div>
             {customers.length > 0 ? (
               <div className="flex flex-col gap-1.5">
                 <label htmlFor="customer_id" className="text-sm font-medium text-ink">
@@ -944,6 +968,27 @@ async function TasksTab(props: {
               </div>
             ) : null}
             <Field label={t("tasks.due")} name="due_date" type="date" />
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="task_priority" className="text-sm font-medium text-ink">
+                {t("work.priority_label")}
+              </label>
+              <select
+                id="task_priority"
+                name="priority"
+                defaultValue="normal"
+                className="min-h-11 rounded-md border border-line-strong bg-card px-3 text-base text-ink"
+              >
+                {WORK_PRIORITIES.map((p) => (
+                  <option key={p} value={p}>
+                    {t(`work.priority.${p}`)}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <label className="flex min-h-11 items-center gap-2 text-sm text-ink">
+              <input type="checkbox" name="requires_approval" value="1" className="size-5" />
+              {t("tasks.requires_approval")}
+            </label>
             <Button type="submit">{t("common.add")}</Button>
           </form>
         </Card>

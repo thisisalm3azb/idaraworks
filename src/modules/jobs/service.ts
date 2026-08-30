@@ -17,7 +17,8 @@ import { createComment } from "@/platform/comments";
 import { signUpload, type SignedUpload } from "@/platform/files";
 import type { FieldDefinitionSet, StageTemplate, JobPreset } from "@/platform/config";
 import { assignedJobCondition, isAssigned } from "./assigned";
-import { changeWorkStatus } from "./lifecycle";
+import { changeWorkStatus, assertWorkMutableIn } from "./lifecycle";
+import { WORK_PRIORITIES } from "./work";
 import { computeProgress, type StageForProgress } from "./progress";
 import { sql, withCtx, type Ctx, type TenantTx } from "@/platform/tenancy";
 import type { RoleArchetype } from "@/platform/registries";
@@ -552,6 +553,11 @@ export const JobCoreInput = z.object({
     .regex(/^\d{4}-\d{2}-\d{2}$/)
     .nullable()
     .optional(),
+  // Priority is set on the work itself, not only at creation: urgency is
+  // discovered while the work runs. Without an edit path the whole priority
+  // vocabulary, and the unowned-urgent delivery signal built on it, stayed at
+  // the default forever.
+  priority: z.enum(WORK_PRIORITIES).optional(),
   customValues: z.record(z.string(), z.unknown()).optional(),
 });
 
@@ -580,6 +586,12 @@ export async function updateJobCore(
       `)) as unknown as Array<{ reference: string; custom_values: Record<string, unknown> }>;
       const job = rows[0];
       if (!job) throw new Error("job not found");
+      // Closed work answers to the same immutability rule as its tasks and
+      // dependencies. A delivered job's target date and customer are historical
+      // record: quietly rewriting them changes what "delivered late" meant. The
+      // way to change closed work is to reopen it, which is authorized, reasoned
+      // and audited.
+      await assertWorkMutableIn(tx, ctx, jobId);
       const defs = (await tx.execute(sql`
         select value from public.app_settings
         where org_id = ${ctx.orgId} and key = 'config.fields.job'
@@ -597,6 +609,7 @@ export async function updateJobCore(
             foreman_user_id = ${data.foremanUserId === undefined ? sql`foreman_user_id` : (data.foremanUserId ?? null)},
             start_date = ${data.startDate === undefined ? sql`start_date` : (data.startDate ?? null)},
             due_date = ${data.dueDate === undefined ? sql`due_date` : (data.dueDate ?? null)},
+            priority = ${data.priority === undefined ? sql`priority` : data.priority},
             custom_values = ${JSON.stringify(customValues)}::jsonb,
             updated_at = now()
         where org_id = ${ctx.orgId} and id = ${jobId}
@@ -813,6 +826,7 @@ export type JobDetail = {
   foremanUserId: string | null;
   managerUserId: string | null;
   customValues: Record<string, unknown>;
+  priority: "low" | "normal" | "high" | "urgent";
   progressOverride: number | null;
   progressOverrideReason: string | null;
 };
@@ -828,7 +842,7 @@ export async function getJobDetail(
     tx.execute(sql`
       select start_date::text as start_date, due_date::text as due_date,
              customer_id::text as customer_id, foreman_user_id::text as foreman_user_id,
-             manager_user_id::text as manager_user_id, custom_values,
+             manager_user_id::text as manager_user_id, custom_values, priority,
              progress_override, progress_override_reason
       from public.job where org_id = ${ctx.orgId} and id = ${jobId}
     `),
@@ -839,6 +853,7 @@ export async function getJobDetail(
     foreman_user_id: string | null;
     manager_user_id: string | null;
     custom_values: Record<string, unknown>;
+    priority: "low" | "normal" | "high" | "urgent" | null;
     progress_override: number | null;
     progress_override_reason: string | null;
   }>;
@@ -848,6 +863,7 @@ export async function getJobDetail(
     startDate: r.start_date,
     dueDate: r.due_date,
     customerId: r.customer_id,
+    priority: r.priority ?? "normal",
     foremanUserId: r.foreman_user_id,
     managerUserId: r.manager_user_id,
     customValues: r.custom_values ?? {},

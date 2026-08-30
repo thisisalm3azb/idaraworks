@@ -315,12 +315,34 @@ export async function acceptQuote(
     throw new QuoteStateError(`only an approved/sent quote can be accepted (was ${q.status})`);
   }
 
+  // H21: when the quotation came from an opportunity, the work carries that
+  // provenance too. Without it the opportunity cannot see the delivery it
+  // produced, and its "Start work" control stays live — so one won sale could be
+  // turned into a second, duplicate work record. The `not exists` guard keeps
+  // acceptance working in the rare case where work was already started from the
+  // opportunity directly: that job keeps the link (the partial unique index
+  // allows only one) and this one is simply unlinked rather than failing.
+  const sourceOpportunityId = await withCtx(ctx, async (tx) => {
+    const rows = (await tx.execute(sql`
+      select o.id::text as id from public.opportunity o
+      where o.org_id = ${ctx.orgId} and o.quote_id = ${quoteId}
+        and not exists (
+          select 1 from public.job j
+          where j.org_id = o.org_id and j.source_opportunity_id = o.id
+        )
+      limit 1
+    `)) as unknown as Array<{ id: string }>;
+    return rows[0]?.id ?? null;
+  });
+
   let job: { id: string; reference: string };
   try {
     job = await createJobFromPreset(ctx, archetype, {
       presetId: claimed.preset_id,
       name: input.jobName ?? `${claimed.reference}`,
       customerId: claimed.customer_id ?? undefined,
+      origin: "quotation",
+      sourceOpportunityId: sourceOpportunityId ?? undefined,
     });
   } catch (err) {
     // createJobFromPreset is atomic — on throw NO job was committed, so it is safe to

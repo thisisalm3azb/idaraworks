@@ -91,6 +91,23 @@ describe("H21 — task vocabulary", () => {
     expect(DEPENDENCY_KINDS).toContain("finish_to_start");
   });
 
+  it("a person cannot hand-complete a step that is waiting on approval", () => {
+    // The approval engine owns that state. When the owner could also write it, a
+    // foreman could submit for approval and then tick it complete himself; the
+    // approval row stayed live and a later rejection updated nothing, leaving a
+    // task reading Completed over a rejected approval.
+    const source = readFileSync("src/modules/jobs/tasks.ts", "utf8");
+    const graph = source.slice(
+      source.indexOf("const TASK_TRANSITIONS"),
+      source.indexOf("export const MAX_TASK_DEPTH"),
+    );
+    const awaiting = /awaiting_approval: \[([^\]]*)\]/.exec(graph)?.[1] ?? "";
+    expect(awaiting).not.toContain("completed");
+    expect(awaiting).not.toContain("in_progress");
+    // Cancelling is still management's call.
+    expect(awaiting).toContain("cancelled");
+  });
+
   it("the overdue rule ignores finished work", () => {
     const asOf = "2026-08-30";
     expect(taskIsOverdue({ status: "in_progress", dueDate: "2026-08-29" }, asOf)).toBe(true);
@@ -153,7 +170,7 @@ describe("H21 — filter contracts", () => {
     expect(f.view).toBe("board");
     expect(f.q).toBe("villa");
     expect(f.category).toBe("active");
-    expect(f.priority).toBe("urgent");
+    expect(f.priority).toEqual(["urgent"]);
     expect(f.origin).toBe("opportunity");
     expect(f.owner).toBe(UUID);
     expect(f.dueFrom).toBe("2026-01-01");
@@ -185,9 +202,27 @@ describe("H21 — filter contracts", () => {
     const back = parseWorkSearch(qs);
     expect(back.view).toBe("board");
     expect(back.category).toBe("active");
-    expect(back.priority).toBe("high");
+    expect(back.priority).toEqual(["high"]);
     expect(back.overdue).toBe(true);
     expect(workHref("o")).toBe("/o/o/jobs");
+  });
+
+  it("work: a priority SET survives the round trip, junk members and all", () => {
+    const back = parseWorkSearch(
+      Object.fromEntries(
+        new URL(`http://x${workHref("o", { priority: ["high", "urgent"], unowned: true })}`)
+          .searchParams,
+      ),
+    );
+    expect(back.priority).toEqual(["high", "urgent"]);
+    expect(back.unowned).toBe(true);
+    // A junk member drops itself, not the whole filter; duplicates collapse.
+    expect(parseWorkSearch({ priority: "high,nonsense,high" }).priority).toEqual(["high"]);
+    expect(parseWorkSearch({ priority: "nonsense,rubbish" }).priority).toBeNull();
+    expect(parseWorkSearch({ priority: "" }).priority).toBeNull();
+    // The booleans are strictly "1", never any truthy string.
+    expect(parseWorkSearch({ unowned: "yes", open: "true" }).unowned).toBe(false);
+    expect(parseWorkSearch({ unowned: "yes", open: "true" }).open).toBe(false);
   });
 
   it("my work: focus is whitelisted and defaults to now", () => {
@@ -260,12 +295,39 @@ describe("H21 — dashboard composition", () => {
     expect(href("work_at_risk")).toBe("/o/org1/jobs?focus=overdue");
     expect(href("blocked_tasks")).toBe("/o/org1/my-work?focus=blocked");
     expect(href("overdue_tasks")).toBe("/o/org1/my-work?focus=overdue");
-    expect(href("unassigned_urgent")).toBe("/o/org1/jobs?priority=urgent");
     expect(href("work_due_soon")).toBe("/o/org1/jobs?from=2026-08-30");
     const count = (key: string) =>
       [...view.attention, ...view.next].find((i) => i.key === key)?.count;
     expect(count("work_at_risk")).toBe(2);
     expect(count("overdue_tasks")).toBe(4);
+  });
+
+  it("the unowned-urgent link carries EVERY predicate its count used", () => {
+    // The count is "high or urgent, still open, no owner". If the link cannot say
+    // all three, the list shows a different set of records than the number did.
+    const view = composeAdaptiveDashboard(cx(), data());
+    const href = [...view.attention, ...view.next].find((i) => i.key === "unassigned_urgent")?.href;
+    const qs = new URL(`http://x${href}`).searchParams;
+    expect(qs.get("priority")).toBe("high,urgent");
+    expect(qs.get("unowned")).toBe("1");
+    expect(qs.get("open")).toBe("1");
+    // And the parser reads back exactly what the count meant.
+    const back = parseWorkSearch(Object.fromEntries(qs));
+    expect(back.priority).toEqual(["high", "urgent"]);
+    expect(back.unowned).toBe(true);
+    expect(back.open).toBe(true);
+  });
+
+  it("a manager's delivery counts and their drill-downs agree on scope", () => {
+    // workDashboardCounts narrows for a foreman only, so a manager's links must
+    // not smuggle in scope=mine: that sent them from an org-wide count to a list
+    // of just their own work.
+    const view = composeAdaptiveDashboard(cx({ archetype: "manager" }), data());
+    for (const key of ["work_at_risk", "work_due_soon"]) {
+      const href = [...view.attention, ...view.next].find((i) => i.key === key)?.href;
+      expect(href).toBeDefined();
+      expect(new URL(`http://x${href}`).searchParams.get("scope")).toBeNull();
+    }
   });
 
   it("work past its target date outranks a blocked step, and both outrank money", () => {
@@ -367,5 +429,92 @@ describe("H21 — structural pins", () => {
     // updateJobStatus is a thin delegate; no second unguarded update survives.
     expect(service).toMatch(/await changeWorkStatus\(ctx, archetype, jobId, \{ statusKey \}\)/);
     expect(service).not.toMatch(/set status_key = \$\{statusKey\}/);
+  });
+
+  it("an accepted quotation records its true origin AND its opportunity", () => {
+    const quotes = readFileSync("src/modules/quotes/service.ts", "utf8");
+    const call = quotes.slice(
+      quotes.indexOf("job = await createJobFromPreset"),
+      quotes.indexOf("} catch (err) {"),
+    );
+    expect(call).toMatch(/origin: "quotation"/);
+    // Without the opportunity link the sale's own page still offers "Start work",
+    // so one won sale could be turned into two work records.
+    expect(call).toMatch(/sourceOpportunityId/);
+  });
+
+  it("every write path to closed work runs the same immutability guard", () => {
+    const deps = readFileSync("src/modules/jobs/dependencies.ts", "utf8");
+    const remove = deps.slice(deps.indexOf("export async function removeDependency"));
+    expect(remove).toMatch(/assertWorkMutableIn/);
+    // Editing the work's own details is a write too: a delivered job's target
+    // date is historical record, and rewriting it changes what "late" meant.
+    const service = readFileSync("src/modules/jobs/service.ts", "utf8");
+    const core = service.slice(
+      service.indexOf("export async function updateJobCore"),
+      service.indexOf("export async function getJobDetail"),
+    );
+    expect(core).toMatch(/assertWorkMutableIn/);
+    // The form is withheld too, rather than offering a control that must fail.
+    const page = readFileSync("src/app/(app)/o/[orgId]/jobs/[jobId]/page.tsx", "utf8");
+    expect(page).toMatch(/canEdit && !terminal && !props\.archived \? \(/);
+  });
+
+  it("every authored work error message is reachable", () => {
+    const errors = readFileSync("src/app/(app)/o/[orgId]/jobs/[jobId]/errors.ts", "utf8");
+    const actions = readFileSync("src/app/(app)/o/[orgId]/jobs/[jobId]/actions.ts", "utf8");
+    // The action sends the specific slug, not a blanket failure.
+    expect(actions).toMatch(/error=\$\{workErrorSlug\(err\)\}/);
+    for (const key of [
+      "work.error.transition",
+      "work.error.reason",
+      "work.error.immutable",
+      "tasks.error.cycle",
+      "tasks.error.scope",
+      "tasks.error.blocked",
+      "tasks.error.children",
+      "tasks.error.depth",
+    ]) {
+      expect(errors).toContain(key);
+      expect(EN[key as keyof typeof EN]).toBeTruthy();
+      expect(AR[key as keyof typeof AR]).toBeTruthy();
+    }
+  });
+
+  it("priority can actually be set, so the signals built on it can fire", () => {
+    const detail = readFileSync("src/app/(app)/o/[orgId]/jobs/[jobId]/page.tsx", "utf8");
+    const opp = readFileSync(
+      "src/app/(app)/o/[orgId]/opportunities/[opportunityId]/page.tsx",
+      "utf8",
+    );
+    // A control on the work itself, on the step form, and on the start-work form.
+    expect(detail.match(/name="priority"/g)?.length).toBe(2);
+    expect(opp).toMatch(/name="priority"/);
+    // And an edit path, or work created before today stays 'normal' forever.
+    const service = readFileSync("src/modules/jobs/service.ts", "utf8");
+    const update = service.slice(
+      service.indexOf("export async function updateJobCore"),
+      service.indexOf("export async function getJobDetail"),
+    );
+    expect(update).toMatch(/priority = \$\{data\.priority/);
+  });
+
+  it("the scheduled-load panel is rendered, not merely computed", () => {
+    const hub = readFileSync("src/app/(app)/o/[orgId]/jobs/page.tsx", "utf8");
+    expect(hub).toMatch(/getWorkload/);
+    expect(hub).toMatch(/work\.workload\.title/);
+    // Neutral by construction: a count, never a capacity verdict.
+    expect(EN["work.workload.high_load" as keyof typeof EN]).toBe("High scheduled load");
+    for (const bad of ["over capacity", "overloaded", "too much"]) {
+      expect(String(EN["work.workload.hint" as keyof typeof EN]).toLowerCase()).not.toContain(bad);
+    }
+  });
+
+  it("the approval gate is reachable from the step form", () => {
+    const page = readFileSync("src/app/(app)/o/[orgId]/jobs/[jobId]/page.tsx", "utf8");
+    // The action reads this field, so the form has to offer it.
+    expect(page).toMatch(/name="requires_approval"[\s\S]{0,80}value="1"/);
+    const actions = readFileSync("src/app/(app)/o/[orgId]/jobs/[jobId]/actions.ts", "utf8");
+    expect(actions).toMatch(/requires_approval"\) === "1"/);
   });
 });

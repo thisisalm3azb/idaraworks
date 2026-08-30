@@ -50,16 +50,24 @@ export const TASK_OPEN_STATUSES = [
 ] as const;
 
 /**
- * Legal task transitions. Completion from in_progress is the normal path;
- * awaiting_approval is reached only when the task requires approval, and is
- * left by the approval engine (approved -> completed, rejected -> in_progress).
+ * Legal task transitions for a PERSON. Completion from in_progress is the normal
+ * path; awaiting_approval is reached only when the task requires approval.
+ *
+ * Nothing here lets a person leave awaiting_approval for completed or back to
+ * in_progress, because that state belongs to the approval engine: it writes
+ * completed on approval and in_progress on rejection or withdrawal, straight to
+ * the row. Allowing the owner to also write those meant a foreman could submit a
+ * task for approval and then tick it complete himself, leaving the approval row
+ * live; a later rejection would update no rows and the task would read Completed
+ * over a rejected approval. Backing out is withdrawApproval, which the engine
+ * routes to in_progress.
  */
 const TASK_TRANSITIONS: Record<TaskStatus, readonly TaskStatus[]> = {
   pending: ["pending", "ready", "in_progress", "blocked", "cancelled"],
   ready: ["ready", "pending", "in_progress", "blocked", "cancelled"],
   in_progress: ["in_progress", "blocked", "awaiting_approval", "completed", "cancelled", "ready"],
   blocked: ["blocked", "pending", "ready", "in_progress", "cancelled"],
-  awaiting_approval: ["awaiting_approval", "in_progress", "completed", "cancelled"],
+  awaiting_approval: ["awaiting_approval", "cancelled"],
   completed: ["completed", "in_progress"], // reopening is explicit and audited
   cancelled: ["cancelled", "pending"], // restoring is explicit and audited
 };
@@ -341,8 +349,10 @@ export async function updateTaskStatus(
 
       // An approval-gated task routes through the approval engine instead of
       // completing directly. The engine flips it to completed on approval.
+      // (The transition graph already refuses completed from awaiting_approval,
+      // so this only ever fires on the first submission.)
       let approvalRequested = false;
-      if (target === "completed" && task.requires_approval && task.status !== "awaiting_approval") {
+      if (target === "completed" && task.requires_approval) {
         target = "awaiting_approval";
       }
 

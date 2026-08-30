@@ -610,7 +610,10 @@ export function composeAdaptiveDashboard(
       work.overdueWork,
       "dashboard.signal.work_at_risk",
       "dashboard.why.work_at_risk",
-      workHref(cx.orgId, { overdue: true, scope: jobScope }),
+      // No jobScope: workDashboardCounts narrows for a foreman only, and so does
+      // the work hub. Carrying the manager's "mine" scope sent them from an
+      // org-wide count to a list of only their own work.
+      workHref(cx.orgId, { overdue: true }),
       { canAct: can(cx.archetype, "jobs.edit") },
     );
   }
@@ -646,7 +649,10 @@ export function composeAdaptiveDashboard(
       work.unassignedUrgentWork,
       "dashboard.signal.unassigned_urgent",
       "dashboard.why.unassigned_urgent",
-      workHref(cx.orgId, { priority: "urgent" }),
+      // The count is "high or urgent, open, no owner". All three predicates have
+      // to survive into the URL or the list shows a different set than the number
+      // counted: priority carries both values, unowned carries the rest.
+      workHref(cx.orgId, { priority: "high,urgent", unowned: true, open: true }),
       { canAct: can(cx.archetype, "jobs.edit") },
     );
   }
@@ -732,7 +738,8 @@ export function composeAdaptiveDashboard(
       work.workDueSoon,
       "dashboard.signal.work_due_soon",
       "dashboard.why.work_due_soon",
-      workHref(cx.orgId, { dueFrom: cx.asOf, scope: jobScope }),
+      // No jobScope, for the same reason as work_at_risk above.
+      workHref(cx.orgId, { dueFrom: cx.asOf }),
       { whyVars: { days: horizonDays }, canAct: can(cx.archetype, "jobs.edit") },
     );
   }

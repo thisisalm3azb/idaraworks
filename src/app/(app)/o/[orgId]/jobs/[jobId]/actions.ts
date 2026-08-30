@@ -31,6 +31,7 @@ import {
   removeDependency,
 } from "@/modules/jobs/service";
 import { confirmUpload, type SignedUpload } from "@/platform/files";
+import { workErrorSlug } from "./errors";
 
 async function resolveOr(orgId: string) {
   const resolved = await resolveCtxForAction(orgId);
@@ -59,7 +60,9 @@ function jobAction(
       await run(resolved, orgId, jobId, formData);
     } catch (err) {
       if ((err as { digest?: string }).digest?.startsWith("NEXT_REDIRECT")) throw err;
-      redirect(`${base}&error=failed`);
+      // A rule the person can satisfy says which rule it was; a real fault stays
+      // generic.
+      redirect(`${base}&error=${workErrorSlug(err)}`);
     }
     revalidatePath(`/o/${orgId}/jobs/${jobId}`);
     redirect(base);
@@ -149,6 +152,9 @@ export const updateJobCoreAction = jobAction("overview", async (r, _o, jobId, f)
       : {}),
     startDate: (f.get("start_date") as string) || null,
     dueDate: (f.get("due_date") as string) || null,
+    // Same rule as the assignment legs: only touch priority when the form
+    // actually posted it.
+    ...(f.has("priority") ? { priority: String(f.get("priority")) } : {}),
     customValues: custom,
   });
 });

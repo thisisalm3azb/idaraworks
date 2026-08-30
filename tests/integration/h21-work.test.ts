@@ -29,6 +29,7 @@ import {
   getSchedule,
   getWorkload,
   workDashboardCounts,
+  updateJobCore,
   customerWork,
   changeWorkStatus,
   reopenJob,
@@ -37,6 +38,7 @@ import {
   WorkTransitionError,
   WorkReasonRequiredError,
   WorkImmutableError,
+  TaskTransitionError,
   createTask,
   updateTask,
   updateTaskStatus,
@@ -180,15 +182,58 @@ describe("H21 — work creation paths", () => {
       jobName: "Quoted delivery",
     });
     const jobs = (await owner`
-      select count(*)::int as n from public.job
-      where org_id = ${orgA} and id = ${jobId}`) as unknown as Array<{ n: number }>;
+      select count(*)::int as n, min(origin) as origin from public.job
+      where org_id = ${orgA} and id = ${jobId}`) as unknown as Array<{
+      n: number;
+      origin: string;
+    }>;
     expect(jobs[0]!.n).toBe(1);
+    // The origin column must say how the work really came to exist.
+    expect(jobs[0]!.origin).toBe("quotation");
     const linked = (await owner`
       select converted_job_id::text as j from public.quote where id = ${q.id}`) as unknown as Array<{
       j: string;
     }>;
     expect(linked[0]!.j).toBe(jobId);
   });
+
+  it(
+    "a quotation raised from an opportunity carries that opportunity onto the work",
+    { timeout: 90_000 },
+    async () => {
+      const { id: oppId } = await createOpportunity(ctxOf(orgA, userA), "owner", {
+        name: "Quoted engagement",
+        customerId: custId,
+        estimatedValueMinor: 500000,
+      });
+      const q = await createQuote(ctxOf(orgA, userA), "owner", {
+        customerId: custId,
+        presetId: presetA,
+        opportunityId: oppId,
+        lines: [{ description: "Scope", qty: 1, unit: "lot", unitPriceMinor: 500000 }],
+      });
+      await owner`update public.quote set status = 'sent', updated_at = now()
+                  where id = ${q.id} and org_id = ${orgA}`;
+      const { jobId } = await acceptQuote(ctxOf(orgA, userA), "owner", q.id, {
+        jobName: "Quoted engagement delivery",
+      });
+      // The sale can see its own delivery...
+      const found = await workForOpportunity(ctxOf(orgA, userA), "owner", oppId);
+      expect(found?.jobId).toBe(jobId);
+      // ...so it can never be turned into a SECOND work record for one sale.
+      const again = await startWorkFromOpportunity(ctxOf(orgA, userA), "owner", oppId, {
+        name: "Duplicate attempt",
+        presetId: presetA,
+      });
+      expect(again.jobId).toBe(jobId);
+      const n = (await owner`
+        select count(*)::int as n from public.job
+        where org_id = ${orgA} and source_opportunity_id = ${oppId}`) as unknown as Array<{
+        n: number;
+      }>;
+      expect(n[0]!.n).toBe(1);
+    },
+  );
 
   it("a won opportunity creates work ONLY through the explicit command, idempotently", async () => {
     const { id: oppId } = await createOpportunity(ctxOf(orgA, userA), "owner", {
@@ -292,6 +337,15 @@ describe("H21 — work lifecycle", () => {
   });
 
   it("completed work is immutable until an authorized reopen with a reason", async () => {
+    // Give the work a real prerequisite edge first, so the removal path below is
+    // exercised for certain rather than opportunistically.
+    const first = await createTask(ctxOf(orgA, userA), "owner", { jobId, title: "First" });
+    const second = await createTask(ctxOf(orgA, userA), "owner", { jobId, title: "Second" });
+    await addDependency(ctxOf(orgA, userA), "owner", {
+      taskId: second.id,
+      dependsOnTaskId: first.id,
+      kind: "finish_to_start",
+    });
     const doneKey = await statusKeyFor(orgA, "done");
     await changeWorkStatus(ctxOf(orgA, userA), "owner", jobId, { statusKey: doneKey });
     const done = (await owner`
@@ -309,6 +363,27 @@ describe("H21 — work lifecycle", () => {
     // Operational writes are refused too.
     await expect(
       createTask(ctxOf(orgA, userA), "owner", { jobId, title: "Too late" }),
+    ).rejects.toBeInstanceOf(WorkImmutableError);
+    // Including REMOVING a prerequisite: that rewrites the recorded sequencing
+    // and can promote a step to ready, so it is as much a mutation as adding one.
+    {
+      const live = (await owner`
+        select d.id::text as id from public.task_dependency d
+        join public.task t on t.id = d.task_id and t.org_id = d.org_id
+        where d.org_id = ${orgA} and d.removed_at is null and t.job_id = ${jobId}
+        limit 1`) as unknown as Array<{ id: string }>;
+      expect(live[0]).toBeDefined();
+      await expect(
+        removeDependency(ctxOf(orgA, userA), "owner", live[0]!.id),
+      ).rejects.toBeInstanceOf(WorkImmutableError);
+    }
+    // And the work's own details: a delivered job's target date and customer are
+    // historical record, so they are not quietly rewritable either.
+    await expect(
+      updateJobCore(ctxOf(orgA, userA), "owner", jobId, {
+        name: "Renamed after delivery",
+        dueDate: shift(99),
+      }),
     ).rejects.toBeInstanceOf(WorkImmutableError);
     // A manager may reopen, with a reason; the completion date is cleared.
     await reopenJob(ctxOf(orgA, userA), "manager", jobId, {
@@ -617,6 +692,39 @@ describe("H21 — task completion approval", () => {
     expect(task[0]!.status).toBe("completed");
     expect(task[0]!.completed_at).not.toBeNull();
   });
+
+  it("a task waiting on approval cannot be completed by hand", async () => {
+    const { id: jobId } = await createJobFromPreset(ctxOf(orgA, userA), "owner", {
+      presetId: presetA,
+      name: "Approval bypass probe",
+    });
+    const { id: taskId } = await createTask(ctxOf(orgA, userA), "owner", {
+      jobId,
+      title: "Needs a second pair of eyes",
+      requiresApproval: true,
+    });
+    await updateTaskStatus(ctxOf(orgA, userA), "owner", taskId, { status: "in_progress" });
+    const res = await updateTaskStatus(ctxOf(orgA, userA), "owner", taskId, {
+      status: "completed",
+    });
+    if (res.status !== "awaiting_approval") return; // an auto-approving rule decided it
+    // The submitter cannot tick it complete himself, and cannot quietly walk it
+    // back either: the approval engine owns this state.
+    await expect(
+      updateTaskStatus(ctxOf(orgA, userA), "owner", taskId, { status: "completed" }),
+    ).rejects.toBeInstanceOf(TaskTransitionError);
+    await expect(
+      updateTaskStatus(ctxOf(orgA, userA), "owner", taskId, { status: "in_progress" }),
+    ).rejects.toBeInstanceOf(TaskTransitionError);
+    const still = (await owner`
+      select status from public.task where id = ${taskId}`) as unknown as Array<{ status: string }>;
+    expect(still[0]!.status).toBe("awaiting_approval");
+    // And no approval was left decided-but-unapplied.
+    const appr = (await owner`
+      select state from public.approval
+      where org_id = ${orgA} and subject_id = ${taskId}`) as unknown as Array<{ state: string }>;
+    expect(appr[0]!.state).toBe("pending");
+  });
 });
 
 describe("H21 — reads: hub, my work, schedule, workload, dashboard", () => {
@@ -700,7 +808,64 @@ describe("H21 — reads: hub, my work, schedule, workload, dashboard", () => {
   it("customer 360 work summary is scoped to that customer", async () => {
     const view = await customerWork(ctxOf(orgA, userA), "owner", custId, asOf);
     expect(view.rows.every((r) => r.customerId === custId)).toBe(true);
-    expect(view.activeCount + view.completedCount).toBeLessThanOrEqual(view.rows.length);
+  });
+
+  it("customer 360 counts are the customer's TOTALS, not a count of the page", async () => {
+    // The counts used to be derived by filtering the 25 rows shown, so they
+    // understated any customer with more work than fits on the page while the
+    // adjacent "view all" link opened a longer list than the summary claimed.
+    const view = await customerWork(ctxOf(orgA, userA), "owner", custId, asOf);
+    const truth = (await owner`
+      select
+        count(*) filter (where status_category in ('draft','active','on_hold'))::int as active,
+        count(*) filter (where status_category = 'done')::int as completed
+      from public.job
+      where org_id = ${orgA} and customer_id = ${custId} and archived = false`) as unknown as Array<{
+      active: number;
+      completed: number;
+    }>;
+    expect(view.activeCount).toBe(truth[0]!.active);
+    expect(view.completedCount).toBe(truth[0]!.completed);
+  });
+
+  it("priority is settable and the hub can express the unowned-urgent count", async () => {
+    const { id: jobId } = await createJobFromPreset(ctxOf(orgA, userA), "owner", {
+      presetId: presetA,
+      name: "Priority probe",
+    });
+    // Default, then changed through the ordinary edit path.
+    const before = (await owner`
+      select priority, owner_user_id from public.job where id = ${jobId}`) as unknown as Array<{
+      priority: string;
+      owner_user_id: string | null;
+    }>;
+    expect(before[0]!.priority).toBe("normal");
+    expect(before[0]!.owner_user_id).toBeNull();
+    await updateJobCore(ctxOf(orgA, userA), "owner", jobId, {
+      name: "Priority probe",
+      priority: "urgent",
+    });
+    const after = (await owner`
+      select priority from public.job where id = ${jobId}`) as unknown as Array<{
+      priority: string;
+    }>;
+    expect(after[0]!.priority).toBe("urgent");
+
+    // The dashboard counts "high or urgent, open, no owner"; the hub filter has
+    // to be able to return exactly that set, or the drill-down lies.
+    const drill = await listWork(ctxOf(orgA, userA), "owner", {
+      priority: ["high", "urgent"],
+      unowned: true,
+      openOnly: true,
+    });
+    expect(drill.some((w) => w.id === jobId)).toBe(true);
+    expect(drill.every((w) => ["high", "urgent"].includes(w.priority))).toBe(true);
+    expect(drill.every((w) => w.ownerUserId === null)).toBe(true);
+    const counts = await workDashboardCounts(ctxOf(orgA, userA), "owner", {
+      asOf,
+      horizonDays: 7,
+    });
+    expect(counts.unassignedUrgentWork).toBe(drill.length);
   });
 });
 

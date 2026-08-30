@@ -15,7 +15,7 @@ import {
   workForOpportunity,
 } from "@/modules/crm/service";
 import { listCustomers } from "@/modules/masters/service";
-import { listActivePresets } from "@/modules/jobs/service";
+import { listActivePresets, WORK_PRIORITIES } from "@/modules/jobs/service";
 import { orgToday } from "@/modules/dashboard/service";
 import {
   loseOpportunityAction,
@@ -258,6 +258,16 @@ export default async function OpportunityDetailPage({
                     type="date"
                     defaultValue={opp.expectedCloseDate ?? ""}
                   />
+                  <label className="flex flex-col gap-1.5 text-sm font-medium text-ink">
+                    {t("work.priority_label")}
+                    <select name="priority" defaultValue="normal" className={selectCls}>
+                      {WORK_PRIORITIES.map((p) => (
+                        <option key={p} value={p}>
+                          {t(`work.priority.${p}`)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
                 </div>
                 <div>
                   <Button type="submit">{t("work.start.cta")}</Button>

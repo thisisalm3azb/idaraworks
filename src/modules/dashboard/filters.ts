@@ -410,10 +410,18 @@ export type WorkSearch = {
   view: WorkView;
   q: string | null;
   category: string | null;
-  priority: string | null;
+  /** A SET of priorities. A dashboard count that spans more than one priority
+   * has to be expressible as a link, or the list shows a different set of
+   * records than the number claimed to have counted. */
+  priority: string[] | null;
   origin: string | null;
   stage: string | null;
   owner: string | null;
+  /** Work with no owner. The "high priority work has no owner" count needs this
+   * predicate in the URL; there was previously no way to express it at all. */
+  unowned: boolean;
+  /** Restrict to work that is still open (draft, active or on hold). */
+  open: boolean;
   assignee: string | null;
   customerId: string | null;
   dueFrom: string | null;
@@ -439,20 +447,31 @@ export function parseWorkSearch(sp: {
   to?: string;
   focus?: string;
   scope?: string;
+  unowned?: string;
+  open?: string;
 }): WorkSearch {
   const q = (sp.q ?? "").trim().slice(0, 120);
   const pick = (v: string | undefined, allowed: readonly string[]) =>
     v && allowed.includes(v) ? v : null;
+  // Each member is whitelisted separately, so junk in a list drops that member
+  // rather than the whole filter, and an all-junk list becomes null.
+  const priorities = (sp.priority ?? "")
+    .split(",")
+    .map((p) => p.trim())
+    .filter((p, i, a) => p.length > 0 && a.indexOf(p) === i)
+    .filter((p) => (WORK_PRIORITY_FILTERS as readonly string[]).includes(p));
   return {
     view: (WORK_VIEWS as readonly string[]).includes(sp.view ?? "")
       ? (sp.view as WorkView)
       : "list",
     q: q.length > 0 ? q : null,
     category: pick(sp.category, WORK_CATEGORY_FILTERS),
-    priority: pick(sp.priority, WORK_PRIORITY_FILTERS),
+    priority: priorities.length > 0 ? priorities : null,
     origin: pick(sp.origin, WORK_ORIGIN_FILTERS),
     stage: sp.stage && STAGE_KEY_RE.test(sp.stage) ? sp.stage : null,
     owner: sp.owner && UUID_RE.test(sp.owner) ? sp.owner : null,
+    unowned: sp.unowned === "1",
+    open: sp.open === "1",
     assignee: sp.assignee && UUID_RE.test(sp.assignee) ? sp.assignee : null,
     customerId: parseCustomerParam(sp).customerId,
     dueFrom: sp.from && DATE_RE.test(sp.from) ? sp.from : null,
@@ -465,16 +484,23 @@ export function parseWorkSearch(sp: {
 
 export function workHref(
   orgId: string,
-  f: Partial<Omit<WorkSearch, "view">> & { view?: WorkView } = {},
+  f: Partial<Omit<WorkSearch, "view" | "priority">> & {
+    view?: WorkView;
+    /** Accepts "high,urgent" or ["high", "urgent"] — both round-trip. */
+    priority?: string | string[] | null;
+  } = {},
 ): string {
   const q = new URLSearchParams();
   if (f.view && f.view !== "list") q.set("view", f.view);
   if (f.q) q.set("q", f.q);
   if (f.category) q.set("category", f.category);
-  if (f.priority) q.set("priority", f.priority);
+  const priority = Array.isArray(f.priority) ? f.priority.join(",") : f.priority;
+  if (priority) q.set("priority", priority);
   if (f.origin) q.set("origin", f.origin);
   if (f.stage) q.set("stage", f.stage);
   if (f.owner) q.set("owner", f.owner);
+  if (f.unowned) q.set("unowned", "1");
+  if (f.open) q.set("open", "1");
   if (f.assignee) q.set("assignee", f.assignee);
   if (f.customerId) q.set("customer", f.customerId);
   if (f.dueFrom) q.set("from", f.dueFrom);
