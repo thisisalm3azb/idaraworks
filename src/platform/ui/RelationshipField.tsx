@@ -201,9 +201,18 @@ export function RelationshipField({
           {createFields.map((f) => (
             <Field
               key={f.name}
+              // The child create form posts through submitChild (controlled
+              // values), but the control still needs its own name so it is a
+              // real, labelled form control rather than an anonymous one.
+              name={f.name}
               label={f.label}
               type={f.type}
-              required={f.required}
+              // Only while the dialog is open. This field sits inside the
+              // PARENT form's DOM; a required control that is closed (and so
+              // not focusable) makes the browser silently refuse to submit
+              // that parent form. The child's own validation is server-side
+              // (submitChild posts collected values and renders field errors).
+              required={open && f.required}
               dir={f.dir}
               maxLength={f.maxLength}
               placeholder={f.placeholder}

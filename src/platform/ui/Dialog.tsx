@@ -100,6 +100,12 @@ export function Dialog({
           <Icon name="close" size={18} />
         </button>
       </div>
+      {/* Children stay MOUNTED while closed (the confirmation copy is part of
+          the rendered markup, pinned by tests). Consequence for callers: a
+          dialog nested inside a <form> must not leave REQUIRED controls
+          mounted while closed — the browser then refuses to submit the parent
+          form ("an invalid form control ... is not focusable") with no visible
+          message. See RelationshipField, which gates `required` on `open`. */}
       <div className="p-4">{children}</div>
     </dialog>
   );

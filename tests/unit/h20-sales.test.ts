@@ -316,6 +316,19 @@ describe("H20 — structural pins", () => {
     expect(createHook).not.toMatch(/set status = 'won'/);
   });
 
+  // Found by H20's production verification: the create-quotation form could
+  // not submit at all. A closed Dialog kept its REQUIRED create fields mounted
+  // inside the parent <form>, so the browser refused to submit it ("an invalid
+  // form control ... is not focusable") with no visible message. Children must
+  // mount only while the dialog is open.
+  it("a closed dialog never leaves a required control in its parent form", () => {
+    const rel = readFileSync("src/platform/ui/RelationshipField.tsx", "utf8");
+    // required is gated on `open`, so the parent form can always submit.
+    expect(rel).toMatch(/required=\{open && f\.required\}/);
+    // And the create fields are real named controls, not anonymous ones.
+    expect(rel).toMatch(/name=\{f\.name\}/);
+  });
+
   it("no DELETE grants exist anywhere in the sales migration", () => {
     const mig = readFileSync("supabase/migrations/0078_sales_crm.sql", "utf8");
     expect(mig).not.toMatch(/^grant[^;]*\bdelete\b/im);
