@@ -365,8 +365,39 @@ export const SEEDERS: Record<string, Seeder> = {
             values (${pol}, ${org}, ${po}, 'Bleed', 5, 'ea', 1000)`;
     await o`insert into public.goods_receipt (id, org_id, reference, po_id, status, received_date, created_by)
             values (${grn}, ${org}, ${"BLGLR-" + randomUUID().slice(0, 8)}, ${po}, 'recorded', '2026-02-11', ${u})`;
-    await o`insert into public.goods_receipt_line (org_id, grn_id, po_line_id, ordered_qty, received_qty)
-            values (${org}, ${grn}, ${pol}, 5, 2)`;
+    await o`insert into public.goods_receipt_line
+              (org_id, grn_id, po_line_id, ordered_qty, received_qty, accepted_qty)
+            values (${org}, ${grn}, ${pol}, 5, 2, 2)`;
+  },
+  supplier_return: async (o, org, u) => {
+    const sup = randomUUID();
+    await o`insert into public.supplier (id, org_id, name) values (${sup}, ${org}, 'Bleed SR Supplier')`;
+    await o`insert into public.supplier_return (org_id, reference, supplier_id, reason, created_by)
+            values (${org}, ${"BLSR-" + randomUUID().slice(0, 8)}, ${sup}, 'bleed', ${u})`;
+  },
+  supplier_return_line: async (o, org, u) => {
+    const s = await seedStockChain(o, org, u);
+    const sup = randomUUID();
+    const po = randomUUID();
+    const pol = randomUUID();
+    const grn = randomUUID();
+    const grl = randomUUID();
+    const ret = randomUUID();
+    await o`insert into public.supplier (id, org_id, name) values (${sup}, ${org}, 'Bleed SRL Supplier')`;
+    await o`insert into public.purchase_order (id, org_id, reference, supplier_id, status, created_by)
+            values (${po}, ${org}, ${"BLSL-" + randomUUID().slice(0, 8)}, ${sup}, 'approved', ${u})`;
+    await o`insert into public.purchase_order_line (id, org_id, po_id, item_name, qty, unit, unit_cost_minor)
+            values (${pol}, ${org}, ${po}, 'Bleed', 5, 'ea', 1000)`;
+    await o`insert into public.goods_receipt (id, org_id, reference, po_id, status, received_date, created_by)
+            values (${grn}, ${org}, ${"BLSLR-" + randomUUID().slice(0, 8)}, ${po}, 'recorded', '2026-02-12', ${u})`;
+    await o`insert into public.goods_receipt_line
+              (id, org_id, grn_id, po_line_id, ordered_qty, received_qty, accepted_qty)
+            values (${grl}, ${org}, ${grn}, ${pol}, 5, 5, 5)`;
+    await o`insert into public.supplier_return (id, org_id, reference, supplier_id, reason, created_by)
+            values (${ret}, ${org}, ${"BLSRL-" + randomUUID().slice(0, 8)}, ${sup}, 'bleed', ${u})`;
+    await o`insert into public.supplier_return_line
+              (org_id, return_id, goods_receipt_line_id, item_id, unit_id, qty)
+            values (${org}, ${ret}, ${grl}, ${s.item}, ${s.unit}, 1)`;
   },
 
   // ── S5 "Measure" tables ──

@@ -22,6 +22,7 @@ import { sql, withCtx, type Ctx, type TenantTx } from "@/platform/tenancy";
 import { isAssignedIn } from "@/modules/jobs/service";
 import { submitForApproval } from "@/modules/approvals/service";
 import { getDocBranding } from "@/modules/branding/service";
+import { CURRENCY_CODES, minorUnitExponent } from "@/platform/registries";
 import type { CurrencyCode, RoleArchetype } from "@/platform/registries";
 import { lpoHtml } from "./lpo-template";
 
@@ -89,10 +90,110 @@ export const CreatePoInput = z.object({
     .max(2000)
     .optional()
     .transform((v) => (v ? v : undefined)),
+  /**
+   * The currency the SUPPLIER is being asked to charge in. Absent means the
+   * organization's own currency, which is what every order meant before this
+   * field existed.
+   */
+  currency: z.enum(CURRENCY_CODES as [CurrencyCode, ...CurrencyCode[]]).optional(),
+  /**
+   * Base-currency units per one unit of the order currency (3.6725 AED per USD).
+   *
+   * Required — and required to differ from 1 — whenever the order currency is
+   * not the base currency. There is no rate service: a person enters this, and
+   * the audit log records who and when.
+   */
+  exchangeRate: z.number().positive().max(1_000_000).optional(),
+  rateDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
   lines: z.array(PoLineInput).min(1).max(200),
 });
 
 // ── helpers ───────────────────────────────────────────────────────────────────
+/** A purchase order's money, fixed at the moment it is written. */
+export type OrderMoney = {
+  currency: CurrencyCode;
+  baseCurrency: CurrencyCode;
+  exchangeRate: number;
+  rateDate: string;
+  rateSource: "same_currency" | "manual";
+  baseTotalMinor: number;
+};
+
+/**
+ * Settle what an order is priced in, and what that is worth in the
+ * organization's own money.
+ *
+ * The rule that matters: a rate of exactly 1 is a statement that no conversion
+ * happens, which is only true when the currencies match. A foreign order with no
+ * rate — or a foreign order at 1 — is refused here with a message a buyer can
+ * act on, rather than reaching the database and failing as a constraint name.
+ *
+ * base_currency is stored on the ORDER rather than read from the organization
+ * later. An organization can change its base currency; a document that already
+ * exists must keep saying what it said.
+ */
+async function resolveOrderMoney(
+  tx: TenantTx,
+  ctx: Ctx,
+  totalMinor: number,
+  input: { currency?: CurrencyCode; exchangeRate?: number; rateDate?: string },
+): Promise<OrderMoney> {
+  const rows = (await tx.execute(sql`
+    select base_currency from public.org where id = ${ctx.orgId}
+  `)) as unknown as Array<{ base_currency: CurrencyCode }>;
+  const baseCurrency = rows[0]?.base_currency;
+  if (!baseCurrency) throw new InvalidSupplyInputError("the organization has no base currency");
+
+  const currency = input.currency ?? baseCurrency;
+  const rateDate = input.rateDate ?? new Date().toISOString().slice(0, 10);
+
+  if (currency === baseCurrency) {
+    if (input.exchangeRate !== undefined && input.exchangeRate !== 1) {
+      throw new InvalidSupplyInputError(
+        `an order in ${currency} is already in the organization's currency, so its rate is 1, not ${input.exchangeRate}`,
+      );
+    }
+    return {
+      currency,
+      baseCurrency,
+      exchangeRate: 1,
+      rateDate,
+      rateSource: "same_currency",
+      baseTotalMinor: totalMinor,
+    };
+  }
+
+  if (input.exchangeRate === undefined) {
+    throw new InvalidSupplyInputError(
+      `an order in ${currency} needs the ${baseCurrency} per ${currency} rate; there is no rate service to assume one`,
+    );
+  }
+  if (input.exchangeRate === 1) {
+    throw new InvalidSupplyInputError(
+      `a rate of 1 says ${currency} and ${baseCurrency} are the same money; enter the real rate`,
+    );
+  }
+
+  /*
+   * Minor units are not interchangeable across currencies: 1000 fils is one
+   * dinar, 1000 cents is ten dollars. So the conversion goes through major
+   * units — divide out the order's exponent, apply the rate, then scale into the
+   * base currency's own exponent.
+   */
+  const scale = 10 ** (minorUnitExponent(baseCurrency) - minorUnitExponent(currency));
+  return {
+    currency,
+    baseCurrency,
+    exchangeRate: input.exchangeRate,
+    rateDate,
+    rateSource: "manual",
+    baseTotalMinor: Math.round(totalMinor * input.exchangeRate * scale),
+  };
+}
+
 async function jobReference(tx: TenantTx, ctx: Ctx, jobId: string | null): Promise<string | null> {
   if (!jobId) return null;
   const rows = (await tx.execute(sql`
@@ -351,12 +452,19 @@ export async function convertMrToPo(
       });
       total += data.vatMinor;
 
+      // A material request carries no currency — it asks for things, not for a
+      // price in someone else's money — so a converted order is in the
+      // organization's own currency. Stated rather than left to a default.
+      const money = await resolveOrderMoney(tx, ctx, total, {});
       await tx.execute(sql`
         insert into public.purchase_order
           (id, org_id, reference, supplier_id, job_id, mr_id, status, vat_minor, total_minor,
-           created_by, approved_at)
+           created_by, approved_at, currency, base_currency, exchange_rate, rate_date,
+           rate_source, base_total_minor)
         values (${poId}, ${ctx.orgId}, ${reference}, ${data.supplierId}, ${mr.job_id}, ${mrId},
-                'approved', ${data.vatMinor}, ${total}, ${ctx.userId}, now())
+                'approved', ${data.vatMinor}, ${total}, ${ctx.userId}, now(),
+                ${money.currency}, ${money.baseCurrency}, ${money.exchangeRate},
+                ${money.rateDate}::date, ${money.rateSource}, ${money.baseTotalMinor})
       `);
       for (const l of poLines) {
         await tx.execute(sql`
@@ -395,6 +503,9 @@ export async function createPurchaseOrder(
   await requireCapability(ctx, "cap.purchase_orders");
   const data = CreatePoInput.parse(input);
   const id = randomUUID();
+  // Captured for the audit line: a manually entered rate must name the person
+  // who entered it, and the audit log is where that is recorded.
+  let money: OrderMoney | null = null;
   return command<{ id: string; reference: string }>(
     ctx,
     {
@@ -402,7 +513,10 @@ export async function createPurchaseOrder(
         action: "po.create",
         entityType: "purchase_order",
         entityId: r.id,
-        summary: `Created ${r.reference} (MR-less)`,
+        summary:
+          money && money.currency !== money.baseCurrency
+            ? `Created ${r.reference} (MR-less) in ${money.currency} at ${money.exchangeRate} ${money.baseCurrency}/${money.currency}, entered manually on ${money.rateDate}`
+            : `Created ${r.reference} (MR-less)`,
       }),
     },
     async (tx) => {
@@ -425,11 +539,16 @@ export async function createPurchaseOrder(
         total += lineTotal;
         return { ...l, lineTotal, sort: i };
       });
+      money = await resolveOrderMoney(tx, ctx, total, data);
       await tx.execute(sql`
         insert into public.purchase_order
-          (id, org_id, reference, supplier_id, job_id, status, vat_minor, total_minor, notes, created_by)
+          (id, org_id, reference, supplier_id, job_id, status, vat_minor, total_minor, notes,
+           created_by, currency, base_currency, exchange_rate, rate_date, rate_source,
+           base_total_minor)
         values (${id}, ${ctx.orgId}, ${reference}, ${data.supplierId}, ${data.jobId ?? null}, 'draft',
-                ${data.vatMinor}, ${total}, ${data.notes ?? null}, ${ctx.userId})
+                ${data.vatMinor}, ${total}, ${data.notes ?? null}, ${ctx.userId},
+                ${money.currency}, ${money.baseCurrency}, ${money.exchangeRate},
+                ${money.rateDate}::date, ${money.rateSource}, ${money.baseTotalMinor})
       `);
       for (const l of lines) {
         await tx.execute(sql`
@@ -498,12 +617,23 @@ export async function submitPurchaseOrder(
 }
 
 // ── Goods Receipts (partial-receipt reconciliation) ──────────────────────────
-const GrnLineInput = z.object({
-  poLineId: z.string().uuid(),
-  receivedQty: z.number().min(0).max(1_000_000_000),
-  damagedQty: z.number().min(0).max(1_000_000_000).optional().default(0),
-  rejectedQty: z.number().min(0).max(1_000_000_000).optional().default(0),
-});
+const GrnLineInput = z
+  .object({
+    poLineId: z.string().uuid(),
+    receivedQty: z.number().min(0).max(1_000_000_000),
+    damagedQty: z.number().min(0).max(1_000_000_000).optional().default(0),
+    rejectedQty: z.number().min(0).max(1_000_000_000).optional().default(0),
+    /** Held for inspection: owned, but not usable until someone decides. */
+    quarantineQty: z.number().min(0).max(1_000_000_000).optional().default(0),
+  })
+  /*
+   * Everything that arrived is accounted for, and the balance is what was
+   * accepted. Refusing the over-split here means the clerk is told which line is
+   * wrong, rather than meeting a constraint name from the database.
+   */
+  .refine((l) => l.damagedQty + l.rejectedQty + l.quarantineQty <= l.receivedQty, {
+    message: "damaged, rejected and quarantined cannot exceed what was received",
+  });
 export const RecordGrnInput = z.object({
   poId: z.string().uuid(),
   receivedDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
@@ -648,12 +778,17 @@ export async function recordGoodsReceipt(
       `);
       for (const [i, l] of data.lines.entries()) {
         const info = byId.get(l.poLineId)!;
+        // What is left once damage, refusal and inspection are taken out is
+        // what the business accepted. Derived here, and checked by the database
+        // against received_qty, so the four can never drift apart.
+        const accepted = l.receivedQty - l.damagedQty - l.rejectedQty - l.quarantineQty;
         await tx.execute(sql`
           insert into public.goods_receipt_line
             (id, org_id, grn_id, po_line_id, ordered_qty, previously_received, received_qty,
-             damaged_qty, rejected_qty, sort)
+             accepted_qty, damaged_qty, rejected_qty, quarantine_qty, sort)
           values (${randomUUID()}, ${ctx.orgId}, ${id}, ${l.poLineId}, ${info.ordered}, ${info.prev},
-                  ${l.receivedQty}, ${l.damagedQty}, ${l.rejectedQty}, ${i})
+                  ${l.receivedQty}, ${accepted}, ${l.damagedQty}, ${l.rejectedQty},
+                  ${l.quarantineQty}, ${i})
         `);
       }
       await reconcilePoStatus(tx, ctx, data.poId);

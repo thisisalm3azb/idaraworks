@@ -32,9 +32,17 @@ export {
   releaseReservation,
   dispatchTransfer,
   postStockCount,
+  sendSupplierReturn,
   NotStockableError,
   type ReceiptPostResult,
 } from "./operations";
+
+export {
+  planAllocation,
+  allocateAndIssueIn,
+  type AllocationLeg,
+  type AllocateInput,
+} from "./allocate";
 
 export {
   previewHistoricalStock,

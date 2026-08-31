@@ -66,6 +66,7 @@ async function seedReceipt(
     qty: number;
     damaged?: number;
     rejected?: number;
+    quarantine?: number;
     cost?: number;
   }>,
   opts: { poStatus?: string; grStatus?: string } = {},
@@ -89,11 +90,14 @@ async function seedReceipt(
         (id, org_id, po_id, item_id, item_name, qty, unit, unit_cost_minor, sort)
       values (${polId}, ${orgA}, ${poId}, ${l.itemId}, 'Line', ${l.qty}, 'ea',
               ${l.cost ?? 0}, ${i})`;
+    // The four dispositions must account for exactly what arrived.
+    const accepted = l.qty - (l.damaged ?? 0) - (l.rejected ?? 0) - (l.quarantine ?? 0);
     await owner`
       insert into public.goods_receipt_line
-        (id, org_id, grn_id, po_line_id, ordered_qty, received_qty, damaged_qty, rejected_qty, sort)
-      values (${grlId}, ${orgA}, ${grId}, ${polId}, ${l.qty}, ${l.qty},
-              ${l.damaged ?? 0}, ${l.rejected ?? 0}, ${i})`;
+        (id, org_id, grn_id, po_line_id, ordered_qty, received_qty, accepted_qty, damaged_qty,
+         rejected_qty, quarantine_qty, sort)
+      values (${grlId}, ${orgA}, ${grId}, ${polId}, ${l.qty}, ${l.qty}, ${accepted},
+              ${l.damaged ?? 0}, ${l.rejected ?? 0}, ${l.quarantine ?? 0}, ${i})`;
     lineIds.push(grlId);
   }
   return { poId, grId, lineIds };
@@ -103,6 +107,18 @@ async function onHand(itemId: string) {
   const [r] = (await owner`
     select coalesce(sum(qty_delta), 0)::text as q from public.stock_movement
     where org_id = ${orgA} and item_id = ${itemId}`) as unknown as Array<{ q: string }>;
+  return Number(r!.q);
+}
+
+/** What is actually issuable: owned stock sitting in an ordinary storage bin. */
+async function inKind(itemId: string, kind: string) {
+  const [r] = (await owner`
+    select coalesce(sum(m.qty_delta), 0)::text as q
+    from public.stock_movement m
+    join public.stock_location l on l.id = m.location_id and l.org_id = m.org_id
+    where m.org_id = ${orgA} and m.item_id = ${itemId} and l.kind = ${kind}`) as unknown as Array<{
+    q: string;
+  }>;
   return Number(r!.q);
 }
 
@@ -166,22 +182,35 @@ describe("goods receipts become stock only through a real inventory item", () =>
     expect(await onHand(svc)).toBe(0);
   });
 
-  it("damaged and rejected quantities are excluded", { timeout: 180_000 }, async () => {
+  it("damaged is owned but not issuable; rejected is neither", { timeout: 180_000 }, async () => {
     const item = await seedItem();
-    // 20 arrived; 3 damaged and 2 rejected are not usable stock.
+    // 20 arrived; 3 damaged, 2 refused at the door.
     const { grId } = await seedReceipt([
       { itemId: item, qty: 20, damaged: 3, rejected: 2, cost: 100 },
     ]);
     await postGoodsReceiptToStock(ctxOf(orgA, userA), "owner", grId);
-    expect(await onHand(item), "only the good 15").toBe(15);
+    expect(await inKind(item, "storage"), "the good 15 are issuable").toBe(15);
+    expect(await inKind(item, "damaged"), "the 3 are owned, in a damaged bin").toBe(3);
+    // 18 owned in total: the 2 rejected were never the organization's to own.
+    expect(await onHand(item)).toBe(18);
   });
 
-  it("a line entirely damaged posts nothing", { timeout: 180_000 }, async () => {
+  it("a line entirely damaged reaches no storage bin", { timeout: 180_000 }, async () => {
     const item = await seedItem();
     const { grId } = await seedReceipt([{ itemId: item, qty: 5, damaged: 5, cost: 100 }]);
     const result = await postGoodsReceiptToStock(ctxOf(orgA, userA), "owner", grId);
-    expect(result[0]!.posted).toBe(false);
-    expect(await onHand(item)).toBe(0);
+    expect(result[0]!.dispositions.map((d) => d.disposition)).toEqual(["damaged"]);
+    expect(await inKind(item, "storage"), "nothing issuable").toBe(0);
+    expect(await inKind(item, "damaged")).toBe(5);
+  });
+
+  it("a quarantined quantity waits outside the issuable pool", { timeout: 180_000 }, async () => {
+    const item = await seedItem();
+    // 10 arrived, 4 held for inspection.
+    const { grId } = await seedReceipt([{ itemId: item, qty: 10, quarantine: 4, cost: 100 }]);
+    await postGoodsReceiptToStock(ctxOf(orgA, userA), "owner", grId);
+    expect(await inKind(item, "storage")).toBe(6);
+    expect(await inKind(item, "quarantine")).toBe(4);
   });
 
   it("a cancelled purchase order cannot deliver stock", { timeout: 180_000 }, async () => {
