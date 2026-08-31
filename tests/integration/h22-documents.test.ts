@@ -52,6 +52,10 @@ let orgB = "";
 let quoteA = "";
 let planA = "";
 let jobA = "";
+/** Fixtures for the schema-level share tests, built in beforeAll so they do not
+ *  depend on another test having run first. */
+let invoiceA = "";
+let sharePlanA = "";
 
 /** A share token pair, for writing a row the minting path would have refused. */
 function shareTokenFor(): { raw: string; hash: string } {
@@ -117,6 +121,21 @@ beforeAll(async () => {
   jobA = job.id;
   await createTask(ctxOf(orgA, userA), "owner", { jobId: jobA, title: "Laminate the hull" });
   await createTask(ctxOf(orgA, userA), "owner", { jobId: jobA, title: "Fit the console" });
+
+  // An invoice, written directly: the schema tests need a real invoice row and
+  // createInvoice is gated behind the cap.invoicing add-on, which is beside the
+  // point when the subject under test is the share table's own integrity.
+  invoiceA = randomUUID();
+  await owner`
+    insert into public.invoice (id, org_id, reference, customer_name, status, created_by)
+    values (${invoiceA}, ${orgA}, ${`H22-INV-${run}`}, 'Gulf Marine Services', 'draft', ${userA})`;
+
+  // A weekly plan that exists only to be refused a share link.
+  const plan = await createWeekPlan(ctxOf(orgA, userA), "owner", {
+    weekStart: "2026-04-06",
+    title: "Internal only",
+  });
+  sharePlanA = plan.id;
 }, 300_000);
 
 afterAll(async () => {
@@ -449,13 +468,135 @@ describe("H22.0 — a share link exposes one document, briefly", () => {
       }),
     ).rejects.toBeInstanceOf(DocumentNotShareableError);
 
-    // And the resolver refuses the kind independently, so a row written by any
-    // other path still serves nobody.
-    const { hash, raw } = shareTokenFor();
-    await owner`
+    // The database refuses the row outright, so the application gate is not the
+    // only thing standing between a plan and the open internet.
+    const { hash } = shareTokenFor();
+    await expect(
+      owner`
+        insert into public.document_share
+          (org_id, subject_type, subject_id, token_hash, expires_at, created_by)
+        values (${orgA}, 'week_plan', ${plan.id}, ${hash}, now() + interval '7 days', ${userA})`,
+    ).rejects.toThrow();
+  });
+});
+
+/**
+ * The share table's own guarantees, exercised with PRIVILEGED access.
+ *
+ * These deliberately bypass the service: they connect as the owner, which holds
+ * no application permission checks and is not subject to RLS, and assert that
+ * the database still refuses what must never be stored. Everything the service
+ * would have caught first is beside the point here — the question is whether the
+ * schema holds on its own.
+ */
+describe("H22.0 — the database refuses an invalid share, whoever is asking", () => {
+  const insertShare = (org: string, type: string, subject: string, user: string) => {
+    const { hash } = shareTokenFor();
+    return owner`
       insert into public.document_share
         (org_id, subject_type, subject_id, token_hash, expires_at, created_by)
-      values (${orgA}, 'week_plan', ${plan.id}, ${hash}, now() + interval '7 days', ${userA})`;
-    expect(await resolveDocumentShare(raw)).toBeNull();
+      values (${org}, ${type}, ${subject}, ${hash}, now() + interval '7 days', ${user})`;
+  };
+
+  it("accepts a share of a quotation in the same organization", { timeout: 120_000 }, async () => {
+    await expect(insertShare(orgA, "quote", quoteA, userA)).resolves.toBeDefined();
   });
+
+  it("accepts a share of an invoice in the same organization", { timeout: 120_000 }, async () => {
+    await expect(insertShare(orgA, "invoice", invoiceA, userA)).resolves.toBeDefined();
+  });
+
+  /**
+   * Two independent gates refuse this, and Postgres runs BEFORE triggers ahead
+   * of check constraints, so the trigger's fail-closed branch answers first.
+   * Which one speaks is an ordering detail; that the row cannot be written is
+   * the property. The constraint is proved separately below.
+   */
+  const REFUSED_TYPE = /not an externally shareable document type|document_share_subject_type_ck/i;
+
+  it("refuses a weekly plan, which must stay internal", { timeout: 120_000 }, async () => {
+    await expect(insertShare(orgA, "week_plan", sharePlanA, userA)).rejects.toThrow(REFUSED_TYPE);
+  });
+
+  it("refuses a subject type nobody has defined", { timeout: 120_000 }, async () => {
+    await expect(insertShare(orgA, "payslip", quoteA, userA)).rejects.toThrow(REFUSED_TYPE);
+  });
+
+  /**
+   * The check constraint on its own, with the trigger out of the way.
+   *
+   * Without this the trigger would be the only thing actually exercised, and a
+   * later change that dropped or weakened the constraint would go unnoticed
+   * because the trigger kept the tests green.
+   */
+  it("refuses a weekly plan on the constraint alone", { timeout: 120_000 }, async () => {
+    await owner`alter table public.document_share disable trigger document_share_subject_validate`;
+    try {
+      await expect(insertShare(orgA, "week_plan", sharePlanA, userA)).rejects.toThrow(
+        /document_share_subject_type_ck|violates check constraint/i,
+      );
+    } finally {
+      await owner`alter table public.document_share enable trigger document_share_subject_validate`;
+    }
+  });
+
+  it("refuses a subject that does not exist", { timeout: 120_000 }, async () => {
+    await expect(insertShare(orgA, "quote", randomUUID(), userA)).rejects.toThrow(
+      /no quote in this organization/i,
+    );
+  });
+
+  /**
+   * The one that a plain existence check would let through: the quotation is
+   * real, and belongs to somebody else. The trigger asserts the org match
+   * explicitly rather than relying on the row being invisible, so this fails the
+   * same way for the service role as it would for a member.
+   */
+  it("refuses a subject belonging to another organization", { timeout: 120_000 }, async () => {
+    await expect(insertShare(orgB, "quote", quoteA, userB)).rejects.toThrow(
+      /no quote in this organization/i,
+    );
+  });
+
+  it("refuses an invoice id presented as a quotation", { timeout: 120_000 }, async () => {
+    await expect(insertShare(orgA, "quote", invoiceA, userA)).rejects.toThrow(
+      /no quote in this organization/i,
+    );
+  });
+
+  /**
+   * A row that predates the constraint, or that some future privileged path
+   * writes around it, must still resolve to nothing.
+   *
+   * The controlled path drops the constraint and disables the trigger, writes
+   * the row, then restores both as NOT VALID so the bad row survives — exactly
+   * the shape of a legacy row inherited from before the rule existed. The
+   * resolver is then asked for it directly.
+   */
+  it("resolves nothing for a legacy row the constraint would now reject", async () => {
+    const { hash, raw } = shareTokenFor();
+    await owner`alter table public.document_share drop constraint document_share_subject_type_ck`;
+    await owner`alter table public.document_share disable trigger document_share_subject_validate`;
+    try {
+      await owner`
+        insert into public.document_share
+          (org_id, subject_type, subject_id, token_hash, expires_at, created_by)
+        values (${orgA}, 'week_plan', ${sharePlanA}, ${hash}, now() + interval '7 days', ${userA})`;
+    } finally {
+      await owner`alter table public.document_share enable trigger document_share_subject_validate`;
+      await owner`
+        alter table public.document_share
+        add constraint document_share_subject_type_ck
+        check (subject_type in ('quote', 'invoice')) not valid`;
+    }
+
+    // The row is really there, so this is not passing by accident.
+    const [row] = (await owner`
+      select subject_type from public.document_share where token_hash = ${hash}
+    `) as unknown as Array<{ subject_type: string }>;
+    expect(row?.subject_type).toBe("week_plan");
+
+    // And it serves nobody: the SQL resolver filters the kind itself.
+    expect(await resolveDocumentShare(raw)).toBeNull();
+  }, 180_000);
 });

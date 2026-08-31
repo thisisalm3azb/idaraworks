@@ -150,9 +150,25 @@ grant update (sort, note, removed_at) on public.week_plan_job to app_user;
 create table public.document_share (
   id uuid primary key default gen_random_uuid(),
   org_id uuid not null references public.org (id) on delete restrict,
-  -- Which document. Kept as (type, id) rather than a column per type so a new
-  -- document type needs no schema change.
-  subject_type text not null check (subject_type in ('quote', 'invoice', 'week_plan')),
+  /*
+   * Which document. Kept as (type, id) rather than a column per type so a new
+   * document type needs no schema change.
+   *
+   * The list is the EXTERNALLY SHAREABLE kinds only. A weekly work plan renders
+   * employee names against tasks and covers every job that week, so one
+   * customer's link would show them another customer's work; it is refused here,
+   * in the minting service, in the resolver and in the public route. This is the
+   * layer that holds when the others are wrong, so adding a kind means deciding
+   * again, in SQL, that it may leave the organization.
+   */
+  subject_type text not null
+    constraint document_share_subject_type_ck check (subject_type in ('quote', 'invoice')),
+  /*
+   * The document itself. A plain foreign key cannot express this because the
+   * target table depends on subject_type, so a trigger validates it below:
+   * without that, subject_id is an unvalidated uuid and a share could point at
+   * nothing, at another organization's record, or at a row of the wrong type.
+   */
   subject_id uuid not null,
   -- SHA-256 of the token. Unique so a lookup is a single indexed probe.
   token_hash text not null,
@@ -187,3 +203,71 @@ create policy document_share_revoke on public.document_share
 grant select, insert on public.document_share to app_user;
 grant update (revoked_at, revoked_by) on public.document_share to app_user;
 -- No DELETE: revoking is a state change that stays in the record.
+
+/*
+ * Polymorphic reference integrity for document_share.subject_id.
+ *
+ * (subject_type, subject_id) points into a different table per type, which no
+ * foreign key can express, so the check is a trigger. It confirms three things
+ * together, because any one alone is insufficient:
+ *   - the referenced record EXISTS
+ *   - it belongs to the SAME organization as the share
+ *   - its table AGREES with subject_type
+ *
+ * SECURITY DEFINER so the answer does not depend on who is inserting or on
+ * whether a tenancy GUC happens to be set: the org match is asserted explicitly
+ * against the row's own org_id rather than inferred from RLS being active. A
+ * cross-organization subject therefore fails on the explicit predicate, not by
+ * being invisible, and fails identically for app_user and for the service role.
+ *
+ * search_path is pinned, as any SECURITY DEFINER function must be, so the
+ * tables it resolves cannot be shadowed by a caller's search_path.
+ */
+create function app.validate_document_share_subject()
+returns trigger
+language plpgsql
+security definer
+set search_path = pg_catalog, public
+as $$
+declare
+  subject_exists boolean;
+begin
+  if new.subject_type = 'quote' then
+    select exists (
+      select 1 from public.quote q
+      where q.id = new.subject_id and q.org_id = new.org_id
+    ) into subject_exists;
+  elsif new.subject_type = 'invoice' then
+    select exists (
+      select 1 from public.invoice i
+      where i.id = new.subject_id and i.org_id = new.org_id
+    ) into subject_exists;
+  else
+    -- Unreachable while the check constraint stands; kept so that relaxing the
+    -- constraint without teaching this function fails closed rather than open.
+    raise exception 'document_share: % is not an externally shareable document type',
+      new.subject_type
+      using errcode = 'check_violation';
+  end if;
+
+  if not subject_exists then
+    -- One message for "no such record" and "another organization's record": the
+    -- difference is not something an error should disclose.
+    raise exception 'document_share: no % in this organization for the given subject_id',
+      new.subject_type
+      using errcode = 'foreign_key_violation';
+  end if;
+
+  return new;
+end;
+$$;
+
+revoke all on function app.validate_document_share_subject() from public;
+
+-- Fires on insert and on any change to the three columns that together decide
+-- what the share points at. app_user cannot update those columns at all, but a
+-- privileged path could, and this is the layer that does not depend on grants.
+create trigger document_share_subject_validate
+  before insert or update of subject_type, subject_id, org_id
+  on public.document_share
+  for each row execute function app.validate_document_share_subject();

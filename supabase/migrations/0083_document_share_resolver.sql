@@ -29,6 +29,11 @@ as $$
   where s.token_hash = p_token_hash
     and s.revoked_at is null
     and s.expires_at > now()
+    -- The externally shareable kinds, restated here rather than inherited from
+    -- the table's constraint. A row written before that constraint existed, or
+    -- by a privileged path that bypassed it, resolves to nothing: the last gate
+    -- a request passes must not depend on every earlier gate having held.
+    and s.subject_type in ('quote', 'invoice')
   limit 1;
 $$;
 
