@@ -17,7 +17,7 @@ import {
   SubscriptionReadOnlyError,
 } from "@/modules/subscription/service";
 import { fakeBillingProvider } from "@/platform/billing/adapter";
-import { ownerSql } from "./helpers";
+import { markFixtureOrg, ownerSql, wipeOrgs } from "./helpers";
 
 const owner = ownerSql();
 const run = randomUUID().slice(0, 8);
@@ -46,6 +46,7 @@ beforeAll(async () => {
     values (${ownerUser}, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
             ${`s9-${run}@example.com`}, '{"full_name":"S9"}'::jsonb, now(), now())`;
   orgId = await createOrgForUser(ownerUser, { name: "S9 Org", country: "AE", baseCurrency: "AED" });
+  await markFixtureOrg(owner, orgId, "s9-subscription", run);
   // Link the fake provider customer id so the webhook can resolve this org.
   await owner`update public.org_plan_state
     set provider = 'fake', provider_customer_id = ${`fake_cus_${orgId}`}, provider_subscription_id = ${`fake_sub_${orgId}`}
@@ -54,9 +55,10 @@ beforeAll(async () => {
 
 afterAll(async () => {
   delete process.env.BILLING_PROVIDER;
+  await wipeOrgs(owner, [orgId], [ownerUser]);
   await owner.end({ timeout: 5 });
   await closeAppDb();
-});
+}, 120_000);
 
 describe("subscription lifecycle (v1 §13, fake provider)", () => {
   it("starts trialing, activates on payment, and is idempotent on duplicate delivery", async () => {

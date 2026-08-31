@@ -30,6 +30,7 @@ import {
   getWorkload,
   workDashboardCounts,
   updateJobCore,
+  MY_WORK_BUCKETS,
   customerWork,
   changeWorkStatus,
   reopenJob,
@@ -758,8 +759,10 @@ describe("H21 — reads: hub, my work, schedule, workload, dashboard", () => {
       id: string;
     }>;
     const ids = new Set(assigned.map((r) => r.id));
-    for (const t of [...mine.overdueTasks, ...mine.dueTodayTasks, ...mine.upcomingTasks]) {
-      expect(ids.has(t.id)).toBe(true);
+    for (const key of MY_WORK_BUCKETS) {
+      for (const t of mine.buckets[key].rows) expect(ids.has(t.id)).toBe(true);
+      // A bucket never reports more rows than it holds, and never fewer than it shows.
+      expect(mine.buckets[key].rows.length).toBeLessThanOrEqual(mine.buckets[key].total);
     }
   });
 

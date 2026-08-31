@@ -7,7 +7,7 @@ import { loadOrgTerminology, term } from "@/platform/terminology";
 import { can } from "@/platform/authz";
 import { cn } from "@/lib/cn";
 import { formatDate } from "@/platform/format";
-import { getMyWork, type MyTask } from "@/modules/jobs/service";
+import { getMyWork, MY_WORK_BUCKETS, type MyTask, type MyWorkBucket } from "@/modules/jobs/service";
 import { myWorkHref, orgToday, parseMyWorkSearch } from "@/modules/dashboard/service";
 import { myWorkStatusAction } from "./actions";
 
@@ -25,7 +25,7 @@ export default async function MyWorkPage({
   searchParams,
 }: {
   params: Promise<{ orgId: string }>;
-  searchParams: Promise<{ focus?: string; ok?: string; error?: string }>;
+  searchParams: Promise<{ focus?: string; page?: string; ok?: string; error?: string }>;
 }) {
   const { orgId } = await params;
   const sp = await searchParams;
@@ -36,28 +36,25 @@ export default async function MyWorkPage({
   const locale = await getServerLocale();
   const terms = await loadOrgTerminology(resolved.ctx, locale);
   const jobsTerm = term("job", terms, "plural");
-  const { focus } = parseMyWorkSearch(sp);
+  const { focus, page } = parseMyWorkSearch(sp);
   const asOf = orgToday(new Date(), resolved.timezone);
 
-  const view = await getMyWork(resolved.ctx, resolved.archetype, { asOf });
+  const view = await getMyWork(resolved.ctx, resolved.archetype, {
+    asOf,
+    focus: focus === "now" ? null : focus,
+    page,
+  });
   const canUpdate = can(resolved.archetype, "tasks.update_status");
   const setStatus = myWorkStatusAction.bind(null, orgId);
 
-  const sections: Array<{ key: string; rows: MyTask[] }> = [
-    { key: "overdue", rows: view.overdueTasks },
-    { key: "today", rows: view.dueTodayTasks },
-    { key: "blocked", rows: view.blockedTasks },
-    { key: "approvals", rows: view.awaitingApproval },
-    { key: "next", rows: view.upcomingTasks },
-  ];
-  const counts: Record<string, number> = Object.fromEntries(
-    sections.map((s) => [s.key, s.rows.length]),
-  );
+  // Counts are the bucket TOTALS, counted over every matching step — never the
+  // length of the rows on screen. A chip saying 412 and a list showing 50 is
+  // honest; a chip saying 50 because only 50 were fetched is not.
+  const sections: MyWorkBucket[] = MY_WORK_BUCKETS.map((key) => view.buckets[key]);
+  const counts: Record<string, number> = Object.fromEntries(sections.map((s) => [s.key, s.total]));
   const needsAttention = (counts.overdue ?? 0) + (counts.today ?? 0) + (counts.blocked ?? 0);
   const visible =
-    focus === "now"
-      ? sections.filter((s) => s.rows.length > 0)
-      : sections.filter((s) => s.key === focus);
+    focus === "now" ? sections.filter((s) => s.total > 0) : sections.filter((s) => s.key === focus);
 
   const taskRow = (task: MyTask) => {
     const overdue = task.dueDate !== null && task.dueDate < asOf;
@@ -184,9 +181,53 @@ export default async function MyWorkPage({
           <Card key={section.key}>
             <CardHeader
               title={t(`my_work.focus.${section.key}`)}
-              meta={<span dir="ltr">{section.rows.length}</span>}
+              meta={<span dir="ltr">{section.total}</span>}
             />
             <ul className="flex flex-col gap-2">{section.rows.map(taskRow)}</ul>
+            {/* What is on screen versus what exists. A bucket never stops short
+                without saying so. */}
+            {section.rows.length < section.total ? (
+              <p className="mt-3 text-xs text-ink-muted">
+                {t("my_work.showing", {
+                  shown: section.rows.length,
+                  total: section.total,
+                })}{" "}
+                {focus === "now" ? (
+                  <Link
+                    href={myWorkHref(orgId, section.key)}
+                    className="text-brand hover:underline"
+                  >
+                    {t("my_work.see_all")}
+                  </Link>
+                ) : null}
+              </p>
+            ) : null}
+            {focus === section.key && (section.page > 1 || section.hasMore) ? (
+              <nav className="mt-3 flex items-center gap-2" aria-label={t("common.pagination")}>
+                {section.page > 1 ? (
+                  <Link
+                    href={myWorkHref(orgId, section.key, section.page - 1)}
+                    className="inline-flex min-h-11 items-center rounded-md border border-line px-3 text-sm text-ink"
+                  >
+                    {t("common.previous")}
+                  </Link>
+                ) : null}
+                <span className="text-xs text-ink-muted">
+                  {t("common.page_of", {
+                    page: section.page,
+                    pages: Math.max(1, Math.ceil(section.total / section.pageSize)),
+                  })}
+                </span>
+                {section.hasMore ? (
+                  <Link
+                    href={myWorkHref(orgId, section.key, section.page + 1)}
+                    className="inline-flex min-h-11 items-center rounded-md border border-line px-3 text-sm text-ink"
+                  >
+                    {t("common.next")}
+                  </Link>
+                ) : null}
+              </nav>
+            ) : null}
           </Card>
         ),
       )}
@@ -195,7 +236,7 @@ export default async function MyWorkPage({
         <Card>
           <CardHeader title={t("my_work.my_jobs", { jobs: jobsTerm })} />
           <ul className="divide-y divide-line">
-            {view.myWork.slice(0, 10).map((w) => (
+            {view.myWork.map((w) => (
               <li key={w.id}>
                 <Link
                   href={`/o/${orgId}/jobs/${w.id}`}
@@ -224,6 +265,14 @@ export default async function MyWorkPage({
               </li>
             ))}
           </ul>
+          {view.myWork.length < view.myWorkTotal ? (
+            <p className="mt-3 text-xs text-ink-muted">
+              {t("my_work.showing", { shown: view.myWork.length, total: view.myWorkTotal })}{" "}
+              <Link href={`/o/${orgId}/jobs?scope=mine`} className="text-brand hover:underline">
+                {t("my_work.see_all")}
+              </Link>
+            </p>
+          ) : null}
         </Card>
       ) : null}
 

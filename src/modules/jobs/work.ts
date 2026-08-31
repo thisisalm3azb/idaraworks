@@ -218,15 +218,35 @@ export type MyTask = {
   blockers: number;
 };
 
+/** The buckets My Work is divided into. Order is the order they are shown. */
+export const MY_WORK_BUCKETS = ["overdue", "today", "blocked", "approvals", "next"] as const;
+export type MyWorkBucketKey = (typeof MY_WORK_BUCKETS)[number];
+
+/** One page of a bucket. 50 is a page a person can actually read on a phone. */
+export const MY_WORK_PAGE_SIZE = 50;
+/** How many rows of each bucket the combined "now" view previews. */
+export const MY_WORK_PREVIEW = 5;
+
+export type MyWorkBucket = {
+  key: MyWorkBucketKey;
+  /** The TRUE number of records in this bucket, counted in SQL over all of them. */
+  total: number;
+  /** The rows actually being shown: a page when focused, a preview otherwise. */
+  rows: MyTask[];
+  /** 1-based. */
+  page: number;
+  pageSize: number;
+  /** True when this bucket holds records beyond the rows above. */
+  hasMore: boolean;
+};
+
 export type MyWorkView = {
   /** The employee record linked to this user, if any — tasks hang off it. */
   employeeId: string | null;
-  overdueTasks: MyTask[];
-  dueTodayTasks: MyTask[];
-  blockedTasks: MyTask[];
-  awaitingApproval: MyTask[];
-  upcomingTasks: MyTask[];
+  buckets: Record<MyWorkBucketKey, MyWorkBucket>;
+  /** The page of work records shown, and the true total behind it. */
   myWork: WorkRow[];
+  myWorkTotal: number;
   overdueWork: WorkRow[];
   recentActivity: Array<{ id: string; summary: string; at: string; jobId: string | null }>;
 };
@@ -247,18 +267,79 @@ function mapMyTask(r: Record<string, unknown>): MyTask {
 }
 
 /**
+ * THE definition of each My Work bucket, written once.
+ *
+ * Everything that reports a number about a person's steps builds it from these:
+ * the bucket totals, the rows in each bucket, and the dashboard cards that drill
+ * into them. Previously the buckets were JS filters over a 300-row page, so past
+ * 300 steps a count described a different set than the list it opened. Predicates
+ * that live in one place cannot drift apart.
+ *
+ * They read against a row that already carries `blockers` (see myTasksCte).
+ */
+/* Predicates read `due_date_raw` — the DATE column — because the row projection
+ * also carries a text copy for the client. Both CTEs below expose that name. */
+function myWorkBucketSql(key: MyWorkBucketKey, asOf: string, until: string) {
+  switch (key) {
+    case "overdue":
+      // A step waiting on someone else's decision is not the assignee's to chase.
+      return sql`due_date_raw is not null and due_date_raw < ${asOf}::date and status <> 'awaiting_approval'`;
+    case "today":
+      return sql`due_date_raw = ${asOf}::date`;
+    case "blocked":
+      return sql`(status = 'blocked' or blockers > 0)`;
+    case "approvals":
+      return sql`status = 'awaiting_approval'`;
+    case "next":
+      return sql`due_date_raw is not null and due_date_raw > ${asOf}::date and due_date_raw <= ${until}::date`;
+  }
+}
+
+/** The one row-set My Work reads: this person's open, unarchived steps. */
+function myTasksCte(ctx: Ctx, employeeId: string) {
+  return sql`
+    select t.id::text as id, t.title, t.status, t.priority, t.due_date::text as due_date,
+           t.due_date as due_date_raw, t.created_at, t.blocked_reason,
+           t.job_id::text as job_id, j.reference as job_reference, j.name as job_name,
+           (select count(*)::int from public.task_dependency d
+             join public.task up on up.id = d.depends_on_task_id and up.org_id = d.org_id
+             where d.org_id = t.org_id and d.task_id = t.id and d.removed_at is null
+               and up.status not in ('completed', 'cancelled')) as blockers
+    from public.task t
+    join public.job j on j.id = t.job_id and j.org_id = t.org_id
+    where t.org_id = ${ctx.orgId} and t.assignee_employee_id = ${employeeId}
+      and t.archived = false and j.archived = false
+      and t.status in ${OPEN_TASK_SQL}
+  `;
+}
+
+/**
  * One person's execution view. Tasks are reached through the employee record
  * linked to this user (people without a login still hold assignments, so the
  * link is optional by design); work is reached through the same assignment
  * resolver used everywhere else.
+ *
+ * Bucket totals are exact and counted over every matching row. The rows returned
+ * are a bounded page of the focused bucket, or a short preview of each bucket in
+ * the combined view — so nothing is ever hidden silently: a bucket showing fewer
+ * rows than its total says so, and the rest are one page away.
  */
 export async function getMyWork(
   ctx: Ctx,
   archetype: RoleArchetype,
-  opts: { asOf: string; horizonDays?: number },
+  opts: {
+    asOf: string;
+    horizonDays?: number;
+    /** Which bucket is being read in full; omitted means the combined view. */
+    focus?: MyWorkBucketKey | null;
+    /** 1-based page within the focused bucket. */
+    page?: number;
+  },
 ): Promise<MyWorkView> {
   assertCan(archetype, "jobs.view");
   const horizon = Math.min(Math.max(opts.horizonDays ?? 7, 1), 90);
+  const focus = opts.focus ?? null;
+  const page = Math.min(Math.max(Math.trunc(opts.page ?? 1), 1), 10_000);
   return withCtx(ctx, async (tx) => {
     const emp = (await tx.execute(sql`
       select id::text as id from public.employee
@@ -266,42 +347,72 @@ export async function getMyWork(
     `)) as unknown as Array<{ id: string }>;
     const employeeId = emp[0]?.id ?? null;
 
-    const taskRows = employeeId
-      ? ((await tx.execute(sql`
-          select t.id::text as id, t.title, t.status, t.priority, t.due_date::text as due_date,
-                 t.blocked_reason, t.job_id::text as job_id, j.reference as job_reference,
-                 j.name as job_name,
-                 (select count(*)::int from public.task_dependency d
-                   join public.task up on up.id = d.depends_on_task_id and up.org_id = d.org_id
-                   where d.org_id = t.org_id and d.task_id = t.id and d.removed_at is null
-                     and up.status not in ('completed', 'cancelled')) as blockers
-          from public.task t
-          join public.job j on j.id = t.job_id and j.org_id = t.org_id
-          where t.org_id = ${ctx.orgId} and t.assignee_employee_id = ${employeeId}
-            and t.archived = false and j.archived = false
-            and t.status in ${OPEN_TASK_SQL}
-          order by t.due_date nulls last, t.created_at
-          limit 300
-        `)) as unknown as Array<Record<string, unknown>>)
-      : [];
-    const tasks = taskRows.map(mapMyTask);
-
     const horizonEnd = (await tx.execute(sql`
       select (${opts.asOf}::date + ${horizon}::int)::text as d
     `)) as unknown as Array<{ d: string }>;
     const until = horizonEnd[0]!.d;
 
-    const overdueTasks = tasks.filter(
-      (t) => t.dueDate !== null && t.dueDate < opts.asOf && t.status !== "awaiting_approval",
-    );
-    const dueTodayTasks = tasks.filter((t) => t.dueDate === opts.asOf);
-    const blockedTasks = tasks.filter((t) => t.status === "blocked" || t.blockers > 0);
-    const awaitingApproval = tasks.filter((t) => t.status === "awaiting_approval");
-    const upcomingTasks = tasks.filter(
-      (t) => t.dueDate !== null && t.dueDate > opts.asOf && t.dueDate <= until,
-    );
+    const empty = (key: MyWorkBucketKey): MyWorkBucket => ({
+      key,
+      total: 0,
+      rows: [],
+      page: 1,
+      pageSize: MY_WORK_PAGE_SIZE,
+      hasMore: false,
+    });
+    const buckets = Object.fromEntries(MY_WORK_BUCKETS.map((k) => [k, empty(k)])) as Record<
+      MyWorkBucketKey,
+      MyWorkBucket
+    >;
 
-    const myWork = await listWork(ctx, archetype, { scope: "mine", limit: 50 });
+    if (employeeId) {
+      // Exact totals for every bucket, over every matching row — one query.
+      const [totals] = (await tx.execute(sql`
+        with my_tasks as (${myTasksCte(ctx, employeeId)})
+        select
+          count(*) filter (where ${myWorkBucketSql("overdue", opts.asOf, until)})::int as overdue,
+          count(*) filter (where ${myWorkBucketSql("today", opts.asOf, until)})::int as today,
+          count(*) filter (where ${myWorkBucketSql("blocked", opts.asOf, until)})::int as blocked,
+          count(*) filter (where ${myWorkBucketSql("approvals", opts.asOf, until)})::int as approvals,
+          count(*) filter (where ${myWorkBucketSql("next", opts.asOf, until)})::int as next
+        from my_tasks
+      `)) as unknown as Array<Record<MyWorkBucketKey, number>>;
+      for (const k of MY_WORK_BUCKETS) buckets[k].total = Number(totals?.[k] ?? 0);
+
+      // Rows: the focused bucket in pages, or a short preview of each bucket.
+      // The ordering ends in id so a page boundary is deterministic.
+      const wanted: MyWorkBucketKey[] = focus ? [focus] : [...MY_WORK_BUCKETS];
+      const limit = focus ? MY_WORK_PAGE_SIZE : MY_WORK_PREVIEW;
+      const offset = focus ? (page - 1) * MY_WORK_PAGE_SIZE : 0;
+      for (const key of wanted) {
+        if (buckets[key].total === 0) continue;
+        const rows = (await tx.execute(sql`
+          with my_tasks as (${myTasksCte(ctx, employeeId)})
+          select * from my_tasks
+          where ${myWorkBucketSql(key, opts.asOf, until)}
+          order by due_date_raw nulls last, created_at, id
+          limit ${limit} offset ${offset}
+        `)) as unknown as Array<Record<string, unknown>>;
+        buckets[key] = {
+          key,
+          total: buckets[key].total,
+          rows: rows.map(mapMyTask),
+          page: focus === key ? page : 1,
+          pageSize: limit,
+          hasMore: offset + rows.length < buckets[key].total,
+        };
+      }
+    }
+
+    const myWork = await listWork(ctx, archetype, { scope: "mine", limit: MY_WORK_PAGE_SIZE });
+    // The true number of work records assigned to this person, so the page can
+    // say "showing 50 of N" instead of quietly stopping at the page size.
+    const [workTotal] = (await tx.execute(sql`
+      select count(*)::int as n from public.job j
+      where j.org_id = ${ctx.orgId} and j.archived = false
+        and ${assignedJobCondition(ctx)}
+    `)) as unknown as Array<{ n: number }>;
+    const myWorkTotal = Number(workTotal?.n ?? 0);
     const overdueWork = myWork.filter(
       (w) =>
         w.dueDate !== null &&
@@ -320,12 +431,9 @@ export async function getMyWork(
 
     return {
       employeeId,
-      overdueTasks,
-      dueTodayTasks,
-      blockedTasks,
-      awaitingApproval,
-      upcomingTasks,
+      buckets,
       myWork,
+      myWorkTotal,
       overdueWork,
       recentActivity: activity.map((a) => ({
         id: a.id,
@@ -555,7 +663,7 @@ export async function workDashboardCounts(
         where org_id = ${ctx.orgId} and user_id = ${ctx.userId} and active = true
       ),
       my_tasks as (
-        select t.id, t.status, t.due_date,
+        select t.id, t.status, t.due_date as due_date_raw,
                (select count(*)::int from public.task_dependency d
                  join public.task up on up.id = d.depends_on_task_id and up.org_id = d.org_id
                  where d.org_id = t.org_id and d.task_id = t.id and d.removed_at is null
@@ -567,6 +675,9 @@ export async function workDashboardCounts(
           and t.archived = false and j.archived = false
           and t.status in ${OPEN_TASK_SQL}
       )
+      -- The two step counts below use myWorkBucketSql, the SAME predicates My
+      -- Work builds its buckets from, so a card and the page it opens can never
+      -- describe different sets.
       select
         (select count(*)::int from scoped where status_category = 'active') as active_work,
         (select count(*)::int from scoped
@@ -580,10 +691,9 @@ export async function workDashboardCounts(
           where status_category in ('draft', 'active') and priority in ('high', 'urgent')
             and owner_user_id is null) as unassigned_urgent,
         (select count(*)::int from my_tasks
-          where due_date is not null and due_date < ${opts.asOf}::date
-            and status <> 'awaiting_approval') as overdue_tasks,
+          where ${myWorkBucketSql("overdue", opts.asOf, opts.asOf)}) as overdue_tasks,
         (select count(*)::int from my_tasks
-          where status = 'blocked' or blockers > 0) as blocked_tasks
+          where ${myWorkBucketSql("blocked", opts.asOf, opts.asOf)}) as blocked_tasks
     `),
   )) as unknown as Array<Record<string, string | number>>;
   const r = rows[0]!;

@@ -231,6 +231,23 @@ describe("H21 — filter contracts", () => {
     expect(myWorkHref("o")).toBe("/o/o/my-work");
     expect(myWorkHref("o", "overdue")).toBe("/o/o/my-work?focus=overdue");
   });
+
+  it("my work: the page survives the round trip and junk falls back to one", () => {
+    // H21.1: a bucket bigger than one page is reachable, and page 1 stays the
+    // clean URL so the common case gains no query string.
+    expect(myWorkHref("o", "overdue", 1)).toBe("/o/o/my-work?focus=overdue");
+    expect(myWorkHref("o", "overdue", 3)).toBe("/o/o/my-work?focus=overdue&page=3");
+    const back = parseMyWorkSearch(
+      Object.fromEntries(new URL(`http://x${myWorkHref("o", "blocked", 7)}`).searchParams),
+    );
+    expect(back.focus).toBe("blocked");
+    expect(back.page).toBe(7);
+    for (const junk of ["0", "-4", "abc", "", "1e9"]) {
+      expect(parseMyWorkSearch({ page: junk }).page).toBe(1);
+    }
+    // Absurd depth is clamped rather than turned into an unbounded offset.
+    expect(parseMyWorkSearch({ page: "99999999" }).page).toBe(10_000);
+  });
 });
 
 // ── Dashboard composition ───────────────────────────────────────────────────

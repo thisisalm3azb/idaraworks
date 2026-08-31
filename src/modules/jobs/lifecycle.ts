@@ -13,6 +13,7 @@
  */
 import { z } from "zod";
 import { command } from "@/platform/audit";
+import { supersedeApprovalsForSubjectsIn } from "@/modules/approvals/service";
 import { assertCan, ForbiddenError } from "@/platform/authz";
 import { sql, type Ctx, type TenantTx } from "@/platform/tenancy";
 import type { RoleArchetype } from "@/platform/registries";
@@ -166,6 +167,23 @@ export async function changeWorkStatus(
             updated_at = now()
         where org_id = ${ctx.orgId} and id = ${jobId}
       `);
+
+      // H21.1: cancelling the work closes every question still open inside it.
+      // Left pending, an approval on a step of cancelled work could still be
+      // approved — and the engine's subject write is guarded on the STEP's status,
+      // not the job's, so it would have completed a step on work that is supposed
+      // to be immutable. Same transaction as the cancellation.
+      if (to === "cancelled") {
+        const open = (await tx.execute(sql`
+          select id::text as id from public.task
+          where org_id = ${ctx.orgId} and job_id = ${jobId} and status = 'awaiting_approval'
+        `)) as unknown as Array<{ id: string }>;
+        await supersedeApprovalsForSubjectsIn(tx, ctx, {
+          subjectType: "task_completion",
+          subjectIds: open.map((r) => r.id),
+          reason: data.reason ?? "The work was cancelled",
+        });
+      }
       return { reference: job.reference, from: job.status_category, to };
     },
   );

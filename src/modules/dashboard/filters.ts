@@ -516,16 +516,28 @@ export function workHref(
 export const MY_WORK_FOCUS = ["now", "overdue", "today", "blocked", "approvals", "next"] as const;
 export type MyWorkFocus = (typeof MY_WORK_FOCUS)[number];
 
-export function parseMyWorkSearch(sp: { focus?: string }): { focus: MyWorkFocus } {
+export function parseMyWorkSearch(sp: { focus?: string; page?: string }): {
+  focus: MyWorkFocus;
+  page: number;
+} {
+  // A page number only means something inside a focused bucket; the combined
+  // view previews every bucket and has nothing to page through.
+  const raw = Number.parseInt(sp.page ?? "", 10);
+  const page = Number.isFinite(raw) && raw >= 1 ? Math.min(raw, 10_000) : 1;
   return {
     focus: (MY_WORK_FOCUS as readonly string[]).includes(sp.focus ?? "")
       ? (sp.focus as MyWorkFocus)
       : "now",
+    page,
   };
 }
 
-export function myWorkHref(orgId: string, focus: MyWorkFocus = "now"): string {
-  return `/o/${orgId}/my-work${focus === "now" ? "" : `?focus=${focus}`}`;
+export function myWorkHref(orgId: string, focus: MyWorkFocus = "now", page = 1): string {
+  const q = new URLSearchParams();
+  if (focus !== "now") q.set("focus", focus);
+  if (page > 1) q.set("page", String(page));
+  const qs = q.toString();
+  return `/o/${orgId}/my-work${qs ? `?${qs}` : ""}`;
 }
 
 /** The overdue rule for a task, shared by every surface that shows one. */

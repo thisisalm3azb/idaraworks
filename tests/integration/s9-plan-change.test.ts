@@ -7,7 +7,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { closeAppDb, type Ctx } from "@/platform/tenancy";
 import { createOrgForUser } from "@/platform/auth/identity";
 import { emitFakeSignal, changePlan, readSubscription } from "@/modules/subscription/service";
-import { ownerSql } from "./helpers";
+import { markFixtureOrg, ownerSql, wipeOrgs } from "./helpers";
 
 const owner = ownerSql();
 const run = randomUUID().slice(0, 8);
@@ -40,6 +40,7 @@ beforeAll(async () => {
     country: "AE",
     baseCurrency: "AED",
   });
+  await markFixtureOrg(owner, orgId, "s9-plan-change", run);
   await owner`update public.org_plan_state
     set provider = 'fake', provider_customer_id = ${`fake_cus_${orgId}`} where org_id = ${orgId}`;
   await emitFakeSignal(orgId, "activated", { providerEventId: "pc-act" }); // trialing → active (growth)
@@ -47,9 +48,10 @@ beforeAll(async () => {
 
 afterAll(async () => {
   delete process.env.BILLING_PROVIDER;
+  await wipeOrgs(owner, [orgId], [ownerUser]);
   await owner.end({ timeout: 5 });
   await closeAppDb();
-});
+}, 120_000);
 
 describe("upgrade / downgrade", () => {
   it("upgrade (growth→business) applies immediately", async () => {

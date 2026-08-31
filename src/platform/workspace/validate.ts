@@ -101,19 +101,73 @@ export function validateBlueprint(raw: unknown): BlueprintValidation & {
         message: `stage weights must sum to 100 (got ${weightSum})`,
       });
     }
-    for (const [ti, t] of [...wf.transitions, ...wf.exceptionPaths].entries()) {
-      if (!stageKeys.has(t.from) || !stageKeys.has(t.to)) {
-        errors.push({
-          code: "invalid_transition",
-          path: `workflows.${wi}.transitions.${ti}`,
-          message: `transition references unknown stage "${!stageKeys.has(t.from) ? t.from : t.to}"`,
-        });
-      } else if (t.from === t.to) {
-        errors.push({
-          code: "invalid_transition",
-          path: `workflows.${wi}.transitions.${ti}`,
-          message: "a stage cannot transition to itself",
-        });
+    // Each edge list is checked under its OWN path. They used to share one loop
+    // whose index ran over the concatenation while always reporting
+    // "transitions.N", so a bad exception path was reported at a transitions
+    // index that did not exist and the author looked in the wrong place.
+    for (const [field, edges] of [
+      ["transitions", wf.transitions],
+      ["exceptionPaths", wf.exceptionPaths],
+    ] as const) {
+      const seen = new Set<string>();
+      for (const [ei, t] of edges.entries()) {
+        const path = `workflows.${wi}.${field}.${ei}`;
+        if (!stageKeys.has(t.from) || !stageKeys.has(t.to)) {
+          errors.push({
+            code: "invalid_transition",
+            path,
+            message: `transition references unknown stage "${!stageKeys.has(t.from) ? t.from : t.to}"`,
+          });
+          continue;
+        }
+        if (t.from === t.to) {
+          errors.push({
+            code: "invalid_transition",
+            path,
+            message: "a stage cannot transition to itself",
+          });
+          continue;
+        }
+        // The same edge twice says nothing new and makes a graph harder to read.
+        const edge = `${t.from}>${t.to}`;
+        if (seen.has(edge)) {
+          errors.push({
+            code: "duplicate_transition",
+            path,
+            message: `"${t.from}" to "${t.to}" is listed more than once`,
+          });
+        }
+        seen.add(edge);
+      }
+    }
+    // Reachability is only a claim when a graph was actually declared. An empty
+    // transitions list means "no declared ordering", which stays valid: the
+    // schema defaults it to [] and most blueprints never set it.
+    if (wf.transitions.length > 0) {
+      const reachable = new Set<string>([wf.stages[0]!.key]);
+      const outgoing = new Map<string, string[]>();
+      for (const t of wf.transitions) {
+        outgoing.set(t.from, [...(outgoing.get(t.from) ?? []), t.to]);
+      }
+      // Bounded walk: every stage is visited at most once.
+      const queue = [wf.stages[0]!.key];
+      while (queue.length > 0) {
+        const at = queue.shift()!;
+        for (const next of outgoing.get(at) ?? []) {
+          if (!reachable.has(next)) {
+            reachable.add(next);
+            queue.push(next);
+          }
+        }
+      }
+      for (const [si, s] of wf.stages.entries()) {
+        if (!reachable.has(s.key)) {
+          errors.push({
+            code: "unreachable_stage",
+            path: `workflows.${wi}.stages.${si}`,
+            message: `no path of transitions reaches "${s.key}"`,
+          });
+        }
       }
     }
     for (const [ai, a] of wf.requiredApprovals.entries()) {

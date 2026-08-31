@@ -17,7 +17,7 @@ import { command } from "@/platform/audit";
 import { assertCan, ForbiddenError } from "@/platform/authz";
 import { sql, withCtx, type Ctx, type TenantTx } from "@/platform/tenancy";
 import type { RoleArchetype } from "@/platform/registries";
-import { submitForApproval } from "@/modules/approvals/service";
+import { submitForApproval, supersedeApprovalsForSubjectIn } from "@/modules/approvals/service";
 import { isAssignedIn } from "./assigned";
 import { assertWorkMutableIn } from "./lifecycle";
 import {
@@ -367,6 +367,21 @@ export async function updateTaskStatus(
         where org_id = ${ctx.orgId} and id = ${taskId}
       `);
 
+      // H21.1: a cancelled step takes its pending approval with it. Leaving the
+      // approval open left the inbox asking a question about work that no longer
+      // exists, and any later decision would have written a judgement nobody made
+      // into the decision history. Same transaction as the cancellation, so the
+      // two can never disagree.
+      let approvalsSuperseded = 0;
+      if (target === "cancelled") {
+        const { supersededIds } = await supersedeApprovalsForSubjectIn(tx, ctx, {
+          subjectType: "task_completion",
+          subjectId: taskId,
+          reason: data.reason?.trim() || "The step was cancelled",
+        });
+        approvalsSuperseded = supersededIds.length;
+      }
+
       if (target === "awaiting_approval") {
         const jobRef = (await tx.execute(sql`
           select reference from public.job where org_id = ${ctx.orgId} and id = ${task.job_id}
@@ -395,9 +410,13 @@ export async function updateTaskStatus(
       if (target === "completed" || target === "cancelled" || task.status === "completed") {
         await recomputeDownstreamReadinessIn(tx, ctx, taskId);
       }
-      return { title: task.title, status: target, approvalRequested };
+      return { title: task.title, status: target, approvalRequested, approvalsSuperseded };
     },
-  ).then((r) => ({ status: r.status, approvalRequested: r.approvalRequested }));
+  ).then((r) => ({
+    status: r.status,
+    approvalRequested: r.approvalRequested,
+    approvalsSuperseded: r.approvalsSuperseded,
+  }));
 }
 
 export async function setTaskArchived(
@@ -417,11 +436,23 @@ export async function setTaskArchived(
         summary: archived ? "Archived a task" : "Restored a task",
       },
     },
-    (tx) =>
-      tx.execute(sql`
+    async (tx) => {
+      await tx.execute(sql`
         update public.task set archived = ${archived}, updated_by = ${ctx.userId}, updated_at = now()
         where org_id = ${ctx.orgId} and id = ${taskId}
-      `),
+      `);
+      // Archiving takes the step out of every list, so a pending approval on it
+      // would ask about something nobody can see. Restoring does NOT bring the old
+      // approval back: a superseded approval stays superseded, and re-submitting
+      // for completion opens a fresh one.
+      if (archived) {
+        await supersedeApprovalsForSubjectIn(tx, ctx, {
+          subjectType: "task_completion",
+          subjectId: taskId,
+          reason: "The step was archived",
+        });
+      }
+    },
   );
 }
 

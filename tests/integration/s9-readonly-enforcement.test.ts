@@ -12,7 +12,7 @@ import { createOrgForUser } from "@/platform/auth/identity";
 import { createCustomer, listCustomers } from "@/modules/masters/service";
 import { emitFakeSignal } from "@/modules/subscription/service";
 import { BillingReadOnlyError } from "@/platform/entitlements";
-import { ownerSql } from "./helpers";
+import { markFixtureOrg, ownerSql, wipeOrgs } from "./helpers";
 
 const owner = ownerSql();
 const run = randomUUID().slice(0, 8);
@@ -36,15 +36,17 @@ beforeAll(async () => {
     country: "AE",
     baseCurrency: "AED",
   });
+  await markFixtureOrg(owner, orgId, "s9-readonly-enforcement", run);
   await owner`update public.org_plan_state set provider = 'fake',
     provider_customer_id = ${`fake_cus_${orgId}`} where org_id = ${orgId}`;
 }, 120_000);
 
 afterAll(async () => {
   delete process.env.BILLING_PROVIDER;
+  await wipeOrgs(owner, [orgId], [ownerUser]);
   await owner.end({ timeout: 5 });
   await closeAppDb();
-});
+}, 120_000);
 
 describe("read-only enforcement at the command() chokepoint (FR-9)", () => {
   it("blocks a real audited mutation when suspended, still allows reads, and restores on recovery", async () => {

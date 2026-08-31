@@ -391,6 +391,80 @@ export type SubmitForApprovalParams = {
 };
 
 /**
+ * IN-TRANSACTION: close every still-pending approval for a subject the caller has
+ * just taken out of play (H21.1). The counterpart to submitForApproval: that opens
+ * the question when the subject enters its live state, this withdraws the question
+ * when the subject leaves it for good.
+ *
+ * 'superseded' is deliberately not 'rejected' or 'withdrawn'. Nobody judged the
+ * work and the requester did not change their mind — the thing being approved
+ * stopped existing. Recording it as a rejection would put a judgement in the
+ * decision history that no person ever made.
+ *
+ * The subject's own status is NOT touched here: the caller is the one closing it,
+ * inside the same transaction, and the approval engine never reaches into another
+ * module's table on its own initiative. Nothing is deleted; the approval row keeps
+ * its full history and simply stops being live.
+ *
+ * Callers must have already asserted their own permission, exactly as they do for
+ * submitForApproval.
+ */
+export async function supersedeApprovalsForSubjectIn(
+  tx: TenantTx,
+  ctx: Ctx,
+  params: { subjectType: string; subjectId: string; reason: string },
+): Promise<{ supersededIds: string[] }> {
+  return supersedeApprovalsForSubjectsIn(tx, ctx, {
+    subjectType: params.subjectType,
+    subjectIds: [params.subjectId],
+    reason: params.reason,
+  });
+}
+
+/**
+ * The same act for a set of subjects closed together — cancelling a whole job
+ * closes every step inside it. One statement, not one per subject, so the cost
+ * does not grow with the size of the work.
+ *
+ * The caller supplies the ids: which subjects belong to what is the caller's
+ * business, and the approval engine stays ignorant of other modules' tables.
+ */
+export async function supersedeApprovalsForSubjectsIn(
+  tx: TenantTx,
+  ctx: Ctx,
+  params: { subjectType: string; subjectIds: readonly string[]; reason: string },
+): Promise<{ supersededIds: string[] }> {
+  if (params.subjectIds.length === 0) return { supersededIds: [] };
+  const note = params.reason.trim().slice(0, 2000);
+  // A bound JS array arrives as a row constructor, not an array literal, so the
+  // set travels as text and is split server-side.
+  const ids = params.subjectIds.join(",");
+  const rows = (await tx.execute(sql`
+    update public.approval
+    set state = 'superseded', decided_by = ${ctx.userId}, decided_at = now(),
+        decision_note = ${note.length > 0 ? note : "subject closed"}, updated_at = now()
+    where org_id = ${ctx.orgId} and subject_type = ${params.subjectType}
+      and subject_id = any(string_to_array(${ids}, ',')::uuid[])
+      and state = 'pending'
+    returning id::text as id, subject_id::text as subject_id
+  `)) as unknown as Array<{ id: string; subject_id: string }>;
+  for (const r of rows) {
+    await emitEvent(tx, ctx, {
+      name: APPROVAL_DECIDED,
+      payload: {
+        orgId: ctx.orgId,
+        actorUserId: ctx.userId,
+        approvalId: r.id,
+        subjectType: params.subjectType,
+        subjectId: r.subject_id,
+        outcome: "superseded" as const,
+      },
+    });
+  }
+  return { supersededIds: rows.map((r) => r.id) };
+}
+
+/**
  * IN-TRANSACTION: create the approval row for a subject the caller has just put
  * into its pending state (same command tx — atomic submission, D-5.1). Resolves
  * the rule, applies the self-approval escalation, pushes REDACTED notifications to

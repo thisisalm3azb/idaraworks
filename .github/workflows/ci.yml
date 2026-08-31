@@ -5,7 +5,10 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    # `verify/**` runs the full gates on a branch BEFORE it reaches main. The
+    # integration stage builds its own local Supabase stack, so this is the one
+    # place the complete suite can run without pointing at a hosted project.
+    branches: [main, "verify/**"]
   pull_request:
 
 concurrency:

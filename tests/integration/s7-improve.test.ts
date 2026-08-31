@@ -32,12 +32,14 @@ import {
   revokeShare,
   resolvePublicShare,
 } from "@/modules/customer-updates/service";
-import { ownerSql, wipeOrgs } from "./helpers";
+import { markFixtureOrg, ownerSql, wipeOrgs } from "./helpers";
 
 const owner = ownerSql();
 const run = randomUUID().slice(0, 8);
 const ownerUser = randomUUID();
 let orgId = "";
+/** The second org one regression creates; module-scoped so teardown sees it. */
+let orgBId = "";
 let presetId = "";
 const AS_OF = "2026-07-14";
 const NIGHTLY = { asOf: AS_OF, nowMs: Date.parse(`${AS_OF}T03:00:00Z`) };
@@ -68,6 +70,7 @@ beforeAll(async () => {
     values (${ownerUser}, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
             ${`s7-${run}@example.com`}, '{"full_name":"S7"}'::jsonb, now(), now())`;
   orgId = await createOrgForUser(ownerUser, { name: "S7 Org", country: "AE", baseCurrency: "AED" });
+  await markFixtureOrg(owner, orgId, "s7-improve", run);
   const installed = await installTemplate(ownerCtx(), TEMPLATE_BOATBUILDING.key);
   presetId = Object.values(installed.presetIds)[0]!;
   void presetId;
@@ -82,11 +85,14 @@ beforeAll(async () => {
 }, 120_000);
 
 afterAll(async () => {
-  // S10 hygiene: self-clean this file's synthetic org so it leaves no leaked org / outbox backlog.
-  await wipeOrgs(owner, [orgId], [ownerUser]).catch(() => {});
+  // S10 hygiene: self-clean this file's synthetic orgs so it leaves no leaked org
+  // / outbox backlog. Both orgs, and no .catch: a cleanup failure that is
+  // swallowed looks exactly like a cleanup that worked, which is how the residue
+  // went unnoticed.
+  await wipeOrgs(owner, [orgId, orgBId], [ownerUser]);
   await owner.end({ timeout: 5 });
   await closeAppDb();
-});
+}, 120_000);
 
 describe("E-05 margin drift (nightly, C-10 quoted, labour wall via DEFINER)", () => {
   it("raises when cost outruns quote, clears when the quote is raised", async () => {
@@ -270,11 +276,15 @@ describe("regression #4 — DEFINER candidate helpers enforce the org self-check
   it("cross-org p_org yields NOTHING: a caller only ever reads its OWN org's walled candidates", async () => {
     // A SECOND org B with real walled candidate data (a soon-expiring visa AND a drift job).
     // The DEFINER functions bypass RLS, so their ONLY tenant guard is p_org = current_org_id().
-    const orgB = await createOrgForUser(ownerUser, {
+    // Module-scoped so teardown can reach it. Declared inside the test, this org
+    // was invisible to afterAll and leaked one row per run.
+    orgBId = await createOrgForUser(ownerUser, {
       name: "S7 Org B",
       country: "AE",
       baseCurrency: "AED",
     });
+    await markFixtureOrg(owner, orgBId, "s7-improve", run);
+    const orgB = orgBId;
     const ctxB: Ctx = {
       orgId: orgB,
       userId: ownerUser,

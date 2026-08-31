@@ -10,7 +10,7 @@ import { closeAppDb } from "@/platform/tenancy";
 import { createOrgForUser } from "@/platform/auth/identity";
 import { sweepLifecycle, runReconciliation } from "@/workers/functions/subscription-worker";
 import { setFakeProviderState } from "@/platform/billing/adapter";
-import { ownerSql } from "./helpers";
+import { markFixtureOrg, ownerSql, wipeOrgs } from "./helpers";
 
 const owner = ownerSql();
 const run = randomUUID().slice(0, 8);
@@ -38,6 +38,7 @@ beforeAll(async () => {
     country: "AE",
     baseCurrency: "AED",
   });
+  await markFixtureOrg(owner, orgId, "s9-lifecycle-worker", run);
   await owner`update public.org_plan_state
     set provider = 'fake', provider_customer_id = ${`fake_cus_${orgId}`} where org_id = ${orgId}`;
 }, 120_000);
@@ -45,9 +46,10 @@ beforeAll(async () => {
 afterAll(async () => {
   delete process.env.BILLING_PROVIDER;
   setFakeProviderState(`fake_cus_${orgId}`, null);
+  await wipeOrgs(owner, [orgId], [ownerUser]);
   await owner.end({ timeout: 5 });
   await closeAppDb();
-});
+}, 120_000);
 
 describe("lifecycle sweep + dunning + reconciliation", () => {
   it("lands an over-run trial on the free base plan, active (add-on model)", async () => {

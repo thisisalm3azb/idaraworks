@@ -21,7 +21,7 @@ import {
   OnboardingCapError,
 } from "@/modules/onboarding/service";
 import { stageImport, applyImport } from "@/modules/imports/service";
-import { ownerSql } from "./helpers";
+import { markFixtureOrg, ownerSql, wipeOrgs } from "./helpers";
 
 const owner = ownerSql();
 const run = randomUUID().slice(0, 8);
@@ -56,12 +56,17 @@ beforeAll(async () => {
     values (${ownerUser}, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
             ${`s8-${run}@example.com`}, '{"full_name":"S8"}'::jsonb, now(), now())`;
   orgId = await createOrgForUser(ownerUser, { name: "S8 Org", country: "AE", baseCurrency: "AED" });
+  await markFixtureOrg(owner, orgId, "s8-onboarding", run);
 }, 120_000);
 
 afterAll(async () => {
+  // Runs even when beforeAll threw, so a half-built fixture is still removed.
+  // Failures are NOT swallowed: a cleanup that silently fails is how residue
+  // accumulated unnoticed in the first place.
+  await wipeOrgs(owner, [orgId], [ownerUser]);
   await owner.end({ timeout: 5 });
   await closeAppDb();
-});
+}, 120_000);
 
 describe("Layer-A pipeline: cold org → configured workspace", () => {
   it("a cold org has no template; onboarding proposes then applies template + approval rules", async () => {

@@ -13,7 +13,7 @@ import {
   listImpersonations,
   hasActiveImpersonation,
 } from "@/modules/support/service";
-import { ownerSql } from "./helpers";
+import { markFixtureOrg, ownerSql, wipeOrgs } from "./helpers";
 
 const owner = ownerSql();
 const run = randomUUID().slice(0, 8);
@@ -56,15 +56,19 @@ beforeAll(async () => {
     country: "AE",
     baseCurrency: "AED",
   });
+  await markFixtureOrg(owner, orgId, "s9-impersonation", run);
   // Seed the platform-staff allow-list (a platform bootstrap operation, done as owner).
   await owner`insert into public.platform_staff (user_id, active) values (${staffUser}, true)`;
 }, 120_000);
 
 afterAll(async () => {
+  // platform_staff has no org_id, so the org sweep cannot reach it: remove the
+  // allow-list row before the users it points at.
   await owner`delete from public.platform_staff where user_id = ${staffUser}`;
+  await wipeOrgs(owner, [orgId], [ownerUser, staffUser]);
   await owner.end({ timeout: 5 });
   await closeAppDb();
-});
+}, 120_000);
 
 describe("support impersonation (consent-gated, dual-logged)", () => {
   it("a consented session is created and appears in the tenant's OWN audit log", async () => {

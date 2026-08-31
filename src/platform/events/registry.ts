@@ -112,7 +112,10 @@ export const ApprovalDecidedData = z.object({
   approvalId: z.string().uuid(),
   subjectType: z.string().min(1).max(40),
   subjectId: z.string().uuid(),
-  outcome: z.enum(["approved", "rejected", "withdrawn"]),
+  // 'superseded' closes an approval whose subject was cancelled: nobody answered
+  // the question, it stopped being a question. Additive to the existing outcomes;
+  // consumers that switch on the others are unaffected.
+  outcome: z.enum(["approved", "rejected", "withdrawn", "superseded"]),
 });
 export type ApprovalDecidedData = z.infer<typeof ApprovalDecidedData>;
 
