@@ -97,12 +97,27 @@ async function fkTopologicalOrder(tables: string[]): Promise<string[]> {
 
 afterAll(async () => {
   const tables = await fkTopologicalOrder(await orgScopedTables());
-  for (const org of [orgA, orgB].filter(Boolean)) {
-    for (const t of tables) {
-      await owner.unsafe(`delete from public.${t} where org_id = $1`, [org]);
+  /*
+   * `session_replication_role = replica` for the teardown.
+   *
+   * H22B made the stock ledger append-only with a trigger that refuses DELETE to
+   * EVERY role, not merely to app_user, so "immutable" does not depend on nobody
+   * holding the right privilege. Replica mode is the deliberate way through it,
+   * and test teardown is exactly the case it exists for: an explicit act by
+   * someone holding the keys, not an ordinary write. wipeOrgs does the same.
+   *
+   * Set inside a transaction (`local`) so it cannot leak into another test.
+   */
+  await owner.begin(async (tx) => {
+    await tx.unsafe("set local session_replication_role = replica");
+    for (const org of [orgA, orgB].filter(Boolean)) {
+      for (const t of tables) {
+        await tx.unsafe(`delete from public.${t} where org_id = $1`, [org]);
+      }
+      await tx.unsafe(`delete from public.org where id = $1`, [org]);
     }
-    await owner`delete from public.org where id = ${org}`;
-  }
+    await tx.unsafe("set local session_replication_role = default");
+  });
   await owner`delete from public.user_profile where id = any(${[userA, userB]}::uuid[])`;
   await owner`delete from auth.users where id = any(${[userA, userB]}::uuid[])`;
   await owner.end({ timeout: 5 });

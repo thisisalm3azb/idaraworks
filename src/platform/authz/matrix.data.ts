@@ -14,6 +14,14 @@ type Grantable = Exclude<RoleArchetype, "worker_reserved_p3">;
 export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
   // Full member management, file lifecycle, ALL config + masters + skeleton (doc 06 row-by-row).
   owner: [
+    "inventory.view",
+    "inventory.receive",
+    "inventory.issue",
+    "inventory.transfer",
+    "inventory.adjust",
+    "inventory.count",
+    "warehouse.manage",
+    "valuation.view",
     "documents.share",
     "week.manage",
     "members.view",
@@ -97,6 +105,14 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
     "pipeline.configure",
   ],
   admin: [
+    "inventory.view",
+    "inventory.receive",
+    "inventory.issue",
+    "inventory.transfer",
+    "inventory.adjust",
+    "inventory.count",
+    "warehouse.manage",
+    "valuation.view",
     "documents.share",
     "week.manage",
     "members.view",
@@ -180,6 +196,13 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
   // Manager (doc 08: the Workshop Manager variant): masters M, jobs/reports, NO
   // config, NO salary/HR side-tables, no invite/deactivate/legal-hold.
   manager: [
+    "inventory.view",
+    "inventory.receive",
+    "inventory.issue",
+    "inventory.transfer",
+    "inventory.adjust",
+    "inventory.count",
+    "warehouse.manage",
     "documents.share",
     "week.manage",
     "members.view",
@@ -246,6 +269,8 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
   // employee/catalog/member/customer/config surfaces — S3's report form gets
   // its scoped lookups with its slice.
   foreman: [
+    "inventory.view",
+    "inventory.issue",
     "jobs.view",
     "tasks.view",
     "stages.request_complete",
@@ -267,6 +292,8 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
     "digest.view",
   ],
   procurement: [
+    "inventory.view",
+    "inventory.receive",
     "members.view",
     "catalog.view",
     "catalog.manage",
@@ -295,6 +322,8 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
     "digest.view",
   ],
   accounts: [
+    "inventory.view",
+    "valuation.view",
     "documents.share",
     "members.view",
     "employees.view",

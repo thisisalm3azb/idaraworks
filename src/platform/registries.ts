@@ -98,6 +98,9 @@ export const AUDIT_ENTITY_TYPES = [
   "sales_activity", // H20 — follow-up completion is an audited mutation
   "document_share", // H22.0 — minting and revoking a document link (never the token itself)
   "week_plan", // H22.0 — the weekly plan record (issue / revise / cancel)
+  "stock_movement", // H22B — every posting to the stock ledger, and its reversals
+  "warehouse", // H22A — warehouses and the locations inside them
+  "unit_of_measure", // H22A — units and their conversion factors
 ] as const;
 export type AuditEntityType = (typeof AUDIT_ENTITY_TYPES)[number];
 

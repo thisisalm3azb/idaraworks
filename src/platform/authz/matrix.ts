@@ -93,6 +93,15 @@ export type Action =
   | "data.export"
   | "documents.share"
   | "week.manage"
+  // H22 inventory and assets.
+  | "inventory.view"
+  | "inventory.receive"
+  | "inventory.issue"
+  | "inventory.transfer"
+  | "inventory.adjust"
+  | "inventory.count"
+  | "warehouse.manage"
+  | "valuation.view"
   | "billing.view"
   | "billing.manage"
   // ── H20 "Sell" — the sales CRM (leads → opportunities → quotation) ────────
@@ -269,6 +278,17 @@ export const MATRIX: Record<Action, readonly Grantable[]> = {
   "documents.share": ["owner", "admin", "manager", "accounts"],
   // Building and issuing the weekly plan is planning work, not reading it.
   "week.manage": ["owner", "admin", "manager"],
+  // H22. Receiving, issuing and adjusting are SEPARATE: the person who books
+  // goods in should not be the only check on the person who writes stock off.
+  "inventory.view": ["owner", "admin", "manager", "procurement", "foreman", "accounts"],
+  "inventory.receive": ["owner", "admin", "manager", "procurement"],
+  "inventory.issue": ["owner", "admin", "manager", "foreman"],
+  "inventory.transfer": ["owner", "admin", "manager"],
+  "inventory.adjust": ["owner", "admin", "manager"],
+  "inventory.count": ["owner", "admin", "manager"],
+  "warehouse.manage": ["owner", "admin", "manager"],
+  // Valuation is money: it follows the cost wall, not the stock wall.
+  "valuation.view": ["owner", "admin", "accounts"],
 
   // ── H20 "Sell" (sales CRM). Leads/opportunities are commercial records:
   // owner/admin/manager work them (the manager archetype is the selling

@@ -46,6 +46,30 @@ export const CREATE_ORG_SEEDED = [
 
 const noop: Seeder = async () => {};
 
+/**
+ * The chain a stock row needs: a unit, a warehouse, a bin and an item.
+ *
+ * The ledger tables all reference the same four, so building them once here
+ * keeps the four seeders below to the row each of them is actually about.
+ */
+async function seedStockChain(o: Owner, org: string, u: string) {
+  const unit = randomUUID();
+  const wh = randomUUID();
+  const bin = randomUUID();
+  const item = randomUUID();
+  await o`insert into public.unit_of_measure
+            (id, org_id, code, name_en, name_ar, dimension, factor_to_base)
+          values (${unit}, ${org}, ${"U" + randomUUID().slice(0, 6)}, 'Bleed unit', 'وحدة', 'count', 1)`;
+  await o`insert into public.warehouse (id, org_id, code, name_en, created_by)
+          values (${wh}, ${org}, ${"W" + randomUUID().slice(0, 6)}, 'Bleed wh', ${u})`;
+  await o`insert into public.stock_location (id, org_id, warehouse_id, code, name_en)
+          values (${bin}, ${org}, ${wh}, ${"B" + randomUUID().slice(0, 6)}, 'Bleed bin')`;
+  await o`insert into public.item (id, org_id, sku, name, category_key, unit, base_unit_id)
+          values (${item}, ${org}, ${"BS-" + randomUUID().slice(0, 8)}, 'Bleed stock item',
+                  'general', 'ea', ${unit})`;
+  return { unit, wh, bin, item };
+}
+
 function filePath(orgId: string): string {
   const attach = randomUUID();
   const fileId = randomUUID();
@@ -485,6 +509,57 @@ export const SEEDERS: Record<string, Seeder> = {
             values (${wh}, ${org}, ${"BL" + randomUUID().slice(0, 6)}, 'Bleed loc warehouse', ${u})`;
     await o`insert into public.stock_location (org_id, warehouse_id, code, name_en)
             values (${org}, ${wh}, ${"BIN" + randomUUID().slice(0, 5)}, 'Bleed bin')`;
+  },
+
+  /*
+   * H22B stock ledger. Each of these needs a full chain — unit, warehouse,
+   * location, item — so one helper builds it and the four seeders share it.
+   */
+  stock_movement: async (o, org, u) => {
+    const s = await seedStockChain(o, org, u);
+    await o`insert into public.stock_movement
+              (org_id, item_id, warehouse_id, location_id, movement_type, qty_delta,
+               unit_id, idempotency_key, actor_user_id)
+            values (${org}, ${s.item}, ${s.wh}, ${s.bin}, 'adjustment_increase', 1,
+                    ${s.unit}, ${"bleed-" + randomUUID()}, ${u})`;
+  },
+  stock_balance: async (o, org, u) => {
+    const s = await seedStockChain(o, org, u);
+    await o`insert into public.stock_balance (org_id, item_id, warehouse_id, location_id, on_hand)
+            values (${org}, ${s.item}, ${s.wh}, ${s.bin}, 7)`;
+  },
+  stock_cost_layer: async (o, org, u) => {
+    const s = await seedStockChain(o, org, u);
+    const mv = randomUUID();
+    await o`insert into public.stock_movement
+              (id, org_id, item_id, warehouse_id, location_id, movement_type, qty_delta,
+               unit_id, idempotency_key, actor_user_id)
+            values (${mv}, ${org}, ${s.item}, ${s.wh}, ${s.bin}, 'goods_receipt', 5,
+                    ${s.unit}, ${"bleed-" + randomUUID()}, ${u})`;
+    await o`insert into public.stock_cost_layer
+              (org_id, item_id, warehouse_id, source_movement_id, qty_received, qty_remaining,
+               unit_cost_minor, currency, received_at)
+            values (${org}, ${s.item}, ${s.wh}, ${mv}, 5, 5, 100, 'AED', now())`;
+  },
+  stock_layer_consumption: async (o, org, u) => {
+    const s = await seedStockChain(o, org, u);
+    const inMv = randomUUID();
+    const outMv = randomUUID();
+    const layer = randomUUID();
+    await o`insert into public.stock_movement
+              (id, org_id, item_id, warehouse_id, location_id, movement_type, qty_delta,
+               unit_id, idempotency_key, actor_user_id)
+            values (${inMv}, ${org}, ${s.item}, ${s.wh}, ${s.bin}, 'goods_receipt', 5,
+                    ${s.unit}, ${"bleed-" + randomUUID()}, ${u}),
+                   (${outMv}, ${org}, ${s.item}, ${s.wh}, ${s.bin}, 'material_issue', -2,
+                    ${s.unit}, ${"bleed-" + randomUUID()}, ${u})`;
+    await o`insert into public.stock_cost_layer
+              (id, org_id, item_id, warehouse_id, source_movement_id, qty_received,
+               qty_remaining, unit_cost_minor, currency, received_at)
+            values (${layer}, ${org}, ${s.item}, ${s.wh}, ${inMv}, 5, 3, 100, 'AED', now())`;
+    await o`insert into public.stock_layer_consumption
+              (org_id, movement_id, layer_id, qty, unit_cost_minor)
+            values (${org}, ${outMv}, ${layer}, 2, 100)`;
   },
 
   // H22.0 documents. A plan's link table needs a plan and a job; a share needs
