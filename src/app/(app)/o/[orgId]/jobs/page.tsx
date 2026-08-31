@@ -17,8 +17,6 @@ import {
 import { getCustomer, listCustomers } from "@/modules/masters/service";
 import { createJobAction } from "./actions";
 import {
-  jobIsDueSoon,
-  jobIsOverdue,
   jobsHref,
   orgToday,
   parseJobsSearch,
@@ -74,19 +72,31 @@ export default async function JobsPage({
   // preselects the create form below). A foreign or unknown customer id
   // yields the same honest empty list as any random uuid.
   const f = parseJobsSearch(sp);
-  const allJobs = await listJobs(resolved.ctx, resolved.archetype, {
-    assignedOnly: f.scope === "mine",
-    customerId: f.customerId ?? undefined,
-  });
   const filterCustomer = f.customerId
     ? await getCustomer(resolved.ctx, resolved.archetype, f.customerId).catch(() => null)
     : null;
   const asOf = orgToday(new Date(), resolved.timezone);
-  const jobs = allJobs.filter((j) => {
-    if (f.stage && j.currentStageKey !== f.stage) return false;
-    if (f.filter === "overdue") return jobIsOverdue(j, asOf);
-    if (f.filter === "due_soon") return jobIsDueSoon(j, asOf, f.days ?? 7);
-    return true;
+  /*
+   * Every narrowing runs in SQL, and the page is a real page.
+   *
+   * This read the whole job table and filtered in JavaScript. Once the read is
+   * bounded that is not merely slow, it is WRONG: filtering a truncated set
+   * makes "page 2 of overdue work" mean the overdue rows that happened to fall
+   * inside page 2 of everything. The stage, overdue and due-soon predicates move
+   * into the query, stated as the same rules jobIsOverdue and jobIsDueSoon
+   * apply, so a page of overdue work is a page OF the overdue set.
+   */
+  // Only the COUNT is needed here: the visible list below is listWork, which
+  // does its own filtering and paging. Asking for one row and reading the
+  // window-function total avoids fetching a page to measure it.
+  const { total: jobCount } = await listJobs(resolved.ctx, resolved.archetype, {
+    assignedOnly: f.scope === "mine",
+    customerId: f.customerId ?? undefined,
+    stageKey: f.stage ?? undefined,
+    overdueAsOf: f.filter === "overdue" ? asOf : undefined,
+    dueSoonAsOf: f.filter === "due_soon" ? asOf : undefined,
+    dueSoonDays: f.days ?? 7,
+    limit: 1,
   });
 
   // H21 — the work hub reads over the SAME records with richer rollups. The
@@ -179,7 +189,7 @@ export default async function JobsPage({
         {filtered && filterSummary ? (
           <FilterBar
             summary={filterSummary}
-            countLabel={t("filters.count", { count: jobs.length })}
+            countLabel={t("filters.count", { count: jobCount })}
             clearHref={jobsHref(orgId)}
             clearLabel={t("jobs.filter_clear")}
           />

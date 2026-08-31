@@ -289,7 +289,7 @@ describe("H18 — count-to-record parity", () => {
       where org_id = ${orgA} and archived = false
         and status_category in ('active','on_hold')
         and due_date is not null and due_date < ${asOf}::date`) as unknown as Array<{ n: number }>;
-    const list = (await listJobs(ctx, "owner")).filter((j) => jobIsOverdue(j, asOf));
+    const list = (await listJobs(ctx, "owner")).rows.filter((j) => jobIsOverdue(j, asOf));
     expect(list.length).toBe(agg[0]!.n);
     expect(list.length).toBeGreaterThanOrEqual(2);
     // Every listed record satisfies the signal condition.
@@ -298,7 +298,7 @@ describe("H18 — count-to-record parity", () => {
 
   it("review queue and missing-today: counts equal lists, same scope", async () => {
     const ctx = ctxOf(orgA, userA);
-    const jobs = await listJobs(ctx, "owner");
+    const jobs = (await listJobs(ctx, "owner")).rows;
     const someJob = jobs.find((j) => j.statusCategory === "active")!;
     await owner`
       insert into public.daily_report (org_id, job_id, report_date, summary, status, submitted_by)
@@ -376,7 +376,7 @@ describe("H18 — count-to-record parity", () => {
     expect(ar.outstandingMinor).toBe(0);
     const list = await listOutstandingInvoices(ctx, "owner", asOf, "all");
     expect(list).toEqual([]);
-    const overdue = (await listJobs(ctx, "owner")).filter((j) => jobIsOverdue(j, asOf));
+    const overdue = (await listJobs(ctx, "owner")).rows.filter((j) => jobIsOverdue(j, asOf));
     expect(overdue).toEqual([]);
   });
 

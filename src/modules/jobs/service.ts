@@ -362,19 +362,35 @@ export async function listJobs(
     assignedOnly?: boolean;
     /** H19: narrow to one customer's work (validated upstream). */
     customerId?: string;
+    /** Reference or name, case-insensitive. */
+    search?: string;
+    /** Only work currently at this stage. */
+    stageKey?: string;
     /**
-     * H22: an explicit ceiling. public.job grows for the life of the tenant and
-     * this read had none, so a long-running organization silently lost rows at
-     * the driver's cap with nothing in the UI to say so. Callers that feed a
-     * picker pass a small number; the jobs list passes its page size.
+     * Due strictly before this org-local day, and still open. The SAME rule as
+     * jobIsOverdue in the dashboard filters, moved into SQL so a page of overdue
+     * work is a page of the overdue set rather than the overdue rows that happen
+     * to fall inside an already-truncated page.
      */
+    overdueAsOf?: string;
+    /** Due on or after this day and within `dueSoonDays`, and still open. */
+    dueSoonAsOf?: string;
+    dueSoonDays?: number;
     limit?: number;
+    offset?: number;
   } = {},
-): Promise<JobRow[]> {
+): Promise<{ rows: JobRow[]; hasMore: boolean; total: number }> {
   assertCan(archetype, "jobs.view");
   // DoD (doc 06/F-6): the foreman sees ONLY assigned jobs, always.
   const scoped = archetype === "foreman" || opts.assignedOnly === true;
   const customerId = opts.customerId ?? null;
+  const limit = Math.min(Math.max(opts.limit ?? 100, 1), 500);
+  const offset = Math.max(opts.offset ?? 0, 0);
+  const search = (opts.search ?? "").trim();
+  const stageKey = (opts.stageKey ?? "").trim();
+  const overdueAsOf = opts.overdueAsOf ?? null;
+  const dueSoonAsOf = opts.dueSoonAsOf ?? null;
+  const dueSoonDays = Math.min(Math.max(opts.dueSoonDays ?? 7, 0), 365);
   const rows = (await withCtx(ctx, (tx) =>
     tx.execute(sql`
       select j.id::text as id, j.reference, j.name, j.status_key, j.status_category,
@@ -382,7 +398,11 @@ export async function listJobs(
              j.due_date::text as due_date, j.progress_override,
              cs.stage_key as current_stage_key,
              (select coalesce(json_agg(json_build_object('weight', s.weight, 'status', s.status)), '[]'::json)
-                from public.job_stage s where s.job_id = j.id) as stages
+                from public.job_stage s where s.job_id = j.id) as stages,
+             -- The size of the whole filtered set, from the same scan. A caller
+             -- that needs only the number asks for one row and reads this rather
+             -- than fetching a page to measure it.
+             count(*) over () as total_count
       from public.job j
       left join public.job_preset p on p.id = j.preset_id
       left join public.customer c on c.id = j.customer_id
@@ -390,8 +410,21 @@ export async function listJobs(
       where j.org_id = ${ctx.orgId} and j.archived = false
         ${scoped ? sql`and ${assignedJobCondition(ctx)}` : sql``}
         and (${customerId}::uuid is null or j.customer_id = ${customerId}::uuid)
+        and (${search === ""} or j.reference ilike ${"%" + search + "%"}
+                              or j.name ilike ${"%" + search + "%"})
+        and (${stageKey === ""} or cs.stage_key = ${stageKey})
+        -- jobIsOverdue: open, dated, and the date has passed.
+        and (${overdueAsOf}::date is null or (
+              j.status_category in ('active', 'on_hold')
+              and j.due_date is not null and j.due_date < ${overdueAsOf}::date))
+        -- jobIsDueSoon: open, dated, not yet overdue, within the window.
+        and (${dueSoonAsOf}::date is null or (
+              j.status_category in ('active', 'on_hold')
+              and j.due_date is not null
+              and j.due_date >= ${dueSoonAsOf}::date
+              and j.due_date <= ${dueSoonAsOf}::date + ${dueSoonDays}::int))
       order by j.created_at desc
-      limit ${Math.min(Math.max(opts.limit ?? 500, 1), 1000)}
+      limit ${limit + 1} offset ${offset}
     `),
   )) as unknown as Array<{
     id: string;
@@ -406,22 +439,27 @@ export async function listJobs(
     progress_override: number | null;
     current_stage_key: string | null;
     stages: StageForProgress[];
+    total_count: string;
   }>;
-  return rows.map((r) => ({
-    id: r.id,
-    reference: r.reference,
-    name: r.name,
-    statusKey: r.status_key,
-    statusCategory: r.status_category,
-    presetCode: r.preset_code,
-    customerName: r.customer_name,
-    createdAt: r.created_at,
-    dueDate: r.due_date,
-    progress:
-      r.progress_override !== null ? Number(r.progress_override) : computeProgress(r.stages),
-    progressOverridden: r.progress_override !== null,
-    currentStageKey: r.current_stage_key,
-  }));
+  return {
+    rows: rows.slice(0, limit).map((r) => ({
+      id: r.id,
+      reference: r.reference,
+      name: r.name,
+      statusKey: r.status_key,
+      statusCategory: r.status_category,
+      presetCode: r.preset_code,
+      customerName: r.customer_name,
+      createdAt: r.created_at,
+      dueDate: r.due_date,
+      progress:
+        r.progress_override !== null ? Number(r.progress_override) : computeProgress(r.stages),
+      progressOverridden: r.progress_override !== null,
+      currentStageKey: r.current_stage_key,
+    })),
+    hasMore: rows.length > limit,
+    total: Number(rows[0]?.total_count ?? 0),
+  };
 }
 
 export async function getJob(

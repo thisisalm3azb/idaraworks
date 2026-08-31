@@ -35,7 +35,7 @@ export default async function NewReportPage({
   // Job picker when no (or an unreachable) job is chosen.
   const job = jobParam ? await getJob(resolved.ctx, a, jobParam) : null;
   if (!job) {
-    const jobs = await listJobs(resolved.ctx, a);
+    const jobs = (await listJobs(resolved.ctx, a, { limit: 200 })).rows;
     return (
       <div className="flex flex-col gap-4">
         <h1 className="text-lg font-semibold text-ink">

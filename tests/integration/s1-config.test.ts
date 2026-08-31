@@ -411,7 +411,7 @@ describe("walking skeleton (DoD: job from preset + daily report, end-to-end)", (
     expect(events).toHaveLength(1);
     expect(events[0]!.payload.reference).toBe("13S-001");
 
-    const jobs = await listJobs(ctx, "owner");
+    const jobs = (await listJobs(ctx, "owner")).rows;
     expect(jobs.find((j) => j.id === first.id)?.statusCategory).toBe("draft");
   });
 
@@ -427,7 +427,7 @@ describe("walking skeleton (DoD: job from preset + daily report, end-to-end)", (
 
   it("submits ONE daily report per job per day and emits the event", async () => {
     const ctx = ctxOf(ownerUser, true);
-    const job = (await listJobs(ctx, "owner"))[0]!;
+    const job = (await listJobs(ctx, "owner")).rows[0]!;
     const { id } = await submitDailyReport(ctx, "owner", {
       jobId: job.id,
       reportDate: REPORT_DATE,
@@ -453,7 +453,7 @@ describe("walking skeleton (DoD: job from preset + daily report, end-to-end)", (
 
   it("foreman may only report on an assigned job (doc 06 condition)", async () => {
     const ctx = ctxOf(ownerUser, true);
-    const job = (await listJobs(ctx, "owner")).find((j) => j.name === "Second Skiff")!;
+    const job = (await listJobs(ctx, "owner")).rows.find((j) => j.name === "Second Skiff")!;
     const foremanCtx = ctxOf(managerUser, false); // fixture user; archetype arg drives the check
     await expect(
       submitDailyReport(foremanCtx, "foreman", {
@@ -476,7 +476,7 @@ describe("walking skeleton (DoD: job from preset + daily report, end-to-end)", (
 
   it("enforces limit.active_jobs via an entitlement override", async () => {
     const ctx = ctxOf(ownerUser, true);
-    const current = (await listJobs(ctx, "owner")).length;
+    const current = (await listJobs(ctx, "owner")).rows.length;
     await owner`
       insert into public.org_entitlement_override (org_id, entitlement_key, limit_value, reason)
       values (${orgId}, 'limit.active_jobs', ${current}, 's1 test cap')

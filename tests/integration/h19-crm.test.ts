@@ -175,7 +175,7 @@ describe("H19 — quote from customer → work with blueprint stages", () => {
     }>;
     const [qn, jn, inn] = [counts[0]!.qn, counts[0]!.jn, counts[0]!.inn];
     expect(quotes.length).toBe(qn);
-    expect(jobs.length).toBe(jn);
+    expect(jobs.rows.length).toBe(jn);
     expect(invoices.length).toBe(inn);
   });
 });

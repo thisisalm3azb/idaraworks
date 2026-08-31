@@ -248,7 +248,7 @@ describe("F-6: the foreman sees only assigned jobs (all three legs)", () => {
   }, 90_000);
 
   it("list: foreman_user_id leg + crew leg visible; unassigned invisible", async () => {
-    const rows = await listJobs(ctxOf(foremanUser, false), "foreman");
+    const rows = (await listJobs(ctxOf(foremanUser, false), "foreman")).rows;
     const refs = rows.map((r) => r.name);
     expect(refs).toContain("Lifecycle Boat"); // foreman_user_id leg
     expect(refs).toContain("Crew Leg Boat"); // job_crew via employee.user_id leg
@@ -271,7 +271,7 @@ describe("F-6: the foreman sees only assigned jobs (all three legs)", () => {
 describe("tasks + walls", () => {
   it("manager creates; foreman updates status on ASSIGNED job only; cancel needs manage", async () => {
     const ctx = ctxOf(ownerUser);
-    const jobs = await listJobs(ctx, "owner");
+    const jobs = (await listJobs(ctx, "owner")).rows;
     const assigned = jobs.find((j) => j.name === "Lifecycle Boat")!;
     const other = jobs.find((j) => j.name === "Unassigned Boat")!;
     const { id: t1 } = await createTask(ctx, "owner", { jobId: assigned.id, title: "Fit rails" });
@@ -289,7 +289,7 @@ describe("tasks + walls", () => {
 
   it("pricing: manager blocked; adjustment is owner-only and appends", async () => {
     const ctx = ctxOf(ownerUser);
-    const job = (await listJobs(ctx, "owner")).find((j) => j.name === "Lifecycle Boat")!;
+    const job = (await listJobs(ctx, "owner")).rows.find((j) => j.name === "Lifecycle Boat")!;
     await expect(
       updateJobPricing(ctxOf(ownerUser), "manager", job.id, { sellingPriceMinor: 100 }),
     ).rejects.toThrow(ForbiddenError);
@@ -313,13 +313,13 @@ describe("tasks + walls", () => {
 
   it("progress override sets with reason, audits, clears", async () => {
     const ctx = ctxOf(ownerUser);
-    const job = (await listJobs(ctx, "owner")).find((j) => j.name === "Lifecycle Boat")!;
+    const job = (await listJobs(ctx, "owner")).rows.find((j) => j.name === "Lifecycle Boat")!;
     await setProgressOverride(ctx, "owner", job.id, { percent: 42, reason: "sea-trial holdback" });
-    let row = (await listJobs(ctx, "owner")).find((j) => j.id === job.id)!;
+    let row = (await listJobs(ctx, "owner")).rows.find((j) => j.id === job.id)!;
     expect(row.progress).toBe(42);
     expect(row.progressOverridden).toBe(true);
     await clearProgressOverride(ctx, "owner", job.id);
-    row = (await listJobs(ctx, "owner")).find((j) => j.id === job.id)!;
+    row = (await listJobs(ctx, "owner")).rows.find((j) => j.id === job.id)!;
     expect(row.progressOverridden).toBe(false);
     const audits = (await owner`
       select 1 as ok from public.audit_log
@@ -331,7 +331,7 @@ describe("tasks + walls", () => {
   // ── S2 review-fix regressions ──
   it("getJob/getJobDetail surface the override on DETAIL, and pricing is F-23 walled", async () => {
     const ctx = ctxOf(ownerUser);
-    const job = (await listJobs(ctx, "owner")).find((j) => j.name === "Lifecycle Boat")!;
+    const job = (await listJobs(ctx, "owner")).rows.find((j) => j.name === "Lifecycle Boat")!;
     await setProgressOverride(ctx, "owner", job.id, { percent: 55, reason: "detail check" });
     // Detail read now carries the override + flag (was undefined before the fix).
     const detailJob = await getJob(ctx, "owner", job.id);
@@ -348,8 +348,8 @@ describe("tasks + walls", () => {
 
   it("comments are gated: viewer blocked, unassigned foreman blocked", async () => {
     const ctx = ctxOf(ownerUser);
-    const assigned = (await listJobs(ctx, "owner")).find((j) => j.name === "Lifecycle Boat")!;
-    const other = (await listJobs(ctx, "owner")).find((j) => j.name === "Unassigned Boat")!;
+    const assigned = (await listJobs(ctx, "owner")).rows.find((j) => j.name === "Lifecycle Boat")!;
+    const other = (await listJobs(ctx, "owner")).rows.find((j) => j.name === "Unassigned Boat")!;
     await expect(addJobComment(ctx, "viewer", assigned.id, "nope")).rejects.toThrow(ForbiddenError);
     // Foreman assigned to Lifecycle Boat, NOT to Unassigned Boat.
     const fctx = ctxOf(foremanUser, false);
@@ -363,7 +363,7 @@ describe("tasks + walls", () => {
 
   it("a task cannot reference another job's stage (composite FK + app check)", async () => {
     const ctx = ctxOf(ownerUser);
-    const jobs = await listJobs(ctx, "owner");
+    const jobs = (await listJobs(ctx, "owner")).rows;
     const jobA = jobs.find((j) => j.name === "Lifecycle Boat")!;
     const jobB = jobs.find((j) => j.name === "Unassigned Boat")!;
     const jobBStage = (await listStages(ctx, jobB.id))[0]!;
@@ -410,7 +410,7 @@ describe("tasks + walls", () => {
 
   it("status change maintains the semantic anchor", async () => {
     const ctx = ctxOf(ownerUser);
-    const job = (await listJobs(ctx, "owner")).find((j) => j.name === "Fields Boat")!;
+    const job = (await listJobs(ctx, "owner")).rows.find((j) => j.name === "Fields Boat")!;
     await updateJobStatus(ctx, "owner", job.id, "in_production");
     const rows = (await owner`
       select status_key, status_category from public.job where id = ${job.id}

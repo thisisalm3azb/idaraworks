@@ -17,7 +17,10 @@ export default async function NewMrPage({ params }: { params: Promise<{ orgId: s
   if (locked) return locked;
   const t = await getT();
   const locale = await getServerLocale();
-  const jobs = (await listJobs(resolved.ctx, a)).map((j) => ({ id: j.id, reference: j.reference }));
+  const jobs = (await listJobs(resolved.ctx, a, { limit: 200 })).rows.map((j) => ({
+    id: j.id,
+    reference: j.reference,
+  }));
 
   const dict: MrDict = {
     title: t("mr.new"),

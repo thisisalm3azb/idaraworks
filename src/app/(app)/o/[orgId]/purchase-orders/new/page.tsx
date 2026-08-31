@@ -20,7 +20,7 @@ export default async function NewPoPage({ params }: { params: Promise<{ orgId: s
   const locale = await getServerLocale();
   const [suppliers, jobs] = await Promise.all([
     listSuppliers(resolved.ctx, a).then((r) => r.rows),
-    listJobs(resolved.ctx, a),
+    listJobs(resolved.ctx, a, { limit: 200 }).then((r) => r.rows),
   ]);
 
   const dict: PoDict = {

@@ -123,7 +123,7 @@ async function main() {
     line.customers = (await listCustomers(ctx, "owner")).length;
     const quotes = await listQuotes(ctx, "owner");
     line.quotes = quotes.length;
-    line.jobs = (await listJobs(ctx, "owner")).length;
+    line.jobs = (await listJobs(ctx, "owner")).rows.length;
 
     // 4) Financial redaction: a non-cost/non-price reader sees no cost total.
     const jid = jobByOrg[a.orgId];
