@@ -46,6 +46,32 @@ const MIGRATIONS_DIR = path.join(process.cwd(), "supabase", "migrations");
 
 export type MigrateResult = { applied: string[]; skipped: string[] };
 
+/**
+ * What WOULD be applied, without applying anything.
+ *
+ * The production path prints this before touching the database, so the person
+ * running it sees the exact file list and can stop. Read-only: creates no
+ * schema, writes no rows, and tolerates a database that was never migrated
+ * (no app.migrations table means everything is pending).
+ */
+export async function pendingMigrations(): Promise<{ pending: string[]; applied: string[] }> {
+  const direct = process.env.DIRECT_URL;
+  if (!direct) throw new Error("DIRECT_URL is not set. Migrations refuse to guess.");
+  const sql = postgres(direct, { max: 1, onnotice: () => {} });
+  try {
+    const files = readdirSync(MIGRATIONS_DIR)
+      .filter((f) => f.endsWith(".sql"))
+      .sort();
+    const rows = (await sql`select filename from app.migrations`.catch(
+      () => [] as unknown as Array<{ filename: string }>,
+    )) as unknown as Array<{ filename: string }>;
+    const done = new Set(rows.map((r) => r.filename));
+    return { pending: files.filter((f) => !done.has(f)), applied: [...done].sort() };
+  } finally {
+    await sql.end({ timeout: 5 });
+  }
+}
+
 export async function runMigrations(options: { to?: string } = {}): Promise<MigrateResult> {
   const direct = process.env.DIRECT_URL;
   if (!direct) {

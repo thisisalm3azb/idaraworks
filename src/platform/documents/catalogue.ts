@@ -98,7 +98,7 @@ export const EXPORT_CATALOGUE: readonly ExportCatalogueEntry[] = [
     statusEligibility: "any status",
     draftWatermark: true,
     requiresIssuerSnapshot: true,
-    availability: "foundation_ready",
+    availability: "available",
   }),
   doc({
     id: "doc_invoice",
@@ -113,7 +113,7 @@ export const EXPORT_CATALOGUE: readonly ExportCatalogueEntry[] = [
     statusEligibility: "any status; issued+ is the formal document",
     draftWatermark: true,
     requiresIssuerSnapshot: true,
-    availability: "foundation_ready",
+    availability: "available",
   }),
   doc({
     id: "doc_credit_note",
@@ -127,7 +127,7 @@ export const EXPORT_CATALOGUE: readonly ExportCatalogueEntry[] = [
     statusEligibility: "issued (credit notes are born issued)",
     draftWatermark: false,
     requiresIssuerSnapshot: true,
-    availability: "foundation_ready",
+    availability: "available",
   }),
   doc({
     id: "doc_payment_receipt",
@@ -212,6 +212,21 @@ export const EXPORT_CATALOGUE: readonly ExportCatalogueEntry[] = [
     draftWatermark: true,
     requiresIssuerSnapshot: false,
     availability: "future",
+  }),
+  doc({
+    id: "doc_week_plan",
+    nameEn: "Weekly work plan",
+    nameAr: "خطة العمل الأسبوعية",
+    source: "week_plan + week_plan_job (week-plan-document.ts)",
+    permission: "week.view",
+    entitlementFeature: null,
+    entitlementNote: "Never gated — planning the week is core to running the work.",
+    redaction:
+      "Operational only: work, tasks and crew. Carries no money, so no cost redaction applies.",
+    statusEligibility: "any status; issued is the circulated document",
+    draftWatermark: true,
+    requiresIssuerSnapshot: true,
+    availability: "available",
   }),
   doc({
     id: "doc_customer_update",

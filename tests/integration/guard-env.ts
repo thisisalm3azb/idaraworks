@@ -96,30 +96,60 @@ export function referencedProjectRefs(env: EnvSnapshot): string[] {
   return [...found];
 }
 
+export type TargetVerdict = { ok: boolean; refs: string[]; problems: string[] };
+
 /**
- * Confirms this environment points at the intended test project and nothing
- * else. Used before migrating or seeding, so a half-filled file cannot send
- * migrations to one project and tests to another.
+ * Confirms this environment points at ONE named project and nothing else.
+ *
+ * "Nothing else" is the point. A half-edited file that names two projects is
+ * refused even when one of them is the intended target, because a run that
+ * migrates one project and seeds another is worse than a run that does nothing.
  */
-export function targetsOnlyTestProject(env: EnvSnapshot = process.env as EnvSnapshot): {
-  ok: boolean;
-  refs: string[];
-  problems: string[];
-} {
+export function targetsOnlyProject(
+  expected: string,
+  env: EnvSnapshot = process.env as EnvSnapshot,
+): TargetVerdict {
   const refs = referencedProjectRefs(env);
   const problems: string[] = [];
   if (refs.length === 0) {
     problems.push("no Supabase project reference found in any URL — is the file filled in?");
   }
   for (const ref of refs) {
-    if (ref === PRODUCTION_PROJECT_REF) problems.push(`${ref} is PRODUCTION`);
-    else if (ref !== TEST_PROJECT_REF)
-      problems.push(`${ref} is neither the test project nor production`);
+    if (ref === expected) continue;
+    problems.push(
+      ref === PRODUCTION_PROJECT_REF
+        ? `${ref} is PRODUCTION, which is not the expected target`
+        : ref === TEST_PROJECT_REF
+          ? `${ref} is the TEST project, which is not the expected target`
+          : `${ref} is an unknown project`,
+    );
   }
   if (refs.length > 1) {
     problems.push(`more than one project referenced: ${refs.join(", ")}`);
   }
   return { ok: problems.length === 0, refs, problems };
+}
+
+/** Points only at `idaraworks-test`. */
+export function targetsOnlyTestProject(env: EnvSnapshot = process.env as EnvSnapshot) {
+  return targetsOnlyProject(TEST_PROJECT_REF, env);
+}
+
+/**
+ * Points only at production. Used by the production migration path, which must
+ * POSITIVELY identify its target rather than merely failing to recognise a test
+ * one: an empty or half-filled environment must never read as "production".
+ */
+export function targetsOnlyProductionProject(env: EnvSnapshot = process.env as EnvSnapshot) {
+  return targetsOnlyProject(PRODUCTION_PROJECT_REF, env);
+}
+
+/**
+ * The exact phrase the production migration path demands, naming the project it
+ * will change. Long, specific, and useless anywhere else.
+ */
+export function productionMigrationPhrase(): string {
+  return `apply-migrations-to-${PRODUCTION_PROJECT_REF}`;
 }
 
 export class ProductionDatabaseRefusal extends Error {

@@ -122,12 +122,23 @@ describe("escaping and bidi isolation", () => {
 });
 
 describe("print behaviour and pagination hooks", () => {
-  it("carries @page, @media print, the no-print hider and the page-number hook", () => {
+  it("carries @page, @media print and the no-print hider", () => {
     const html = shell();
     expect(html).toContain("@page { size: A4;");
     expect(html).toContain("@media print");
     expect(html).toContain(".no-print { display: none !important; }");
-    expect(html).toContain('class="doc-page-number"');
+  });
+
+  /**
+   * The shell used to carry an empty `.doc-page-number` element that its own
+   * `:empty { display: none }` rule then hid, so no document ever printed a page
+   * number. Nothing in the shell could have filled it: only the browser knows
+   * the page count, and Chrome exposes that count solely through the PDF footer
+   * template. The number is printed there now (renderPdf's `pageNumbers`), and
+   * this asserts the element that never worked has not come back.
+   */
+  it("draws no page-number element the shell could never fill", () => {
+    expect(shell()).not.toContain("doc-page-number");
   });
 });
 

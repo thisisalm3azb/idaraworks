@@ -96,6 +96,8 @@ export const AUDIT_ENTITY_TYPES = [
   "lead", // H20 — pre-customer sales records (create/update/status/convert/archive)
   "opportunity", // H20 — pipeline records (create/update/stage/won/lost/quote-link)
   "sales_activity", // H20 — follow-up completion is an audited mutation
+  "document_share", // H22.0 — minting and revoking a document link (never the token itself)
+  "week_plan", // H22.0 — the weekly plan record (issue / revise / cancel)
 ] as const;
 export type AuditEntityType = (typeof AUDIT_ENTITY_TYPES)[number];
 

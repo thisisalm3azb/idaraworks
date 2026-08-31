@@ -91,6 +91,8 @@ export type Action =
   | "onboarding.run"
   | "imports.manage"
   | "data.export"
+  | "documents.share"
+  | "week.manage"
   | "billing.view"
   | "billing.manage"
   // ── H20 "Sell" — the sales CRM (leads → opportunities → quotation) ────────
@@ -262,6 +264,11 @@ export const MATRIX: Record<Action, readonly Grantable[]> = {
   // CSVs are redacted per the caller's cost/price privilege at the export boundary (F-23), so a
   // non-money-privileged holder exports operational data without seeing cost/selling figures.
   "data.export": ["owner", "admin", "accounts"],
+  // Sending a document outside the organization is a different act from reading
+  // it inside: a viewer may open an invoice and still not be able to share it.
+  "documents.share": ["owner", "admin", "manager", "accounts"],
+  // Building and issuing the weekly plan is planning work, not reading it.
+  "week.manage": ["owner", "admin", "manager"],
 
   // ── H20 "Sell" (sales CRM). Leads/opportunities are commercial records:
   // owner/admin/manager work them (the manager archetype is the selling

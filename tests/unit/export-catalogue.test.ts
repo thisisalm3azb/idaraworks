@@ -16,8 +16,10 @@ describe("catalogue shape and coverage", () => {
     }
   });
 
-  it("covers the mandated surfaces: 17 formal documents + 20 data exports", () => {
-    expect(DOCUMENT_EXPORTS.length).toBe(17);
+  it("covers the mandated surfaces: 18 formal documents + 20 data exports", () => {
+    // 17 from 003B.1, plus the weekly work plan introduced with the document
+    // foundation in H22.0.
+    expect(DOCUMENT_EXPORTS.length).toBe(18);
     expect(DATA_EXPORTS.length).toBe(20);
   });
 
@@ -65,9 +67,29 @@ describe("catalogue shape and coverage", () => {
 });
 
 describe("HONESTY LAW — availability never overstates reality", () => {
-  it("no formal document claims to be available (print routes begin in 003B.2)", () => {
+  /**
+   * The document kinds the live route actually renders, from
+   * src/app/api/o/[orgId]/documents/[kind]/[id]/route.ts. A credit note is an
+   * invoice row with kind='credit_note', so the invoice path serves it too.
+   *
+   * Keep this in step with the route, never with intent: it is the whole point
+   * of the law that a catalogue entry cannot claim to work before it does.
+   */
+  const SERVED = new Set(["doc_quote", "doc_invoice", "doc_credit_note", "doc_week_plan"]);
+
+  it("a document claims availability ONLY when the document route renders it", () => {
     for (const e of DOCUMENT_EXPORTS) {
-      expect(e.availability, `${e.id} falsely claims availability`).not.toBe("available");
+      if (e.availability === "available") {
+        expect(SERVED.has(e.id), `${e.id} claims availability but no route renders it`).toBe(true);
+      }
+    }
+  });
+
+  it("every document the route renders is marked available", () => {
+    for (const id of SERVED) {
+      const entry = DOCUMENT_EXPORTS.find((e) => e.id === id);
+      expect(entry, `served document '${id}' missing from the catalogue`).toBeTruthy();
+      expect(entry!.availability, id).toBe("available");
     }
   });
 

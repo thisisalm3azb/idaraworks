@@ -4,7 +4,7 @@ import postgres from "postgres";
 export function ownerSql() {
   const direct = process.env.DIRECT_URL;
   if (!direct) throw new Error("DIRECT_URL missing — integration tests need .env.local / CI env.");
-  return postgres(direct, { max: 1, onnotice: () => {} });
+  return postgres(direct, { max: 1, connect_timeout: 60, onnotice: () => {} });
 }
 
 export function requireIntegrationEnv(): void {

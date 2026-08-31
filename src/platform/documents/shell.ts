@@ -60,7 +60,6 @@ const L = {
   revision: { ar: "مراجعة", en: "Revision" },
   signatory: { ar: "التوقيع المعتمد", en: "Authorized signatory" },
   payment: { ar: "تعليمات الدفع", en: "Payment instructions" },
-  page: { ar: "صفحة", en: "Page" },
 };
 
 function label(key: keyof typeof L, language: DocLanguage): string {
@@ -125,6 +124,24 @@ export function renderDocumentShell(p: DocumentShellProps): string {
   const lang = p.language === "en" ? "en" : "ar";
   // Accent is advanced styling; an invalid value is ignored, never interpolated raw.
   const accent = p.accentColor && ACCENT_RE.test(p.accentColor) ? p.accentColor : "#1a1a1a";
+
+  /*
+   * Both families are bundled, so a document looks the same on a Windows laptop
+   * and on the Linux container that renders the production PDF. Host fonts are
+   * named only as a last resort before the generic.
+   *
+   * Font matching is per-character, and the two languages want opposite orders.
+   * An English document takes Noto Sans first, because Noto Naskh Arabic also
+   * carries Latin glyphs and an English invoice set in a Naskh design is wrong.
+   * An Arabic document takes Noto Naskh Arabic first. Either way the other
+   * family still follows, so an Arabic customer name inside an English document
+   * renders properly rather than dropping to empty boxes.
+   */
+  const HOST = `"Segoe UI", Helvetica, Arial`;
+  const fontStack =
+    p.language === "en"
+      ? `"Noto Sans", "Noto Naskh Arabic", ${HOST}, sans-serif`
+      : `"Noto Naskh Arabic", "Noto Sans", ${HOST}, sans-serif`;
 
   const i = p.issuer;
   const contact = [
@@ -222,7 +239,7 @@ export function renderDocumentShell(p: DocumentShellProps): string {
   * { box-sizing: border-box; }
   @page { size: A4; margin: 14mm 12mm 18mm; }
   html, body { margin: 0; padding: 0; }
-  body { font-family: "Noto Naskh Arabic", "Segoe UI", Tahoma, sans-serif;
+  body { font-family: ${fontStack};
          color: #1a1a1a; font-size: 13px; line-height: 1.55; background: #fff; }
   .doc-page { position: relative; max-width: 800px; margin: 0 auto; padding: 24px 20px 84px; }
   .doc-header { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16px;
@@ -252,7 +269,9 @@ export function renderDocumentShell(p: DocumentShellProps): string {
                       border-block-start: 1px solid #ddd; padding-block-start: 6px;
                       font-size: 10.5px; color: #555; display: flex;
                       justify-content: space-between; gap: 12px; }
-  .doc-page-number:empty { display: none; }
+  /* Page numbering is drawn by the PDF renderer, which is the only thing that
+     knows the page count; Chrome has no CSS paged-media margin boxes for the
+     document to draw it itself. The browser adds its own when printing. */
   .doc-watermark { position: absolute; inset: 0; display: flex; align-items: center;
                    justify-content: center; pointer-events: none; z-index: 1;
                    font-size: 64px; font-weight: 800; color: rgba(150, 30, 30, 0.12);
@@ -278,7 +297,6 @@ ${p.bodyHtml}
   ${signatory}
   <footer class="doc-footer">
     <div class="doc-footer-text">${i.footer ? esc(i.footer) : esc(i.legalName)}</div>
-    <div class="doc-page-number" data-label="${esc(label("page", p.language))}"></div>
   </footer>
 </div>
 </body>

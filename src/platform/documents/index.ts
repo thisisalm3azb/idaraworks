@@ -24,3 +24,17 @@ export {
   type ExportCatalogueEntry,
   type ExportFormat,
 } from "./catalogue";
+export {
+  DOCUMENT_FONT_CSS,
+  renderDocument,
+  shellIssuerFromIdentity,
+  shellIssuerFromSnapshot,
+  type DocumentField,
+  type DocumentLine,
+  type DocumentRenderModel,
+  type DocumentSection,
+  type DocumentTotal,
+} from "./render";
+export { closePdfBrowser, renderPdf, type PdfOptions } from "./pdf";
+export { DOCUMENT_FONT_FILES, documentFontCss, type FontDelivery } from "./render";
+export { embeddedDocumentFonts } from "./pdf";

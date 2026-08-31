@@ -25,15 +25,13 @@ async function get(path: string) {
 }
 
 async function main() {
-  // 1. Landing redirects unauthenticated traffic to /login.
+  // 1. `/` is the PUBLIC marketing homepage and serves 200 to signed-out
+  //    visitors. It stopped redirecting to /login in 005A, and this check kept
+  //    expecting the old 307 — failing ever since. Gating is asserted below on a
+  //    PROTECTED route, which is where it actually matters.
   {
     const res = await get("/");
-    const loc = res.headers.get("location") ?? "";
-    record(
-      "landing auth gate",
-      res.status === 307 && loc.endsWith("/login"),
-      `${res.status} -> ${loc}`,
-    );
+    record("public landing serves", res.status === 200, `${res.status}`);
   }
 
   // 2. Login page serves, with the security headers and a correlation id.

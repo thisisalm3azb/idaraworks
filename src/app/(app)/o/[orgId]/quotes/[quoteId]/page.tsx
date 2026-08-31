@@ -7,6 +7,9 @@ import { can } from "@/platform/authz";
 import { formatMoney } from "@/platform/format/money";
 import type { CurrencyCode } from "@/platform/registries";
 import { getQuote } from "@/modules/quotes/service";
+import { listDocumentShares } from "@/modules/documents/service";
+import { DocumentActions } from "../../documents/DocumentActions";
+import { ShareSection } from "../../documents/ShareSection";
 import {
   submitQuoteAction,
   sendQuoteAction,
@@ -31,6 +34,10 @@ export default async function QuoteDetailPage({
   const q = await getQuote(resolved.ctx, resolved.archetype, quoteId);
   if (!q) notFound();
   const manage = can(resolved.archetype, "quotes.manage");
+  const canShare = can(resolved.archetype, "documents.share");
+  const shares = canShare
+    ? await listDocumentShares(resolved.ctx, resolved.archetype, "quote", quoteId)
+    : [];
   const money = (v: number | null) => (v === null ? "🔒" : formatMoney(v, currency));
 
   return (
@@ -67,6 +74,11 @@ export default async function QuoteDetailPage({
           ))}
         </ul>
       </Card>
+      <Card>
+        <CardHeader title={t("documents.title")} />
+        <DocumentActions orgId={orgId} kind="quote" id={q.id} />
+      </Card>
+      {canShare ? <ShareSection orgId={orgId} kind="quote" id={q.id} shares={shares} /> : null}
       {manage ? (
         <div className="flex flex-col gap-2">
           {q.status === "draft" || q.status === "rejected" ? (

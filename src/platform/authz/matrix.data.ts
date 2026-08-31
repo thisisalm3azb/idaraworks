@@ -14,6 +14,8 @@ type Grantable = Exclude<RoleArchetype, "worker_reserved_p3">;
 export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
   // Full member management, file lifecycle, ALL config + masters + skeleton (doc 06 row-by-row).
   owner: [
+    "documents.share",
+    "week.manage",
     "members.view",
     "members.invite",
     "members.deactivate",
@@ -95,6 +97,8 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
     "pipeline.configure",
   ],
   admin: [
+    "documents.share",
+    "week.manage",
     "members.view",
     "members.invite",
     "members.deactivate",
@@ -176,6 +180,8 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
   // Manager (doc 08: the Workshop Manager variant): masters M, jobs/reports, NO
   // config, NO salary/HR side-tables, no invite/deactivate/legal-hold.
   manager: [
+    "documents.share",
+    "week.manage",
     "members.view",
     "files.void",
     "employees.view",
@@ -289,6 +295,7 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
     "digest.view",
   ],
   accounts: [
+    "documents.share",
     "members.view",
     "employees.view",
     "customers.view",

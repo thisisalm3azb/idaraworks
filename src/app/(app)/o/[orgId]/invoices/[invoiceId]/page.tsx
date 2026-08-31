@@ -7,6 +7,9 @@ import { can } from "@/platform/authz";
 import { formatMoney } from "@/platform/format/money";
 import type { CurrencyCode } from "@/platform/registries";
 import { getInvoice } from "@/modules/invoices/service";
+import { listDocumentShares } from "@/modules/documents/service";
+import { DocumentActions } from "../../documents/DocumentActions";
+import { ShareSection } from "../../documents/ShareSection";
 import {
   issueInvoiceAction,
   voidInvoiceAction,
@@ -31,6 +34,10 @@ export default async function InvoiceDetailPage({
   const inv = await getInvoice(resolved.ctx, resolved.archetype, invoiceId);
   if (!inv) notFound();
   const manage = can(resolved.archetype, "invoices.manage");
+  const canShare = can(resolved.archetype, "documents.share");
+  const shares = canShare
+    ? await listDocumentShares(resolved.ctx, resolved.archetype, "invoice", invoiceId)
+    : [];
   const money = (v: number | null) => (v === null ? "🔒" : formatMoney(v, currency));
   const row = (l: string, v: string) => (
     <div className="flex items-center justify-between gap-2 border-b border-line py-2 text-sm">
@@ -77,6 +84,11 @@ export default async function InvoiceDetailPage({
           ? row(t("invoices.detail.einvoice"), t(`invoices.einvoice.${inv.eInvoiceStatus}`))
           : null}
       </Card>
+      <Card>
+        <CardHeader title={t("documents.title")} />
+        <DocumentActions orgId={orgId} kind="invoice" id={inv.id} />
+      </Card>
+      {canShare ? <ShareSection orgId={orgId} kind="invoice" id={inv.id} shares={shares} /> : null}
       {manage ? (
         <div className="flex flex-col gap-2">
           {inv.status === "draft" ? (

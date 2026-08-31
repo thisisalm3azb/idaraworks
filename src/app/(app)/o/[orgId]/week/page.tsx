@@ -62,6 +62,9 @@ export default async function WeekPage({
               >
                 {t("week.next")}
               </Link>
+              <Link href={`/o/${orgId}/week/plans`} className="text-brand hover:underline">
+                {t("week_plan.title")}
+              </Link>
             </span>
           }
         />

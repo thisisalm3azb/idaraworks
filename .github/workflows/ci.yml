@@ -110,6 +110,12 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
 
+      # The document tests render real PDFs, which drives the same Chromium the
+      # production PDF route uses. Without it they would fail on a missing
+      # browser rather than on anything about the documents.
+      - name: Install Playwright browsers
+        run: pnpm exec playwright install --with-deps chromium
+
       - uses: supabase/setup-cli@v1
         with:
           # Pinned to the repo's `supabase` devDependency version — bump deliberately.

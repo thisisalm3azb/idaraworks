@@ -169,9 +169,7 @@ describe("the target project is confirmed, not merely 'not production'", () => {
     };
     const r = targetsOnlyTestProject(other);
     expect(r.ok).toBe(false);
-    expect(r.problems.some((p) => p.includes("neither the test project nor production"))).toBe(
-      true,
-    );
+    expect(r.problems.some((p) => p.includes("unknown project"))).toBe(true);
   });
 
   it("rejects an unfilled file rather than treating blank as safe", () => {
