@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { Badge, Button, Card, CardHeader, EmptyState, Field } from "@/platform/ui";
+import { Badge, Button, Card, CardHeader, EmptyState, Field, Pager } from "@/platform/ui";
 import { getT, getServerLocale } from "@/platform/i18n/server";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { can } from "@/platform/authz";
@@ -22,6 +22,8 @@ export default async function ItemsPage({
     unit?: string;
     unit_cost_minor?: string;
     selling_price_minor?: string;
+    page?: string;
+    q?: string;
   }>;
 }) {
   const { orgId } = await params;
@@ -30,7 +32,15 @@ export default async function ItemsPage({
   if (typeof resolved === "string") redirect("/");
   const t = await getT();
   const locale = await getServerLocale();
-  const items = await listItems(resolved.ctx, resolved.archetype);
+  const PAGE = 100;
+  const page = Math.max(Number(sp.page ?? "1") || 1, 1);
+  const search = (sp.q ?? "").trim();
+  const { rows: items, hasMore } = await listItems(resolved.ctx, resolved.archetype, {
+    includeInactive: true,
+    limit: PAGE,
+    offset: (page - 1) * PAGE,
+    search,
+  });
   const canManage = can(resolved.archetype, "catalog.manage");
   const addWithOrg = createItemAction.bind(null, orgId);
 
@@ -70,6 +80,21 @@ export default async function ItemsPage({
             ))}
           </ul>
         )}
+        <Pager
+          page={page}
+          hasMore={hasMore}
+          hrefFor={(p) =>
+            `/o/${orgId}/items?${new URLSearchParams({
+              ...(search ? { q: search } : {}),
+              page: String(p),
+            })}`
+          }
+          labels={{
+            previous: t("common.previous"),
+            next: t("common.next"),
+            page: t("common.page"),
+          }}
+        />
       </Card>
 
       {canManage && categories.length > 0 ? (

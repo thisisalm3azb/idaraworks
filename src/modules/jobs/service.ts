@@ -362,6 +362,13 @@ export async function listJobs(
     assignedOnly?: boolean;
     /** H19: narrow to one customer's work (validated upstream). */
     customerId?: string;
+    /**
+     * H22: an explicit ceiling. public.job grows for the life of the tenant and
+     * this read had none, so a long-running organization silently lost rows at
+     * the driver's cap with nothing in the UI to say so. Callers that feed a
+     * picker pass a small number; the jobs list passes its page size.
+     */
+    limit?: number;
   } = {},
 ): Promise<JobRow[]> {
   assertCan(archetype, "jobs.view");
@@ -384,6 +391,7 @@ export async function listJobs(
         ${scoped ? sql`and ${assignedJobCondition(ctx)}` : sql``}
         and (${customerId}::uuid is null or j.customer_id = ${customerId}::uuid)
       order by j.created_at desc
+      limit ${Math.min(Math.max(opts.limit ?? 500, 1), 1000)}
     `),
   )) as unknown as Array<{
     id: string;

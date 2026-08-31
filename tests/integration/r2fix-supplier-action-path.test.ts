@@ -108,7 +108,7 @@ describe("createSupplierAction — deployed code path", () => {
 
     const url = await runAction(fd);
     expect(url).toBe(`/o/${orgId}/suppliers`); // no ?error — success
-    const list = await listSuppliers(ctx(), "owner");
+    const list = (await listSuppliers(ctx(), "owner", { includeInactive: true })).rows;
     expect(list.some((s) => s.name === `Action Sub ${run}`)).toBe(true);
   });
 
@@ -134,7 +134,7 @@ describe("createSupplierAction — deployed code path", () => {
     expect(url).not.toContain("not-an-email");
 
     // And nothing was written for the failed submit.
-    const list = await listSuppliers(ctx(), "owner");
+    const list = (await listSuppliers(ctx(), "owner", { includeInactive: true })).rows;
     expect(list.some((s) => s.name === `Kept Name ${run}`)).toBe(false);
   });
 });

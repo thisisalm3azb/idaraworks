@@ -19,7 +19,7 @@ export default async function NewPoPage({ params }: { params: Promise<{ orgId: s
   const t = await getT();
   const locale = await getServerLocale();
   const [suppliers, jobs] = await Promise.all([
-    listSuppliers(resolved.ctx, a),
+    listSuppliers(resolved.ctx, a).then((r) => r.rows),
     listJobs(resolved.ctx, a),
   ]);
 

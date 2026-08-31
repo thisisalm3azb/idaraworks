@@ -30,7 +30,11 @@ export default async function MrDetailPage({
   const canConvert = can(a, "mr.convert") && mr.status === "approved";
   const canSubmit =
     (mr.status === "draft" || mr.status === "rejected") && mr.createdBy === resolved.ctx.userId;
-  const suppliers = canConvert ? await listSuppliers(resolved.ctx, a).catch(() => []) : [];
+  const suppliers = canConvert
+    ? await listSuppliers(resolved.ctx, a)
+        .then((r) => r.rows)
+        .catch(() => [])
+    : [];
 
   return (
     <div className="flex flex-col gap-4">

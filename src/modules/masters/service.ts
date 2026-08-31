@@ -14,6 +14,20 @@ import { requireCapability } from "@/platform/entitlements";
 import { sql, withCtx, type Ctx } from "@/platform/tenancy";
 import type { RoleArchetype } from "@/platform/registries";
 
+/**
+ * A master record the caller may not touch: absent, or another organization's.
+ *
+ * One error for both, because RLS plus the org filter make a foreign id
+ * indistinguishable from a missing one, and telling them apart would leak
+ * whether an id exists somewhere else.
+ */
+export class MasterNotFoundError extends Error {
+  constructor(what: string) {
+    super(`${what} not found`);
+    this.name = "MasterNotFoundError";
+  }
+}
+
 const name = (max: number) => z.string().trim().min(1).max(max);
 const opt = (max: number) =>
   z
@@ -850,18 +864,102 @@ export async function createSupplier(
   return { id };
 }
 
+export const SupplierPatch = SupplierInput.partial();
+
+/**
+ * Edit a supplier.
+ *
+ * Suppliers had no update path at all: they could be created and listed and
+ * nothing else, so a changed phone number meant a duplicate record. Every field
+ * is optional and an omitted field is left alone, so a partial form post cannot
+ * blank data it never showed.
+ */
+export async function updateSupplier(
+  ctx: Ctx,
+  archetype: RoleArchetype,
+  supplierId: string,
+  input: unknown,
+): Promise<void> {
+  assertCan(archetype, "catalog.manage");
+  const data = SupplierPatch.parse(input);
+  await command(
+    ctx,
+    {
+      audit: {
+        action: "supplier.update",
+        entityType: "supplier",
+        entityId: supplierId,
+        summary: `Updated supplier`,
+        after: data as Record<string, unknown>,
+      },
+    },
+    async (tx) => {
+      const rows = (await tx.execute(sql`
+        update public.supplier set
+          name = ${data.name === undefined ? sql`name` : data.name},
+          tax_reg_no = ${data.taxRegNo === undefined ? sql`tax_reg_no` : (data.taxRegNo ?? null)},
+          terms_text = ${data.termsText === undefined ? sql`terms_text` : (data.termsText ?? null)},
+          phone = ${data.phone === undefined ? sql`phone` : (data.phone ?? null)},
+          email = ${data.email === undefined ? sql`email` : (data.email ?? null)},
+          active = ${data.active === undefined ? sql`active` : data.active},
+          updated_at = now()
+        where id = ${supplierId} and org_id = ${ctx.orgId}
+        returning id
+      `)) as unknown as Array<{ id: string }>;
+      if (!rows[0]) throw new MasterNotFoundError("supplier");
+    },
+  );
+}
+
+export type SupplierRow = {
+  id: string;
+  name: string;
+  taxRegNo: string | null;
+  termsText: string | null;
+  phone: string | null;
+  email: string | null;
+  active: boolean;
+};
+
+/**
+ * A page of suppliers.
+ *
+ * This was a bare unbounded select. Supplier lists grow for the life of the
+ * tenant, so it returns a page and says whether more exist rather than
+ * truncating in silence.
+ */
 export async function listSuppliers(
   ctx: Ctx,
   archetype: RoleArchetype,
-): Promise<Array<{ id: string; name: string; active: boolean }>> {
+  opts: { limit?: number; offset?: number; search?: string; includeInactive?: boolean } = {},
+): Promise<{ rows: SupplierRow[]; hasMore: boolean }> {
   assertCan(archetype, "catalog.view");
+  const limit = Math.min(Math.max(opts.limit ?? 100, 1), 200);
+  const offset = Math.max(opts.offset ?? 0, 0);
+  const search = (opts.search ?? "").trim();
   const rows = (await withCtx(ctx, (tx) =>
     tx.execute(sql`
-      select id::text as id, name, active from public.supplier
-      where org_id = ${ctx.orgId} order by active desc, name
+      select id::text as id, name, tax_reg_no, terms_text, phone, email, active
+      from public.supplier
+      where org_id = ${ctx.orgId}
+        and (${opts.includeInactive === true} or active)
+        and (${search === ""} or name ilike ${"%" + search + "%"})
+      order by active desc, name
+      limit ${limit + 1} offset ${offset}
     `),
-  )) as unknown as Array<{ id: string; name: string; active: boolean }>;
-  return rows;
+  )) as unknown as Array<Record<string, unknown>>;
+  return {
+    rows: rows.slice(0, limit).map((r) => ({
+      id: r.id as string,
+      name: r.name as string,
+      taxRegNo: (r.tax_reg_no as string | null) ?? null,
+      termsText: (r.terms_text as string | null) ?? null,
+      phone: (r.phone as string | null) ?? null,
+      email: (r.email as string | null) ?? null,
+      active: r.active as boolean,
+    })),
+    hasMore: rows.length > limit,
+  };
 }
 
 // ── items (catalog live, stock deferred) ─────────────────────────────────────
@@ -936,41 +1034,119 @@ export type ItemRow = {
   unitCostMinor: number | null;
   /** REDACTED to null unless ctx.pricePrivileged. */
   sellingPriceMinor: number | null;
+  /** Reorder threshold. Written since 0020 and read for the first time in H22. */
+  minQty: number | null;
   active: boolean;
 };
 
-export async function listItems(ctx: Ctx, archetype: RoleArchetype): Promise<ItemRow[]> {
+export const ItemPatch = ItemInput.partial();
+
+/**
+ * Edit an item.
+ *
+ * Items had no update path: a corrected name or price meant a second SKU. The
+ * category is re-validated when it changes, so an edit cannot move an item into
+ * a retired or unknown category that creation would have refused.
+ *
+ * `min_qty` is included because it becomes load-bearing in H22: it is the
+ * reorder threshold, and until now it was written and never read.
+ */
+export async function updateItem(
+  ctx: Ctx,
+  archetype: RoleArchetype,
+  itemId: string,
+  input: unknown,
+): Promise<void> {
+  assertCan(archetype, "catalog.manage");
+  const data = ItemPatch.parse(input);
+  if (data.categoryKey !== undefined) await assertItemCategory(ctx, data.categoryKey);
+  await command(
+    ctx,
+    {
+      audit: {
+        action: "item.update",
+        entityType: "item",
+        entityId: itemId,
+        summary: "Updated item",
+        after: data as Record<string, unknown>,
+      },
+    },
+    async (tx) => {
+      const rows = (await tx.execute(sql`
+        update public.item set
+          sku = ${data.sku === undefined ? sql`sku` : data.sku},
+          name = ${data.name === undefined ? sql`name` : data.name},
+          category_key = ${data.categoryKey === undefined ? sql`category_key` : data.categoryKey},
+          unit = ${data.unit === undefined ? sql`unit` : data.unit},
+          unit_cost_minor = ${data.unitCostMinor === undefined ? sql`unit_cost_minor` : (data.unitCostMinor ?? null)},
+          selling_price_minor = ${data.sellingPriceMinor === undefined ? sql`selling_price_minor` : (data.sellingPriceMinor ?? null)},
+          min_qty = ${data.minQty === undefined ? sql`min_qty` : (data.minQty ?? null)},
+          active = ${data.active === undefined ? sql`active` : data.active},
+          updated_at = now()
+        where id = ${itemId} and org_id = ${ctx.orgId}
+        returning id
+      `)) as unknown as Array<{ id: string }>;
+      if (!rows[0]) throw new MasterNotFoundError("item");
+    },
+  );
+}
+
+/**
+ * A page of items.
+ *
+ * This was a bare unbounded select feeding the items screen. The catalogue grows
+ * for the life of the tenant, and H22's inventory screens read it constantly, so
+ * it pages and reports whether more exist.
+ */
+export async function listItems(
+  ctx: Ctx,
+  archetype: RoleArchetype,
+  opts: {
+    limit?: number;
+    offset?: number;
+    search?: string;
+    categoryKey?: string;
+    includeInactive?: boolean;
+  } = {},
+): Promise<{ rows: ItemRow[]; hasMore: boolean }> {
   assertCan(archetype, "catalog.view");
+  const limit = Math.min(Math.max(opts.limit ?? 100, 1), 200);
+  const offset = Math.max(opts.offset ?? 0, 0);
+  const search = (opts.search ?? "").trim();
+  const category = (opts.categoryKey ?? "").trim();
   const rows = (await withCtx(ctx, (tx) =>
     tx.execute(sql`
-      select id::text as id, sku, name, category_key, unit, unit_cost_minor, selling_price_minor, active
-      from public.item where org_id = ${ctx.orgId}
+      select id::text as id, sku, name, category_key, unit, unit_cost_minor,
+             selling_price_minor, min_qty, active
+      from public.item
+      where org_id = ${ctx.orgId}
+        and (${opts.includeInactive === true} or active)
+        and (${category === ""} or category_key = ${category})
+        and (${search === ""} or name ilike ${"%" + search + "%"} or sku ilike ${"%" + search + "%"})
       order by active desc, category_key, name
+      limit ${limit + 1} offset ${offset}
     `),
-  )) as unknown as Array<{
-    id: string;
-    sku: string;
-    name: string;
-    category_key: string;
-    unit: string;
-    unit_cost_minor: number | null;
-    selling_price_minor: number | null;
-    active: boolean;
-  }>;
-  return rows.map((r) => ({
-    id: r.id,
-    sku: r.sku,
-    name: r.name,
-    categoryKey: r.category_key,
-    unit: r.unit,
-    // postgres bigint arrives as string — coerce before serializing (F-23 wall
-    // stays: redacted to null for non-privileged ctx).
-    unitCostMinor:
-      ctx.costPrivileged && r.unit_cost_minor !== null ? Number(r.unit_cost_minor) : null,
-    sellingPriceMinor:
-      ctx.pricePrivileged && r.selling_price_minor !== null ? Number(r.selling_price_minor) : null,
-    active: r.active,
-  }));
+  )) as unknown as Array<Record<string, unknown>>;
+  return {
+    rows: rows.slice(0, limit).map((r) => ({
+      id: r.id as string,
+      sku: r.sku as string,
+      name: r.name as string,
+      categoryKey: r.category_key as string,
+      unit: r.unit as string,
+      // postgres bigint arrives as string — coerce before serializing (F-23 wall
+      // stays: redacted to null for non-privileged ctx).
+      unitCostMinor:
+        ctx.costPrivileged && r.unit_cost_minor !== null ? Number(r.unit_cost_minor) : null,
+      sellingPriceMinor:
+        ctx.pricePrivileged && r.selling_price_minor !== null
+          ? Number(r.selling_price_minor)
+          : null,
+      minQty: r.min_qty === null ? null : Number(r.min_qty),
+      active: r.active as boolean,
+    })),
+    hasMore: rows.length > limit,
+  };
 }
 
 // ── employee detail reads (S1 detail page) ───────────────────────────────────

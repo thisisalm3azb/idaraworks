@@ -110,7 +110,7 @@ describe("supplier creation on a construction-template org", () => {
       const r = await createSupplier(ctx, "owner", input);
       expect(r.id).toBeTruthy();
     }
-    const list = await listSuppliers(ctx, "owner");
+    const list = (await listSuppliers(ctx, "owner", { includeInactive: true })).rows;
     expect(list.length).toBe(cases.length);
     expect(list.some((s) => s.name === `مقاول باطن الخليج ${run}`)).toBe(true);
   });
@@ -165,8 +165,10 @@ describe("supplier creation on a construction-template org", () => {
   });
 
   it("is tenant-isolated (another org never sees these suppliers)", async () => {
-    const mine = await listSuppliers(ctxFor(mainOrg), "owner");
-    const theirs = await listSuppliers(ctxFor(otherOrg, otherUser), "owner");
+    const mine = (await listSuppliers(ctxFor(mainOrg), "owner", { includeInactive: true })).rows;
+    const theirs = (
+      await listSuppliers(ctxFor(otherOrg, otherUser), "owner", { includeInactive: true })
+    ).rows;
     const myNames = new Set(mine.map((s) => s.name));
     expect(theirs.some((s) => myNames.has(s.name))).toBe(false);
   });
@@ -224,7 +226,9 @@ describe("item creation on a construction-template org (valid category required)
       unit: "ton",
       unitCostMinor: 250000,
     });
-    expect((await listItems(ctx, "owner")).some((i) => i.id === id)).toBe(true);
+    expect(
+      (await listItems(ctx, "owner", { includeInactive: true })).rows.some((i) => i.id === id),
+    ).toBe(true);
   });
 
   it("rejects a duplicate SKU as duplicate/sku (org-unique constraint)", async () => {
@@ -304,7 +308,7 @@ describe("suspended org (FR-9): writes blocked, reads allowed", () => {
       expect(classifyMasterDataError(err).code).toBe("read_only_billing");
     }
     // READ still works.
-    const seen = await listSuppliers(ctx, "owner");
+    const seen = (await listSuppliers(ctx, "owner", { includeInactive: true })).rows;
     expect(seen.some((s) => s.id === seeded.id)).toBe(true);
   }, 60_000);
 });

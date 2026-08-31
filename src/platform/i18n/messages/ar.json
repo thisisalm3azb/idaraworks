@@ -2329,5 +2329,6 @@
   "week_plan.previous_plan": "فتح الخطة السابقة",
   "week_plan.error.duplicate_week": "يوجد بالفعل خطة نشطة لهذا الأسبوع.",
   "week_plan.error.immutable": "لا يمكن تعديل خطة صادرة. أصدر مراجعة بدلاً من ذلك.",
-  "week_plan.error.reason": "السبب مطلوب."
+  "week_plan.error.reason": "السبب مطلوب.",
+  "common.page": "صفحة"
 }

@@ -301,11 +301,13 @@ describe("masters through the command path + privileged walls", () => {
       unitCostMinor: 4500,
       sellingPriceMinor: 6000,
     });
-    const privileged = (await listItems(ctx, "owner")).find((i) => i.sku === `RES-${run}`)!;
-    expect(privileged.unitCostMinor).toBe(4500);
-    const redacted = (await listItems(ctxOf(ownerUser, false), "owner")).find(
+    const privileged = (await listItems(ctx, "owner", { includeInactive: true })).rows.find(
       (i) => i.sku === `RES-${run}`,
     )!;
+    expect(privileged.unitCostMinor).toBe(4500);
+    const redacted = (
+      await listItems(ctxOf(ownerUser, false), "owner", { includeInactive: true })
+    ).rows.find((i) => i.sku === `RES-${run}`)!;
     expect(redacted.unitCostMinor).toBeNull();
     expect(redacted.sellingPriceMinor).toBeNull();
   });

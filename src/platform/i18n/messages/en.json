@@ -2329,5 +2329,6 @@
   "week_plan.previous_plan": "Open the earlier plan",
   "week_plan.error.duplicate_week": "This week already has an active plan.",
   "week_plan.error.immutable": "An issued plan cannot be edited. Issue a revision instead.",
-  "week_plan.error.reason": "A reason is required."
+  "week_plan.error.reason": "A reason is required.",
+  "common.page": "Page"
 }

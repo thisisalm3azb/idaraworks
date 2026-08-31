@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { Badge, Button, Card, CardHeader, EmptyState, Field } from "@/platform/ui";
+import { Badge, Button, Card, CardHeader, EmptyState, Field, Pager } from "@/platform/ui";
 import { getT, getServerLocale } from "@/platform/i18n/server";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { loadOrgTerminology, term } from "@/platform/terminology";
@@ -21,6 +21,8 @@ export default async function SuppliersPage({
     tax_reg_no?: string;
     phone?: string;
     email?: string;
+    page?: string;
+    q?: string;
   }>;
 }) {
   const { orgId } = await params;
@@ -30,7 +32,15 @@ export default async function SuppliersPage({
   const t = await getT();
   const locale = await getServerLocale();
   const terms = await loadOrgTerminology(resolved.ctx, locale);
-  const suppliers = await listSuppliers(resolved.ctx, resolved.archetype);
+  const PAGE = 100;
+  const page = Math.max(Number(sp.page ?? "1") || 1, 1);
+  const search = (sp.q ?? "").trim();
+  const { rows: suppliers, hasMore } = await listSuppliers(resolved.ctx, resolved.archetype, {
+    includeInactive: true,
+    limit: PAGE,
+    offset: (page - 1) * PAGE,
+    search,
+  });
   const canManage = can(resolved.archetype, "catalog.manage");
   const addWithOrg = createSupplierAction.bind(null, orgId);
 
@@ -58,6 +68,21 @@ export default async function SuppliersPage({
             ))}
           </ul>
         )}
+        <Pager
+          page={page}
+          hasMore={hasMore}
+          hrefFor={(p) =>
+            `/o/${orgId}/suppliers?${new URLSearchParams({
+              ...(search ? { q: search } : {}),
+              page: String(p),
+            })}`
+          }
+          labels={{
+            previous: t("common.previous"),
+            next: t("common.next"),
+            page: t("common.page"),
+          }}
+        />
       </Card>
 
       {canManage ? (

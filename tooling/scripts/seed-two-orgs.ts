@@ -470,6 +470,23 @@ export const SEEDERS: Record<string, Seeder> = {
                     '{}'::jsonb, ${"ab".repeat(32)}, 'user_change', ${u})`;
   },
 
+  // H22A inventory foundation. A location needs a warehouse; a unit stands alone.
+  unit_of_measure: async (o, org) => {
+    await o`insert into public.unit_of_measure (org_id, code, name_en, name_ar, dimension, factor_to_base, is_base)
+            values (${org}, ${"BU" + randomUUID().slice(0, 6)}, 'Bleed unit', 'وحدة', 'count', 1, false)`;
+  },
+  warehouse: async (o, org, u) => {
+    await o`insert into public.warehouse (org_id, code, name_en, created_by)
+            values (${org}, ${"BW" + randomUUID().slice(0, 6)}, 'Bleed warehouse', ${u})`;
+  },
+  stock_location: async (o, org, u) => {
+    const wh = randomUUID();
+    await o`insert into public.warehouse (id, org_id, code, name_en, created_by)
+            values (${wh}, ${org}, ${"BL" + randomUUID().slice(0, 6)}, 'Bleed loc warehouse', ${u})`;
+    await o`insert into public.stock_location (org_id, warehouse_id, code, name_en)
+            values (${org}, ${wh}, ${"BIN" + randomUUID().slice(0, 5)}, 'Bleed bin')`;
+  },
+
   // H22.0 documents. A plan's link table needs a plan and a job; a share needs
   // a subject, and only a customer-addressed kind may be shared.
   week_plan: async (o, org, u) => {
