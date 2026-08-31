@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import EN from "../../src/platform/i18n/messages/en.json";
 
 // `/` is the public marketing homepage for signed-out visitors (005A) — it no
 // longer redirects to /login. Get Started routes to registration; Log in to
@@ -7,7 +8,10 @@ import { expect, test } from "@playwright/test";
 test("unauthenticated root renders the public homepage", async ({ page }) => {
   await page.goto("/");
   await expect(page).not.toHaveURL(/\/login/);
-  await expect(page.getByRole("heading", { level: 1 })).toContainText("Run your business");
+  // The headline is read from the copy catalogue rather than repeated here: a
+  // hardcoded copy went stale in H13 when the hero was rewritten, and this
+  // smoke has been failing on main ever since.
+  await expect(page.getByRole("heading", { level: 1 })).toContainText(EN["home.hero.title"]);
   await expect(page.getByRole("link", { name: "Get Started" }).first()).toHaveAttribute(
     "href",
     "/signup",
