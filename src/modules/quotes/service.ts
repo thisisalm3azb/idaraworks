@@ -88,6 +88,31 @@ export function computeQuoteTotals(
   return { lines: computed, subtotalMinor, vatAmountMinor, totalMinor, baseTotalMinor };
 }
 
+/**
+ * Capture the issuer identity onto this quotation, inside the caller's own
+ * transaction.
+ *
+ * Every transition that makes a quotation final must call this. The document
+ * layer decides what a customer sees from `issuer_snapshot`, so a transition
+ * that changes the status without capturing leaves the document rendering
+ * TODAY's legal name and tax number as though they were the ones it was issued
+ * under. That is what happened before H22.0.1: the helper existed and worked,
+ * and no quotation lifecycle action called it.
+ *
+ * Imported dynamically because the documents module imports this one; a static
+ * import would close the cycle. The call is inside a function body, so by the
+ * time it runs both modules are loaded.
+ */
+async function captureIssuer(
+  tx: TenantTx,
+  ctx: Ctx,
+  quoteId: string,
+  options: { stampIssuedAt?: boolean } = {},
+): Promise<void> {
+  const { captureDocumentIssuerIn } = await import("@/modules/documents/service");
+  await captureDocumentIssuerIn(tx, ctx, "quote", quoteId, options);
+}
+
 async function customerName(tx: TenantTx, ctx: Ctx, customerId: string): Promise<string> {
   const rows = (await tx.execute(sql`
     select name, active from public.customer where id = ${customerId} and org_id = ${ctx.orgId}
@@ -246,6 +271,7 @@ export async function markQuoteSent(
         returning id
       `)) as unknown as Array<{ id: string }>;
       if (!rows[0]) throw new QuoteStateError("only an approved quote can be sent");
+      await captureIssuer(tx, ctx, quoteId, { stampIssuedAt: true });
     },
   );
 }
@@ -293,6 +319,11 @@ export async function acceptQuote(
       terms: string | null;
       reference: string;
     }>;
+    // Acceptance is allowed straight from 'approved', so a quotation can become
+    // official without ever having been sent. The identity is captured in the
+    // SAME transaction as the claim, which is also the serialization point: a
+    // losing racer matched no row above and reaches nothing here.
+    if (rows[0]) await captureIssuer(tx, ctx, quoteId, { stampIssuedAt: true });
     return rows[0];
   });
   if (!claimed) {
@@ -430,6 +461,12 @@ export async function rejectQuote(
         returning id
       `)) as unknown as Array<{ id: string }>;
       if (!rows[0]) throw new QuoteStateError("only an approved/sent quote can be rejected");
+      // 'rejected' is one of the statuses the document layer renders as final, so
+      // the identity must be captured here too. Without it a quotation rejected
+      // straight from 'approved' would print the legacy-fallback notice, which
+      // would be untrue: it is not a legacy record, it simply never went out.
+      // No issue date, because rejection is not an issuance.
+      await captureIssuer(tx, ctx, quoteId);
     },
   );
 }

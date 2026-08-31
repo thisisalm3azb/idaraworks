@@ -95,7 +95,6 @@ async function main() {
 /** Create the temporary organization, marked so cleanup can always find it. */
 async function seed(sql: postgres.Sql, run: string): Promise<{ orgId: string; userId: string }> {
   const userId = randomUUID();
-  const orgId = randomUUID();
   const email = `h22-smoke-${run}@idaraworks-smoke.invalid`;
 
   await sql`

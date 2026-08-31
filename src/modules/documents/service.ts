@@ -297,12 +297,28 @@ export async function captureDocumentIssuerIn(
   ctx: Ctx,
   table: "quote" | "invoice" | "week_plan",
   id: string,
+  options: {
+    /**
+     * Also stamp `issued_at` with the moment the document became official.
+     *
+     * True for a genuine issuance (sending or accepting a quotation, issuing an
+     * invoice or a credit note). False for a termination such as rejection or
+     * cancelling a draft: those transitions make the document render as final,
+     * so they must capture the identity, but nothing about them is an issue date.
+     */
+    stampIssuedAt?: boolean;
+  } = {},
 ): Promise<void> {
   const profile = await getDocumentProfile(ctx);
   const snapshot = captureIssuerSnapshot(profile.identity, new Date().toISOString());
+  // `issuer_snapshot is null` is the whole concurrency story: the first writer
+  // wins and every later call, retry or concurrent request matches no row.
+  // coalesce protects issued_at the same way, so a second issuance cannot move
+  // the date a customer already has.
   await tx.execute(sql`
     update public.${sql.raw(table)}
     set issuer_snapshot = ${JSON.stringify(snapshot)}::jsonb
+        ${options.stampIssuedAt ? sql`, issued_at = coalesce(issued_at, now())` : sql``}
     where id = ${id} and org_id = ${ctx.orgId} and issuer_snapshot is null
   `);
 }

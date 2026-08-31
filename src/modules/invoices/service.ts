@@ -95,6 +95,29 @@ export function computeInvoiceTotals(
   return { lines: computed, subtotalMinor, vatAmountMinor, totalMinor, baseTotalMinor };
 }
 
+/**
+ * Capture the issuer identity onto this invoice, inside the caller's own
+ * transaction.
+ *
+ * Every transition that makes an invoice final must call this. The document
+ * layer renders from `issuer_snapshot`, so a transition that changes the status
+ * without capturing leaves a legal tax document showing TODAY's legal name, tax
+ * registration and address rather than the ones it was issued under. Before
+ * H22.0.1 no invoice lifecycle action called it.
+ *
+ * Imported dynamically because the documents module imports this one; a static
+ * import would close the cycle.
+ */
+async function captureIssuer(
+  tx: TenantTx,
+  ctx: Ctx,
+  invoiceId: string,
+  options: { stampIssuedAt?: boolean } = {},
+): Promise<void> {
+  const { captureDocumentIssuerIn } = await import("@/modules/documents/service");
+  await captureDocumentIssuerIn(tx, ctx, "invoice", invoiceId, options);
+}
+
 async function customerSnapshot(tx: TenantTx, ctx: Ctx, customerId: string) {
   const rows = (await tx.execute(sql`
     select name, tax_reg_no from public.customer where id = ${customerId} and org_id = ${ctx.orgId}
@@ -191,6 +214,10 @@ export async function issueInvoice(
         returning job_id::text as job_id
       `)) as unknown as Array<{ job_id: string | null }>;
       if (!rows[0]) throw new InvoiceStateError("only a draft invoice can be issued");
+      // The identity the customer's copy carries, frozen in the same transaction
+      // that makes the invoice legal. issued_at is set by the UPDATE above and
+      // the capture coalesces, so it is never moved by a later call.
+      await captureIssuer(tx, ctx, invoiceId, { stampIssuedAt: true });
       return { jobId: rows[0].job_id };
     },
   );
@@ -227,6 +254,10 @@ export async function voidInvoice(
       if (!rows[0]) {
         throw new InvoiceStateError("only a draft invoice can be cancelled (issued → credit note)");
       }
+      // 'cancelled' is rendered as a final document, so it needs the identity it
+      // carried when it was cancelled. No issue date: cancelling a draft is not
+      // an issuance, and stamping one would invent a moment that never happened.
+      await captureIssuer(tx, ctx, invoiceId);
     },
   );
 }
@@ -288,6 +319,10 @@ export async function createCreditNote(
       // Re-reconcile the CORRECTED invoice now that a credit offsets it: a fully-
       // credited invoice settles to 'paid' (leaving the collectible/overdue set), so
       // E-10 and AR agree with the credit note without waiting for a payment.
+      // A credit note is born issued, so it captures its own identity rather than
+      // inheriting the corrected invoice's. The two are separate legal documents
+      // and the company may have changed between them.
+      await captureIssuer(tx, ctx, rows[0]!.id, { stampIssuedAt: true });
       await reconcileInvoiceStatus(tx, ctx, correctsInvoiceId);
       return { id: rows[0]!.id, reference };
     },
