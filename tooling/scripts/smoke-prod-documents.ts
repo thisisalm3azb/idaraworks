@@ -151,18 +151,30 @@ async function exercise(
   });
   check("quote created", Boolean(quote.id), quote.reference);
 
-  // Issue it, which is the moment the issuer identity must be captured.
-  const { withCtx, sql: dsql } = await import("@/platform/tenancy");
-  const { captureDocumentIssuerIn } = await import("@/modules/documents/service");
-  await withCtx(ctx, async (tx) => {
-    await tx.execute(
-      dsql`update public.quote set status = 'sent' where id = ${quote.id} and org_id = ${orgId}`,
-    );
-    await captureDocumentIssuerIn(tx, ctx, "quote", quote.id);
-  });
+  /*
+   * Send it through the REAL lifecycle action.
+   *
+   * This check used to call captureDocumentIssuerIn itself, which is exactly the
+   * mistake that hid the H22.0 defect: the helper always worked, and nothing in
+   * the product called it. Driving markQuoteSent is the only version of this
+   * check that can fail when the wiring is missing.
+   */
+  const { markQuoteSent } = await import("@/modules/quotes/service");
+  await sql`update public.quote set status = 'approved' where id = ${quote.id} and org_id = ${orgId}`;
+  await markQuoteSent(ctx, "owner", quote.id);
+
   const [snap] = await sql`
-    select issuer_snapshot is not null as has_snapshot from public.quote where id = ${quote.id}`;
-  check("issuing captured an issuer snapshot", snap?.has_snapshot === true, "");
+    select issuer_snapshot ->> 'legalName' as legal_name,
+           issuer_snapshot is not null as has_snapshot,
+           issued_at is not null as has_issued_at
+    from public.quote where id = ${quote.id}`;
+  check("sending captured an issuer snapshot", snap?.has_snapshot === true, "");
+  check("sending recorded the issue date", snap?.has_issued_at === true, "");
+  check(
+    "the snapshot holds this organization's identity",
+    typeof snap?.legal_name === "string" && snap.legal_name.length > 0,
+    String(snap?.legal_name ?? ""),
+  );
 
   // Render both languages, then a real PDF with the bundled fonts.
   const { documentHtml, documentModel } = await import("@/modules/documents/service");
@@ -170,6 +182,27 @@ async function exercise(
   const ar = await documentHtml(ctx, "owner", { kind: "quote", id: quote.id, language: "ar" });
   check("English document renders", en.includes(quote.reference), `${en.length} bytes`);
   check("Arabic document renders right to left", ar.includes('dir="rtl"'), `${ar.length} bytes`);
+  check(
+    "the sent document carries no legacy notice",
+    !/Issued before document snapshots were recorded/i.test(en),
+    "it has a real snapshot",
+  );
+
+  /*
+   * The property the whole correction exists for: rename the company and confirm
+   * the document a customer already holds does not change.
+   */
+  const original = String(snap?.legal_name ?? "");
+  const renamed = `Renamed During Smoke ${run}`;
+  await sql`update public.company set legal_name = ${renamed} where org_id = ${orgId} and is_default`;
+  const afterRename = await documentHtml(ctx, "owner", {
+    kind: "quote",
+    id: quote.id,
+    language: "en",
+  });
+  check("a rename does not alter the sent document", afterRename.includes(original), original);
+  check("the new name does not leak into it", !afterRename.includes(renamed), "");
+  await sql`update public.company set legal_name = ${original} where org_id = ${orgId} and is_default`;
 
   const { renderDocument, renderPdf, embeddedDocumentFonts, closePdfBrowser } =
     await import("@/platform/documents");
