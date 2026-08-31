@@ -1,7 +1,8 @@
 /**
  * The inventory module's only public door (BUILD_BIBLE §3.3).
  *
- * Nothing outside this module imports ledger.ts or reconcile.ts directly.
+ * Nothing outside this module imports ledger.ts, operations.ts, historical.ts or
+ * reconcile.ts directly.
  */
 export {
   postMovement,
@@ -23,3 +24,21 @@ export {
   type BalanceDrift,
   type ReconcileResult,
 } from "./reconcile";
+
+export {
+  postGoodsReceiptToStock,
+  postConsumptionToStock,
+  reserveStock,
+  releaseReservation,
+  dispatchTransfer,
+  postStockCount,
+  NotStockableError,
+  type ReceiptPostResult,
+} from "./operations";
+
+export {
+  previewHistoricalStock,
+  type HistoricalPreview,
+  type HistoricalPosition,
+  type UnreconcilableRecord,
+} from "./historical";

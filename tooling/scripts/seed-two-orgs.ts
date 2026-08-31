@@ -562,6 +562,53 @@ export const SEEDERS: Record<string, Seeder> = {
             values (${org}, ${outMv}, ${layer}, 2, 100)`;
   },
 
+  // H22C stock operations. Each needs the same chain plus its own header.
+  stock_transfer: async (o, org, u) => {
+    const s = await seedStockChain(o, org, u);
+    const bin2 = randomUUID();
+    await o`insert into public.stock_location (id, org_id, warehouse_id, code, name_en)
+            values (${bin2}, ${org}, ${s.wh}, ${"B2" + randomUUID().slice(0, 5)}, 'Bleed bin 2')`;
+    await o`insert into public.stock_transfer
+              (org_id, reference, from_warehouse_id, from_location_id,
+               to_warehouse_id, to_location_id, created_by)
+            values (${org}, ${"BT-" + randomUUID().slice(0, 8)}, ${s.wh}, ${s.bin},
+                    ${s.wh}, ${bin2}, ${u})`;
+  },
+  stock_transfer_line: async (o, org, u) => {
+    const s = await seedStockChain(o, org, u);
+    const bin2 = randomUUID();
+    const tr = randomUUID();
+    await o`insert into public.stock_location (id, org_id, warehouse_id, code, name_en)
+            values (${bin2}, ${org}, ${s.wh}, ${"B3" + randomUUID().slice(0, 5)}, 'Bleed bin 3')`;
+    await o`insert into public.stock_transfer
+              (id, org_id, reference, from_warehouse_id, from_location_id,
+               to_warehouse_id, to_location_id, created_by)
+            values (${tr}, ${org}, ${"BTL-" + randomUUID().slice(0, 8)}, ${s.wh}, ${s.bin},
+                    ${s.wh}, ${bin2}, ${u})`;
+    await o`insert into public.stock_transfer_line (org_id, transfer_id, item_id, unit_id, qty)
+            values (${org}, ${tr}, ${s.item}, ${s.unit}, 1)`;
+  },
+  stock_count: async (o, org, u) => {
+    const s = await seedStockChain(o, org, u);
+    await o`insert into public.stock_count (org_id, reference, warehouse_id, created_by)
+            values (${org}, ${"BC-" + randomUUID().slice(0, 8)}, ${s.wh}, ${u})`;
+  },
+  stock_count_line: async (o, org, u) => {
+    const s = await seedStockChain(o, org, u);
+    const c = randomUUID();
+    await o`insert into public.stock_count (id, org_id, reference, warehouse_id, created_by)
+            values (${c}, ${org}, ${"BCL-" + randomUUID().slice(0, 8)}, ${s.wh}, ${u})`;
+    await o`insert into public.stock_count_line
+              (org_id, count_id, item_id, location_id, unit_id, counted_qty)
+            values (${org}, ${c}, ${s.item}, ${s.bin}, ${s.unit}, 3)`;
+  },
+  stock_reservation: async (o, org, u) => {
+    const s = await seedStockChain(o, org, u);
+    await o`insert into public.stock_reservation
+              (org_id, item_id, warehouse_id, location_id, unit_id, qty, created_by)
+            values (${org}, ${s.item}, ${s.wh}, ${s.bin}, ${s.unit}, 2, ${u})`;
+  },
+
   // H22.0 documents. A plan's link table needs a plan and a job; a share needs
   // a subject, and only a customer-addressed kind may be shared.
   week_plan: async (o, org, u) => {
