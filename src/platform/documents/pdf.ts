@@ -108,7 +108,37 @@ function pageFooterTemplate(rtl: boolean): string {
   );
 }
 
+/**
+ * How many documents may be rendering at once in this process.
+ *
+ * Every render opens a page in the shared Chromium and lays out a full document;
+ * the public share route can start one without a signed-in member behind it. The
+ * per-IP rate limit bounds one caller, not the total, so this bounds the total.
+ * Rejecting rather than queueing is deliberate: a caller waiting behind a long
+ * queue would hit the route's own timeout anyway, having held a connection open
+ * for the whole wait.
+ */
+const MAX_CONCURRENT_RENDERS = 4;
+let activeRenders = 0;
+
+export class PdfBusyError extends Error {
+  constructor() {
+    super("too many documents are rendering at once");
+    this.name = "PdfBusyError";
+  }
+}
+
 export async function renderPdf(html: string, options: PdfOptions = {}): Promise<Uint8Array> {
+  if (activeRenders >= MAX_CONCURRENT_RENDERS) throw new PdfBusyError();
+  activeRenders++;
+  try {
+    return await renderPdfInner(html, options);
+  } finally {
+    activeRenders--;
+  }
+}
+
+async function renderPdfInner(html: string, options: PdfOptions): Promise<Uint8Array> {
   const browser = await launch();
   const page = await browser.newPage();
   try {

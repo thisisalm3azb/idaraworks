@@ -18,16 +18,13 @@ import { assertCan, ForbiddenError, type Action } from "@/platform/authz";
 import { sql, withCtx, type Ctx, type TenantTx } from "@/platform/tenancy";
 import type { RoleArchetype } from "@/platform/registries";
 import {
-  IssuerSnapshot,
   captureIssuerSnapshot,
-  legacyIssuerFallback,
   renderDocument,
-  shellIssuerFromIdentity,
-  shellIssuerFromSnapshot,
   type DocLanguage,
   type DocumentRenderModel,
 } from "@/platform/documents";
 import { getDocumentProfile } from "@/modules/branding/service";
+import { resolveIssuer } from "./issuer-resolve";
 import { getQuote } from "@/modules/quotes/service";
 import { getInvoice } from "@/modules/invoices/service";
 import { formatDate, formatMoney } from "@/platform/format";
@@ -46,6 +43,31 @@ export class DocumentNotFoundError extends Error {
   constructor(kind: string, id: string) {
     super(`no ${kind} document for ${id}`);
     this.name = "DocumentNotFoundError";
+  }
+}
+
+/**
+ * Which documents may be handed to someone outside the organization.
+ *
+ * A quotation or an invoice is ADDRESSED to one customer: sending it to that
+ * customer is the whole point, and it contains only their own commercial terms.
+ *
+ * A weekly work plan is neither. It renders employee names against tasks, and
+ * it covers every job that week, which in a business serving more than one
+ * customer means one customer's link would show them another's job references,
+ * names and schedule. That is a disclosure, not a feature, so no share link can
+ * be minted for one and the public route refuses the kind outright.
+ */
+export const SHAREABLE_KINDS = ["quote", "invoice"] as const;
+export type ShareableKind = (typeof SHAREABLE_KINDS)[number];
+
+const isShareable = (kind: DocumentKind): kind is ShareableKind =>
+  (SHAREABLE_KINDS as readonly string[]).includes(kind);
+
+export class DocumentNotShareableError extends Error {
+  constructor(kind: string) {
+    super(`a ${kind} document cannot be shared outside the organization`);
+    this.name = "DocumentNotShareableError";
   }
 }
 
@@ -70,37 +92,6 @@ export type DocumentContext = {
   id: string;
   language: DocLanguage;
 };
-
-/**
- * The issuer block for a document: its own snapshot when it has one, the
- * organization's current identity otherwise.
- *
- * `legacyIssuerFallback` covers rows issued before snapshots existed. It is an
- * EXPLICIT path with a visible notice rather than a silent substitution — a
- * document that cannot prove what it was issued under should say so, not quietly
- * present today's details as history.
- */
-async function resolveIssuer(
-  ctx: Ctx,
-  storedSnapshot: unknown,
-  isIssued: boolean,
-): Promise<{ issuer: ReturnType<typeof shellIssuerFromIdentity>; notice?: string }> {
-  const profile = await getDocumentProfile(ctx);
-  if (!isIssued) {
-    return { issuer: shellIssuerFromIdentity(profile.identity, profile.logoDataUri) };
-  }
-  const parsed = IssuerSnapshot.safeParse(storedSnapshot);
-  if (parsed.success) {
-    return { issuer: shellIssuerFromSnapshot(parsed.data, profile.logoDataUri) };
-  }
-  // Issued, but with no usable snapshot: pre-H22.0, or a snapshot that no longer
-  // satisfies its own contract. Render from the legacy fallback and say so.
-  const fallback = legacyIssuerFallback(profile.identity);
-  return {
-    issuer: shellIssuerFromIdentity(fallback.identity, profile.logoDataUri),
-    notice: "Issued before document snapshots were recorded. Details shown are current.",
-  };
-}
 
 const t = (language: DocLanguage, en: string, ar: string) => (language === "en" ? en : ar);
 
@@ -340,6 +331,17 @@ export async function createDocumentShare(
   // Sharing sends a document outside the organization; viewing it internally is
   // not the same act, so it carries its own permission.
   assertCan(archetype, "documents.share");
+  // Permission is not enough: some documents must never leave, whoever asks.
+  if (!isShareable(input.kind)) throw new DocumentNotShareableError(input.kind);
+  /*
+   * The public route renders a shared document with pricePrivileged: true, which
+   * is right for the customer the quotation is addressed to and wrong as an
+   * escape hatch. Without this, a member whose price visibility is off could
+   * mint a link and then read, through that link, the money the application
+   * refuses to show them in the app. Minting is the only place this can be
+   * stopped, because by the time the link is opened there is no member left.
+   */
+  if (!ctx.pricePrivileged) throw new ForbiddenError("documents.share");
   const days = Math.min(Math.max(Math.trunc(input.days), 1), SHARE_MAX_DAYS);
   const { raw, hash } = newShareToken();
 
@@ -420,7 +422,10 @@ export async function listDocumentShares(
              view_count, created_at::text as created_at
       from public.document_share
       where org_id = ${ctx.orgId} and subject_type = ${kind} and subject_id = ${id}
-      order by created_at desc
+      -- Live links first: the cap must fall on dead rows, never on a link
+      -- someone still needs to revoke. Ordering by age alone hid the only
+      -- control for revoking once an org had 50 expired shares on a record.
+      order by (revoked_at is null and expires_at > now()) desc, created_at desc
       limit 50
     `),
   )) as unknown as Array<Record<string, unknown>>;
@@ -458,10 +463,15 @@ export async function resolveDocumentShare(rawToken: string): Promise<{
       from app.resolve_document_share(${hash})
     `)) as unknown as Array<Record<string, unknown>>;
     if (!rows[0]) return null;
+    const kind = rows[0].subject_type as DocumentKind;
+    // Second gate, independent of the one that mints links: a row for a kind
+    // that must not leave resolves to nothing, so a share created before this
+    // rule existed, or by any future path that forgets it, still serves nobody.
+    if (!isShareable(kind)) return null;
     await db.execute(sql`select app.record_document_share_view(${hash})`).catch(() => undefined);
     return {
       orgId: rows[0].org_id as string,
-      kind: rows[0].subject_type as DocumentKind,
+      kind,
       id: rows[0].subject_id as string,
     };
   } finally {
@@ -483,6 +493,9 @@ export {
   weekStartOf,
   listWeekPlans,
   listWeekPlanJobIds,
+  listWeekPlanPickerJobs,
+  MAX_WEEK_PLAN_JOBS,
+  WeekPlanTooManyJobsError,
   getWeekPlan,
   createWeekPlan,
   setWeekPlanJobs,
@@ -492,4 +505,5 @@ export {
   cancelWeekPlan,
   type WeekPlanStatus,
   type WeekPlanRow,
+  type PickerJob,
 } from "./week-plan";

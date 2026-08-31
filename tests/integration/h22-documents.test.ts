@@ -6,7 +6,7 @@
  * under however the company later changes, and every surface that can produce it
  * agrees on what it says.
  */
-import { randomUUID } from "node:crypto";
+import { randomUUID, randomBytes, createHash } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { closeAppDb, type Ctx } from "@/platform/tenancy";
 import { createOrgForUser } from "@/platform/auth/identity";
@@ -17,6 +17,7 @@ import { createJobFromPreset, listActivePresets, createTask } from "@/modules/jo
 import {
   documentModel,
   documentHtml,
+  DocumentNotShareableError,
   createDocumentShare,
   revokeDocumentShare,
   listDocumentShares,
@@ -51,6 +52,12 @@ let orgB = "";
 let quoteA = "";
 let planA = "";
 let jobA = "";
+
+/** A share token pair, for writing a row the minting path would have refused. */
+function shareTokenFor(): { raw: string; hash: string } {
+  const raw = randomBytes(32).toString("base64url");
+  return { raw, hash: createHash("sha256").update(raw).digest("hex") };
+}
 
 const ctxOf = (orgId: string, userId: string): Ctx => ({
   orgId,
@@ -421,5 +428,34 @@ describe("H22.0 — a share link exposes one document, briefly", () => {
     await expect(
       createDocumentShare(ctxOf(orgA, userA), "viewer", { kind: "quote", id: quoteA, days: 7 }),
     ).rejects.toBeInstanceOf(ForbiddenError);
+  });
+
+  /**
+   * A weekly plan names employees against tasks and covers every job that week,
+   * so one customer's link would show them another customer's work. Even an
+   * owner, who holds documents.share, cannot mint one: this is a property of the
+   * document, not of the person asking.
+   */
+  it("a weekly plan cannot be shared, even by an owner", { timeout: 180_000 }, async () => {
+    const plan = await createWeekPlan(ctxOf(orgA, userA), "owner", {
+      weekStart: "2026-03-02",
+      title: "Not for outside eyes",
+    });
+    await expect(
+      createDocumentShare(ctxOf(orgA, userA), "owner", {
+        kind: "week_plan",
+        id: plan.id,
+        days: 7,
+      }),
+    ).rejects.toBeInstanceOf(DocumentNotShareableError);
+
+    // And the resolver refuses the kind independently, so a row written by any
+    // other path still serves nobody.
+    const { hash, raw } = shareTokenFor();
+    await owner`
+      insert into public.document_share
+        (org_id, subject_type, subject_id, token_hash, expires_at, created_by)
+      values (${orgA}, 'week_plan', ${plan.id}, ${hash}, now() + interval '7 days', ${userA})`;
+    expect(await resolveDocumentShare(raw)).toBeNull();
   });
 });

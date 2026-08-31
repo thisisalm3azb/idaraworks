@@ -7,13 +7,11 @@ import { can } from "@/platform/authz";
 import { formatDate } from "@/platform/format";
 import {
   getWeekPlan,
-  listWeekPlanJobIds,
-  listDocumentShares,
+  listWeekPlanPickerJobs,
   type WeekPlanStatus,
 } from "@/modules/documents/service";
-import { listJobs, listAssignableMembers } from "@/modules/jobs/service";
+import { listAssignableMembers } from "@/modules/jobs/service";
 import { DocumentActions } from "../../../documents/DocumentActions";
-import { ShareSection } from "../../../documents/ShareSection";
 import {
   updateWeekPlanAction,
   setWeekPlanJobsAction,
@@ -49,16 +47,15 @@ export default async function WeekPlanDetailPage({
   if (!plan) notFound();
 
   const manage = can(resolved.archetype, "week.manage");
-  const canShare = can(resolved.archetype, "documents.share");
   const draft = plan.status === "draft";
-  const selected = new Set(await listWeekPlanJobIds(resolved.ctx, resolved.archetype, planId));
-  // The work picker only exists for a draft, so the jobs list is only read there.
-  const jobs = manage && draft ? await listJobs(resolved.ctx, resolved.archetype) : [];
+  // The work picker only exists for a draft, so the jobs are only read there. It
+  // returns open work plus whatever this plan already covers, because saving
+  // replaces the set from what the form posts: a selected job the picker did not
+  // render would be dropped without anyone asking for that.
+  const jobs =
+    manage && draft ? await listWeekPlanPickerJobs(resolved.ctx, resolved.archetype, planId) : [];
   const members =
     manage && draft ? await listAssignableMembers(resolved.ctx, resolved.archetype) : [];
-  const shares = canShare
-    ? await listDocumentShares(resolved.ctx, resolved.archetype, "week_plan", planId)
-    : [];
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-4">
@@ -140,10 +137,6 @@ export default async function WeekPlanDetailPage({
         <DocumentActions orgId={orgId} kind="week_plan" id={plan.id} />
       </Card>
 
-      {canShare ? (
-        <ShareSection orgId={orgId} kind="week_plan" id={plan.id} shares={shares} />
-      ) : null}
-
       {manage && draft ? (
         <>
           <Card>
@@ -209,7 +202,7 @@ export default async function WeekPlanDetailPage({
                           type="checkbox"
                           name="job_id"
                           value={j.id}
-                          defaultChecked={selected.has(j.id)}
+                          defaultChecked={j.selected}
                           className="size-5 shrink-0"
                         />
                         <span className="flex min-w-0 flex-col">

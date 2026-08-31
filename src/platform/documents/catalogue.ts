@@ -222,7 +222,9 @@ export const EXPORT_CATALOGUE: readonly ExportCatalogueEntry[] = [
     entitlementFeature: null,
     entitlementNote: "Never gated — planning the week is core to running the work.",
     redaction:
-      "Operational only: work, tasks and crew. Carries no money, so no cost redaction applies.",
+      "Operational only: work, tasks and crew. Carries no money, so no cost redaction applies. " +
+      "INTERNAL — it names employees and spans every customer's work that week, so it cannot be " +
+      "given a public share link (SHAREABLE_KINDS in the documents service).",
     statusEligibility: "any status; issued is the circulated document",
     draftWatermark: true,
     requiresIssuerSnapshot: true,

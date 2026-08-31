@@ -16,7 +16,20 @@ import { sql, withCtx, type Ctx } from "@/platform/tenancy";
 import type { RoleArchetype } from "@/platform/registries";
 import { formatDate } from "@/platform/format";
 import type { DocLanguage, DocumentRenderModel, DocumentSection } from "@/platform/documents";
+import { assignedJobCondition } from "@/modules/jobs/service";
+import { resolveIssuer } from "./issuer-resolve";
 import { getWeekPlan } from "./week-plan";
+
+/**
+ * Tasks rendered per covered job.
+ *
+ * The plan names one week, but a job's tasks accumulate over its whole life and
+ * completing one does not archive it, so an unbounded join renders every task
+ * ever created on every covered job. Sixty per job is far more than a week's
+ * work and keeps a long-running job from turning one document into thousands of
+ * rows the renderer must lay out.
+ */
+const TASKS_PER_JOB = 60;
 
 const t = (language: DocLanguage, en: string, ar: string) => (language === "en" ? en : ar);
 const dateLocale = (language: DocLanguage): "en" | "ar" => (language === "en" ? "en" : "ar");
@@ -42,6 +55,11 @@ export async function weekPlanModel(
   const plan = await getWeekPlan(ctx, archetype, id);
   if (!plan) throw new Error(`no weekly plan ${id}`);
 
+  // F-6: a foreman reaches only assigned work, always. The document is a read of
+  // the same jobs and tasks as every other surface, so it narrows the same way.
+  // Without this a plan hands a foreman the whole workshop's week.
+  const foreman = archetype === "foreman";
+
   const [meta] = (await withCtx(ctx, (tx) =>
     tx.execute(sql`
       select issuer_snapshot from public.week_plan where id = ${id} and org_id = ${ctx.orgId}
@@ -63,9 +81,16 @@ export async function weekPlanModel(
                  and up.status not in ('completed', 'cancelled')) as blockers
       from public.week_plan_job wpj
       join public.job j on j.id = wpj.job_id and j.org_id = wpj.org_id
-      left join public.task tk on tk.job_id = j.id and tk.org_id = j.org_id and tk.archived = false
+      left join lateral (
+        select tk.* from public.task tk
+        where tk.job_id = j.id and tk.org_id = j.org_id and tk.archived = false
+        order by tk.due_date nulls last, tk.created_at
+        limit ${TASKS_PER_JOB}
+      ) tk on true
       left join public.employee e on e.id = tk.assignee_employee_id and e.org_id = tk.org_id
       where wpj.org_id = ${ctx.orgId} and wpj.week_plan_id = ${id}
+        and wpj.removed_at is null
+        ${foreman ? sql`and ${assignedJobCondition(ctx)}` : sql``}
       order by wpj.sort, j.reference, tk.due_date nulls last, tk.created_at
     `),
   )) as unknown as Array<Record<string, unknown>>;
@@ -116,19 +141,15 @@ export async function weekPlanModel(
     emptyText: t(language, "No steps recorded for this work.", "لا توجد خطوات مسجلة لهذا العمل."),
   }));
 
-  const { shellIssuerFromIdentity, shellIssuerFromSnapshot, IssuerSnapshot, legacyIssuerFallback } =
-    await import("@/platform/documents");
-  const { getDocumentProfile } = await import("@/modules/branding/service");
-  const profile = await getDocumentProfile(ctx);
-  const isIssued = plan.status !== "draft";
-  const parsed = IssuerSnapshot.safeParse(meta?.issuer_snapshot);
-  const issuer =
-    isIssued && parsed.success
-      ? shellIssuerFromSnapshot(parsed.data, profile.logoDataUri)
-      : shellIssuerFromIdentity(
-          isIssued ? legacyIssuerFallback(profile.identity).identity : profile.identity,
-          profile.logoDataUri,
-        );
+  // The one resolver every document type uses. The inline version this replaced
+  // had both arms of its ternary producing the same value and dropped the
+  // notice, so an issued plan with no usable snapshot silently presented today's
+  // identity as the one it was issued under.
+  const { issuer, notice } = await resolveIssuer(
+    ctx,
+    meta?.issuer_snapshot,
+    plan.status !== "draft",
+  );
 
   return {
     kind: "week_plan",
@@ -139,6 +160,7 @@ export async function weekPlanModel(
     reference: plan.reference,
     dateText: `${formatDate(plan.weekStart, { locale: dateLocale(language) })} – ${formatDate(plan.weekEnd, { locale: dateLocale(language) })}`,
     statusText: plan.status,
+    noticeText: notice,
     revisionText: plan.revisionOfId ? t(language, "Revision", "مراجعة") : undefined,
     watermark: plan.status === "draft" ? "draft" : plan.status === "cancelled" ? "cancelled" : null,
     fields: [

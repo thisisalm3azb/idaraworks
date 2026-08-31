@@ -115,6 +115,9 @@ create table public.week_plan_job (
   job_id uuid not null,
   sort integer not null default 0,
   note text check (note is null or length(note) <= 500),
+  -- Taking work off a draft marks the row rather than deleting it, so the app
+  -- role needs no DELETE grant here. Readers filter on this being null.
+  removed_at timestamptz,
   created_at timestamptz not null default now(),
   constraint week_plan_job_plan_fk foreign key (week_plan_id, org_id)
     references public.week_plan (id, org_id) on delete restrict,
@@ -128,12 +131,17 @@ create policy week_plan_job_select on public.week_plan_job
   for select to app_user using (org_id = (select app.current_org_id()));
 create policy week_plan_job_insert on public.week_plan_job
   for insert to app_user with check (org_id = (select app.current_org_id()));
-create policy week_plan_job_delete on public.week_plan_job
-  for delete to app_user using (org_id = (select app.current_org_id()));
-grant select, insert, delete on public.week_plan_job to app_user;
--- DELETE is allowed here and nowhere else in this migration: removing a job
--- from a DRAFT plan is editing the plan, not destroying a business record. The
--- service refuses it once the plan is issued.
+create policy week_plan_job_update on public.week_plan_job
+  for update to app_user
+  using (org_id = (select app.current_org_id()))
+  with check (org_id = (select app.current_org_id()));
+grant select, insert on public.week_plan_job to app_user;
+grant update (sort, note, removed_at) on public.week_plan_job to app_user;
+-- No DELETE grant, here or anywhere (D-1.7). Editing a draft's covered work
+-- marks rows removed and revives them on re-selection, so the plan's history
+-- survives and no code path can destroy the lines of an ISSUED document even
+-- by mistake. The service refuses edits after issue as well; this is the layer
+-- that holds when the service is wrong.
 
 -- ── 3. Share links ──────────────────────────────────────────────────────────
 -- A revocable, expiring, single-document link. The token is stored HASHED: a

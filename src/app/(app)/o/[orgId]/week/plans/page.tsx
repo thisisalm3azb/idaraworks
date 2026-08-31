@@ -21,7 +21,7 @@ export default async function WeekPlansPage({
   searchParams,
 }: {
   params: Promise<{ orgId: string }>;
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; page?: string }>;
 }) {
   const { orgId } = await params;
   const sp = await searchParams;
@@ -31,7 +31,12 @@ export default async function WeekPlansPage({
   const t = await getT();
   const locale = await getServerLocale();
   const manage = can(resolved.archetype, "week.manage");
-  const plans = await listWeekPlans(resolved.ctx, resolved.archetype);
+  const PAGE = 50;
+  const page = Math.max(Number(sp.page ?? "1") || 1, 1);
+  const { rows: plans, hasMore } = await listWeekPlans(resolved.ctx, resolved.archetype, {
+    limit: PAGE,
+    offset: (page - 1) * PAGE,
+  });
   const members = manage ? await listAssignableMembers(resolved.ctx, resolved.archetype) : [];
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Dubai" }).format(new Date());
 
@@ -122,6 +127,30 @@ export default async function WeekPlansPage({
             ))}
           </ul>
         )}
+        {page > 1 || hasMore ? (
+          <div className="mt-3 flex items-center justify-between gap-2 text-sm">
+            {page > 1 ? (
+              <Link
+                href={`/o/${orgId}/week/plans?page=${page - 1}`}
+                className="text-brand hover:underline"
+              >
+                {t("common.previous")}
+              </Link>
+            ) : (
+              <span />
+            )}
+            {hasMore ? (
+              <Link
+                href={`/o/${orgId}/week/plans?page=${page + 1}`}
+                className="text-brand hover:underline"
+              >
+                {t("common.next")}
+              </Link>
+            ) : (
+              <span />
+            )}
+          </div>
+        ) : null}
       </Card>
     </div>
   );

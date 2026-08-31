@@ -24,6 +24,9 @@ import { resolveDocumentShare, documentModel } from "@/modules/documents/service
 import { renderDocument } from "@/platform/documents";
 
 export const dynamic = "force-dynamic";
+/** Chromium needs room to start on a cold serverless container, as on the
+ *  authenticated twin: the PDF path here launches the same browser. */
+export const maxDuration = 60;
 
 const NOT_AVAILABLE = `<!doctype html><html lang="en"><head><meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />

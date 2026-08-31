@@ -20,6 +20,7 @@ export default function robots(): MetadataRoute.Robots {
           "/mfa",
           "/invite/",
           "/reset-password",
+          "/d/",
           "/s/",
           "/api/",
           "/auth/",

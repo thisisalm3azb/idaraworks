@@ -470,6 +470,37 @@ export const SEEDERS: Record<string, Seeder> = {
                     '{}'::jsonb, ${"ab".repeat(32)}, 'user_change', ${u})`;
   },
 
+  // H22.0 documents. A plan's link table needs a plan and a job; a share needs
+  // a subject, and only a customer-addressed kind may be shared.
+  week_plan: async (o, org, u) => {
+    await o`insert into public.week_plan (org_id, reference, week_start, week_end, title, created_by)
+            values (${org}, ${"BLWP-" + randomUUID().slice(0, 8)}, '2026-01-05', '2026-01-11',
+                    'Bleed plan', ${u})`;
+  },
+  week_plan_job: async (o, org, u) => {
+    const plan = randomUUID();
+    const job = randomUUID();
+    await o`insert into public.week_plan (id, org_id, reference, week_start, week_end, created_by)
+            values (${plan}, ${org}, ${"BLWJ-" + randomUUID().slice(0, 8)}, '2026-01-12',
+                    '2026-01-18', ${u})`;
+    await o`insert into public.job (id, org_id, reference, name, status_key, status_category, created_by)
+            values (${job}, ${org}, ${"BLW-" + randomUUID().slice(0, 8)}, 'Bleed planned work',
+                    'draft', 'draft', ${u})`;
+    await o`insert into public.week_plan_job (org_id, week_plan_id, job_id, sort)
+            values (${org}, ${plan}, ${job}, 0)`;
+  },
+  document_share: async (o, org, u) => {
+    const q = randomUUID();
+    await o`insert into public.quote (id, org_id, reference, customer_name, status, created_by)
+            values (${q}, ${org}, ${"BLDS-" + randomUUID().slice(0, 8)}, 'Bleed customer',
+                    'draft', ${u})`;
+    await o`insert into public.document_share
+              (org_id, subject_type, subject_id, token_hash, expires_at, created_by)
+            values (${org}, 'quote', ${q},
+                    ${randomUUID().replace(/-/g, "") + randomUUID().replace(/-/g, "")},
+                    now() + interval '7 days', ${u})`;
+  },
+
   // H21 work management. A dependency needs two tasks, which need a job.
   task_dependency: async (o, org, u) => {
     const job = randomUUID();
