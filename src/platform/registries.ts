@@ -45,6 +45,11 @@ export const APPROVABLE_TYPES = [
   "payment", // org-configurable modes: none / always / amount_gte (OP-7)
   "task_completion", // H21 — a task marked requires_approval finishes through the inbox
   "asset_disposal", // H22E — taking an owned thing off the books needs a second person
+  // H23 — HR and payroll route through the same engine as everything else.
+  "leave_request",
+  "overtime_request",
+  "expense_claim",
+  "pay_run",
   // P3 (with QC): "stage_signoff", "qc_delivery_override"
 ] as const;
 export type ApprovableType = (typeof APPROVABLE_TYPES)[number];
@@ -67,6 +72,10 @@ export const ATTACHABLE_TYPES = [
   "supplier",
   "employee",
   "asset", // H22E — photographs, manuals, warranty certificates, disposal evidence
+  "leave_request", // H23 — medical certificates and supporting documents
+  "expense_claim", // H23 — receipts on claim lines
+  "overtime_request", // H23 — activity-feed identity; no file surface shipped
+  "pay_run", // H23 — activity-feed identity; no file surface shipped
 ] as const;
 export type AttachableType = (typeof ATTACHABLE_TYPES)[number];
 
@@ -93,6 +102,7 @@ export const AUDIT_ENTITY_TYPES = [
   "customer_update", // S7 — draft/edit/send are audited customer-facing mutations
   "share_token", // S7 — mint/revoke of a public share link are audited
   "onboarding_session", // S8 — propose/apply/undo of a guided onboarding are audited config mutations
+  "payslip", // H23 — issuance is audited; the slip itself is immutable
   "import_batch", // S8 — guided CSV imports (customers/employees/items) are audited
   "workspace_blueprint", // H14 — blueprint lifecycle (draft/validate/approve/reject/apply/undo)
   "lead", // H20 — pre-customer sales records (create/update/status/convert/archive)

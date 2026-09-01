@@ -124,6 +124,40 @@ const SUBJECTS: Record<string, SubjectConfig> = {
     onReject: "rejected",
     onWithdraw: "draft",
   },
+  /*
+   * H23 — HR and payroll. Every rejection lands in a WORKABLE state:
+   * leave/overtime go back to rejected-but-resubmittable via their own draft
+   * paths; a claim returns for revision; a pay run drops back to review so the
+   * exceptions can be fixed and the run re-submitted.
+   */
+  leave_request: {
+    table: "leave_request",
+    live: "pending",
+    onApprove: "approved",
+    onReject: "rejected",
+    onWithdraw: "draft",
+  },
+  overtime_request: {
+    table: "overtime_request",
+    live: "pending",
+    onApprove: "approved",
+    onReject: "rejected",
+    onWithdraw: "draft",
+  },
+  expense_claim: {
+    table: "expense_claim",
+    live: "submitted",
+    onApprove: "approved",
+    onReject: "returned",
+    onWithdraw: "draft",
+  },
+  pay_run: {
+    table: "pay_run",
+    live: "awaiting_approval",
+    onApprove: "approved",
+    onReject: "review",
+    onWithdraw: "review",
+  },
   // H21: a task marked requires_approval waits here. Rejection returns it to
   // in_progress — an explicit, workable state, never a dead end.
   task_completion: {
@@ -666,7 +700,15 @@ export async function decideApproval(
               ? "task"
               : r.subjectType === "asset_disposal"
                 ? "asset"
-                : "material_request",
+                : r.subjectType === "leave_request"
+                  ? "leave_request"
+                  : r.subjectType === "expense_claim"
+                    ? "expense_claim"
+                    : r.subjectType === "overtime_request"
+                      ? "overtime_request"
+                      : r.subjectType === "pay_run"
+                        ? "pay_run"
+                        : "material_request",
         entityId: r.subjectId,
         verb: r.outcome === "approved" ? "approved" : "rejected",
         summary: `${r.outcome} the ${r.subjectType.replace("_", " ")}${r.selfApproved ? " (self-approved)" : ""}`,
@@ -911,6 +953,11 @@ export async function listInbox(ctx: Ctx, archetype: RoleArchetype): Promise<Inb
     // Disposal proceeds are a sale amount, so they follow the price wall rather
     // than a purchasing permission.
     if (subjectType === "asset_disposal") return ctx.pricePrivileged ? amount : null;
+    // H23: leave and overtime carry no money at all; a claim amount rides the
+    // expense permission; a pay run total is PAY data and rides the cost wall.
+    if (subjectType === "leave_request" || subjectType === "overtime_request") return null;
+    if (subjectType === "expense_claim") return can(archetype, "expenses.view") ? amount : null;
+    if (subjectType === "pay_run") return ctx.costPrivileged ? amount : null;
     return seesPo ? amount : null; // material_request, purchase_order, expense
   };
   return rows.map((r) => ({

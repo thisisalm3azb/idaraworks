@@ -54,6 +54,11 @@ describe("registries (phase2 closed vocabularies)", () => {
         "task_completion",
         // H22E: taking an owned asset off the books needs a second person.
         "asset_disposal",
+        // H23: HR and payroll decisions ride the same engine as supply and money.
+        "leave_request",
+        "overtime_request",
+        "expense_claim",
+        "pay_run",
       ].sort(),
     );
     // invoice_issue is explicitly OUT of the MVP enum (audit C-1)
