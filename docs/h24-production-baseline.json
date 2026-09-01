@@ -1,18 +1,25 @@
 {
- "orgs": "39",
- "invoices": "78",
- "invoice_total": "164501650",
- "payments": "63",
- "payment_confirmed_total": "129667908",
- "expenses": "51",
- "expense_total": "19532695",
- "pos": "18",
- "grns": "13",
- "stock_moves": "0",
- "assets": "0",
- "pay_runs": "0",
- "quotes": "46",
- "earliest_invoice": "2023-09-10 12:00:00+00",
- "payment_statuses": "1"
+  "orgs": "39",
+  "invoices": "78",
+  "invoice_total": "164501650",
+  "payments": "63",
+  "payment_confirmed_total": "129667908",
+  "expenses": "51",
+  "expense_total": "19532695",
+  "pos": "18",
+  "grns": "13",
+  "stock_moves": "0",
+  "assets": "0",
+  "pay_runs": "0",
+  "quotes": "46",
+  "earliest_invoice": "2023-09-10 12:00:00+00",
+  "payment_statuses": "1",
+  "payment_status_breakdown": [
+    {
+      "status": "confirmed",
+      "n": 63
+    }
+  ],
+  "captured_at": "2026-09-01",
+  "production_commit": "53fec57"
 }
-payment statuses: [{"status":"confirmed","n":63}]
