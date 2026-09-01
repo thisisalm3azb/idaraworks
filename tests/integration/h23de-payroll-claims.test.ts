@@ -404,11 +404,11 @@ describe("expense claims", () => {
       await expect(finalizePayRun(A(), "owner", r2)).rejects.toThrow(/settled elsewhere/);
       await reopenPayRun(M(), "accounts", r2);
       await calculatePayRun(M(), "accounts", r2);
-      const line = await owner`
-        select snapshot from public.pay_run_line
-        where pay_run_id = ${r2} and employee_id = ${empE}`;
-      const snap = line[0]!.snapshot as { inputs: { reimbursements: unknown[] } };
-      expect(snap.inputs.reimbursements).toHaveLength(0);
+      // An off-cycle run carries ONLY adjustments and reimbursements; with the
+      // claim settled elsewhere it has nothing left to pay — zero lines.
+      const relines = await owner`
+        select count(*)::int as n from public.pay_run_line where pay_run_id = ${r2}`;
+      expect(relines[0]!.n).toBe(0);
 
       // And the paid claim cannot ALSO settle into the expense book.
       await expect(

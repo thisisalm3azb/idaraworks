@@ -64,7 +64,7 @@ export default async function PayRunPage({
       ) : null}
 
       <div className="flex flex-wrap items-center gap-2">
-        {manages && (run.status === "draft" || run.status === "review") ? (
+        {manages && (run.status === "draft" || run.status === "review") && run.runKind !== "reversal" ? (
           <form action={step}>
             <input type="hidden" name="run_id" value={run.id} />
             <input type="hidden" name="step" value="calculate" />

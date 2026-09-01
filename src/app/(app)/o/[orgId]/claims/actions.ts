@@ -3,6 +3,8 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { resolveCtxForAction } from "@/platform/auth/resolve";
+import { toMinorUnits } from "@/platform/format";
+import type { CurrencyCode } from "@/platform/registries";
 import {
   createClaim,
   submitClaim,
@@ -36,7 +38,11 @@ export async function createClaimAction(orgId: string, formData: FormData): Prom
       expenseDate: date,
       categoryKey: category,
       description,
-      ...(amountRaw ? { amountMinor: Math.round(Number(amountRaw) * 100) } : {}),
+      // Currency-exponent aware: an AED org multiplies by 100, a 3-decimal
+      // currency by 1000 — never a hard-coded 100.
+      ...(amountRaw
+        ? { amountMinor: toMinorUnits(Number(amountRaw), resolved.baseCurrency as CurrencyCode) }
+        : {}),
       ...(kmRaw ? { mileageKm: Number(kmRaw) } : {}),
     });
   }

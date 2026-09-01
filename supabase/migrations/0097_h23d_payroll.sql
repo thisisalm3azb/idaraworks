@@ -29,6 +29,10 @@ create policy pay_group_all on public.pay_group
   for all to app_user
   using (org_id = (select app.current_org_id()) and (select app.is_cost_privileged()))
   with check (org_id = (select app.current_org_id()) and (select app.is_cost_privileged()));
+-- ONE active pay group per organization: every calculate covers every employee
+-- (there is no group membership), so a second active group would pay everyone
+-- twice. Enforced here until group membership exists.
+create unique index pay_group_one_active_uq on public.pay_group (org_id) where active;
 grant select, insert on public.pay_group to app_user;
 grant update (name_en, name_ar, frequency, rounding_minor, active, updated_at)
   on public.pay_group to app_user;
@@ -40,7 +44,7 @@ create table public.pay_period (
   period_start date not null,
   period_end date not null,
   constraint pay_period_id_org_uq unique (id, org_id),
-  constraint pay_period_uq unique (org_id, pay_group_id, period_start),
+  constraint pay_period_uq unique (org_id, pay_group_id, period_start, period_end),
   constraint pay_period_group_fk foreign key (pay_group_id, org_id)
     references public.pay_group (id, org_id) on delete restrict,
   constraint pay_period_span_ck check (period_end >= period_start)

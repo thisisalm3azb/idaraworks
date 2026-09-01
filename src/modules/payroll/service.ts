@@ -83,13 +83,21 @@ async function ensurePeriod(
   periodStart: string,
   periodEnd: string,
 ): Promise<string> {
+  // Insert-or-reuse the EXACT span. Never an update: mutating an existing
+  // period's end date would silently change what another run already covers.
   const rows = (await tx.execute(sql`
     insert into public.pay_period (org_id, pay_group_id, period_start, period_end)
     values (${ctx.orgId}, ${payGroupId}, ${periodStart}, ${periodEnd})
-    on conflict (org_id, pay_group_id, period_start) do update set period_end = excluded.period_end
+    on conflict (org_id, pay_group_id, period_start, period_end) do nothing
     returning id::text as id
   `)) as unknown as Array<{ id: string }>;
-  return rows[0]!.id;
+  if (rows[0]) return rows[0].id;
+  const existing = (await tx.execute(sql`
+    select id::text as id from public.pay_period
+    where org_id = ${ctx.orgId} and pay_group_id = ${payGroupId}
+      and period_start = ${periodStart}::date and period_end = ${periodEnd}::date
+  `)) as unknown as Array<{ id: string }>;
+  return existing[0]!.id;
 }
 
 // ── the run ──────────────────────────────────────────────────────────────────
@@ -125,6 +133,34 @@ export async function createPayRun(
         select country, base_currency from public.org where id = ${ctx.orgId}
       `)) as unknown as Array<{ country: string | null; base_currency: string }>;
       const pack = packFor(org[0]?.country ?? null);
+      /*
+       * A REGULAR run must not overlap another live regular run of the group:
+       * regular runs pay the full month, so overlapping spans would pay the
+       * same days twice (and count the same overtime twice). The advisory lock
+       * serializes concurrent creators so the check cannot race with itself.
+       * Off-cycle and settlement runs overlap regular ones by design — they
+       * carry only adjustments and claim reimbursements (calculatePayRun).
+       */
+      if (input.runKind === "regular") {
+        await tx.execute(sql`
+          select pg_advisory_xact_lock(hashtextextended(${`${ctx.orgId}:payrun-create:${input.payGroupId}`}, 0))
+        `);
+        const overlapping = (await tx.execute(sql`
+          select r.reference from public.pay_run r
+          join public.pay_period p on p.id = r.period_id and p.org_id = r.org_id
+          where r.org_id = ${ctx.orgId} and r.pay_group_id = ${input.payGroupId}
+            and r.run_kind = 'regular' and r.status <> 'cancelled'
+            and p.period_start <= ${input.periodEnd}::date
+            and p.period_end >= ${input.periodStart}::date
+          limit 1
+        `)) as unknown as Array<{ reference: string }>;
+        if (overlapping[0]) {
+          throw new HrError(
+            `the period overlaps regular run ${overlapping[0].reference}`,
+            "invalid_state",
+          );
+        }
+      }
       const periodId = await ensurePeriod(tx, ctx, input.payGroupId, input.periodStart, input.periodEnd);
       const seq = await allocateReference(tx, ctx, "pay_run");
       const reference = formatRef("PAY", seq);
@@ -299,6 +335,14 @@ export async function calculatePayRun(
       `)) as unknown as Array<Record<string, unknown>>;
       const run = runs[0];
       if (!run) throw new HrError("pay run not found", "not_found");
+      if (run.run_kind === "reversal") {
+        // A reversal's lines are the negation of a finalized run — a
+        // recalculation would replace them with a fresh full-pay computation.
+        throw new HrError(
+          "a reversal run is computed from its original, never recalculated",
+          "invalid_state",
+        );
+      }
       if (run.status !== "draft" && run.status !== "review") {
         throw new HrError(`a ${run.status as string} run cannot be recalculated`, "invalid_state");
       }
@@ -320,7 +364,23 @@ export async function calculatePayRun(
         const inputs = await inputsFor(
           tx, ctx, emp, run.ps as string, run.pe as string, runId, pack,
         );
-        if (inputs.basicMonthlyMinor === 0 && inputs.recurring.length === 0) {
+        /*
+         * An off-cycle or final-settlement run is a CORRECTION instrument: it
+         * carries only what a person put on it — reasoned adjustments and
+         * approved claim reimbursements. Salary, recurring components, overtime,
+         * leave proration and loan installments belong to the ONE regular run
+         * for the period; repeating them here would pay them twice.
+         */
+        if (run.run_kind === "off_cycle" || run.run_kind === "final_settlement") {
+          inputs.basicMonthlyMinor = 0;
+          inputs.recurring = [];
+          inputs.overtimeMinutes = 0;
+          inputs.unpaidLeaveDays = 0;
+          inputs.loanInstallments = [];
+          if (inputs.adjustments.length === 0 && inputs.reimbursements.length === 0) {
+            continue; // nothing recorded for this employee on this run
+          }
+        } else if (inputs.basicMonthlyMinor === 0 && inputs.recurring.length === 0) {
           continue; // no pay set up — not an exception, simply not on this payroll
         }
         const result = calculateLine(inputs, pack ?? AE_PACK, Number(run.rounding_minor));
@@ -467,12 +527,22 @@ export async function finalizePayRun(
         }
       }
       if (claimIds.length > 0) {
+        /*
+         * FOR UPDATE: two DIFFERENT runs finalizing concurrently share no
+         * advisory lock, so without the row locks both could pass this check
+         * before either stamps — and both would pay the claim. Locking the
+         * claim rows serializes the finalizes; the loser re-reads a settled
+         * claim and aborts here instead of paying it twice.
+         */
         const payable = (await tx.execute(sql`
-          select count(*)::int as n from public.expense_claim
-          where org_id = ${ctx.orgId}
-            and id = any(${"{" + claimIds.join(",") + "}"}::uuid[])
-            and status = 'approved' and settlement_route = 'payroll'
-            and settled_pay_run_id is null
+          select count(*)::int as n from (
+            select 1 from public.expense_claim
+            where org_id = ${ctx.orgId}
+              and id = any(${"{" + claimIds.join(",") + "}"}::uuid[])
+              and status = 'approved' and settlement_route = 'payroll'
+              and settled_pay_run_id is null
+            for update
+          ) locked
         `)) as unknown as Array<{ n: number }>;
         if ((payable[0]?.n ?? 0) !== claimIds.length) {
           throw new HrError(
@@ -633,7 +703,7 @@ export async function createReversalRun(
                deduction_minor::text as d, employer_minor::text as emp, net_minor::text as n
         from public.pay_run_line where org_id = ${ctx.orgId} and pay_run_id = ${originalRunId}
       `)) as unknown as Array<Record<string, unknown>>;
-      let net = 0;
+      let gross = 0, ded = 0, employer = 0, net = 0;
       for (const l of lines) {
         const snap = {
           reversalOf: originalRunId,
@@ -641,19 +711,26 @@ export async function createReversalRun(
           original: l.snapshot,
         };
         // A reversal records NEGATIVE net; gross/deduction swap to keep the
-        // net = gross - deduction identity intact with integers.
+        // net = gross - deduction identity intact with integers, and the
+        // employer contribution is negated so employer cost reverses too.
         await tx.execute(sql`
           insert into public.pay_run_line
             (org_id, pay_run_id, employee_id, snapshot, gross_minor, deduction_minor,
              employer_minor, net_minor, exceptions)
           values (${ctx.orgId}, ${revId}, ${l.e as string}, ${JSON.stringify(snap)}::jsonb,
-                  ${Number(l.d)}, ${Number(l.g)}, ${0}, ${Number(l.d) - Number(l.g)}, '[]'::jsonb)
+                  ${Number(l.d)}, ${Number(l.g)}, ${-Number(l.emp)},
+                  ${Number(l.d) - Number(l.g)}, '[]'::jsonb)
         `);
+        gross += Number(l.d);
+        ded += Number(l.g);
+        employer += -Number(l.emp);
         net += Number(l.d) - Number(l.g);
       }
       await tx.execute(sql`
-        update public.pay_run set status = 'review', net_total_minor = ${net},
-               calculated_at = now(), updated_at = now()
+        update public.pay_run
+        set status = 'review', gross_total_minor = ${gross}, deduction_total_minor = ${ded},
+            employer_total_minor = ${employer}, net_total_minor = ${net},
+            calculated_at = now(), updated_at = now()
         where id = ${revId} and org_id = ${ctx.orgId}
       `);
       return { id: revId, reference };
