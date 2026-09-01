@@ -397,10 +397,8 @@ async function main(): Promise<void> {
       redirect: "manual",
     });
     const gateBody = await gate.text();
-    const showsNotFound =
-      gateBody.includes("404") || gateBody.includes("could not be found");
-    const leaksLeaveUi =
-      gateBody.includes("Request leave") || gateBody.includes("طلب إجازة");
+    const showsNotFound = gateBody.includes("404") || gateBody.includes("could not be found");
+    const leaksLeaveUi = gateBody.includes("Request leave") || gateBody.includes("طلب إجازة");
     check(
       "HR surfaces hidden while the flag is unset",
       (gate.status === 404 || (gate.status === 200 && showsNotFound)) && !leaksLeaveUi,
