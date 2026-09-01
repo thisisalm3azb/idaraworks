@@ -21,7 +21,12 @@ import { headers } from "next/headers";
 import { rateLimit } from "@/platform/http/rateLimit";
 import { clientIpFromHeaders } from "@/platform/http/clientIp";
 import { resolveDocumentShare, documentModel } from "@/modules/documents/service";
-import { renderDocument, isRenderFailure, pdfUnavailablePage } from "@/platform/documents";
+import {
+  renderDocument,
+  isRenderFailure,
+  pdfUnavailablePage,
+  renderingPdf,
+} from "@/platform/documents";
 import { logger } from "@/platform/logger";
 
 export const dynamic = "force-dynamic";
@@ -87,14 +92,19 @@ export async function GET(
       language,
     });
     if (wantsPdf) {
-      const { renderPdf, embeddedDocumentFonts } = await import("@/platform/documents");
-      const html = renderDocument(model, {
-        delivery: "embed",
-        embedded: await embeddedDocumentFonts(),
-      });
-      const pdf = await renderPdf(html, {
-        pageNumbers: true,
-        rtl: model.language !== "en",
+      /*
+       * Everything from here is RENDERING. The share resolved and the model
+       * loaded, so the document provably exists; whatever goes wrong now is a
+       * server problem, not a missing record, and the wrapper says so without
+       * anybody having to predict the message.
+       */
+      const pdf = await renderingPdf(async () => {
+        const { renderPdf, embeddedDocumentFonts } = await import("@/platform/documents");
+        const html = renderDocument(model, {
+          delivery: "embed",
+          embedded: await embeddedDocumentFonts(),
+        });
+        return renderPdf(html, { pageNumbers: true, rtl: model.language !== "en" });
       });
       const filename = `${model.reference.replace(/[^A-Za-z0-9._-]/g, "-")}.pdf`;
       return new Response(Buffer.from(pdf), {
@@ -150,6 +160,19 @@ export async function GET(
         },
       });
     }
+    /*
+     * Anything else really is a lookup failure, and it must still say so — but
+     * it must not say so SILENTLY. This returned 404 with no log line at all,
+     * which is how a broken renderer stayed invisible: the only trace of it was
+     * a customer telling somebody their document had vanished.
+     */
+    logger.error(
+      {
+        err: err instanceof Error ? `${err.name}: ${err.message}` : String(err),
+        wantsPdf,
+      },
+      "shared document request failed",
+    );
     return notAvailable();
   }
 }

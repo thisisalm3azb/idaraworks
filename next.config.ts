@@ -78,14 +78,35 @@ const nextConfig: NextConfig = {
   //                                (confirmFlowAction → runConfirmChain →
   //                                applyDraftBranding → uploadLogo → processLogo)
   // (watermarkImage also imports sharp but is not yet wired to any route.)
+  /*
+   * THE KEY IS A ROUTE GLOB. An exact route path matches NOTHING.
+   *
+   * Every entry here was keyed "/d/[token]", "/api/inngest", "/onboarding".
+   * None of them ever applied. Nor does adding the "/route" or "/page" suffix
+   * help: only a glob such as "/d/**" matches. A key that matches no route is
+   * not an error — the build succeeds, the deploy succeeds, and the function
+   * ships without the files it was told to carry.
+   *
+   * That is exactly how Download PDF stayed broken through the slice that set
+   * out to fix it. The include was added, a comment explained it, and the tracer
+   * silently ignored it. The values were always fine; only the keys were wrong,
+   * which is why reading the built .nft.json — not the config — is the only way
+   * to know. tooling/scripts/check-traced-payloads.ts does that and fails when a
+   * payload is absent.
+   *
+   * The two sharp entries had the same defect and had been inert since the day
+   * they were written, which is why the onboarding logo upload they were meant
+   * to fix went on failing on deploy. Their linux-only libraries cannot be
+   * verified from a Windows machine; the key shape is now the one proven to work.
+   */
   outputFileTracingIncludes: {
-    "/api/inngest": [
+    "/api/inngest/**": [
       "./node_modules/@img/sharp-linux-x64/**/*",
       "./node_modules/@img/sharp-libvips-linux-x64/**/*",
     ],
     // U2 branding: the logo upload server action re-encodes through sharp
     // (lazily imported) — the settings/branding route needs the same libs.
-    "/o/[orgId]/settings/branding": [
+    "/o/[orgId]/settings/branding/**": [
       "./node_modules/@img/sharp-linux-x64/**/*",
       "./node_modules/@img/sharp-libvips-linux-x64/**/*",
     ],
@@ -94,7 +115,7 @@ const nextConfig: NextConfig = {
     // — the branding-step logo stash and the final confirm-time upload — so this
     // function needs the native libs too, or the stash catch returns a generic
     // failure (the deployed-onboarding logo-upload bug).
-    "/onboarding": [
+    "/onboarding/**": [
       "./node_modules/@img/sharp-linux-x64/**/*",
       "./node_modules/@img/sharp-libvips-linux-x64/**/*",
     ],
@@ -110,19 +131,17 @@ const nextConfig: NextConfig = {
      * Both document routes render a PDF: the signed-in one and the public share
      * link. Same include, because they run as separate functions.
      */
-    "/api/o/[orgId]/documents/[kind]/[id]": [
-      // bin/ holds the .br payloads as FILES, so the glob must match files at
-      // that level — `**/*` alone wants a directory in between and matched
-      // nothing, which the build's own trace made visible.
+    "/api/o/**/documents/**": [
+      // bin/ holds the payloads @sparticuz decompresses into /tmp at runtime;
+      // chromium.br alone is 65 MB. Nothing imports them, so only an explicit
+      // include puts them in the function.
       "./node_modules/@sparticuz/chromium/bin/*",
-      "./node_modules/@sparticuz/chromium/bin/**/*",
     ],
-    "/d/[token]": [
-      // bin/ holds the .br payloads as FILES, so the glob must match files at
-      // that level — `**/*` alone wants a directory in between and matched
-      // nothing, which the build's own trace made visible.
+    "/d/**": [
+      // bin/ holds the payloads @sparticuz decompresses into /tmp at runtime;
+      // chromium.br alone is 65 MB. Nothing imports them, so only an explicit
+      // include puts them in the function.
       "./node_modules/@sparticuz/chromium/bin/*",
-      "./node_modules/@sparticuz/chromium/bin/**/*",
     ],
   },
   // U2 branding: the logo upload server action carries up to a 2 MB image

@@ -10,8 +10,14 @@
 import { NextResponse } from "next/server";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { ForbiddenError } from "@/platform/authz";
-import { renderDocument, isRenderFailure, renderUnavailable } from "@/platform/documents";
+import {
+  renderDocument,
+  isRenderFailure,
+  renderUnavailable,
+  renderingPdf,
+} from "@/platform/documents";
 import { DOCUMENT_KINDS, documentModel, type DocumentKind } from "@/modules/documents/service";
+import { logger } from "@/platform/logger";
 
 export const dynamic = "force-dynamic";
 /** Chromium needs room to start on a cold serverless container. */
@@ -70,14 +76,18 @@ export async function GET(
     // The PDF path loads the document through setContent(), which has no base
     // URL, so the font must travel WITH it or Arabic silently falls back to
     // whatever the container has — which on Linux is nothing.
-    const { renderPdf, embeddedDocumentFonts } = await import("@/platform/documents");
-    const html = renderDocument(model, {
-      delivery: "embed",
-      embedded: await embeddedDocumentFonts(),
-    });
-    const pdf = await renderPdf(html, {
-      pageNumbers: true,
-      rtl: model.language !== "en",
+    /*
+     * Wrapped, so the answer does not depend on recognising the message. By
+     * here the caller is authorized and the model has loaded: the document
+     * exists, and anything that fails from now on is the renderer.
+     */
+    const pdf = await renderingPdf(async () => {
+      const { renderPdf, embeddedDocumentFonts } = await import("@/platform/documents");
+      const html = renderDocument(model, {
+        delivery: "embed",
+        embedded: await embeddedDocumentFonts(),
+      });
+      return renderPdf(html, { pageNumbers: true, rtl: model.language !== "en" });
     });
     const filename = `${model.reference.replace(/[^A-Za-z0-9._-]/g, "-")}.pdf`;
     return new NextResponse(Buffer.from(pdf), {
@@ -114,7 +124,12 @@ export async function GET(
     }
 
     // A missing record and a record in another organization are the same
-    // response: nothing here confirms that an id exists elsewhere.
+    // response: nothing here confirms that an id exists elsewhere. It is logged
+    // either way — a 404 nobody records is how the render defect stayed hidden.
+    logger.error(
+      { err: err instanceof Error ? `${err.name}: ${err.message}` : String(err), wantsPdf },
+      "document request failed",
+    );
     return NextResponse.json({ error: "not found" }, { status: 404 });
   }
 }

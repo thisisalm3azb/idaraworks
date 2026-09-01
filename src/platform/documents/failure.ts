@@ -15,31 +15,72 @@ import { NextResponse } from "next/server";
 import { logger } from "@/platform/logger";
 
 /**
+ * The error thrown while producing a PDF for a document that was already found.
+ *
+ * WHY A WRAPPER AND NOT A MATCHER. The first version of this asked
+ * `isRenderFailure(err)` — a list of substrings the renderer was known to throw.
+ * It shipped, and production went on answering 404 for a document that plainly
+ * existed, because the error it actually threw was not on the list. That is the
+ * defining weakness of the approach: the list can only contain failures somebody
+ * already thought of, and the one that reaches production is by definition the
+ * one nobody did. Adding another needle each time is a treadmill, and every lap
+ * is a customer being told their invoice is gone.
+ *
+ * The distinction the routes need is not "what does this message say" but
+ * "where did this happen". By the time a route is building a PDF it has already
+ * resolved the share, loaded the model and rendered the HTML — the document is
+ * proven to exist. Any failure after that point is a rendering failure, whatever
+ * it says, including one nobody has seen yet.
+ *
+ * So the render is wrapped, and position decides. `isRenderFailure` then means
+ * exactly one thing: this came from inside that wrapper.
+ */
+export class PdfRenderError extends Error {
+  override readonly name = "PdfRenderError";
+  constructor(cause: unknown) {
+    super(cause instanceof Error ? cause.message : String(cause), { cause });
+  }
+}
+
+/**
+ * Run the PDF render, and mark anything it throws as a render failure.
+ *
+ * Wrap the NARROWEST possible region: the lookup must stay outside it, so a
+ * document in another organization still answers 404 rather than being dressed
+ * up as a server problem.
+ */
+export async function renderingPdf<T>(render: () => Promise<T>): Promise<T> {
+  try {
+    return await render();
+  } catch (err) {
+    throw err instanceof PdfRenderError ? err : new PdfRenderError(err);
+  }
+}
+
+/**
  * Did this fail because the PDF could not be produced, rather than because the
  * document could not be found?
  *
- * Matched on the shapes the renderer actually throws. Deliberately narrow: an
- * unrecognised error still falls through to 404, so a genuine lookup failure is
- * never dressed up as a server problem.
+ * True for anything raised inside `renderingPdf`. The substring list is kept
+ * only as a safety net for a caller that has not been wrapped yet — it can add
+ * a true, never remove one.
  */
 export function isRenderFailure(err: unknown): boolean {
+  if (err instanceof PdfRenderError) return true;
   if (!(err instanceof Error)) return false;
   if (err.name === "PdfBusyError") return true;
   const text = `${err.name} ${err.message}`.toLowerCase();
   return [
-    // The one production actually threw. @sparticuz/chromium decompresses its
-    // payload out of a bin/ directory that was never traced into the function,
-    // and says so in exactly these words — which the first version of this
-    // matcher missed, so the honest 503 would have gone on being a 404.
     "input directory does not exist",
-    "executablepath", // …or it could not work out where the binary should be
-    "enoent", // …or the path it resolved is not there
-    "browsertype.launch", // playwright could not start the browser
+    "executablepath",
+    "enoent",
+    "browsertype.launch",
     "failed to launch",
     "target closed",
     "protocol error",
     "timeout",
     "chromium",
+    "cannot find module",
   ].some((needle) => text.includes(needle));
 }
 

@@ -87,3 +87,70 @@ describe("telling a broken renderer from a missing document", () => {
     expect(body.printUrl, "and it names the way out").toBe("/doc?print=1");
   });
 });
+
+/**
+ * The wrapper, which replaced the matcher as the thing routes actually rely on.
+ *
+ * The matcher shipped, and production went on answering 404 for a document that
+ * plainly existed, because the error it really threw was not on the list. That
+ * is the permanent weakness of a substring list: it can only hold failures
+ * somebody already imagined, and the one that reaches production is the one
+ * nobody did. These tests are written to fail if anybody swaps position-based
+ * detection back for pattern matching.
+ */
+describe("a failure is judged by where it happened, not by what it says", () => {
+  it("marks anything thrown inside the render, however unfamiliar", async () => {
+    const { renderingPdf, isRenderFailure } = await import("@/platform/documents/failure");
+    // Deliberately a message no matcher would ever recognise.
+    const alien = new Error("quota exceeded for resource type 42");
+    await expect(
+      renderingPdf(async () => {
+        throw alien;
+      }),
+    ).rejects.toMatchObject({ name: "PdfRenderError" });
+
+    let caught: unknown;
+    try {
+      await renderingPdf(async () => {
+        throw alien;
+      });
+    } catch (e) {
+      caught = e;
+    }
+    expect(isRenderFailure(caught), "an unrecognised render error is still a render error").toBe(
+      true,
+    );
+    expect((caught as Error).cause, "the original is kept for the log").toBe(alien);
+  });
+
+  it("passes a success straight through", async () => {
+    const { renderingPdf } = await import("@/platform/documents/failure");
+    await expect(renderingPdf(async () => "pdf-bytes")).resolves.toBe("pdf-bytes");
+  });
+
+  it("does not double-wrap", async () => {
+    const { renderingPdf, PdfRenderError } = await import("@/platform/documents/failure");
+    const inner = new PdfRenderError(new Error("first"));
+    let caught: unknown;
+    try {
+      await renderingPdf(async () => {
+        throw inner;
+      });
+    } catch (e) {
+      caught = e;
+    }
+    expect(caught, "wrapping twice would bury the original cause").toBe(inner);
+  });
+
+  it("leaves a lookup failure OUTSIDE the wrapper still a 404", async () => {
+    /*
+     * The direction that matters most. A record in another organization must
+     * keep answering "not found" — the wrapper must be placed around the render
+     * only, never around the lookup, or a tenancy probe learns that an id exists
+     * somewhere.
+     */
+    const { isRenderFailure } = await import("@/platform/documents/failure");
+    expect(isRenderFailure(new Error("no rows returned"))).toBe(false);
+    expect(isRenderFailure(new Error("permission denied for table quote"))).toBe(false);
+  });
+});
