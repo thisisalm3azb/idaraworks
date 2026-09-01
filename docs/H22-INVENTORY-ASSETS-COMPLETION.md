@@ -2,7 +2,7 @@
 
 **Branch** `verify/h22` · **Base** `3662569` · **14 commits** · 91 files, ~25,900 insertions
 **Migrations** 0084–0092 (nine, ~3,500 lines of SQL) · **Tests** 284 H22 integration tests, 1,389 unit tests
-**Production status at time of writing** untouched — commit `3662569`, 84 migrations, zero H22 migrations applied
+**Production** untouched — commit `3662569`, 84 migrations, zero H22 migrations applied. Deployment is prepared and verified but **not performed**; see [Deployment](#deployment).
 
 ---
 
@@ -241,6 +241,27 @@ working unchanged against the new schema. The freeze trigger only rejects a
 Low, and deliberately so. The schema is additive, the backfills only fill new
 columns, and every new surface is behind a flag that is off. A production
 deployment of this branch changes nothing a customer can see.
+
+Because the release gate is off, the usual ordering constraint relaxes: the new
+code never queries an H22 table while the flag is off, so code and schema can go
+out in either order without a broken window between them.
+
+### Status: NOT DEPLOYED — awaiting the owner
+
+Everything up to the deployment is done and green. The two production-mutating
+steps were not run:
+
+1. `npx tsx tooling/scripts/migrate-prod.ts --confirm=apply-migrations-to-anhgeeutrwftsvuzfinf`
+2. merging `verify/h22` into `main`, which is what deploys the code
+
+Applying nine migrations to a live database holding real customer organizations
+is the owner's call to make, not one to take on their behalf. The evidence for
+that decision is above: CI green on `93ca8f7` for both the quality and
+integration workflows, the pre-flight clear on all four checks against
+production itself, and the schema additive with backward-compatible defaults.
+
+**Do not set `FEATURE_STOCK_SURFACES` in production.** Absent means off, which
+is the intended state until the system has been exercised on a real deployment.
 
 ---
 
