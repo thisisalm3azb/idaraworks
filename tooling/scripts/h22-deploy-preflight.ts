@@ -28,7 +28,10 @@ import { config } from "dotenv";
 config({ path: [".env.local"], quiet: true });
 
 import postgres from "postgres";
-import { PRODUCTION_PROJECT_REF, targetsOnlyProductionProject } from "../../tests/integration/guard-env";
+import {
+  PRODUCTION_PROJECT_REF,
+  targetsOnlyProductionProject,
+} from "../../tests/integration/guard-env";
 
 async function main(): Promise<void> {
   if (!targetsOnlyProductionProject()) {
