@@ -345,6 +345,34 @@ alter table public.stock_cost_layer
 grant update (qty_remaining, value_remaining_minor, depleted_at)
   on public.stock_cost_layer to app_user;
 
+-- ── 9. A layer that says nothing about its value is worth rate x quantity ────
+/*
+ * The same lesson as accepted_qty in 0087, learned again: adding a NOT NULL
+ * column breaks every writer that predates it, and "every writer" always turns
+ * out to include one nobody remembered.
+ *
+ * Filling it here rather than in each caller means a seed script, a fixture or
+ * an older code path records the same fact the posting path does. It is not a
+ * guess: at the moment a layer is created, rate x quantity IS its value — the
+ * two only diverge later, as draws take rounded shares out of it.
+ */
+create function app.stock_cost_layer_value_default()
+returns trigger
+language plpgsql
+as $$
+begin
+  if new.value_remaining_minor is null then
+    new.value_remaining_minor := round(coalesce(new.unit_cost_minor, 0) * coalesce(new.qty_remaining, 0));
+  end if;
+  return new;
+end;
+$$;
+revoke all on function app.stock_cost_layer_value_default() from public;
+
+create trigger stock_cost_layer_value_default
+  before insert on public.stock_cost_layer
+  for each row execute function app.stock_cost_layer_value_default();
+
 comment on column public.stock_cost_layer.value_remaining_minor is
   'What is left to charge out of this layer, in base-currency minor units. The last draw takes all of it, so rounding never creates or destroys value.';
 
@@ -410,6 +438,31 @@ set local session_replication_role = origin;
 alter table public.stock_layer_consumption
   alter column value_minor set not null,
   add constraint stock_layer_consumption_value_ck check (value_minor >= 0);
+
+/*
+ * And the same for a draw's recorded amount.
+ *
+ * A row that states a rate and a quantity but no amount means the obvious thing:
+ * the amount is the two multiplied. Only the posting path knows better — it has
+ * the exact figure the layer gave up — so it passes one and everything else is
+ * filled in here.
+ */
+create function app.stock_layer_consumption_value_default()
+returns trigger
+language plpgsql
+as $$
+begin
+  if new.value_minor is null then
+    new.value_minor := round(coalesce(new.unit_cost_minor, 0) * coalesce(new.qty, 0));
+  end if;
+  return new;
+end;
+$$;
+revoke all on function app.stock_layer_consumption_value_default() from public;
+
+create trigger stock_layer_consumption_value_default
+  before insert on public.stock_layer_consumption
+  for each row execute function app.stock_layer_consumption_value_default();
 
 comment on column public.stock_layer_consumption.value_minor is
   'The exact base-currency amount this draw took from the layer. unit_cost_minor is the rate it worked out to and is for reading, not for arithmetic.';
