@@ -10,6 +10,7 @@
  */
 import { randomUUID } from "node:crypto";
 import type postgres from "postgres";
+import { H23_SEEDERS } from "./seed-h23";
 
 type Owner = ReturnType<typeof postgres>;
 /**
@@ -119,6 +120,8 @@ function filePath(orgId: string): string {
  * populated by createOrgForUser); every other org-scoped table gets a real insert.
  */
 export const SEEDERS: Record<string, Seeder> = {
+  // H23 — people, time, leave, payroll, claims (tooling/scripts/seed-h23.ts).
+  ...H23_SEEDERS,
   // ── seeded by org creation ──
   company: noop,
   membership: noop,
