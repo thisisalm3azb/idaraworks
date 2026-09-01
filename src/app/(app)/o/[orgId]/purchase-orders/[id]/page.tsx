@@ -20,7 +20,7 @@ export default async function PoDetailPage({
   searchParams,
 }: {
   params: Promise<{ orgId: string; id: string }>;
-  searchParams: Promise<{ ok?: string; error?: string }>;
+  searchParams: Promise<{ ok?: string; error?: string; warn?: string }>;
 }) {
   const { orgId, id } = await params;
   const sp = await searchParams;
@@ -50,6 +50,16 @@ export default async function PoDetailPage({
       {sp.ok === "received" ? (
         <p className="rounded-md bg-success-soft px-3 py-2 text-sm text-success">
           {t("po.grn_recorded")}
+        </p>
+      ) : null}
+      {/*
+       * The receipt is safe; the stock ledger did not take it. Said plainly,
+       * because the alternative is somebody trusting a stock figure that never
+       * moved. Receiving again re-posts without duplicating.
+       */}
+      {sp.warn === "not_stocked" ? (
+        <p className="rounded-md bg-warning-soft px-3 py-2 text-sm text-warning" role="alert">
+          {t("po.grn_not_stocked")}
         </p>
       ) : null}
       {sp.error ? (

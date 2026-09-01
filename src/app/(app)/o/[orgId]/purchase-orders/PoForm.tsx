@@ -5,8 +5,10 @@ import { useRouter } from "next/navigation";
 import { Button, Card } from "@/platform/ui";
 import { createPoAction, type PoCreatePayload } from "./actions";
 
-type Line = { itemName: string; qty: number; unit: string; unitCostMinor: number };
+type Line = { itemId: string; itemName: string; qty: number; unit: string; unitCostMinor: number };
 type Supplier = { id: string; name: string };
+/** A catalogue item an order line can name instead of describing in free text. */
+export type PickableItem = { id: string; sku: string; name: string; unit: string };
 type Job = { id: string; reference: string };
 export type PoDict = {
   title: string;
@@ -14,6 +16,8 @@ export type PoDict = {
   job: string;
   add_line: string;
   item: string;
+  item_free_text: string;
+  item_pick: string;
   unit_cost: string;
   vat: string;
   notes: string;
@@ -27,12 +31,18 @@ export function PoForm({
   orgId,
   suppliers,
   jobs,
+  items,
   dict,
   dir,
 }: {
   orgId: string;
   suppliers: Supplier[];
   jobs: Job[];
+  /**
+   * The catalogue. Empty for an organization that keeps none, in which case the
+   * form behaves exactly as it always did — free text only.
+   */
+  items: PickableItem[];
   dict: PoDict;
   dir: "ltr" | "rtl";
 }) {
@@ -42,7 +52,7 @@ export function PoForm({
   const [vat, setVat] = useState(0);
   const [notes, setNotes] = useState("");
   const [lines, setLines] = useState<Line[]>([
-    { itemName: "", qty: 1, unit: "pcs", unitCostMinor: 0 },
+    { itemId: "", itemName: "", qty: 1, unit: "pcs", unitCostMinor: 0 },
   ]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -69,6 +79,10 @@ export function PoForm({
       vatMinor: vat || 0,
       notes: notes.trim() || undefined,
       lines: clean.map((l) => ({
+        // The id is what makes a receipt against this line able to become
+        // stock. Without it the line is a description of something bought, and
+        // the warehouse never hears about it.
+        itemId: l.itemId || undefined,
         itemName: l.itemName.trim(),
         qty: l.qty,
         unit: l.unit.trim() || "pcs",
@@ -124,12 +138,46 @@ export function PoForm({
         <label className="mb-2 block text-sm font-medium text-ink">{dict.add_line}</label>
         {lines.map((l, i) => (
           <div key={i} className="mb-2 flex flex-wrap items-center gap-2">
-            <input
-              value={l.itemName}
-              onChange={(e) => setLine(i, { itemName: e.target.value })}
-              placeholder={dict.item}
-              className="min-h-11 flex-1 rounded-md border border-line-strong bg-card px-3 text-base text-ink"
-            />
+            {/*
+             * Pick from the catalogue, or describe it.
+             *
+             * Both are real: a business orders catalogue stock AND one-off
+             * things that will never be an item. Only the first can become
+             * stock, so choosing an item fills the name and unit from the
+             * catalogue and the free-text box steps aside.
+             */}
+            {items.length > 0 ? (
+              <select
+                value={l.itemId}
+                aria-label={dict.item_pick}
+                onChange={(e) => {
+                  const picked = items.find((it) => it.id === e.target.value);
+                  setLine(
+                    i,
+                    picked
+                      ? { itemId: picked.id, itemName: picked.name, unit: picked.unit }
+                      : { itemId: "", itemName: "" },
+                  );
+                }}
+                className="min-h-11 flex-1 rounded-md border border-line-strong bg-card px-3 text-base text-ink"
+              >
+                <option value="">{dict.item_free_text}</option>
+                {items.map((it) => (
+                  <option key={it.id} value={it.id}>
+                    {it.sku} — {it.name}
+                  </option>
+                ))}
+              </select>
+            ) : null}
+            {l.itemId === "" ? (
+              <input
+                value={l.itemName}
+                onChange={(e) => setLine(i, { itemName: e.target.value })}
+                placeholder={dict.item}
+                aria-label={dict.item}
+                className="min-h-11 flex-1 rounded-md border border-line-strong bg-card px-3 text-base text-ink"
+              />
+            ) : null}
             <input
               type="number"
               min={0}
@@ -156,7 +204,10 @@ export function PoForm({
           variant="secondary"
           type="button"
           onClick={() =>
-            setLines((p) => [...p, { itemName: "", qty: 1, unit: "pcs", unitCostMinor: 0 }])
+            setLines((p) => [
+              ...p,
+              { itemId: "", itemName: "", qty: 1, unit: "pcs", unitCostMinor: 0 },
+            ])
           }
         >
           {dict.add_line}
