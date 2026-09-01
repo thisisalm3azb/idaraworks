@@ -359,6 +359,75 @@ export const EXPORT_ENTITIES = {
       ]);
     },
   },
+  // ── H24I: the books leave through the same paged door ──────────────────────
+  gl_accounts: {
+    headers: [
+      "code",
+      "name_en",
+      "name_ar",
+      "account_type",
+      "normal_balance",
+      "is_control",
+      "system_key",
+      "archived_at",
+    ],
+    page: async (tx, ctx, limit, offset) => {
+      const rows = (await tx.execute(sql`
+        select code, name_en, name_ar, account_type, normal_balance,
+               is_control::text as is_control, system_key, archived_at::text as archived_at
+        from public.gl_account where org_id = ${ctx.orgId}
+        order by code, id limit ${limit} offset ${offset}`)) as unknown as Array<
+        Record<string, unknown>
+      >;
+      return rows.map((r) => [
+        r.code,
+        r.name_en,
+        r.name_ar,
+        r.account_type,
+        r.normal_balance,
+        r.is_control,
+        r.system_key,
+        r.archived_at,
+      ]);
+    },
+  },
+  journal_entries: {
+    headers: [
+      "entry_no",
+      "entry_date",
+      "status",
+      "journal_kind",
+      "memo",
+      "currency",
+      "total_debit_minor",
+      "base_total_debit_minor",
+      "source_type",
+      "posted_at",
+    ],
+    page: async (tx, ctx, limit, offset) => {
+      const rows = (await tx.execute(sql`
+        select entry_no, entry_date::text as entry_date, status, journal_kind, memo, currency,
+               total_debit_minor::text as total_debit_minor,
+               base_total_debit_minor::text as base_total_debit_minor,
+               source_type, posted_at::text as posted_at
+        from public.journal_entry where org_id = ${ctx.orgId}
+        order by entry_date, entry_no limit ${limit} offset ${offset}`)) as unknown as Array<
+        Record<string, unknown>
+      >;
+      return rows.map((r) => [
+        r.entry_no,
+        r.entry_date,
+        r.status,
+        r.journal_kind,
+        r.memo,
+        r.currency,
+        r.total_debit_minor,
+        r.base_total_debit_minor,
+        r.source_type,
+        r.posted_at,
+      ]);
+    },
+  },
 } as const satisfies Record<string, EntityDef>;
 
 export type ExportEntity = keyof typeof EXPORT_ENTITIES;

@@ -8,7 +8,7 @@
 import { z } from "zod";
 import { command } from "@/platform/audit";
 import { assertCan } from "@/platform/authz";
-import { sql, withCtx, type Ctx, type TenantTx } from "@/platform/tenancy";
+import { sql, withCtx, type Ctx } from "@/platform/tenancy";
 import type { RoleArchetype } from "@/platform/registries";
 import { allocateReference, formatRef } from "@/platform/reference/sequence";
 import { FinanceError, postFromSourceIn, systemAccountIn } from "./ledger";

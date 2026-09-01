@@ -14,7 +14,6 @@ import { createOrgForUser, inviteMember, SeatLimitError } from "@/platform/auth/
 import {
   ADDONS,
   BUNDLES,
-  getAddon,
   resolveEntitlements,
   invalidateEntitlements,
   BillingReadOnlyError,

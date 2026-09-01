@@ -601,6 +601,29 @@ export const EXPORT_CATALOGUE: readonly ExportCatalogueEntry[] = [
     redaction: "none (tenant's own configuration).",
     availability: "foundation_ready",
   }),
+  // ── H24I: ledger data exports ──────────────────────────────────────────────
+  data({
+    id: "data_gl_accounts",
+    nameEn: "Chart of accounts",
+    nameAr: "دليل الحسابات",
+    source: "gl_account",
+    permission: "data.export",
+    entitlementFeature: null,
+    entitlementNote: "Never gated.",
+    redaction: "none (account structure only, no balances).",
+    availability: "available", // H24I
+  }),
+  data({
+    id: "data_journal_entries",
+    nameEn: "Journal entries",
+    nameAr: "قيود اليومية",
+    source: "journal_entry (header totals; lines drill in-app)",
+    permission: "data.export",
+    entitlementFeature: null,
+    entitlementNote: "Never gated.",
+    redaction: "none — exporters (owner/admin/accounts) keep the books.",
+    availability: "available", // H24I
+  }),
 ];
 
 /** Convenience views. */

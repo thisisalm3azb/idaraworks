@@ -10,3 +10,4 @@ export * from "./banking";
 export * from "./subledgers";
 export * from "./fx";
 export * from "./tax";
+export * from "./reports";

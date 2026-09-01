@@ -648,7 +648,7 @@ export async function addCtAdjustment(
   return command(
     ctx,
     {
-      audit: (r: { id: string }) => ({
+      audit: () => ({
         action: "finance.tax.ct_adjustment",
         entityType: "tax_return",
         entityId: input.returnId,
