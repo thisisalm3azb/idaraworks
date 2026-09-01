@@ -14,6 +14,11 @@ type Grantable = Exclude<RoleArchetype, "worker_reserved_p3">;
 export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
   // Full member management, file lifecycle, ALL config + masters + skeleton (doc 06 row-by-row).
   owner: [
+    "assets.view",
+    "assets.manage",
+    "assets.assign",
+    "assets.maintain",
+    "assets.dispose",
     "inventory.view",
     "inventory.receive",
     "inventory.issue",
@@ -105,6 +110,11 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
     "pipeline.configure",
   ],
   admin: [
+    "assets.view",
+    "assets.manage",
+    "assets.assign",
+    "assets.maintain",
+    "assets.dispose",
     "inventory.view",
     "inventory.receive",
     "inventory.issue",
@@ -196,6 +206,10 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
   // Manager (doc 08: the Workshop Manager variant): masters M, jobs/reports, NO
   // config, NO salary/HR side-tables, no invite/deactivate/legal-hold.
   manager: [
+    "assets.view",
+    "assets.manage",
+    "assets.assign",
+    "assets.maintain",
     "inventory.view",
     "inventory.receive",
     "inventory.issue",
@@ -269,6 +283,9 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
   // employee/catalog/member/customer/config surfaces — S3's report form gets
   // its scoped lookups with its slice.
   foreman: [
+    "assets.view",
+    "assets.assign",
+    "assets.maintain",
     "inventory.view",
     "inventory.issue",
     "jobs.view",
@@ -292,6 +309,7 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
     "digest.view",
   ],
   procurement: [
+    "assets.view",
     "inventory.view",
     "inventory.receive",
     "members.view",
@@ -322,6 +340,7 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
     "digest.view",
   ],
   accounts: [
+    "assets.view",
     "inventory.view",
     "valuation.view",
     "documents.share",

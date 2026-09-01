@@ -102,6 +102,14 @@ export type Action =
   | "inventory.count"
   | "warehouse.manage"
   | "valuation.view"
+  // H22E — the asset register. Kept apart from inventory because stock is held
+  // to be consumed or sold and an asset is held to be USED: the storekeeper who
+  // hands out a drill is not the person who writes one off the books.
+  | "assets.view"
+  | "assets.manage"
+  | "assets.assign"
+  | "assets.maintain"
+  | "assets.dispose"
   | "billing.view"
   | "billing.manage"
   // ── H20 "Sell" — the sales CRM (leads → opportunities → quotation) ────────
@@ -289,6 +297,22 @@ export const MATRIX: Record<Action, readonly Grantable[]> = {
   "warehouse.manage": ["owner", "admin", "manager"],
   // Valuation is money: it follows the cost wall, not the stock wall.
   "valuation.view": ["owner", "admin", "accounts"],
+
+  /*
+   * H22E assets. The split is by consequence, not by convenience.
+   *
+   * Anyone who works with the equipment needs to SEE it. Handing it out and
+   * taking it back is a foreman's daily job. Maintaining it is theirs too.
+   * REGISTERING one changes what the organization says it owns, and PROPOSING
+   * to dispose of one starts the process that takes it off the books — the last
+   * two are deliberately narrower, and disposal still has to be approved by
+   * somebody else through the ordinary approval engine.
+   */
+  "assets.view": ["owner", "admin", "manager", "procurement", "foreman", "accounts"],
+  "assets.manage": ["owner", "admin", "manager"],
+  "assets.assign": ["owner", "admin", "manager", "foreman"],
+  "assets.maintain": ["owner", "admin", "manager", "foreman"],
+  "assets.dispose": ["owner", "admin"],
 
   // ── H20 "Sell" (sales CRM). Leads/opportunities are commercial records:
   // owner/admin/manager work them (the manager archetype is the selling

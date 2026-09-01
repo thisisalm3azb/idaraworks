@@ -31,6 +31,7 @@ import {
 } from "@/platform/events";
 import { createNotificationIn } from "@/platform/notifications";
 import { sql, withCtx, type Ctx, type TenantTx } from "@/platform/tenancy";
+import { APPROVABLE_TYPES } from "@/platform/registries";
 import type { RoleArchetype } from "@/platform/registries";
 
 export class ApprovalNotFoundError extends Error {
@@ -109,6 +110,19 @@ const SUBJECTS: Record<string, SubjectConfig> = {
     onApprove: "confirmed",
     onReject: "rejected",
     onWithdraw: "recorded",
+  },
+  /*
+   * H22E: disposing of an asset is proposed by one person and decided by
+   * another, through this engine rather than a private one — same routing, same
+   * self-approval guard, same audit. Rejection returns the request to draft so
+   * the reason can be improved and put again, which is what actually happens.
+   */
+  asset_disposal: {
+    table: "asset_disposal",
+    live: "submitted",
+    onApprove: "approved",
+    onReject: "rejected",
+    onWithdraw: "draft",
   },
   // H21: a task marked requires_approval waits here. Rejection returns it to
   // in_progress — an explicit, workable state, never a dead end.
@@ -253,14 +267,15 @@ export async function validateRules(
 
 // ── rule management (owner/admin; org-editable, config-audited) ──────────────
 export const CreateRuleInput = z.object({
-  subjectType: z.enum([
-    "material_request",
-    "expense",
-    "quote_send",
-    "purchase_order",
-    "payment",
-    "task_completion",
-  ]),
+  /*
+   * Derived from the registry, not transcribed from it.
+   *
+   * This list used to be typed out here as well, so adding a subject meant
+   * remembering four places — the SUBJECTS config, the database CHECK, the
+   * registry and this. H22E forgot exactly one of them and every asset test
+   * failed at fixture setup. Reading the registry makes that impossible.
+   */
+  subjectType: z.enum(APPROVABLE_TYPES),
   conditionKind: z.enum(["always", "amount_gte", "urgency_in"]),
   amountGteMinor: z.number().int().min(0).optional(),
   urgencyIn: z.array(z.string().min(1).max(20)).optional(),
@@ -649,7 +664,9 @@ export async function decideApproval(
             ? "purchase_order"
             : r.subjectType === "task_completion"
               ? "task"
-              : "material_request",
+              : r.subjectType === "asset_disposal"
+                ? "asset"
+                : "material_request",
         entityId: r.subjectId,
         verb: r.outcome === "approved" ? "approved" : "rejected",
         summary: `${r.outcome} the ${r.subjectType.replace("_", " ")}${r.selfApproved ? " (self-approved)" : ""}`,
@@ -891,6 +908,9 @@ export async function listInbox(ctx: Ctx, archetype: RoleArchetype): Promise<Inb
     if (subjectType === "payment") return seesPayments ? amount : null;
     // A task completion carries no money; never borrow a purchasing permission for it.
     if (subjectType === "task_completion") return null;
+    // Disposal proceeds are a sale amount, so they follow the price wall rather
+    // than a purchasing permission.
+    if (subjectType === "asset_disposal") return ctx.pricePrivileged ? amount : null;
     return seesPo ? amount : null; // material_request, purchase_order, expense
   };
   return rows.map((r) => ({

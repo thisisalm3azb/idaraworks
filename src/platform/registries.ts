@@ -44,6 +44,7 @@ export const APPROVABLE_TYPES = [
   "purchase_order", // MR-less or over-threshold only (audit F-3)
   "payment", // org-configurable modes: none / always / amount_gte (OP-7)
   "task_completion", // H21 — a task marked requires_approval finishes through the inbox
+  "asset_disposal", // H22E — taking an owned thing off the books needs a second person
   // P3 (with QC): "stage_signoff", "qc_delivery_override"
 ] as const;
 export type ApprovableType = (typeof APPROVABLE_TYPES)[number];
@@ -65,6 +66,7 @@ export const ATTACHABLE_TYPES = [
   "customer",
   "supplier",
   "employee",
+  "asset", // H22E — photographs, manuals, warranty certificates, disposal evidence
 ] as const;
 export type AttachableType = (typeof ATTACHABLE_TYPES)[number];
 
@@ -101,6 +103,7 @@ export const AUDIT_ENTITY_TYPES = [
   "stock_movement", // H22B — every posting to the stock ledger, and its reversals
   "warehouse", // H22A — warehouses and the locations inside them
   "unit_of_measure", // H22A — units and their conversion factors
+  "asset", // H22E — the register, its custody history, maintenance and disposal
 ] as const;
 export type AuditEntityType = (typeof AUDIT_ENTITY_TYPES)[number];
 

@@ -52,6 +52,8 @@ describe("registries (phase2 closed vocabularies)", () => {
         "quote_send",
         // H21: a task marked requires_approval finishes through the inbox.
         "task_completion",
+        // H22E: taking an owned asset off the books needs a second person.
+        "asset_disposal",
       ].sort(),
     );
     // invoice_issue is explicitly OUT of the MVP enum (audit C-1)

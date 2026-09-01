@@ -90,6 +90,24 @@ async function seedReceiptLine(o: Owner, org: string, u: string): Promise<string
   return grl;
 }
 
+/**
+ * The chain an asset row needs: a category and a registered asset.
+ *
+ * Asset numbers are per-organization, so the bleed fixture has to mint distinct
+ * ones for both orgs rather than colliding on a shared literal.
+ */
+async function seedAsset(o: Owner, org: string, u: string) {
+  const category = randomUUID();
+  const asset = randomUUID();
+  await o`insert into public.asset_category (id, org_id, code, name_en, created_by)
+          values (${category}, ${org}, ${"AC" + randomUUID().slice(0, 6)}, 'Bleed category', ${u})`;
+  await o`insert into public.asset
+            (id, org_id, asset_no, category_id, name_en, status, condition, created_by)
+          values (${asset}, ${org}, ${"AST-" + randomUUID().slice(0, 8)}, ${category},
+                  'Bleed asset', 'in_service', 'good', ${u})`;
+  return { category, asset };
+}
+
 function filePath(orgId: string): string {
   const attach = randomUUID();
   const fileId = randomUUID();
@@ -484,6 +502,51 @@ export const SEEDERS: Record<string, Seeder> = {
               (org_id, reference, direction, item_id, qty, unit_id, warehouse_id, created_by)
             values (${org}, ${"ASM-" + randomUUID().slice(0, 8)}, 'assemble', ${s.item}, 1,
                     ${s.unit}, ${s.wh}, ${u})`;
+  },
+  asset_category: async (o, org, u) => {
+    await o`insert into public.asset_category (org_id, code, name_en, created_by)
+            values (${org}, ${"AC" + randomUUID().slice(0, 6)}, 'Bleed category', ${u})`;
+  },
+  asset: async (o, org, u) => {
+    await seedAsset(o, org, u);
+  },
+  asset_assignment: async (o, org, u) => {
+    const a = await seedAsset(o, org, u);
+    await o`insert into public.asset_assignment
+              (org_id, asset_id, event, to_user_id, reason, recorded_by)
+            values (${org}, ${a.asset}, 'assigned', ${u}, 'bleed', ${u})`;
+  },
+  asset_inspection: async (o, org, u) => {
+    const a = await seedAsset(o, org, u);
+    await o`insert into public.asset_inspection
+              (org_id, asset_id, inspected_on, inspected_by, passed, condition_found, recorded_by)
+            values (${org}, ${a.asset}, '2026-03-01', ${u}, true, 'good', ${u})`;
+  },
+  asset_maintenance_plan: async (o, org, u) => {
+    const a = await seedAsset(o, org, u);
+    await o`insert into public.asset_maintenance_plan
+              (org_id, asset_id, name_en, interval_days, created_by)
+            values (${org}, ${a.asset}, 'Bleed plan', 90, ${u})`;
+  },
+  asset_maintenance_event: async (o, org, u) => {
+    const a = await seedAsset(o, org, u);
+    await o`insert into public.asset_maintenance_event
+              (org_id, asset_id, performed_on, recorded_by)
+            values (${org}, ${a.asset}, '2026-03-02', ${u})`;
+  },
+  asset_downtime: async (o, org, u) => {
+    const a = await seedAsset(o, org, u);
+    await o`insert into public.asset_downtime
+              (org_id, asset_id, started_at, ended_at, reason, recorded_by)
+            values (${org}, ${a.asset}, '2026-03-03T08:00:00Z', '2026-03-03T10:00:00Z',
+                    'breakdown', ${u})`;
+  },
+  asset_disposal: async (o, org, u) => {
+    const a = await seedAsset(o, org, u);
+    await o`insert into public.asset_disposal
+              (org_id, asset_id, reference, method, reason, requested_by)
+            values (${org}, ${a.asset}, ${"ADP-" + randomUUID().slice(0, 8)}, 'scrap',
+                    'bleed', ${u})`;
   },
   assembly_order_serial: async (o, org, u) => {
     const s = await seedStockChain(o, org, u);
