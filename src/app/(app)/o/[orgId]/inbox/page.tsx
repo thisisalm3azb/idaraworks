@@ -5,7 +5,7 @@ import { getT, getServerLocale, type Translator } from "@/platform/i18n/server";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { can } from "@/platform/authz";
 import { listMyNotifications } from "@/platform/notifications";
-import { hrAttentionFeed, type HrAttentionItem } from "@/modules/hr/attention";
+import { hrAttentionFeed, type HrAttentionItem } from "@/modules/hr/service";
 import { attentionFeed, type AttentionItem } from "@/modules/inventory/service";
 import { formatDate } from "@/platform/format";
 import { stockSurfacesEnabled, hrSurfacesEnabled } from "@/platform/flags";
