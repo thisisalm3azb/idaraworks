@@ -388,7 +388,40 @@ export const EXPORT_CATALOGUE: readonly ExportCatalogueEntry[] = [
     entitlementFeature: null,
     entitlementNote: "Never gated.",
     redaction: "salary terms and HR identity documents are NEVER exported here.",
-    availability: "foundation_ready",
+    availability: "available", // H23H — shipped through the paged export route
+  }),
+  data({
+    id: "data_leave_requests",
+    nameEn: "Leave requests",
+    nameAr: "طلبات الإجازة",
+    source: "leave_request + leave_type",
+    permission: "data.export",
+    entitlementFeature: null,
+    entitlementNote: "Never gated.",
+    redaction: "no money columns; reasons are not exported.",
+    availability: "available", // H23H
+  }),
+  data({
+    id: "data_expense_claims",
+    nameEn: "Expense claims",
+    nameAr: "مطالبات المصروفات",
+    source: "expense_claim",
+    permission: "data.export",
+    entitlementFeature: null,
+    entitlementNote: "Never gated.",
+    redaction: "total_minor requires cost privilege.",
+    availability: "available", // H23H
+  }),
+  data({
+    id: "data_payslips",
+    nameEn: "Payslips",
+    nameAr: "قسائم الرواتب",
+    source: "payslip + pay_run_line",
+    permission: "data.export",
+    entitlementFeature: null,
+    entitlementNote: "Never gated.",
+    redaction: "gross_minor and net_minor require cost privilege.",
+    availability: "available", // H23H
   }),
   data({
     id: "data_teams",

@@ -19,6 +19,7 @@ import { assertCan } from "@/platform/authz";
 import { sql, withCtx, type Ctx, type TenantTx } from "@/platform/tenancy";
 import { allocateReference, formatRef } from "@/platform/reference/sequence";
 import { requireCapability } from "@/platform/entitlements";
+import { createNotificationIn } from "@/platform/notifications/notify";
 import type { RoleArchetype } from "@/platform/registries";
 import { submitForApproval, supersedeApprovalsForSubjectIn } from "@/modules/approvals/service";
 import { HrError } from "@/modules/hr/service";
@@ -495,6 +496,21 @@ export async function finalizePayRun(
                   ${period[0]!.ps}::date, ${period[0]!.pe}::date, ${ctx.userId})
         `);
         payslips++;
+
+        // Tell the person their payslip exists — title carries the slip number
+        // and period, NEVER an amount (F-23: notifications are redacted).
+        const linked = (await tx.execute(sql`
+          select user_id::text as user_id from public.employee
+          where id = ${line.employee_id as string} and org_id = ${ctx.orgId} and user_id is not null
+        `)) as unknown as Array<{ user_id: string }>;
+        if (linked[0]) {
+          await createNotificationIn(tx, ctx, {
+            recipientUserId: linked[0].user_id,
+            kind: "payslip_issued",
+            title: `Payslip ${slipNo} — ${period[0]!.ps} to ${period[0]!.pe}`,
+            entityType: "payslip",
+          });
+        }
 
         // Post loan repayments from the snapshot (append-only).
         const snap = line.snapshot as {

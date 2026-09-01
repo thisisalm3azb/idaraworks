@@ -5,9 +5,10 @@ import { getT, getServerLocale, type Translator } from "@/platform/i18n/server";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { can } from "@/platform/authz";
 import { listMyNotifications } from "@/platform/notifications";
+import { hrAttentionFeed, type HrAttentionItem } from "@/modules/hr/attention";
 import { attentionFeed, type AttentionItem } from "@/modules/inventory/service";
 import { formatDate } from "@/platform/format";
-import { stockSurfacesEnabled } from "@/platform/flags";
+import { stockSurfacesEnabled, hrSurfacesEnabled } from "@/platform/flags";
 import { markReadAction } from "./actions";
 
 /**
@@ -70,6 +71,17 @@ export default async function InboxPage({
       ? await attentionFeed(resolved.ctx, resolved.archetype)
       : null;
 
+  /*
+   * H23H — the HR half of "what needs attention", under the same two gates:
+   * released (FEATURE_HR_SURFACES) and permitted (employees.view). Probation
+   * decisions, expiring documents, ending contracts and waiting pay runs are
+   * date-truths computed on read, exactly like the stock feed above.
+   */
+  const hrAttention =
+    hrSurfacesEnabled() && can(resolved.archetype, "employees.view")
+      ? await hrAttentionFeed(resolved.ctx, resolved.archetype)
+      : null;
+
   const markRead = markReadAction.bind(null, orgId);
   const unread = notifications.filter((n) => n.readAt === null).length;
 
@@ -101,6 +113,22 @@ export default async function InboxPage({
              * reads as "this is everything", which is exactly the wrong thing
              * to believe about a list of problems.
              */
+            <p className="text-xs text-ink-muted">{t("inbox.attention_truncated")}</p>
+          ) : null}
+        </section>
+      ) : null}
+
+      {hrAttention && hrAttention.items.length > 0 ? (
+        <section className="flex flex-col gap-3">
+          <h2 className="text-sm font-semibold text-ink-secondary">{t("inbox.attention_hr")}</h2>
+          <ul className="flex flex-col gap-3">
+            {hrAttention.items.map((item) => (
+              <li key={`${item.kind}:${item.entityId}:${item.on ?? ""}`}>
+                <HrAttentionRow orgId={orgId} item={item} locale={locale} t={t} />
+              </li>
+            ))}
+          </ul>
+          {hrAttention.truncated ? (
             <p className="text-xs text-ink-muted">{t("inbox.attention_truncated")}</p>
           ) : null}
         </section>
@@ -174,6 +202,45 @@ function AttentionRow({
     item.entityType === "asset"
       ? `/o/${orgId}/assets/${item.entityId}`
       : `/o/${orgId}/stock/${item.entityId}`;
+  return (
+    <Card>
+      <div className="flex flex-col gap-2">
+        <div className="flex items-start justify-between gap-2">
+          <span className="font-medium text-ink">{t(`inbox.attn.${item.kind}.title`, vars)}</span>
+          <Badge tone={item.severity === "urgent" ? "danger" : "warning"}>
+            {t(`inbox.severity_${item.severity}`)}
+          </Badge>
+        </div>
+        <p className="text-sm text-ink-secondary">{t(`inbox.attn.${item.kind}.detail`, vars)}</p>
+        <Link
+          href={href}
+          className="inline-flex min-h-11 items-center text-sm text-ink underline underline-offset-4"
+        >
+          {t("inbox.open_item")}
+        </Link>
+      </div>
+    </Card>
+  );
+}
+
+/** One HR concern, worded by the catalogue from the module's facts (H23H). */
+function HrAttentionRow({
+  orgId,
+  item,
+  locale,
+  t,
+}: {
+  orgId: string;
+  item: HrAttentionItem;
+  locale: "en" | "ar";
+  t: Translator;
+}) {
+  const name = item.name ? (locale === "ar" ? (item.name.ar ?? item.name.en) : item.name.en) : "";
+  const vars = { ...item.vars, name, date: item.on ? formatDate(item.on, { locale }) : "" };
+  const href =
+    item.entityType === "pay_run"
+      ? `/o/${orgId}/payroll/${item.entityId}`
+      : `/o/${orgId}/people`;
   return (
     <Card>
       <div className="flex flex-col gap-2">

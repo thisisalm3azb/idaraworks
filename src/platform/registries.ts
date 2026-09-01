@@ -215,5 +215,6 @@ export const NOTIFICATION_KINDS = [
   "approval_requested", // S4 — pushed to the assigned role's members on submission
   "approval_decided", // S4 — pushed to the requester on approve/reject
   "exception_raised", // S5 — pushed to a raised exception's audience (redacted body, F-23)
+  "payslip_issued", // H23H — pushed to the employee's linked login on finalize (no amounts, F-23)
 ] as const;
 export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];

@@ -16,11 +16,12 @@ describe("catalogue shape and coverage", () => {
     }
   });
 
-  it("covers the mandated surfaces: 18 formal documents + 20 data exports", () => {
+  it("covers the mandated surfaces: 18 formal documents + 23 data exports", () => {
     // 17 from 003B.1, plus the weekly work plan introduced with the document
     // foundation in H22.0.
     expect(DOCUMENT_EXPORTS.length).toBe(18);
-    expect(DATA_EXPORTS.length).toBe(20);
+    // H23H added leave requests, expense claims and payslips.
+    expect(DATA_EXPORTS.length).toBe(23);
   });
 
   it("every entry carries bilingual names, a permission, redaction and entitlement notes", () => {

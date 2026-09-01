@@ -34,6 +34,9 @@ const PRICE_COLS: Partial<Record<string, readonly number[]>> = {
 };
 const COST_COLS: Partial<Record<string, readonly number[]>> = {
   expenses: [3], // amount_minor (job/overhead cost)
+  // H23H — pay is cost data; claims totals are money the org pays out.
+  payslips: [4, 5], // gross_minor, net_minor
+  expense_claims: [4], // total_minor
 };
 
 /** Null out money columns the caller isn't privileged to see. Pure — mutates + returns `rows`. */
@@ -227,6 +230,108 @@ export const EXPORT_ENTITIES = {
         r.actor_user_id,
         r.summary,
         r.created_at,
+      ]);
+    },
+  },
+  // ── H23H: HR data leaves through the same paged, redacted door ─────────────
+  // No salary/terms columns on employees: compensation history is cost-walled
+  // at the row level and belongs to payroll exports (payslips), not a person
+  // directory. Every page() loops in EXPORT PAGE STEPS — the 1,000-row
+  // PostgREST cap never applies to these direct reads, and the pager proves
+  // accuracy above 1,000 rows by construction.
+  employees: {
+    headers: ["employee_no", "name", "name_ar", "lifecycle", "employment_type", "hire_date", "created_at"],
+    page: async (tx, ctx, limit, offset) => {
+      const rows = (await tx.execute(sql`
+        select employee_no, name, name_ar, lifecycle, employment_type,
+               hire_date::text as hire_date, created_at::text as created_at
+        from public.employee where org_id = ${ctx.orgId}
+        order by created_at, id limit ${limit} offset ${offset}`)) as unknown as Array<
+        Record<string, unknown>
+      >;
+      return rows.map((r) => [
+        r.employee_no,
+        r.name,
+        r.name_ar,
+        r.lifecycle,
+        r.employment_type,
+        r.hire_date,
+        r.created_at,
+      ]);
+    },
+  },
+  leave_requests: {
+    headers: ["employee", "leave_type", "start_date", "end_date", "days", "status", "created_at"],
+    page: async (tx, ctx, limit, offset) => {
+      const rows = (await tx.execute(sql`
+        select e.name as employee, t.key as leave_type, r.start_date::text as start_date,
+               r.end_date::text as end_date, r.days::text as days, r.status,
+               r.created_at::text as created_at
+        from public.leave_request r
+        join public.employee e on e.id = r.employee_id and e.org_id = r.org_id
+        join public.leave_type t on t.id = r.leave_type_id and t.org_id = r.org_id
+        where r.org_id = ${ctx.orgId}
+        order by r.created_at, r.id limit ${limit} offset ${offset}`)) as unknown as Array<
+        Record<string, unknown>
+      >;
+      return rows.map((r) => [
+        r.employee,
+        r.leave_type,
+        r.start_date,
+        r.end_date,
+        r.days,
+        r.status,
+        r.created_at,
+      ]);
+    },
+  },
+  expense_claims: {
+    headers: ["reference", "employee", "title", "status", "total_minor", "settlement_route", "created_at"],
+    page: async (tx, ctx, limit, offset) => {
+      const rows = (await tx.execute(sql`
+        select c.reference, e.name as employee, c.title, c.status,
+               c.total_minor::text as total_minor, c.settlement_route,
+               c.created_at::text as created_at
+        from public.expense_claim c
+        join public.employee e on e.id = c.employee_id and e.org_id = c.org_id
+        where c.org_id = ${ctx.orgId}
+        order by c.created_at, c.id limit ${limit} offset ${offset}`)) as unknown as Array<
+        Record<string, unknown>
+      >;
+      return rows.map((r) => [
+        r.reference,
+        r.employee,
+        r.title,
+        r.status,
+        r.total_minor,
+        r.settlement_route,
+        r.created_at,
+      ]);
+    },
+  },
+  payslips: {
+    headers: ["slip_no", "employee", "period_start", "period_end", "gross_minor", "net_minor", "issued_at"],
+    page: async (tx, ctx, limit, offset) => {
+      const rows = (await tx.execute(sql`
+        select s.slip_no, e.name as employee, s.period_start::text as period_start,
+               s.period_end::text as period_end,
+               coalesce(l.gross_minor, 0)::text as gross_minor, s.net_minor::text as net_minor,
+               s.issued_at::text as issued_at
+        from public.payslip s
+        join public.employee e on e.id = s.employee_id and e.org_id = s.org_id
+        left join public.pay_run_line l on l.id = s.pay_run_line_id and l.org_id = s.org_id
+        where s.org_id = ${ctx.orgId}
+        order by s.issued_at, s.id limit ${limit} offset ${offset}`)) as unknown as Array<
+        Record<string, unknown>
+      >;
+      return rows.map((r) => [
+        r.slip_no,
+        r.employee,
+        r.period_start,
+        r.period_end,
+        r.gross_minor,
+        r.net_minor,
+        r.issued_at,
       ]);
     },
   },
