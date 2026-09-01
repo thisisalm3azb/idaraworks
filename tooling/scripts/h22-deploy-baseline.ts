@@ -195,8 +195,20 @@ function compare(before: Snapshot, after: Snapshot): number {
 }
 
 async function main(): Promise<void> {
-  if (!targetsOnlyProductionProject()) {
-    throw new Error("refusing to run: the environment does not identify the production project");
+  /*
+   * The guard, written the way it must be read.
+   *
+   * This said  for its first few runs.
+   * That function returns a VERDICT OBJECT, never a boolean, so the negation was
+   * always false and the guard never once fired — a safety check that cannot
+   * fail, in a script whose whole justification is that it is careful. It only
+   * ever reached production because .env.local happens to point there.
+   */
+  const target = targetsOnlyProductionProject();
+  if (!target.ok) {
+    console.error("Refusing to run: this environment does not identify the production project.");
+    for (const p of target.problems) console.error(`  - ${p}`);
+    process.exit(1);
   }
   const url = process.env.DIRECT_URL;
   if (!url) throw new Error("DIRECT_URL is not set");
