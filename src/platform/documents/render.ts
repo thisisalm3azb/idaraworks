@@ -55,7 +55,19 @@ export type DocumentField = { label: string; value: string; ltr?: boolean };
 
 export type DocumentRenderModel = {
   /** Which document this is, for the audit trail and the catalogue. */
-  kind: "quote" | "invoice" | "week_plan";
+  kind:
+    | "quote"
+    | "invoice"
+    | "week_plan"
+    | "payslip"
+    | "salary_certificate"
+    | "employment_contract"
+    | "experience_letter"
+    | "warning_letter"
+    | "leave_confirmation"
+    | "expense_claim_summary"
+    | "payroll_register"
+    | "final_settlement";
   language: DocLanguage;
   issuer: DocumentShellIssuer;
   /** The party the document is addressed to. Absent on internal documents. */

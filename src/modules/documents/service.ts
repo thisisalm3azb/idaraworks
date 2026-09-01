@@ -29,7 +29,21 @@ import { getQuote } from "@/modules/quotes/service";
 import { getInvoice } from "@/modules/invoices/service";
 import { formatDate, formatMoney } from "@/platform/format";
 
-export const DOCUMENT_KINDS = ["quote", "invoice", "week_plan"] as const;
+export const DOCUMENT_KINDS = [
+  "quote",
+  "invoice",
+  "week_plan",
+  // H23F — HR documents through the SAME model/HTML/PDF pipeline.
+  "payslip",
+  "salary_certificate",
+  "employment_contract",
+  "experience_letter",
+  "warning_letter",
+  "leave_confirmation",
+  "expense_claim_summary",
+  "payroll_register",
+  "final_settlement",
+] as const;
 export type DocumentKind = (typeof DOCUMENT_KINDS)[number];
 
 /** Reading a document requires the permission for the record behind it. */
@@ -37,6 +51,18 @@ const VIEW_ACTION: Record<DocumentKind, Action> = {
   quote: "quotes.view",
   invoice: "invoices.view",
   week_plan: "week.view",
+  // hr.self is the COARSE gate every member holds; each builder narrows to the
+  // caller's own employee row unless the wider action ALSO holds (weekPlanModel
+  // precedent: the fine check lives with the data, not the route).
+  payslip: "hr.self",
+  salary_certificate: "hr.self",
+  employment_contract: "hr.self",
+  experience_letter: "hr.self",
+  warning_letter: "employees.hr.manage",
+  leave_confirmation: "hr.self",
+  expense_claim_summary: "hr.self",
+  payroll_register: "payroll.view",
+  final_settlement: "payroll.view",
 };
 
 export class DocumentNotFoundError extends Error {
@@ -76,6 +102,19 @@ const ISSUED_STATUSES: Record<DocumentKind, readonly string[]> = {
   quote: ["sent", "accepted", "converted", "converting", "rejected", "expired"],
   invoice: ["issued", "partially_paid", "paid", "cancelled"],
   week_plan: ["issued", "revised", "cancelled"],
+  // A payslip row EXISTS only issued (immutable, snapshot on the row); the
+  // other HR letters render on demand from live records — current identity,
+  // exactly the draft rule — and the register/settlement builders watermark
+  // themselves until the run is finalized / the settlement is paid.
+  payslip: ["issued"],
+  salary_certificate: [],
+  employment_contract: ["issued", "accepted", "superseded", "ended"],
+  experience_letter: [],
+  warning_letter: [],
+  leave_confirmation: ["approved"],
+  expense_claim_summary: ["approved", "paid"],
+  payroll_register: ["finalized"],
+  final_settlement: [],
 };
 
 const WATERMARK_FOR: Record<string, "draft" | "cancelled" | "void" | null> = {
@@ -273,6 +312,10 @@ export async function documentModel(
     case "week_plan": {
       const { weekPlanModel } = await import("./week-plan-document");
       return weekPlanModel(ctx, archetype, doc.id, doc.language);
+    }
+    default: {
+      const { hrDocumentModel } = await import("./hr-documents");
+      return hrDocumentModel(ctx, archetype, doc.kind, doc.id, doc.language);
     }
   }
 }

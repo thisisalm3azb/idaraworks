@@ -16,6 +16,18 @@ const DETAIL_PATH: Record<DocumentKind, (orgId: string, id: string) => string> =
   quote: (o, id) => `/o/${o}/quotes/${id}`,
   invoice: (o, id) => `/o/${o}/invoices/${id}`,
   week_plan: (o, id) => `/o/${o}/week/plans/${id}`,
+  // H23F — HR kinds are NOT shareable (SHAREABLE_KINDS), so no share ever
+  // exists to revoke on these paths; the entries satisfy the exhaustive type
+  // and point at the surfaces the records live on.
+  payslip: (o) => `/o/${o}/payroll`,
+  salary_certificate: (o, id) => `/o/${o}/people/${id}`,
+  employment_contract: (o) => `/o/${o}/people`,
+  experience_letter: (o, id) => `/o/${o}/people/${id}`,
+  warning_letter: (o) => `/o/${o}/people`,
+  leave_confirmation: (o) => `/o/${o}/leave`,
+  expense_claim_summary: (o) => `/o/${o}/claims`,
+  payroll_register: (o) => `/o/${o}/payroll`,
+  final_settlement: (o) => `/o/${o}/people`,
 };
 
 export type CreateShareResult =
