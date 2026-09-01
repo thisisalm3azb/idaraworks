@@ -131,12 +131,39 @@ in English and Arabic.
 
 ## Production deployment status
 
-_This section is completed at deployment time. Gates: clean tree accounted,
-migration list audited, CI green on the exact commit, pre-flight healthy,
-protected dry-run listing exactly the six H23 migrations, code deploy matching
-the tested commit, `FEATURE_HR_SURFACES` unset (surfaces hidden), backend smoke
-before any flag change, marked smoke fixtures with zero residue, historical
-counts intact._
+**DEPLOYED AND LIVE — 2026-09-01.**
+
+- CI green on the exact commit `c37ef70` (quality + fresh-stack integration
+  including all H23 suites + e2e). Two earlier CI failures were real and were
+  fixed first: prettier formatting; DELETE grants on two H23 tables (D-1.7 —
+  recalculation now goes through a guarded SECURITY DEFINER wipe); btree_gist
+  installed into public (moved to the extensions schema); and a dollar-quote
+  delimiter mangled by an automated edit.
+- Pre-flight: HEALTHY, no new auth residue. The protected dry-run listed
+  exactly the six H23 migrations; they were applied through the guarded
+  production runner only (93 → 99). Post-verify: 0 tables without RLS, only
+  the allow-listed `org_holiday_calendar` DELETE grant, btree_gist in the
+  extensions schema, 12 HR entitlement rows (3 keys × 4 plans), business
+  counts unchanged.
+- `main` fast-forwarded to `c37ef70`; Vercel deployed it (the health endpoint
+  confirmed the hash) with `FEATURE_HR_SURFACES` still unset.
+- Production smoke (marked fixture, removed in `finally`): **ALL 15 CHECKS
+  PASSED** — compensation projection, leave applied exactly once, mileage
+  pricing, deterministic calculation, concurrent double-finalize with exactly
+  one winner, claim latched + second settlement refused, payslip immutable to
+  the table owner, deployed payslip PDFs EN (23,335 B) and AR (24,110 B) as
+  real 200/application/pdf/%PDF responses fetched by the signed-in employee,
+  self-service salary certificate PDF, and the release gate hiding every HR
+  screen. Zero residue; historical counts identical before and after.
+- `FEATURE_HR_SURFACES=1` was then set in the Vercel production environment
+  (the CLI was authenticated as the owner, so this did not block) and the same
+  code redeployed. Post-enable verification with a second marked fixture:
+  /leave, /my-pay and /claims render live, the navigation shows the
+  people-group items, cleanup residue 0.
+
+**H23 is live in production.** The exact production application commit is
+`c37ef706631466377e63caca209fd0192640eed4` (any later commits on `main` are
+docs/tooling only).
 
 ## Known blockers carried forward (NOT part of H23)
 

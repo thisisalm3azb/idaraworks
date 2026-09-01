@@ -388,6 +388,25 @@ async function main(): Promise<void> {
       `${cert.status} ${cert.type}`,
     );
 
+    // ── 9. the release gate: with FEATURE_HR_SURFACES unset, the deployed
+    //      screens render the not-found page even to a signed-in member.
+    //      (Next streams the not-found boundary with HTTP 200 once the shell
+    //      has begun, so the BODY is the truth here, not the status code.)
+    const gate = await fetch(`${BASE}/o/${orgId}/leave`, {
+      headers: { cookie },
+      redirect: "manual",
+    });
+    const gateBody = await gate.text();
+    const showsNotFound =
+      gateBody.includes("404") || gateBody.includes("could not be found");
+    const leaksLeaveUi =
+      gateBody.includes("Request leave") || gateBody.includes("طلب إجازة");
+    check(
+      "HR surfaces hidden while the flag is unset",
+      (gate.status === 404 || (gate.status === 200 && showsNotFound)) && !leaksLeaveUi,
+      `${gate.status} notFound=${showsNotFound} leaks=${leaksLeaveUi}`,
+    );
+
     console.log(`\nALL ${checks} CHECKS PASSED`);
   } finally {
     await cleanup();
