@@ -138,7 +138,35 @@ export async function renderPdf(html: string, options: PdfOptions = {}): Promise
   }
 }
 
+/**
+ * Render, and survive a browser that died while the container was asleep.
+ *
+ * A serverless instance is FROZEN between requests, and the Chromium it started
+ * does not come back — but the handle still says `isConnected()`, so the cached
+ * browser looks perfectly healthy until the first thing that touches it throws.
+ *
+ * The symptom in production was a Download PDF that worked, failed, then worked
+ * again: the first request on an instance launched a browser and rendered, the
+ * second reused the corpse and failed in under a second, and the third launched
+ * a new one because by then the handle finally admitted it was gone.
+ *
+ * So a cached browser gets exactly one chance to prove it is alive. If it is
+ * not, it is thrown away and the render is done again on a fresh one. A cold
+ * launch has nothing cached, so it is never retried and a genuine rendering
+ * error is not paid for twice.
+ */
 async function renderPdfInner(html: string, options: PdfOptions): Promise<Uint8Array> {
+  const wasCached = cached !== null;
+  try {
+    return await renderOnce(html, options);
+  } catch (err) {
+    if (!wasCached) throw err;
+    await closePdfBrowser();
+    return await renderOnce(html, options);
+  }
+}
+
+async function renderOnce(html: string, options: PdfOptions): Promise<Uint8Array> {
   const browser = await launch();
   const page = await browser.newPage();
   try {
