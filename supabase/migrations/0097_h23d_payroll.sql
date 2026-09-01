@@ -337,7 +337,7 @@ create or replace function app.wipe_pay_run_lines(p_run uuid) returns integer
 language plpgsql
 security definer
 set search_path = pg_catalog, public
-as $
+as $$
 declare
   v_org uuid;
   n integer;
@@ -356,13 +356,12 @@ begin
   get diagnostics n = row_count;
   return n;
 end;
-$;
+$$;
 revoke all on function app.wipe_pay_run_lines(uuid) from public;
 grant execute on function app.wipe_pay_run_lines(uuid) to app_user;
 
 -- A line of a finalized run is frozen; recalculation deletes lines only while
--- the run is draft/review (delete IS the recalculation mechanism, so it stays
--- granted but the trigger scopes it to unfinalized runs).
+-- the run is draft/review, and only through app.wipe_pay_run_lines above.
 create or replace function app.pay_run_line_frozen_when_final()
 returns trigger
 language plpgsql
