@@ -12,3 +12,4 @@ export * from "./fx";
 export * from "./tax";
 export * from "./reports";
 export * from "./lists";
+export * from "./tally";

@@ -441,3 +441,74 @@ export async function budgetStatusAction(orgId: string, formData: FormData): Pro
   revalidatePath(base);
   redirect(`${base}?ok=status`);
 }
+
+// ── Tally migration (H24J) ───────────────────────────────────────────────────
+
+export async function inspectTallyAction(orgId: string, formData: FormData): Promise<void> {
+  const resolved = await resolveOrRedirect(orgId);
+  const base = `/o/${orgId}/finance/tally`;
+  let id = "";
+  try {
+    const file = formData.get("file");
+    if (!(file instanceof File)) redirect(`${base}?error=no_file`);
+    const { inspectTallyFile } = await import("@/modules/finance/service");
+    const r = await inspectTallyFile(resolved.ctx, resolved.archetype, {
+      filename: file.name,
+      content: await file.text(),
+    });
+    id = r.importId;
+  } catch (err) {
+    fail(base, err);
+  }
+  revalidatePath(base);
+  redirect(`${base}?batch=${id}`);
+}
+
+export async function mapTallyAction(orgId: string, formData: FormData): Promise<void> {
+  const resolved = await resolveOrRedirect(orgId);
+  const importId = String(formData.get("import_id") ?? "");
+  const base = `/o/${orgId}/finance/tally?batch=${importId}`;
+  const map: Record<string, string> = {};
+  for (let i = 0; i < 200; i++) {
+    const ledger = formData.get(`ledger_${i}`);
+    const account = formData.get(`account_${i}`);
+    if (ledger === null) break;
+    if (String(account ?? "")) map[String(ledger)] = String(account);
+  }
+  try {
+    const { mapTallyLedgers } = await import("@/modules/finance/service");
+    await mapTallyLedgers(resolved.ctx, resolved.archetype, { importId, map });
+  } catch (err) {
+    fail(base, err);
+  }
+  revalidatePath(`/o/${orgId}/finance/tally`);
+  redirect(`${base}&ok=mapped`);
+}
+
+export async function dryRunTallyAction(orgId: string, formData: FormData): Promise<void> {
+  const resolved = await resolveOrRedirect(orgId);
+  const importId = String(formData.get("import_id") ?? "");
+  const base = `/o/${orgId}/finance/tally?batch=${importId}`;
+  try {
+    const { dryRunTallyImport } = await import("@/modules/finance/service");
+    await dryRunTallyImport(resolved.ctx, resolved.archetype, importId);
+  } catch (err) {
+    fail(base, err);
+  }
+  revalidatePath(`/o/${orgId}/finance/tally`);
+  redirect(`${base}&ok=dry_run`);
+}
+
+export async function approveTallyAction(orgId: string, formData: FormData): Promise<void> {
+  const resolved = await resolveOrRedirect(orgId);
+  const importId = String(formData.get("import_id") ?? "");
+  const base = `/o/${orgId}/finance/tally?batch=${importId}`;
+  try {
+    const { approveTallyImport } = await import("@/modules/finance/service");
+    await approveTallyImport(resolved.ctx, resolved.archetype, importId);
+  } catch (err) {
+    fail(base, err);
+  }
+  revalidatePath(`/o/${orgId}/finance/tally`);
+  redirect(`${base}&ok=imported`);
+}

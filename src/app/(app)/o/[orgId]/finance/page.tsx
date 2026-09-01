@@ -80,9 +80,14 @@ export default async function FinancePage({
             {t("finance.accounts.title")}
           </Link>
           {can(resolved.archetype, "finance.manage") ? (
-            <Link className="text-accent underline" href={`/o/${orgId}/finance/setup`}>
-              {t("finance.setup.title")}
-            </Link>
+            <>
+              <Link className="text-accent underline" href={`/o/${orgId}/finance/setup`}>
+                {t("finance.setup.title")}
+              </Link>
+              <Link className="text-accent underline" href={`/o/${orgId}/finance/tally`}>
+                {t("finance.tally.title")}
+              </Link>
+            </>
           ) : null}
         </div>
       </div>
