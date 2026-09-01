@@ -521,6 +521,26 @@ export async function supersedeApprovalsForSubjectsIn(
  * the caller can advance/record accordingly. Auto-approve (or preApproved) creates
  * an already-approved approval and returns {decided:true}.
  */
+/*
+ * A submission decided at submission time (preApproved or auto-approve rule)
+ * must advance the SUBJECT exactly as a human decision would — guarded on the
+ * live state, so legacy callers that already created their subject in the
+ * approved state see a harmless no-op.
+ */
+async function advanceSubjectOnSubmitDecision(
+  tx: TenantTx,
+  ctx: Ctx,
+  subjectType: string,
+  subjectId: string,
+): Promise<void> {
+  const cfg = SUBJECTS[subjectType];
+  if (!cfg) return;
+  await tx.execute(
+    sql`update public.${sql.raw(cfg.table)} set status = ${cfg.onApprove}, updated_at = now()
+        where id = ${subjectId} and org_id = ${ctx.orgId} and status = ${cfg.live}`,
+  );
+}
+
 export async function submitForApproval(
   tx: TenantTx,
   ctx: Ctx,
@@ -539,6 +559,7 @@ export async function submitForApproval(
               ${JSON.stringify(params.subjectSummary)}::jsonb, ${ctx.userId}, 'owner',
               'approved', ${ctx.userId}, now(), false)
     `);
+    await advanceSubjectOnSubmitDecision(tx, ctx, params.subjectType, params.subjectId);
     await emitEvent(tx, ctx, {
       name: APPROVAL_DECIDED,
       payload: {
@@ -569,6 +590,7 @@ export async function submitForApproval(
               ${resolved.assignedRole}, 'approved', ${ctx.userId}, now(),
               'auto-approved (below configured threshold)', false)
     `);
+    await advanceSubjectOnSubmitDecision(tx, ctx, params.subjectType, params.subjectId);
     await emitEvent(tx, ctx, {
       name: APPROVAL_DECIDED,
       payload: {

@@ -59,7 +59,7 @@ export const VoidExpenseInput = z.object({
 /** Resolve a category's costing_mapping from the org's expense CategorySet config
  * (blob artifact). Rejects an unknown/retired category — the mapping is authoritative,
  * never client-supplied (which would let a caller mis-route cost). */
-async function resolveCategoryMapping(
+export async function resolveCategoryMapping(
   tx: TenantTx,
   ctx: Ctx,
   categoryKey: string,

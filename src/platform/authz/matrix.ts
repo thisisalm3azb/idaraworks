@@ -110,6 +110,15 @@ export type Action =
   | "assets.assign"
   | "assets.maintain"
   | "assets.dispose"
+  // H23 — payroll. View is broad with amounts behind the cost FLAG (doc 06
+  // D-6.2 — the wall tracks costPrivileged, never an archetype list); manage is
+  // the finance seat; approve/finalize is the second person.
+  // H23F — every member may read their OWN HR documents (payslip, letters);
+  // builders narrow to the caller's employee row unless a wider action holds.
+  | "hr.self"
+  | "payroll.view"
+  | "payroll.manage"
+  | "payroll.approve"
   | "billing.view"
   | "billing.manage"
   // ── H20 "Sell" — the sales CRM (leads → opportunities → quotation) ────────
@@ -273,6 +282,10 @@ export const MATRIX: Record<Action, readonly Grantable[]> = {
   // S8 — guided onboarding (config setup) is an owner/admin task (config.manage holders).
   "onboarding.run": ["owner", "admin"],
   // Commercial/billing (doc 10 #21): manage is OWNER-ONLY; view extends to admin + accounts.
+  "hr.self": ["owner", "admin", "manager", "foreman", "procurement", "accounts", "viewer"],
+  "payroll.view": ["owner", "admin", "manager", "accounts", "viewer"],
+  "payroll.manage": ["owner", "admin", "accounts"],
+  "payroll.approve": ["owner", "admin"],
   "billing.view": ["owner", "admin", "accounts"],
   "billing.manage": ["owner"],
   // S8 — guided CSV imports of masters (customers/employees/items).

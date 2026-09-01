@@ -15,7 +15,6 @@ import { createOrgForUser } from "@/platform/auth/identity";
 import { createEmployee } from "@/modules/masters/service";
 import { createApprovalRule, decideApproval, listInbox } from "@/modules/approvals/service";
 import {
-  createWorkPattern,
   createShift,
   assignSchedule,
   punch,

@@ -114,6 +114,9 @@ export const AUDIT_ENTITY_TYPES = [
   "warehouse", // H22A — warehouses and the locations inside them
   "unit_of_measure", // H22A — units and their conversion factors
   "asset", // H22E — the register, its custody history, maintenance and disposal
+  "mileage_rate", // H23E — org mileage-rate config edits are audited money config
+  "cash_advance", // H23E — record/settle of a cash advance is an audited money mutation
+  "employee_loan", // H23D/E — loan creation and status flips are audited money mutations
 ] as const;
 export type AuditEntityType = (typeof AUDIT_ENTITY_TYPES)[number];
 

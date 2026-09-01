@@ -14,6 +14,9 @@ type Grantable = Exclude<RoleArchetype, "worker_reserved_p3">;
 export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
   // Full member management, file lifecycle, ALL config + masters + skeleton (doc 06 row-by-row).
   owner: [
+    "payroll.view",
+    "payroll.manage",
+    "payroll.approve",
     "assets.view",
     "assets.manage",
     "assets.assign",
@@ -60,6 +63,7 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
     "tasks.update_status",
     "crew.manage",
     "week.view",
+    "hr.self",
     "comments.create",
     "reports.create",
     "reports.review",
@@ -110,6 +114,9 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
     "pipeline.configure",
   ],
   admin: [
+    "payroll.view",
+    "payroll.manage",
+    "payroll.approve",
     "assets.view",
     "assets.manage",
     "assets.assign",
@@ -155,6 +162,7 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
     "tasks.update_status",
     "crew.manage",
     "week.view",
+    "hr.self",
     "comments.create",
     "reports.create",
     "reports.review",
@@ -206,6 +214,7 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
   // Manager (doc 08: the Workshop Manager variant): masters M, jobs/reports, NO
   // config, NO salary/HR side-tables, no invite/deactivate/legal-hold.
   manager: [
+    "payroll.view",
     "assets.view",
     "assets.manage",
     "assets.assign",
@@ -240,6 +249,7 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
     "tasks.update_status",
     "crew.manage",
     "week.view",
+    "hr.self",
     "comments.create",
     "reports.create",
     "reports.review",
@@ -293,6 +303,7 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
     "stages.request_complete",
     "tasks.update_status",
     "week.view",
+    "hr.self",
     "comments.create",
     "reports.create",
     // "Issues: raise" C (assigned) — the field's fast path to flag a blocker.
@@ -318,6 +329,7 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
     "jobs.view",
     "tasks.view",
     "week.view",
+    "hr.self",
     "comments.create",
     // "Issues: raise" C for procurement (materials problems → tickets).
     "issues.raise",
@@ -340,6 +352,8 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
     "digest.view",
   ],
   accounts: [
+    "payroll.view",
+    "payroll.manage",
     "assets.view",
     "inventory.view",
     "valuation.view",
@@ -351,6 +365,7 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
     "jobs.view",
     "tasks.view",
     "week.view",
+    "hr.self",
     "comments.create",
     // "Issues: raise" C + "Attendance: view" V (payroll input, D-6.2 cost-priv
     // holder — but attendance itself is not a cost wall).
@@ -389,5 +404,7 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
   // Viewer (doc 06): jobs v (redacted) + week view + attendance V — other rows −.
   // today.view added (adversarial review): read-only Today composed ONLY from
   // the viewer's own read grants above (no money, no queues).
-  viewer: ["members.view", "jobs.view", "tasks.view", "week.view", "attendance.view", "today.view"],
+  viewer: [
+    "payroll.view","members.view", "jobs.view", "tasks.view", "week.view",
+    "hr.self", "attendance.view", "today.view"],
 };
