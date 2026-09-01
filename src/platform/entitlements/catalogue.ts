@@ -33,6 +33,11 @@ export const FEATURE_KEYS = [
   "cap.purchase_orders",
   "cap.goods_receipts",
   "cap.items",
+  // capabilities (H23G): the HR system — seeded enabled on every plan (0099);
+  // release-gated by FEATURE_HR_SURFACES until verified end to end.
+  "cap.leave",
+  "cap.payroll",
+  "cap.expense_claims",
   // behaviour
   "feat.ai_onboarding",
   "feat.ai_narration",
@@ -101,6 +106,9 @@ export const FREE_PLAN_FEATURES: readonly FeatureKey[] = [
   "cap.issues",
   "cap.customers",
   "cap.people",
+  "cap.leave",
+  "cap.payroll",
+  "cap.expense_claims",
   "feat.ai_onboarding",
   "feat.ai_drafts",
   "feat.custom_fields",

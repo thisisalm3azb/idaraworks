@@ -8,7 +8,7 @@ import { getT, getServerLocale } from "@/platform/i18n/server";
 import { getSessionUser, listMyOrgs, resolveCtx } from "@/platform/auth/resolve";
 import { loadOrgTerminology, term } from "@/platform/terminology";
 import { can } from "@/platform/authz";
-import { stockSurfacesEnabled } from "@/platform/flags";
+import { stockSurfacesEnabled, hrSurfacesEnabled } from "@/platform/flags";
 import { resolveEntitlements } from "@/platform/entitlements";
 import {
   filterGroupsByBlueprint,
@@ -80,6 +80,8 @@ export default async function OrgLayout({
     // H22F release gate — the stock and asset screens are absent from every
     // menu until the deployment turns them on (platform/flags.ts).
     stockSurfaces: stockSurfacesEnabled(),
+    // H23G release gate — same law as stock.
+    hrSurfaces: hrSurfacesEnabled(),
   };
   const groups: NavGroupVM[] = filterGroupsByBlueprint(
     buildNavGroups(input).map((g) => ({

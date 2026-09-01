@@ -9,6 +9,23 @@ import { formatMoney, formatDate } from "@/platform/format";
 import type { CurrencyCode } from "@/platform/registries";
 import { decideApprovalAction } from "./actions";
 
+/**
+ * Where each approval subject lives, so the reviewer can open the record
+ * before deciding. Unknown subjects render no link rather than a wrong one.
+ */
+const SUBJECT_PATH: Record<string, (id: string) => string> = {
+  purchase_order: (id) => `/purchase-orders/${id}`,
+  material_request: (id) => `/material-requests/${id}`,
+  quote_send: (id) => `/quotes/${id}`,
+  payment: () => `/payments`,
+  asset_disposal: (id) => `/assets/${id}`,
+  task_completion: () => `/my-work`,
+  leave_request: () => `/leave`,
+  overtime_request: () => `/leave`,
+  expense_claim: () => `/claims`,
+  pay_run: (id) => `/payroll/${id}`,
+};
+
 export default async function ApprovalsPage({
   params,
   searchParams,
@@ -85,12 +102,14 @@ export default async function ApprovalsPage({
                     </Button>
                   </div>
                 </form>
-                <Link
-                  href={`/o/${orgId}/${a.subjectType === "purchase_order" ? "purchase-orders" : "material-requests"}/${a.subjectId}`}
-                  className="mt-2 inline-block text-sm text-ink-secondary underline"
-                >
-                  {a.subjectType.replace("_", " ")} →
-                </Link>
+                {SUBJECT_PATH[a.subjectType] ? (
+                  <Link
+                    href={`/o/${orgId}${SUBJECT_PATH[a.subjectType]!(a.subjectId)}`}
+                    className="mt-2 inline-block text-sm text-ink-secondary underline"
+                  >
+                    {a.subjectType.replaceAll("_", " ")} →
+                  </Link>
+                ) : null}
               </Card>
             </li>
           ))}

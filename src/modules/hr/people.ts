@@ -799,3 +799,17 @@ export async function linkEmployeeToMember(
     },
   );
 }
+
+/** The caller's own employee row, or null when they are not one. */
+export async function myEmployee(
+  ctx: Ctx,
+): Promise<{ id: string; name: string; employeeNo: string | null } | null> {
+  const rows = (await withCtx(ctx, (tx) =>
+    tx.execute(sql`
+      select id::text as id, name, employee_no from public.employee
+      where org_id = ${ctx.orgId} and user_id = ${ctx.userId}
+    `),
+  )) as unknown as Array<{ id: string; name: string; employee_no: string | null }>;
+  const r = rows[0];
+  return r ? { id: r.id, name: r.name, employeeNo: r.employee_no } : null;
+}

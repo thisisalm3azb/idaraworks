@@ -65,6 +65,8 @@ type ItemSpec = {
    * apply is a gate that gets forgotten.
    */
   requiresStockSurfaces?: boolean;
+  /** H23G release gate (platform/flags.ts hrSurfacesEnabled). */
+  requiresHrSurfaces?: boolean;
 };
 
 type GroupSpec = { key: string; labelKey: string; icon: IconName; items: ItemSpec[] };
@@ -292,6 +294,42 @@ const GROUPS: GroupSpec[] = [
         action: "employees.view",
       },
       {
+        key: "leave",
+        labelKey: "nav.leave",
+        path: "/leave",
+        icon: "calendar",
+        action: "hr.self",
+        feature: "cap.leave",
+        requiresHrSurfaces: true,
+      },
+      {
+        key: "claims",
+        labelKey: "nav.claims",
+        path: "/claims",
+        icon: "receipt",
+        action: "hr.self",
+        feature: "cap.expense_claims",
+        requiresHrSurfaces: true,
+      },
+      {
+        key: "my_pay",
+        labelKey: "nav.my_pay",
+        path: "/my-pay",
+        icon: "wallet",
+        action: "hr.self",
+        feature: "cap.payroll",
+        requiresHrSurfaces: true,
+      },
+      {
+        key: "payroll",
+        labelKey: "nav.payroll",
+        path: "/payroll",
+        icon: "banknote",
+        action: "payroll.view",
+        feature: "cap.payroll",
+        requiresHrSurfaces: true,
+      },
+      {
         key: "members",
         labelKey: "members.title",
         path: "/settings/members",
@@ -388,11 +426,15 @@ export type BuildNavInput = {
    * that forgets this gets the safe one.
    */
   stockSurfaces?: boolean;
+  /** Whether the H23 HR/leave/claims/payroll screens are released. Same
+   *  pass-it-in law as stockSurfaces: absent means hidden. */
+  hrSurfaces?: boolean;
 };
 
 function resolveItem(spec: ItemSpec, input: BuildNavInput): NavItem | null {
   // Release gate first: an unfinished surface is not a permission question.
   if (spec.requiresStockSurfaces === true && input.stockSurfaces !== true) return null;
+  if (spec.requiresHrSurfaces === true && input.hrSurfaces !== true) return null;
   if (!can(input.archetype, spec.action)) return null;
   const entitled = spec.feature === undefined || (input.features[spec.feature] ?? false);
   if (entitled) {

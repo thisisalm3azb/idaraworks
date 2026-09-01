@@ -10,7 +10,7 @@
  * is verified end to end. This is the single line of code enforcing it.
  */
 import { afterEach, describe, expect, it } from "vitest";
-import { stockSurfacesEnabled } from "@/platform/flags";
+import { stockSurfacesEnabled, hrSurfacesEnabled } from "@/platform/flags";
 
 const original = process.env.FEATURE_STOCK_SURFACES;
 
@@ -41,5 +41,31 @@ describe("the stock and asset release gate", () => {
   it("is on for exactly one value", () => {
     process.env.FEATURE_STOCK_SURFACES = "1";
     expect(stockSurfacesEnabled()).toBe(true);
+  });
+});
+
+/** H23G — the HR gate obeys exactly the same law. */
+describe("the HR surfaces release gate", () => {
+  const orig = process.env.FEATURE_HR_SURFACES;
+  afterEach(() => {
+    if (orig === undefined) delete process.env.FEATURE_HR_SURFACES;
+    else process.env.FEATURE_HR_SURFACES = orig;
+  });
+
+  it("is off when nothing is set", () => {
+    delete process.env.FEATURE_HR_SURFACES;
+    expect(hrSurfacesEnabled()).toBe(false);
+  });
+
+  it("is off for every near-miss spelling", () => {
+    for (const value of ["", "0", "false", "true", "yes", "on", "1 ", " 1", "TRUE"]) {
+      process.env.FEATURE_HR_SURFACES = value;
+      expect(hrSurfacesEnabled(), `"${value}" turned the surfaces on`).toBe(false);
+    }
+  });
+
+  it("is on for exactly one value", () => {
+    process.env.FEATURE_HR_SURFACES = "1";
+    expect(hrSurfacesEnabled()).toBe(true);
   });
 });

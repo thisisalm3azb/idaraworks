@@ -19,6 +19,7 @@
  */
 import { z } from "zod";
 import { command } from "@/platform/audit";
+import { requireCapability } from "@/platform/entitlements";
 import { assertCan, can } from "@/platform/authz";
 import { sql, type Ctx, type TenantTx } from "@/platform/tenancy";
 import type { RoleArchetype } from "@/platform/registries";
@@ -127,6 +128,7 @@ export async function createClaim(
   archetype: RoleArchetype,
   raw: unknown,
 ): Promise<{ id: string; reference: string; totalMinor: number }> {
+  await requireCapability(ctx, "cap.expense_claims");
   const input = CreateClaimInput.parse(raw);
   return command(
     ctx,
@@ -597,5 +599,67 @@ export async function listClaims(
       settlementRoute: r.settlement_route!,
       createdAt: r.created_at!,
     }));
+  });
+}
+
+export type ClaimDetail = {
+  id: string;
+  reference: string;
+  title: string;
+  employeeId: string;
+  employeeName: string;
+  currency: string;
+  totalMinor: number;
+  status: string;
+  settlementRoute: string;
+  lines: Array<{
+    id: string;
+    expenseDate: string;
+    categoryKey: string;
+    description: string;
+    amountMinor: number;
+    mileageKm: string | null;
+  }>;
+};
+
+export async function getClaim(ctx: Ctx, claimId: string): Promise<ClaimDetail | null> {
+  const { withCtx } = await import("@/platform/tenancy");
+  return withCtx(ctx, async (tx) => {
+    const rows = (await tx.execute(sql`
+      select c.id::text as id, c.reference, c.title, c.employee_id::text as employee_id,
+             e.name as employee_name, c.currency, c.total_minor::text as total,
+             c.status, c.settlement_route
+      from public.expense_claim c
+      join public.employee e on e.id = c.employee_id and e.org_id = c.org_id
+      where c.id = ${claimId} and c.org_id = ${ctx.orgId}
+    `)) as unknown as Array<Record<string, string>>;
+    const r = rows[0];
+    if (!r) return null; // hidden by RLS or absent — one indistinguishable answer
+    const lines = (await tx.execute(sql`
+      select id::text as id, expense_date::text as d, category_key, description,
+             amount_minor::text as amount, mileage_km::text as km
+      from public.expense_claim_line
+      where claim_id = ${claimId} and org_id = ${ctx.orgId}
+      order by expense_date, created_at
+    `)) as unknown as Array<Record<string, string | null>>;
+    return {
+      id: r.id!,
+      reference: r.reference!,
+      title: r.title!,
+      employeeId: r.employee_id!,
+      employeeName: r.employee_name!,
+      currency: r.currency!,
+      totalMinor: Number(r.total),
+      status: r.status!,
+      settlementRoute: r.settlement_route!,
+      lines: lines.map((l) => ({
+        id: l.id!,
+        expenseDate: l.d!,
+        categoryKey: l.category_key!,
+        description: l.description!,
+        amountMinor: Number(l.amount),
+        mileageKm: l.km ?? null,
+      })),
+    };
   });
 }

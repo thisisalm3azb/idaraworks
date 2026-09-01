@@ -13,7 +13,7 @@ import {
   buildQuickCreate,
 } from "@/platform/ui/nav/build";
 import { FEATURE_KEYS } from "@/platform/entitlements";
-import type { RoleArchetype } from "@/platform/registries";
+import { ROLE_ARCHETYPES, type RoleArchetype } from "@/platform/registries";
 
 const ORG = "org-1";
 const allOn: Record<string, boolean> = Object.fromEntries(FEATURE_KEYS.map((k) => [k, true]));
@@ -307,5 +307,42 @@ describe("H22F release gate — the stock and asset screens", () => {
         `${a} has no inbox`,
       ).toContain("inbox");
     }
+  });
+});
+
+/** H23G release gate — the HR screens follow the stock law exactly. */
+describe("H23G release gate — leave, claims, my pay, payroll", () => {
+  const HR_KEYS = ["leave", "claims", "my_pay", "payroll"] as const;
+  const allOn = Object.fromEntries(FEATURE_KEYS.map((k) => [k, true]));
+
+  it("absent flag hides every HR item for every archetype", () => {
+    for (const a of ROLE_ARCHETYPES) {
+      const keys = buildNavGroups({ orgId: ORG, archetype: a, features: allOn })
+        .flatMap((g) => g.items)
+        .map((i) => i.key);
+      for (const k of HR_KEYS) {
+        expect(keys, `${a} was shown the unreleased ${k} screen`).not.toContain(k);
+      }
+    }
+  });
+
+  it("with the flag on, items appear per role: everyone gets self surfaces, payroll stays privileged", () => {
+    const withFlag = (a: (typeof ROLE_ARCHETYPES)[number]) =>
+      buildNavGroups({ orgId: ORG, archetype: a, features: allOn, hrSurfaces: true })
+        .flatMap((g) => g.items)
+        .map((i) => i.key);
+    expect(withFlag("owner")).toEqual(expect.arrayContaining(["leave", "claims", "my_pay", "payroll"]));
+    expect(withFlag("foreman")).toEqual(expect.arrayContaining(["leave", "claims", "my_pay"]));
+    expect(withFlag("foreman")).not.toContain("payroll");
+  });
+
+  it("entitlement off hides the module even when released", () => {
+    const noPay = { ...allOn, "cap.payroll": false };
+    const keys = buildNavGroups({ orgId: ORG, archetype: "owner", features: noPay, hrSurfaces: true })
+      .flatMap((g) => g.items)
+      .map((i) => i.key);
+    expect(keys).not.toContain("payroll");
+    expect(keys).not.toContain("my_pay");
+    expect(keys).toContain("leave");
   });
 });

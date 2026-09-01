@@ -10,6 +10,7 @@
  */
 import { z } from "zod";
 import { command } from "@/platform/audit";
+import { requireCapability } from "@/platform/entitlements";
 import { assertCan, can } from "@/platform/authz";
 import { sql, withCtx, type Ctx, type TenantTx } from "@/platform/tenancy";
 import type { RoleArchetype } from "@/platform/registries";
@@ -285,6 +286,7 @@ export async function submitLeaveRequest(
   archetype: RoleArchetype,
   raw: unknown,
 ): Promise<{ id: string; days: number; decided: boolean }> {
+  await requireCapability(ctx, "cap.leave");
   const input = LeaveRequestInput.parse(raw);
   const managesOthers = can(archetype, "attendance.manage");
   return command(
@@ -556,4 +558,38 @@ export async function listLeaveRequests(
     days: r.days!,
     status: r.status!,
   }));
+}
+
+export type LeaveTypeRow = {
+  id: string;
+  key: string;
+  labelEn: string;
+  labelAr: string;
+  paid: boolean;
+  requiresAttachment: boolean;
+  allowHalfDay: boolean;
+};
+
+/** The active leave types (bounded by design — org config, not growth data). */
+export async function listLeaveTypes(ctx: Ctx): Promise<LeaveTypeRow[]> {
+  const rows = (await withCtx(ctx, (tx) =>
+    tx.execute(sql`
+      select id::text as id, key, label, paid, requires_attachment, allow_half_day
+      from public.leave_type
+      where org_id = ${ctx.orgId} and active
+      order by sort, key
+    `),
+  )) as unknown as Array<Record<string, unknown>>;
+  return rows.map((r) => {
+    const label = r.label as { en?: string; ar?: string };
+    return {
+      id: r.id as string,
+      key: r.key as string,
+      labelEn: label.en ?? (r.key as string),
+      labelAr: label.ar ?? label.en ?? (r.key as string),
+      paid: r.paid === true,
+      requiresAttachment: r.requires_attachment === true,
+      allowHalfDay: r.allow_half_day === true,
+    };
+  });
 }

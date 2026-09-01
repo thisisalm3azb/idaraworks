@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { resolveCtxForAction } from "@/platform/auth/resolve";
 import { ForbiddenError } from "@/platform/authz";
 import { decideApproval, ApprovalStateError, SelfApprovalError } from "@/modules/approvals/service";
+import { applyLeaveApproval } from "@/modules/hr/service";
 
 export async function decideApprovalAction(orgId: string, formData: FormData): Promise<void> {
   const resolved = await resolveCtxForAction(orgId);
@@ -13,11 +14,19 @@ export async function decideApprovalAction(orgId: string, formData: FormData): P
   const base = `/o/${orgId}/approvals`;
   const decision = String(formData.get("decision") ?? "") as "approved" | "rejected";
   try {
-    await decideApproval(resolved.ctx, resolved.archetype, {
+    const decided = await decideApproval(resolved.ctx, resolved.archetype, {
       approvalId: String(formData.get("approval_id") ?? ""),
       decision,
       note: (formData.get("note") as string) || undefined,
     });
+    // Subject follow-ups the engine cannot run itself (it must not import
+    // other modules): an approved leave request debits the ledger and
+    // resolves into attendance — idempotent, so a retry cannot double-debit.
+    // Claims and pay runs need nothing here (settlement and finalization are
+    // their own explicit steps); approved overtime simply counts when read.
+    if (decided.outcome === "approved" && decided.subjectType === "leave_request") {
+      await applyLeaveApproval(resolved.ctx, resolved.archetype, decided.subjectId);
+    }
   } catch (err) {
     if ((err as { digest?: string }).digest?.startsWith("NEXT_REDIRECT")) throw err;
     const code =

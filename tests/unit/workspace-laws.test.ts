@@ -259,7 +259,14 @@ describe("H14 — registry parity with the platform sources of truth", () => {
     const seen = new Set<string>();
     for (const archetype of BLUEPRINT_ARCHETYPES) {
       const keys = new Set(
-        buildNavGroups({ orgId: "x", archetype, features: allOn, stockSurfaces: true })
+        buildNavGroups({
+          orgId: "x",
+          archetype,
+          features: allOn,
+          stockSurfaces: true,
+          // H23G — parity is judged with every release gate open, same as stock.
+          hrSurfaces: true,
+        })
           .flatMap((g) => g.items)
           .map((i) => i.key),
       );
@@ -289,6 +296,7 @@ describe("H14 — registry parity with the platform sources of truth", () => {
         archetype: "owner",
         features,
         stockSurfaces: true,
+        hrSurfaces: true,
       }).flatMap((g) => g.items);
       const byKey = new Map(items.map((i) => [i.key, i]));
       for (const key of NAV_ITEM_KEYS) {

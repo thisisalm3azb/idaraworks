@@ -18,6 +18,7 @@ import { command } from "@/platform/audit";
 import { assertCan } from "@/platform/authz";
 import { sql, withCtx, type Ctx, type TenantTx } from "@/platform/tenancy";
 import { allocateReference, formatRef } from "@/platform/reference/sequence";
+import { requireCapability } from "@/platform/entitlements";
 import type { RoleArchetype } from "@/platform/registries";
 import { submitForApproval, supersedeApprovalsForSubjectIn } from "@/modules/approvals/service";
 import { HrError } from "@/modules/hr/service";
@@ -107,6 +108,7 @@ export async function createPayRun(
       reversesRunId: z.string().uuid().optional(),
     })
     .parse(raw);
+  await requireCapability(ctx, "cap.payroll");
   return command(
     ctx,
     {
@@ -791,5 +793,107 @@ export async function listPayslips(
     periodEnd: r.pe!,
     netMinor: Number(r.net),
     currency: r.currency!,
+  }));
+}
+
+export type PayRunDetail = {
+  id: string;
+  reference: string;
+  runKind: string;
+  status: string;
+  periodStart: string;
+  periodEnd: string;
+  currency: string;
+  packVersion: string | null;
+  grossTotalMinor: number;
+  deductionTotalMinor: number;
+  netTotalMinor: number;
+  exceptionCount: number;
+  lines: Array<{
+    id: string;
+    employeeId: string;
+    employeeName: string;
+    grossMinor: number;
+    deductionMinor: number;
+    netMinor: number;
+    exceptions: string[];
+    payslipId: string | null;
+  }>;
+};
+
+export async function getPayRun(
+  ctx: Ctx,
+  archetype: RoleArchetype,
+  runId: string,
+): Promise<PayRunDetail | null> {
+  assertCan(archetype, "payroll.view");
+  if (!ctx.costPrivileged) throw new HrError("payroll requires cost privilege", "forbidden");
+  return withCtx(ctx, async (tx) => {
+    const runs = (await tx.execute(sql`
+      select r.id::text as id, r.reference, r.run_kind, r.status, r.currency, r.pack_version,
+             r.gross_total_minor::text as gross, r.deduction_total_minor::text as ded,
+             r.net_total_minor::text as net, r.exception_count,
+             p.period_start::text as ps, p.period_end::text as pe
+      from public.pay_run r
+      join public.pay_period p on p.id = r.period_id and p.org_id = r.org_id
+      where r.id = ${runId} and r.org_id = ${ctx.orgId}
+    `)) as unknown as Array<Record<string, unknown>>;
+    const r = runs[0];
+    if (!r) return null;
+    const lines = (await tx.execute(sql`
+      select l.id::text as id, l.employee_id::text as employee_id, e.name,
+             l.gross_minor::text as g, l.deduction_minor::text as d, l.net_minor::text as n,
+             l.exceptions, s.id::text as payslip_id
+      from public.pay_run_line l
+      join public.employee e on e.id = l.employee_id and e.org_id = l.org_id
+      left join public.payslip s on s.pay_run_line_id = l.id and s.org_id = l.org_id
+      where l.pay_run_id = ${runId} and l.org_id = ${ctx.orgId}
+      order by e.name
+    `)) as unknown as Array<Record<string, unknown>>;
+    return {
+      id: r.id as string,
+      reference: r.reference as string,
+      runKind: r.run_kind as string,
+      status: r.status as string,
+      periodStart: r.ps as string,
+      periodEnd: r.pe as string,
+      currency: r.currency as string,
+      packVersion: (r.pack_version as string | null) ?? null,
+      grossTotalMinor: Number(r.gross),
+      deductionTotalMinor: Number(r.ded),
+      netTotalMinor: Number(r.net),
+      exceptionCount: Number(r.exception_count),
+      lines: lines.map((l) => ({
+        id: l.id as string,
+        employeeId: l.employee_id as string,
+        employeeName: l.name as string,
+        grossMinor: Number(l.g),
+        deductionMinor: Number(l.d),
+        netMinor: Number(l.n),
+        exceptions: (l.exceptions as string[]) ?? [],
+        payslipId: (l.payslip_id as string | null) ?? null,
+      })),
+    };
+  });
+}
+
+/** The pay groups (bounded org config). */
+export async function listPayGroups(
+  ctx: Ctx,
+  archetype: RoleArchetype,
+): Promise<Array<{ id: string; nameEn: string; frequency: string; roundingMinor: number }>> {
+  assertCan(archetype, "payroll.view");
+  const rows = (await withCtx(ctx, (tx) =>
+    tx.execute(sql`
+      select id::text as id, name_en, frequency, rounding_minor from public.pay_group
+      where org_id = ${ctx.orgId} and active
+      order by name_en
+    `),
+  )) as unknown as Array<Record<string, unknown>>;
+  return rows.map((r) => ({
+    id: r.id as string,
+    nameEn: r.name_en as string,
+    frequency: r.frequency as string,
+    roundingMinor: Number(r.rounding_minor),
   }));
 }

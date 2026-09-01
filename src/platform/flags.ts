@@ -27,3 +27,15 @@
 export function stockSurfacesEnabled(): boolean {
   return process.env.FEATURE_STOCK_SURFACES === "1";
 }
+
+/**
+ * The H23 HR, leave, claims and payroll screens.
+ *
+ * Same law as the stock gate: off unless , exactly
+ * that spelling; when off the navigation has no entries and the routes answer
+ * 404. Pay data reaching users through a half-verified screen is worse than a
+ * late feature.
+ */
+export function hrSurfacesEnabled(): boolean {
+  return process.env.FEATURE_HR_SURFACES === "1";
+}
