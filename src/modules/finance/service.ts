@@ -8,3 +8,5 @@ export * from "./posting";
 export * from "./receivables";
 export * from "./banking";
 export * from "./subledgers";
+export * from "./fx";
+export * from "./tax";

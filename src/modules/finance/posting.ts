@@ -11,6 +11,7 @@
 import { sql, type Ctx, type TenantTx } from "@/platform/tenancy";
 import { FinanceError, postFromSourceIn, systemAccountIn } from "./ledger";
 import { financeConfigIn } from "./chart";
+import { captureTaxEntryIn } from "./tax";
 
 export const POSTING_RULES_VERSION = "core-1";
 
@@ -116,6 +117,22 @@ export async function postInvoiceIssuedIn(
     controlOk: true,
     lines,
   });
+  // H24H: the tax FACT (credit notes net the boxes with negative amounts).
+  if (!r.alreadyPosted) {
+    const isExportRow = (await tx.execute(sql`
+      select is_export from public.invoice where id = ${invoiceId} and org_id = ${ctx.orgId}
+    `)) as unknown as Array<{ is_export: boolean }>;
+    await captureTaxEntryIn(tx, ctx, {
+      journalEntryId: r.entryId,
+      sourceType: "invoice",
+      sourceId: invoiceId,
+      direction: "output",
+      baseMinor: isCredit ? -subtotal : subtotal,
+      taxMinor: isCredit ? -vat : vat,
+      txnDate: inv.d!,
+      isExport: isExportRow[0]?.is_export === true,
+    });
+  }
   return { posted: !r.alreadyPosted, entryId: r.entryId };
 }
 
@@ -244,5 +261,16 @@ export async function postExpenseRecordedIn(
       { accountId: credit, creditMinor: total, description: `Expense ${e.reference}` },
     ],
   });
+  if (!r.alreadyPosted && vat > 0) {
+    await captureTaxEntryIn(tx, ctx, {
+      journalEntryId: r.entryId,
+      sourceType: "expense",
+      sourceId: expenseId,
+      direction: "input",
+      baseMinor: net,
+      taxMinor: vat,
+      txnDate: e.d!,
+    });
+  }
   return { posted: !r.alreadyPosted, entryId: r.entryId };
 }
