@@ -583,10 +583,24 @@ async function receivingLocation(
     if (!rows[0]) throw new StockMovementConflictError("location not found");
     return { warehouseId: rows[0].warehouse_id, locationId: explicit };
   }
+  /*
+   * A TOTAL order, because an organization can have more than one warehouse.
+   *
+   * Each warehouse may nominate its own receiving bay, and `limit 1` with no
+   * ordering returns whichever row the database happens to hand back first — so
+   * the same receipt lands in a different warehouse on a different machine, or
+   * after a vacuum reorders the heap. CI found exactly that: goods arriving in
+   * the second warehouse while every test looked for them in the first.
+   *
+   * The oldest warehouse's bay is an arbitrary rule, but it is a STATED one, and
+   * a caller that knows better passes the location explicitly.
+   */
   const rows = (await tx.execute(sql`
-    select id::text as id, warehouse_id::text as warehouse_id
-    from public.stock_location
-    where org_id = ${ctx.orgId} and is_default_receiving and active and can_hold_stock
+    select l.id::text as id, l.warehouse_id::text as warehouse_id
+    from public.stock_location l
+    join public.warehouse w on w.id = l.warehouse_id and w.org_id = l.org_id
+    where l.org_id = ${ctx.orgId} and l.is_default_receiving and l.active and l.can_hold_stock
+    order by w.created_at, w.id, l.created_at, l.id
     limit 1
   `)) as unknown as Array<{ id: string; warehouse_id: string }>;
   if (!rows[0]) {

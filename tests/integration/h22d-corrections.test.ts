@@ -98,7 +98,10 @@ async function receive(
     receivedDate: "2026-08-05",
     lines: [{ poLineId: po!.lines[0]!.id, receivedQty: qty, ...tracking }],
   });
-  const posted = await postGoodsReceiptToStock(ownerCtx(), "owner", grn.id);
+  // Named explicitly: this fixture has TWO warehouses, each with its own default
+  // receiving bay, and a test that does not say where goods land is asserting
+  // about a choice it never made.
+  const posted = await postGoodsReceiptToStock(ownerCtx(), "owner", grn.id, { locationId: binA });
   return { poId, grnId: grn.id, grlId: posted[0]!.lineId, posted };
 }
 
