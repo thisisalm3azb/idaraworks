@@ -23,6 +23,7 @@ import { createNotificationIn } from "@/platform/notifications/notify";
 import type { RoleArchetype } from "@/platform/registries";
 import { submitForApproval, supersedeApprovalsForSubjectIn } from "@/modules/approvals/service";
 import { HrError } from "@/modules/hr/service";
+import { postPayRunFinalizedIn } from "@/modules/finance/service";
 import { getDocumentProfile } from "@/modules/branding/service";
 import { captureIssuerSnapshot } from "@/platform/documents/issuer";
 import { AE_PACK } from "./packs/ae";
@@ -639,6 +640,9 @@ export async function finalizePayRun(
         `);
       }
 
+      // H24F: the run's accounting entry (salary/employer expense, net and
+      // deduction liabilities) posts once, in the same transaction.
+      await postPayRunFinalizedIn(tx, ctx, runId);
       return { payslips };
     },
   );

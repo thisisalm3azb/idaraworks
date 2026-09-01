@@ -22,6 +22,7 @@
  */
 import { randomUUID } from "node:crypto";
 import { sql, type Ctx, type TenantTx } from "@/platform/tenancy";
+import { postStockMovementIn } from "@/modules/finance/service";
 import { assertCan } from "@/platform/authz";
 import { command } from "@/platform/audit";
 import type { RoleArchetype } from "@/platform/registries";
@@ -396,6 +397,10 @@ export async function postMovementIn(
             ${input.reason ?? null}, ${input.note ?? null},
             ${input.reversesMovementId ?? null}, ${ctx.userId})
   `);
+
+  // H24F: the movement's VALUE reaches the books through one idempotent rule
+  // (no-op before finance adoption or the books start date).
+  await postStockMovementIn(tx, ctx, movementId);
 
   // What this movement moved, by name. Written before the cost layers, because
   // an inbound tracked movement creates one layer per lot or per unit.
