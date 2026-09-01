@@ -81,7 +81,9 @@ async function download(href: string): Promise<{
   contentType: string;
   disposition: string;
   body: Buffer;
+  ms: number;
 }> {
+  const started = Date.now();
   const res = await fetch(`${BASE}${href}`, {
     redirect: "manual",
     headers: {
@@ -92,11 +94,15 @@ async function download(href: string): Promise<{
       "user-agent": "Mozilla/5.0 (H22 production PDF verification)",
     },
   });
+  const body = Buffer.from(await res.arrayBuffer());
   return {
     status: res.status,
     contentType: res.headers.get("content-type") ?? "",
     disposition: res.headers.get("content-disposition") ?? "",
-    body: Buffer.from(await res.arrayBuffer()),
+    body,
+    // How long it took says what happened when nothing else can: a browser that
+    // starts takes seconds, and a module that is not there fails in under one.
+    ms: Date.now() - started,
   };
 }
 
@@ -104,6 +110,7 @@ async function download(href: string): Promise<{
 async function verifyLanguage(label: string, href: string, mustEmbed: string): Promise<void> {
   console.log(`\n${label.toUpperCase()} — GET ${href}`);
   const res = await download(href);
+  console.log(`  (${res.ms}ms, ${res.body.byteLength} bytes)`);
   const head = res.body.subarray(0, 5).toString("latin1");
   const asText = res.body.toString("latin1");
 
@@ -203,6 +210,24 @@ async function run(): Promise<void> {
   check("the button is labelled for the reader", /Download PDF|تنزيل PDF/.test(html), "");
   if (hrefs.length === 0) {
     throw new Error("no Download PDF link on the shared page — nothing to follow");
+  }
+
+  /*
+   * When it fails, ask WHY before giving up. The route answers ?diag=1 with the
+   * error, to a caller holding the token, so a failing verification reports a
+   * cause rather than only a status code.
+   */
+  const probe = await download(`/d/${share.token}?format=pdf&lang=en&diag=1`);
+  if (probe.status !== 200) {
+    let why = probe.body.toString("utf8").slice(0, 400);
+    try {
+      why = (JSON.parse(probe.body.toString("utf8")) as { detail?: string }).detail ?? why;
+    } catch {
+      /* not JSON: the raw body is the best available answer */
+    }
+    console.log(`
+WHY IT FAILED (from production): ${why}
+`);
   }
 
   // English, then Arabic, following the page's own link shape.

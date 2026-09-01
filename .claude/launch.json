@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "stock-preview",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["tooling/scripts/dev-stock-preview.mjs"],
+      "port": 3210
+    }
+  ]
+}

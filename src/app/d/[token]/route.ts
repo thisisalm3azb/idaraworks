@@ -146,10 +146,28 @@ export async function GET(
      */
     if (wantsPdf && isRenderFailure(err)) {
       const back = url.pathname + "?lang=" + (url.searchParams.get("lang") === "ar" ? "ar" : "en");
-      logger.error(
-        { err: err instanceof Error ? err.name + ": " + err.message : String(err) },
-        "shared document PDF render failed",
-      );
+      const detail = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+      logger.error({ err: detail }, "shared document PDF render failed");
+
+      /*
+       * `?diag=1` returns the reason — to whoever already holds the token.
+       *
+       * A serverless render failure is invisible from outside: the log goes
+       * somewhere only the platform account can read, and the page deliberately
+       * says nothing technical. That is precisely why this defect survived a
+       * slice that set out to fix it, twice — the cause had to be inferred from
+       * a status code and a response time.
+       *
+       * The share token is a bearer secret for exactly this document, and this
+       * says nothing about any other, so a holder learning why their own
+       * download failed gives away nothing they did not already have.
+       */
+      if (url.searchParams.get("diag") === "1") {
+        return Response.json(
+          { error: "pdf_unavailable", detail: detail.slice(0, 400), printUrl: back },
+          { status: 503, headers: { "cache-control": "no-store" } },
+        );
+      }
       return new Response(pdfUnavailablePage(back), {
         status: 503,
         headers: {
