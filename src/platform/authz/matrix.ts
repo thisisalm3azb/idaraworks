@@ -116,6 +116,17 @@ export type Action =
   // H23F — every member may read their OWN HR documents (payslip, letters);
   // builders narrow to the caller's employee row unless a wider action holds.
   | "hr.self"
+  // H24 — finance. Segregation of duties (truth map D14): post≠approve,
+  // prepare≠review, close/reopen is its own power.
+  | "finance.view"
+  | "finance.manage"
+  | "finance.post"
+  | "finance.approve"
+  | "finance.close"
+  | "finance.reconcile"
+  | "tax.prepare"
+  | "tax.review"
+  | "budget.manage"
   | "payroll.view"
   | "payroll.manage"
   | "payroll.approve"
@@ -283,6 +294,15 @@ export const MATRIX: Record<Action, readonly Grantable[]> = {
   "onboarding.run": ["owner", "admin"],
   // Commercial/billing (doc 10 #21): manage is OWNER-ONLY; view extends to admin + accounts.
   "hr.self": ["owner", "admin", "manager", "foreman", "procurement", "accounts", "viewer"],
+  "finance.view": ["owner", "admin", "manager", "accounts", "viewer"],
+  "finance.manage": ["owner", "admin", "accounts"],
+  "finance.post": ["owner", "admin", "accounts"],
+  "finance.approve": ["owner", "admin"],
+  "finance.close": ["owner", "admin"],
+  "finance.reconcile": ["owner", "admin", "accounts"],
+  "tax.prepare": ["owner", "admin", "accounts"],
+  "tax.review": ["owner", "admin"],
+  "budget.manage": ["owner", "admin", "accounts"],
   "payroll.view": ["owner", "admin", "manager", "accounts", "viewer"],
   "payroll.manage": ["owner", "admin", "accounts"],
   "payroll.approve": ["owner", "admin"],

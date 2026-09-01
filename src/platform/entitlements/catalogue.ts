@@ -38,6 +38,9 @@ export const FEATURE_KEYS = [
   "cap.leave",
   "cap.payroll",
   "cap.expense_claims",
+  // capability (H24): the finance system — seeded enabled on every plan (0101);
+  // release-gated by FEATURE_FINANCE_SURFACES until verified end to end.
+  "cap.finance",
   // behaviour
   "feat.ai_onboarding",
   "feat.ai_narration",
@@ -109,6 +112,7 @@ export const FREE_PLAN_FEATURES: readonly FeatureKey[] = [
   "cap.leave",
   "cap.payroll",
   "cap.expense_claims",
+  "cap.finance",
   "feat.ai_onboarding",
   "feat.ai_drafts",
   "feat.custom_fields",

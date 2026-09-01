@@ -50,6 +50,7 @@ export const APPROVABLE_TYPES = [
   "overtime_request",
   "expense_claim",
   "pay_run",
+  "journal_entry", // H24 — optional approval before posting (engine never touches its status)
   // P3 (with QC): "stage_signoff", "qc_delivery_override"
 ] as const;
 export type ApprovableType = (typeof APPROVABLE_TYPES)[number];
@@ -76,6 +77,7 @@ export const ATTACHABLE_TYPES = [
   "expense_claim", // H23 — receipts on claim lines
   "overtime_request", // H23 — activity-feed identity; no file surface shipped
   "pay_run", // H23 — activity-feed identity; no file surface shipped
+  "journal_entry", // H24 — supporting evidence attaches to journals
 ] as const;
 export type AttachableType = (typeof ATTACHABLE_TYPES)[number];
 
@@ -117,6 +119,19 @@ export const AUDIT_ENTITY_TYPES = [
   "mileage_rate", // H23E — org mileage-rate config edits are audited money config
   "cash_advance", // H23E — record/settle of a cash advance is an audited money mutation
   "employee_loan", // H23D/E — loan creation and status flips are audited money mutations
+  "gl_account", // H24 — chart edits are audited financial config
+  "fiscal_year", // H24 — fiscal calendar mutations are audited
+  "fiscal_period", // H24 — close/lock/reopen are audited control events
+  "cost_centre", // H24 — dimension master edits are audited
+  "bank_account", // H24E — bank/cash account config is audited money config
+  "bank_statement", // H24E — statement import/void is audited
+  "bank_reconciliation", // H24E — reconciliation lifecycle is audited
+  "tax_code", // H24H — tax configuration is audited
+  "tax_return", // H24H — working-paper lifecycle is audited
+  "budget", // H24G — budget lifecycle is audited
+  "currency_rate", // H24G — rate book entries are audited money config
+  "asset_depreciation_run", // H24F — depreciation runs are audited
+  "tally_import", // H24J — migration batches are audited
 ] as const;
 export type AuditEntityType = (typeof AUDIT_ENTITY_TYPES)[number];
 

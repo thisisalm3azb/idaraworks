@@ -979,6 +979,7 @@ export async function listInbox(ctx: Ctx, archetype: RoleArchetype): Promise<Inb
     // expense permission; a pay run total is PAY data and rides the cost wall.
     if (subjectType === "leave_request" || subjectType === "overtime_request") return null;
     if (subjectType === "expense_claim") return can(archetype, "expenses.view") ? amount : null;
+    if (subjectType === "journal_entry") return can(archetype, "finance.view") ? amount : null;
     if (subjectType === "pay_run") return ctx.costPrivileged ? amount : null;
     return seesPo ? amount : null; // material_request, purchase_order, expense
   };

@@ -59,6 +59,8 @@ describe("registries (phase2 closed vocabularies)", () => {
         "overtime_request",
         "expense_claim",
         "pay_run",
+        // H24: an org can require a second person before a journal posts.
+        "journal_entry",
       ].sort(),
     );
     // invoice_issue is explicitly OUT of the MVP enum (audit C-1)
