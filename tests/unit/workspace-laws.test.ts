@@ -259,7 +259,7 @@ describe("H14 — registry parity with the platform sources of truth", () => {
     const seen = new Set<string>();
     for (const archetype of BLUEPRINT_ARCHETYPES) {
       const keys = new Set(
-        buildNavGroups({ orgId: "x", archetype, features: allOn })
+        buildNavGroups({ orgId: "x", archetype, features: allOn, stockSurfaces: true })
           .flatMap((g) => g.items)
           .map((i) => i.key),
       );
@@ -281,9 +281,15 @@ describe("H14 — registry parity with the platform sources of truth", () => {
         .filter((f): f is NonNullable<typeof f> => f !== null),
     )) {
       const features = { ...allOn, [feature]: false };
-      const items = buildNavGroups({ orgId: "x", archetype: "owner", features }).flatMap(
-        (g) => g.items,
-      );
+      // Released, so the H22F items take part in the parity check: their whole
+      // point is that a RELEASE gate and an ENTITLEMENT gate are different, and
+      // that only means something if the entitlement half is exercised.
+      const items = buildNavGroups({
+        orgId: "x",
+        archetype: "owner",
+        features,
+        stockSurfaces: true,
+      }).flatMap((g) => g.items);
       const byKey = new Map(items.map((i) => [i.key, i]));
       for (const key of NAV_ITEM_KEYS) {
         const info = NAV_ITEM_INFO[key];

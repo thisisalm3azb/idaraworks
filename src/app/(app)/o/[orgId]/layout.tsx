@@ -8,6 +8,7 @@ import { getT, getServerLocale } from "@/platform/i18n/server";
 import { getSessionUser, listMyOrgs, resolveCtx } from "@/platform/auth/resolve";
 import { loadOrgTerminology, term } from "@/platform/terminology";
 import { can } from "@/platform/authz";
+import { stockSurfacesEnabled } from "@/platform/flags";
 import { resolveEntitlements } from "@/platform/entitlements";
 import {
   filterGroupsByBlueprint,
@@ -72,7 +73,14 @@ export default async function OrgLayout({
   // deciding inside the builder (the H14 effective-access equation).
   const shell = await resolveShell(resolved);
 
-  const input = { orgId, archetype: a, features: ent.features };
+  const input = {
+    orgId,
+    archetype: a,
+    features: ent.features,
+    // H22F release gate — the stock and asset screens are absent from every
+    // menu until the deployment turns them on (platform/flags.ts).
+    stockSurfaces: stockSurfacesEnabled(),
+  };
   const groups: NavGroupVM[] = filterGroupsByBlueprint(
     buildNavGroups(input).map((g) => ({
       key: g.key,

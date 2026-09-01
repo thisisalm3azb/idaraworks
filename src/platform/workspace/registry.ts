@@ -239,6 +239,8 @@ export const MODULE_INFO: Record<WorkspaceModuleKey, ModuleInfo> = {
  */
 export const NAV_ITEM_KEYS = [
   "today",
+  // H22F — everyone has an inbox; nobody sees stock or assets until released.
+  "inbox",
   "jobs",
   "my_work",
   "week",
@@ -250,6 +252,8 @@ export const NAV_ITEM_KEYS = [
   "material_requests",
   "purchase_orders",
   "items",
+  "stock",
+  "assets",
   "suppliers",
   "quotes",
   "invoices",
@@ -291,6 +295,13 @@ export type NavItemInfo = {
 
 export const NAV_ITEM_INFO: Record<NavItemKey, NavItemInfo> = {
   today: { action: null, feature: null, module: null, alwaysVisible: true },
+  /*
+   * H22F. The inbox has no action because there is no role that may hold a
+   * membership and not have one, and it is alwaysVisible because a blueprint
+   * that hides somebody's own messages from them is not a configuration
+   * choice a business should be able to make by accident.
+   */
+  inbox: { action: null, feature: null, module: null, alwaysVisible: true },
   jobs: { action: "jobs.view", feature: null, module: "cap.jobs", alwaysVisible: false },
   // H21 — one person's own execution view; rides the work module.
   my_work: { action: "jobs.view", feature: null, module: "cap.jobs", alwaysVisible: false },
@@ -333,6 +344,28 @@ export const NAV_ITEM_INFO: Record<NavItemKey, NavItemInfo> = {
     alwaysVisible: false,
   },
   items: { action: "catalog.view", feature: null, module: "cap.items", alwaysVisible: false },
+  /*
+   * H22F stock and assets. No : these are RELEASE gated rather than
+   * sold (platform/flags.ts), and writing a capability key here would tell the
+   * workspace compiler this is something an organization can buy.
+   */
+  stock: {
+    action: "inventory.view",
+    feature: null,
+    // Stock IS item quantities, so a workspace that has switched the item
+    // catalogue off has no stock to show either.
+    module: "cap.items",
+    alwaysVisible: false,
+  },
+  assets: {
+    action: "assets.view",
+    feature: null,
+    // No module: an asset register is not a sub-part of any module the
+    // workspace compiler knows about, and borrowing one would make disabling
+    // that module silently hide the register.
+    module: null,
+    alwaysVisible: false,
+  },
   suppliers: {
     action: "catalog.view",
     feature: null,

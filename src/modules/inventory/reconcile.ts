@@ -350,8 +350,8 @@ export async function itemStock(
     tx.execute(sql`
       select b.warehouse_id::text as warehouse_id, w.name_en as warehouse_name,
              b.location_id::text as location_id, l.name_en as location_name,
-             b.on_hand::text as on_hand, b.reserved::text as reserved,
-             (b.on_hand - b.reserved)::text as available
+             trim_scale(b.on_hand)::text as on_hand, trim_scale(b.reserved)::text as reserved,
+             trim_scale(b.on_hand - b.reserved)::text as available
       from public.stock_balance b
       join public.warehouse w on w.id = b.warehouse_id and w.org_id = b.org_id
       join public.stock_location l on l.id = b.location_id and l.org_id = b.org_id

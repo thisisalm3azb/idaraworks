@@ -43,3 +43,15 @@ export {
   RequestDisposalInput,
   CompleteDisposalInput,
 } from "./lifecycle";
+
+export {
+  assetDetail,
+  type AssetFullDetail,
+  type AssetDetail,
+  type CustodyEvent,
+  type InspectionRow,
+  type MaintenancePlanRow,
+  type MaintenanceEventRow,
+  type DowntimeRow,
+  type DisposalRow,
+} from "./read";

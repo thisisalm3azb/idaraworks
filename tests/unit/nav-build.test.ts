@@ -228,3 +228,84 @@ describe("activeItemKey", () => {
     expect(activeItemKey(`/o/${ORG}/jobs/`, items)).toBe("jobs");
   });
 });
+
+describe("H22F release gate — the stock and asset screens", () => {
+  /*
+   * The whole point of the gate is that FORGETTING it hides the item. These
+   * tests are written from that direction: the default must be absent, and the
+   * only way to make the item appear is to say so explicitly.
+   */
+  it("is absent for every role when the caller says nothing", () => {
+    const archetypes: RoleArchetype[] = [
+      "owner",
+      "admin",
+      "manager",
+      "foreman",
+      "accounts",
+      "procurement",
+      "viewer",
+    ];
+    for (const a of archetypes) {
+      const keys = flat(a).map((i) => i.key);
+      expect(keys, `${a} was shown the unreleased stock screen`).not.toContain("stock");
+      expect(keys, `${a} was shown the unreleased asset screen`).not.toContain("assets");
+    }
+  });
+
+  it("stays absent even with every entitlement on — a paid plan is not a release", () => {
+    // The failure this guards: gating an unfinished surface on `feature` instead
+    // of the release flag, which shows it to exactly the orgs paying the most.
+    const keys = buildNavGroups({ orgId: ORG, archetype: "owner", features: allOn })
+      .flatMap((g) => g.items)
+      .map((i) => i.key);
+    expect(keys).not.toContain("stock");
+    expect(keys).not.toContain("assets");
+  });
+
+  it("appears once the deployment turns it on, still under can()", () => {
+    const withFlag = (archetype: RoleArchetype) =>
+      buildNavGroups({ orgId: ORG, archetype, features: allOn, stockSurfaces: true })
+        .flatMap((g) => g.items)
+        .map((i) => i.key);
+
+    expect(withFlag("owner")).toEqual(expect.arrayContaining(["stock", "assets"]));
+    // A viewer holds neither inventory.view nor assets.view: the release flag
+    // must not become a way around the permission matrix.
+    expect(withFlag("viewer")).not.toContain("stock");
+    expect(withFlag("viewer")).not.toContain("assets");
+  });
+
+  it("lands in the materials group, not a new one", () => {
+    const groups = buildNavGroups({
+      orgId: ORG,
+      archetype: "owner",
+      features: allOn,
+      stockSurfaces: true,
+    });
+    const materials = groups.find((g) => g.key === "materials");
+    expect(materials?.items.map((i) => i.key)).toEqual(expect.arrayContaining(["stock", "assets"]));
+    // The group list itself is unchanged — no extra heading appeared.
+    expect(groups.map((g) => g.key)).toEqual([
+      "today",
+      "work",
+      "materials",
+      "money",
+      "customers",
+      "people",
+      "data",
+      "settings",
+    ]);
+  });
+
+  it("the inbox is in the nav for every role, ungated", () => {
+    // Not a stock test, but the same law: an alert nobody can reach is not an
+    // alert. Every membership has an inbox, so no role may be missing it.
+    const archetypes: RoleArchetype[] = ["owner", "foreman", "accounts", "viewer"];
+    for (const a of archetypes) {
+      expect(
+        flat(a).map((i) => i.key),
+        `${a} has no inbox`,
+      ).toContain("inbox");
+    }
+  });
+});

@@ -26,6 +26,11 @@ const PATHS = {
   clock: ["M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z", "M12 7.5V12l3 2"],
   inbox: ["M4 5h16v14H4z", "M4 13h4.5l1.5 2.5h4l1.5-2.5H20"],
   package: ["M12 3 4 7v10l8 4 8-4V7l-8-4z", "M4 7l8 4 8-4", "M12 11v10"],
+  // H22F: the asset register. A spanner reads as "the equipment itself", where
+  // `package` and `box` already both mean "a quantity of a thing".
+  wrench: [
+    "M15.5 3.5a5 5 0 0 0-5.9 6.6L3.5 16.2a2 2 0 0 0 2.8 2.8l6.1-6.1a5 5 0 0 0 6.6-5.9l-3 3-2.8-.7-.7-2.8z",
+  ],
   cart: [
     "M3 4h2.5l2 11.5h11L21 8H6.4",
     "M9.5 20.2a.9.9 0 1 0 0-1.8.9.9 0 0 0 0 1.8z",

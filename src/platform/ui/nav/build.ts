@@ -55,6 +55,16 @@ type ItemSpec = {
   feature?: string;
   /** How an un-entitled item presents. Default "hide". */
   whenUnentitled?: "hide" | "lock";
+  /**
+   * A RELEASE gate, not a commercial one (see platform/flags.ts).
+   *
+   * `feature` answers "has this org paid for it"; this answers "is it finished".
+   * They are different questions and conflating them is how an unverified screen
+   * reaches a customer with a price attached. Absent by default, and the item is
+   * hidden unless the caller passes the flag — a gate you have to remember to
+   * apply is a gate that gets forgotten.
+   */
+  requiresStockSurfaces?: boolean;
 };
 
 type GroupSpec = { key: string; labelKey: string; icon: IconName; items: ItemSpec[] };
@@ -141,6 +151,28 @@ const GROUPS: GroupSpec[] = [
         feature: "cap.purchase_orders",
       },
       { key: "items", labelKey: "nav.items", path: "/items", icon: "box", action: "catalog.view" },
+      /*
+       * Stock and assets sit in the materials group rather than in a group of
+       * their own: somebody asking "how much steel do we have" is already
+       * looking under materials, and a second near-identical heading is how a
+       * menu stops being navigable.
+       */
+      {
+        key: "stock",
+        labelKey: "nav.stock",
+        path: "/stock",
+        icon: "box",
+        action: "inventory.view",
+        requiresStockSurfaces: true,
+      },
+      {
+        key: "assets",
+        labelKey: "nav.assets",
+        path: "/assets",
+        icon: "wrench",
+        action: "assets.view",
+        requiresStockSurfaces: true,
+      },
       {
         key: "suppliers",
         labelKey: "nav.suppliers",
@@ -347,9 +379,20 @@ export type BuildNavInput = {
   orgId: string;
   archetype: RoleArchetype;
   features: Features;
+  /**
+   * Whether the H22 stock and asset screens are released (platform/flags.ts).
+   *
+   * Passed IN rather than read here so this builder stays a pure function of
+   * its arguments and the role x entitlement matrix stays unit-testable. Absent
+   * means hidden: the default has to be the safe one, because every call site
+   * that forgets this gets the safe one.
+   */
+  stockSurfaces?: boolean;
 };
 
 function resolveItem(spec: ItemSpec, input: BuildNavInput): NavItem | null {
+  // Release gate first: an unfinished surface is not a permission question.
+  if (spec.requiresStockSurfaces === true && input.stockSurfaces !== true) return null;
   if (!can(input.archetype, spec.action)) return null;
   const entitled = spec.feature === undefined || (input.features[spec.feature] ?? false);
   if (entitled) {
@@ -382,6 +425,24 @@ export function buildNavGroups(input: BuildNavInput): NavGroup[] {
         labelKey: "today.title",
         href: `/o/${input.orgId}`,
         icon: "home",
+        locked: false,
+      },
+      /*
+       * The inbox is UNCONDITIONAL, and deliberately not one of the specs above.
+       *
+       * It shows a person their own notifications, plus the concerns they are
+       * already permitted to see — RLS scopes the first to the recipient and
+       * the page checks a permission for the second. No role can hold a
+       * membership and not have an inbox, so there is no action to gate it on;
+       * inventing one would only be a way of hiding somebody's own messages
+       * from them. Every notification this product writes was unreachable in
+       * the UI until this item existed.
+       */
+      {
+        key: "inbox",
+        labelKey: "nav.inbox",
+        href: `/o/${input.orgId}/inbox`,
+        icon: "bell",
         locked: false,
       },
     ],

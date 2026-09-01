@@ -75,8 +75,20 @@ export async function createNotificationIn(
   return { id };
 }
 
-/** The caller's own notifications in the active org (RLS enforces recipient). */
-export async function listMyNotifications(ctx: Ctx, unreadOnly = false): Promise<Notification[]> {
+/**
+ * The caller's own notifications in the active org (RLS enforces recipient).
+ *
+ * BOUNDED. Notifications accumulate for the life of a membership and this read
+ * had no LIMIT at all, so rendering one screen loaded every notification the
+ * account had ever received. `before` walks backwards by timestamp rather than
+ * by offset, because new arrivals at the head would make an offset skip rows.
+ */
+export async function listMyNotifications(
+  ctx: Ctx,
+  unreadOnly = false,
+  opts: { limit?: number; before?: string } = {},
+): Promise<Notification[]> {
+  const limit = Math.min(Math.max(opts.limit ?? 50, 1), 200);
   return withCtx(ctx, async (tx) => {
     const rows = (await tx.execute(sql`
       select id::text as id, kind, title, body, entity_type, entity_id::text as entity_id,
@@ -84,7 +96,10 @@ export async function listMyNotifications(ctx: Ctx, unreadOnly = false): Promise
       from public.notification
       where org_id = ${ctx.orgId} and user_id = ${ctx.userId}
         ${unreadOnly ? sql`and read_at is null` : sql``}
+        and (${opts.before ?? null}::timestamptz is null
+             or created_at < ${opts.before ?? null}::timestamptz)
       order by created_at desc
+      limit ${limit}
     `)) as unknown as Array<Record<string, unknown>>;
     return rows.map((r) => ({
       id: r.id as string,
