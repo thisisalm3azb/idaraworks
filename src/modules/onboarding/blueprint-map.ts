@@ -171,6 +171,15 @@ export function recommendModules(a: DraftAnswers): ModuleRecommendation[] {
       effectiveCustomerSharing(a) ? "updates_on" : "updates_off",
       ["customer_sharing"],
     ),
+    // H24K — full double-entry books. Recommended only where the answers show
+    // a formal record-keeping obligation (VAT registration); everyone else
+    // opts in when their bookkeeper is ready — books are never a surprise.
+    rec(
+      "cap.finance",
+      a.vat_registered_q === "yes",
+      a.vat_registered_q === "yes" ? "finance_vat_on" : "finance_off",
+      ["vat_registered_q"],
+    ),
   ];
 }
 

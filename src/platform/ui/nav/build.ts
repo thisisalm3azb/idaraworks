@@ -67,6 +67,8 @@ type ItemSpec = {
   requiresStockSurfaces?: boolean;
   /** H23G release gate (platform/flags.ts hrSurfacesEnabled). */
   requiresHrSurfaces?: boolean;
+  /** H24K release gate (platform/flags.ts financeSurfacesEnabled). */
+  requiresFinanceSurfaces?: boolean;
 };
 
 type GroupSpec = { key: string; labelKey: string; icon: IconName; items: ItemSpec[] };
@@ -235,6 +237,87 @@ const GROUPS: GroupSpec[] = [
         whenUnentitled: "lock",
       },
       { key: "ar", labelKey: "nav.ar", path: "/ar", icon: "chart", action: "ar.view" },
+    ],
+  },
+  {
+    // H24K — the books. Behind BOTH the cap.finance entitlement and the
+    // FEATURE_FINANCE_SURFACES release gate; hidden (never locked) while off.
+    key: "finance",
+    labelKey: "nav.group.finance",
+    icon: "calculator",
+    items: [
+      {
+        key: "finance",
+        labelKey: "nav.finance",
+        path: "/finance",
+        icon: "chart",
+        action: "finance.view",
+        feature: "cap.finance",
+        requiresFinanceSurfaces: true,
+      },
+      {
+        key: "finance_journals",
+        labelKey: "nav.finance_journals",
+        path: "/finance/journals",
+        icon: "fileText",
+        action: "finance.view",
+        feature: "cap.finance",
+        requiresFinanceSurfaces: true,
+      },
+      {
+        key: "finance_banking",
+        labelKey: "nav.finance_banking",
+        path: "/finance/banking",
+        icon: "banknote",
+        action: "finance.view",
+        feature: "cap.finance",
+        requiresFinanceSurfaces: true,
+      },
+      {
+        key: "finance_receivables",
+        labelKey: "nav.finance_receivables",
+        path: "/finance/receivables",
+        icon: "receipt",
+        action: "finance.view",
+        feature: "cap.finance",
+        requiresFinanceSurfaces: true,
+      },
+      {
+        key: "finance_payables",
+        labelKey: "nav.finance_payables",
+        path: "/finance/payables",
+        icon: "wallet",
+        action: "finance.view",
+        feature: "cap.finance",
+        requiresFinanceSurfaces: true,
+      },
+      {
+        key: "finance_reports",
+        labelKey: "nav.finance_reports",
+        path: "/finance/reports",
+        icon: "chart",
+        action: "finance.view",
+        feature: "cap.finance",
+        requiresFinanceSurfaces: true,
+      },
+      {
+        key: "finance_tax",
+        labelKey: "nav.finance_tax",
+        path: "/finance/tax",
+        icon: "clipboard",
+        action: "tax.prepare",
+        feature: "cap.finance",
+        requiresFinanceSurfaces: true,
+      },
+      {
+        key: "finance_budgets",
+        labelKey: "nav.finance_budgets",
+        path: "/finance/budgets",
+        icon: "calculator",
+        action: "budget.manage",
+        feature: "cap.finance",
+        requiresFinanceSurfaces: true,
+      },
     ],
   },
   {
@@ -429,12 +512,15 @@ export type BuildNavInput = {
   /** Whether the H23 HR/leave/claims/payroll screens are released. Same
    *  pass-it-in law as stockSurfaces: absent means hidden. */
   hrSurfaces?: boolean;
+  /** Whether the H24 finance/banking/tax screens are released. Same law. */
+  financeSurfaces?: boolean;
 };
 
 function resolveItem(spec: ItemSpec, input: BuildNavInput): NavItem | null {
   // Release gate first: an unfinished surface is not a permission question.
   if (spec.requiresStockSurfaces === true && input.stockSurfaces !== true) return null;
   if (spec.requiresHrSurfaces === true && input.hrSurfaces !== true) return null;
+  if (spec.requiresFinanceSurfaces === true && input.financeSurfaces !== true) return null;
   if (!can(input.archetype, spec.action)) return null;
   const entitled = spec.feature === undefined || (input.features[spec.feature] ?? false);
   if (entitled) {

@@ -86,6 +86,9 @@ export const WORKSPACE_MODULE_KEYS = [
   "cap.purchase_orders",
   "cap.goods_receipts",
   "cap.items",
+  // H24K — the accounting, banking and tax system (release-gated in the nav
+  // builder by FEATURE_FINANCE_SURFACES until verified end to end).
+  "cap.finance",
 ] as const satisfies readonly FeatureKey[];
 export type WorkspaceModuleKey = (typeof WORKSPACE_MODULE_KEYS)[number];
 export function isWorkspaceModuleKey(x: string): x is WorkspaceModuleKey {
@@ -225,6 +228,13 @@ export const MODULE_INFO: Record<WorkspaceModuleKey, ModuleInfo> = {
     recommends: [],
     termKeys: [],
   },
+  "cap.finance": {
+    availability: "shipped",
+    entitlement: "cap.finance",
+    requires: [],
+    recommends: ["cap.invoicing", "cap.expenses"],
+    termKeys: [],
+  },
 };
 
 // ── Navigation item keys (parity-tested against the U5 nav builder) ─────────
@@ -271,6 +281,15 @@ export const NAV_ITEM_KEYS = [
   "claims",
   "my_pay",
   "payroll",
+  // H24K — the books; absent from every menu until the release gate opens.
+  "finance",
+  "finance_journals",
+  "finance_banking",
+  "finance_receivables",
+  "finance_payables",
+  "finance_reports",
+  "finance_tax",
+  "finance_budgets",
   "members",
   "imports",
   "exports",
@@ -449,6 +468,55 @@ export const NAV_ITEM_INFO: Record<NavItemKey, NavItemInfo> = {
     action: "payroll.view",
     feature: "cap.payroll",
     module: "cap.people",
+    alwaysVisible: false,
+  },
+  // H24K — mirrors the builder's finance group (release-gated there).
+  finance: {
+    action: "finance.view",
+    feature: "cap.finance",
+    module: "cap.finance",
+    alwaysVisible: false,
+  },
+  finance_journals: {
+    action: "finance.view",
+    feature: "cap.finance",
+    module: "cap.finance",
+    alwaysVisible: false,
+  },
+  finance_banking: {
+    action: "finance.view",
+    feature: "cap.finance",
+    module: "cap.finance",
+    alwaysVisible: false,
+  },
+  finance_receivables: {
+    action: "finance.view",
+    feature: "cap.finance",
+    module: "cap.finance",
+    alwaysVisible: false,
+  },
+  finance_payables: {
+    action: "finance.view",
+    feature: "cap.finance",
+    module: "cap.finance",
+    alwaysVisible: false,
+  },
+  finance_reports: {
+    action: "finance.view",
+    feature: "cap.finance",
+    module: "cap.finance",
+    alwaysVisible: false,
+  },
+  finance_tax: {
+    action: "tax.prepare",
+    feature: "cap.finance",
+    module: "cap.finance",
+    alwaysVisible: false,
+  },
+  finance_budgets: {
+    action: "budget.manage",
+    feature: "cap.finance",
+    module: "cap.finance",
     alwaysVisible: false,
   },
   members: { action: "members.view", feature: null, module: null, alwaysVisible: true },

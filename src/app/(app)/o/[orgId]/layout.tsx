@@ -8,7 +8,7 @@ import { getT, getServerLocale } from "@/platform/i18n/server";
 import { getSessionUser, listMyOrgs, resolveCtx } from "@/platform/auth/resolve";
 import { loadOrgTerminology, term } from "@/platform/terminology";
 import { can } from "@/platform/authz";
-import { stockSurfacesEnabled, hrSurfacesEnabled } from "@/platform/flags";
+import { stockSurfacesEnabled, hrSurfacesEnabled, financeSurfacesEnabled } from "@/platform/flags";
 import { resolveEntitlements } from "@/platform/entitlements";
 import {
   filterGroupsByBlueprint,
@@ -82,6 +82,8 @@ export default async function OrgLayout({
     stockSurfaces: stockSurfacesEnabled(),
     // H23G release gate — same law as stock.
     hrSurfaces: hrSurfacesEnabled(),
+    // H24K release gate — same law again.
+    financeSurfaces: financeSurfacesEnabled(),
   };
   const groups: NavGroupVM[] = filterGroupsByBlueprint(
     buildNavGroups(input).map((g) => ({

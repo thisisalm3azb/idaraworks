@@ -39,3 +39,16 @@ export function stockSurfacesEnabled(): boolean {
 export function hrSurfacesEnabled(): boolean {
   return process.env.FEATURE_HR_SURFACES === "1";
 }
+
+/**
+ * The H24 accounting, banking and tax screens.
+ *
+ * Same law again: off unless `FEATURE_FINANCE_SURFACES=1`, exactly that
+ * spelling — "true", "yes", "on", padded values and absence all stay OFF.
+ * When off the navigation has no entries and the routes answer 404. A ledger
+ * screen reaching users before the engine is verified is how books get
+ * corrupted by accident.
+ */
+export function financeSurfacesEnabled(): boolean {
+  return process.env.FEATURE_FINANCE_SURFACES === "1";
+}
