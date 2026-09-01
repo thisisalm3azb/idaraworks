@@ -21,7 +21,8 @@ import { headers } from "next/headers";
 import { rateLimit } from "@/platform/http/rateLimit";
 import { clientIpFromHeaders } from "@/platform/http/clientIp";
 import { resolveDocumentShare, documentModel } from "@/modules/documents/service";
-import { renderDocument } from "@/platform/documents";
+import { renderDocument, isRenderFailure, pdfUnavailablePage } from "@/platform/documents";
+import { logger } from "@/platform/logger";
 
 export const dynamic = "force-dynamic";
 /** Chromium needs room to start on a cold serverless container, as on the
@@ -123,7 +124,32 @@ export async function GET(
         "x-robots-tag": "noindex, nofollow",
       },
     });
-  } catch {
+  } catch (err) {
+    /*
+     * A recipient outside the business gets the same distinction, and needs it
+     * more: they have no support channel and no way to tell a broken link from
+     * a broken renderer. "This link is not available" would send them back to
+     * whoever sent it, for a document that is sitting right there.
+     *
+     * So a render failure keeps them on the document, in HTML, where their own
+     * browser can print it.
+     */
+    if (wantsPdf && isRenderFailure(err)) {
+      const back = url.pathname + "?lang=" + (url.searchParams.get("lang") === "ar" ? "ar" : "en");
+      logger.error(
+        { err: err instanceof Error ? err.name + ": " + err.message : String(err) },
+        "shared document PDF render failed",
+      );
+      return new Response(pdfUnavailablePage(back), {
+        status: 503,
+        headers: {
+          "content-type": "text/html; charset=utf-8",
+          "cache-control": "no-store",
+          "retry-after": "60",
+          "x-robots-tag": "noindex, nofollow",
+        },
+      });
+    }
     return notAvailable();
   }
 }

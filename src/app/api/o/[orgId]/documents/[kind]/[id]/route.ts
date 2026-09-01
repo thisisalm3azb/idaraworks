@@ -10,7 +10,7 @@
 import { NextResponse } from "next/server";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { ForbiddenError } from "@/platform/authz";
-import { renderDocument } from "@/platform/documents";
+import { renderDocument, isRenderFailure, renderUnavailable } from "@/platform/documents";
 import { DOCUMENT_KINDS, documentModel, type DocumentKind } from "@/modules/documents/service";
 
 export const dynamic = "force-dynamic";
@@ -92,6 +92,27 @@ export async function GET(
     if (err instanceof ForbiddenError) {
       return NextResponse.json({ error: "forbidden" }, { status: 403 });
     }
+
+    /*
+     * A document that cannot be PRINTED is not a document that does not EXIST.
+     *
+     * Every failure here used to collapse into 404 "not found". So when the
+     * renderer could not start — which in production it could not, because the
+     * browser binary was never traced into the function — somebody looking at an
+     * invoice was told the invoice was not there, and would reasonably conclude
+     * their data had gone.
+     *
+     * A rendering failure now gets its own answer, and names the thing that does
+     * still work: the same document as HTML, which the browser can print itself.
+     */
+    if (wantsPdf && isRenderFailure(err)) {
+      return renderUnavailable(
+        err,
+        `${url.pathname}?print=1&lang=${language}`,
+        request.headers.get("accept"),
+      );
+    }
+
     // A missing record and a record in another organization are the same
     // response: nothing here confirms that an id exists elsewhere.
     return NextResponse.json({ error: "not found" }, { status: 404 });

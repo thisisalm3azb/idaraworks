@@ -47,7 +47,19 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   // pino + transport must not be bundled by Next (review finding #8a);
   // sharp's native binding must stay external for the serverless runtime (Phase E).
-  serverExternalPackages: ["pino", "pino-pretty", "sharp"],
+  //
+  // H22F: @sparticuz/chromium and playwright-core join them. The chromium
+  // package locates its own compressed binary by a path relative to its package
+  // directory, so bundling its JavaScript moves that lookup into .next/server —
+  // where the binary is not. playwright-core reaches for its driver the same
+  // way. Both are imported only from a server route, never from the client.
+  serverExternalPackages: [
+    "pino",
+    "pino-pretty",
+    "sharp",
+    "@sparticuz/chromium",
+    "playwright-core",
+  ],
   // Deploy fix: Turbopack + pnpm misses sharp's linux-x64 native libs in a
   // function trace (libvips-cpp.so → ERR_DLOPEN_FAILED on Vercel;
   // vercel/vercel#14001, next.js discussion #83230). Force-include the platform
@@ -85,6 +97,32 @@ const nextConfig: NextConfig = {
     "/onboarding": [
       "./node_modules/@img/sharp-linux-x64/**/*",
       "./node_modules/@img/sharp-libvips-linux-x64/**/*",
+    ],
+    /*
+     * H22F — Download PDF. The SAME defect shape as sharp, found by reading the
+     * built .nft.json: the trace pulled in @sparticuz/chromium's JavaScript and
+     * none of its `bin/` payload, because nothing in the code imports those
+     * files — the package decompresses them at runtime by path.
+     *
+     * So every Download PDF in production launched a browser that was not there,
+     * threw, and (until this slice) was reported to the user as "not found".
+     *
+     * Both document routes render a PDF: the signed-in one and the public share
+     * link. Same include, because they run as separate functions.
+     */
+    "/api/o/[orgId]/documents/[kind]/[id]": [
+      // bin/ holds the .br payloads as FILES, so the glob must match files at
+      // that level — `**/*` alone wants a directory in between and matched
+      // nothing, which the build's own trace made visible.
+      "./node_modules/@sparticuz/chromium/bin/*",
+      "./node_modules/@sparticuz/chromium/bin/**/*",
+    ],
+    "/d/[token]": [
+      // bin/ holds the .br payloads as FILES, so the glob must match files at
+      // that level — `**/*` alone wants a directory in between and matched
+      // nothing, which the build's own trace made visible.
+      "./node_modules/@sparticuz/chromium/bin/*",
+      "./node_modules/@sparticuz/chromium/bin/**/*",
     ],
   },
   // U2 branding: the logo upload server action carries up to a 2 MB image

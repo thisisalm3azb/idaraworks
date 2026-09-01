@@ -38,3 +38,4 @@ export {
 export { closePdfBrowser, renderPdf, type PdfOptions } from "./pdf";
 export { DOCUMENT_FONT_FILES, documentFontCss, type FontDelivery } from "./render";
 export { embeddedDocumentFonts } from "./pdf";
+export { isRenderFailure, renderUnavailable, pdfUnavailablePage } from "./failure";
