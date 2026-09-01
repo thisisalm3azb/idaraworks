@@ -43,6 +43,19 @@ export const DOCUMENT_KINDS = [
   "expense_claim_summary",
   "payroll_register",
   "final_settlement",
+  // H24L — finance documents: vouchers, statements, working papers. All
+  // internal (not shareable), rendered on demand under current identity.
+  "journal_voucher",
+  "receipt_voucher",
+  "payment_voucher",
+  "customer_statement",
+  "supplier_statement",
+  "trial_balance",
+  "balance_sheet",
+  "profit_loss",
+  "vat_working",
+  "ct_workpaper",
+  "bank_recon_summary",
 ] as const;
 export type DocumentKind = (typeof DOCUMENT_KINDS)[number];
 
@@ -63,6 +76,19 @@ const VIEW_ACTION: Record<DocumentKind, Action> = {
   expense_claim_summary: "hr.self",
   payroll_register: "payroll.view",
   final_settlement: "payroll.view",
+  // H24L — books documents follow the ledger's own view lane; the tax working
+  // papers follow the preparation lane (viewer archetypes hold neither).
+  journal_voucher: "finance.view",
+  receipt_voucher: "finance.view",
+  payment_voucher: "finance.view",
+  customer_statement: "finance.view",
+  supplier_statement: "finance.view",
+  trial_balance: "finance.view",
+  balance_sheet: "finance.view",
+  profit_loss: "finance.view",
+  vat_working: "tax.prepare",
+  ct_workpaper: "tax.prepare",
+  bank_recon_summary: "finance.view",
 };
 
 export class DocumentNotFoundError extends Error {
@@ -115,6 +141,20 @@ const ISSUED_STATUSES: Record<DocumentKind, readonly string[]> = {
   expense_claim_summary: ["approved", "paid"],
   payroll_register: ["finalized"],
   final_settlement: [],
+  // H24L — finance documents all render on demand from live records under the
+  // current identity (the letter rule); the builders watermark drafts, voids
+  // and in-progress reconciliations themselves.
+  journal_voucher: [],
+  receipt_voucher: [],
+  payment_voucher: [],
+  customer_statement: [],
+  supplier_statement: [],
+  trial_balance: [],
+  balance_sheet: [],
+  profit_loss: [],
+  vat_working: [],
+  ct_workpaper: [],
+  bank_recon_summary: [],
 };
 
 const WATERMARK_FOR: Record<string, "draft" | "cancelled" | "void" | null> = {
@@ -312,6 +352,20 @@ export async function documentModel(
     case "week_plan": {
       const { weekPlanModel } = await import("./week-plan-document");
       return weekPlanModel(ctx, archetype, doc.id, doc.language);
+    }
+    case "journal_voucher":
+    case "receipt_voucher":
+    case "payment_voucher":
+    case "customer_statement":
+    case "supplier_statement":
+    case "trial_balance":
+    case "balance_sheet":
+    case "profit_loss":
+    case "vat_working":
+    case "ct_workpaper":
+    case "bank_recon_summary": {
+      const { financeDocumentModel } = await import("./finance-documents");
+      return financeDocumentModel(ctx, archetype, doc.kind, doc.id, doc.language);
     }
     default: {
       const { hrDocumentModel } = await import("./hr-documents");

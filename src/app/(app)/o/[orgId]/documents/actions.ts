@@ -28,6 +28,19 @@ const DETAIL_PATH: Record<DocumentKind, (orgId: string, id: string) => string> =
   expense_claim_summary: (o) => `/o/${o}/claims`,
   payroll_register: (o) => `/o/${o}/payroll`,
   final_settlement: (o) => `/o/${o}/people`,
+  // H24L — finance kinds are NOT shareable either; entries satisfy the
+  // exhaustive type and point at the surfaces the records live on.
+  journal_voucher: (o, id) => `/o/${o}/finance/journals/${id}`,
+  receipt_voucher: (o) => `/o/${o}/finance/banking`,
+  payment_voucher: (o) => `/o/${o}/finance/banking`,
+  customer_statement: (o) => `/o/${o}/finance/receivables`,
+  supplier_statement: (o) => `/o/${o}/finance/payables`,
+  trial_balance: (o) => `/o/${o}/finance/reports`,
+  balance_sheet: (o) => `/o/${o}/finance/reports`,
+  profit_loss: (o) => `/o/${o}/finance/reports`,
+  vat_working: (o) => `/o/${o}/finance/tax`,
+  ct_workpaper: (o) => `/o/${o}/finance/tax`,
+  bank_recon_summary: (o) => `/o/${o}/finance/banking`,
 };
 
 export type CreateShareResult =

@@ -67,7 +67,18 @@ export type DocumentRenderModel = {
     | "leave_confirmation"
     | "expense_claim_summary"
     | "payroll_register"
-    | "final_settlement";
+    | "final_settlement"
+    | "journal_voucher"
+    | "receipt_voucher"
+    | "payment_voucher"
+    | "customer_statement"
+    | "supplier_statement"
+    | "trial_balance"
+    | "balance_sheet"
+    | "profit_loss"
+    | "vat_working"
+    | "ct_workpaper"
+    | "bank_recon_summary";
   language: DocLanguage;
   issuer: DocumentShellIssuer;
   /** The party the document is addressed to. Absent on internal documents. */
