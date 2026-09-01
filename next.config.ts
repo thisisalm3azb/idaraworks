@@ -136,12 +136,38 @@ const nextConfig: NextConfig = {
       // chromium.br alone is 65 MB. Nothing imports them, so only an explicit
       // include puts them in the function.
       "./node_modules/@sparticuz/chromium/bin/*",
+      /*
+       * playwright-core reads browsers.json at require time, by path. Nothing
+       * imports it, so the tracer never saw it — and production said so in
+       * exactly these words:
+       *
+       *   Cannot find module /var/task/node_modules/playwright-core/browsers.json
+       *
+       * Which is the whole reason the chromium payload above looked like the
+       * culprit for two rounds: the browser binary was indeed missing, and
+       * fixing that alone changed nothing, because the driver never got far
+       * enough to look for it.
+       */
+      "./node_modules/playwright-core/browsers.json",
     ],
     "/d/**": [
       // bin/ holds the payloads @sparticuz decompresses into /tmp at runtime;
       // chromium.br alone is 65 MB. Nothing imports them, so only an explicit
       // include puts them in the function.
       "./node_modules/@sparticuz/chromium/bin/*",
+      /*
+       * playwright-core reads browsers.json at require time, by path. Nothing
+       * imports it, so the tracer never saw it — and production said so in
+       * exactly these words:
+       *
+       *   Cannot find module /var/task/node_modules/playwright-core/browsers.json
+       *
+       * Which is the whole reason the chromium payload above looked like the
+       * culprit for two rounds: the browser binary was indeed missing, and
+       * fixing that alone changed nothing, because the driver never got far
+       * enough to look for it.
+       */
+      "./node_modules/playwright-core/browsers.json",
     ],
   },
   // U2 branding: the logo upload server action carries up to a 2 MB image

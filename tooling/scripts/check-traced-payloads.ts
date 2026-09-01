@@ -36,6 +36,24 @@ const REQUIRED: Array<{ route: string; needs: RegExp; label: string; why: string
     label: "browser binary",
     why: "the signed-in Download PDF renders a PDF",
   },
+  /*
+   * The one production actually died on, twice over. playwright-core reads
+   * browsers.json at REQUIRE time by path; nothing imports it, so the tracer
+   * never saw it, and the driver failed before it ever looked for the browser
+   * binary. Which is why fixing the binary alone changed nothing.
+   */
+  {
+    route: "d/[token]/route.js",
+    needs: /playwright-core\/browsers\.json$/,
+    label: "playwright browsers.json",
+    why: "playwright-core refuses to load without it, before any browser is sought",
+  },
+  {
+    route: "api/o/[orgId]/documents/[kind]/[id]/route.js",
+    needs: /playwright-core\/browsers\.json$/,
+    label: "playwright browsers.json",
+    why: "playwright-core refuses to load without it, before any browser is sought",
+  },
   {
     route: "d/[token]/route.js",
     needs: /public\/fonts\/NotoNaskhArabic-Regular\.ttf$/,
