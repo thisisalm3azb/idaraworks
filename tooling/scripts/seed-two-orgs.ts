@@ -11,6 +11,7 @@
 import { randomUUID } from "node:crypto";
 import type postgres from "postgres";
 import { H23_SEEDERS } from "./seed-h23";
+import { H24_SEEDERS } from "./seed-h24";
 
 type Owner = ReturnType<typeof postgres>;
 /**
@@ -122,6 +123,8 @@ function filePath(orgId: string): string {
 export const SEEDERS: Record<string, Seeder> = {
   // H23 — people, time, leave, payroll, claims (tooling/scripts/seed-h23.ts).
   ...H23_SEEDERS,
+  // H24 — the finance tables (tooling/scripts/seed-h24.ts).
+  ...H24_SEEDERS,
   // ── seeded by org creation ──
   company: noop,
   membership: noop,

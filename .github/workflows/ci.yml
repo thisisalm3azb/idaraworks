@@ -92,7 +92,7 @@ jobs:
   # mirrors the hosted procedure exactly: VC-1 spike (0000 only) BEFORE real tables.
   integration:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30 # H24 added seven finance suites + a larger bleed fixture
     env:
       APP_DB_PASSWORD: ci-app-password
     steps:

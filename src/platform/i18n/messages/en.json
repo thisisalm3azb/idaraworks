@@ -805,6 +805,8 @@
   "finance.banking.unmatched_ledger": "Unmatched ledger lines",
   "finance.banking.unmatched_statement": "Unmatched statement lines",
   "finance.banking.void": "Void",
+  "finance.banking.void_action": "Void",
+  "finance.banking.void_reason": "Reason",
   "finance.budgets.actual": "Actual",
   "finance.budgets.approve": "Approve",
   "finance.budgets.budget": "Budget",

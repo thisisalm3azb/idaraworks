@@ -19,6 +19,7 @@ import {
   createBankAccountAction,
   recordMoneyTransactionAction,
   startReconciliationAction,
+  voidMoneyTransactionAction,
 } from "../actions";
 
 /** H24K — banking: accounts, money in/out, reconciliations. Every voucher is
@@ -58,6 +59,7 @@ export default async function BankingPage({
   const createBank = createBankAccountAction.bind(null, orgId);
   const record = recordMoneyTransactionAction.bind(null, orgId);
   const startRecon = startReconciliationAction.bind(null, orgId);
+  const voidTxn = voidMoneyTransactionAction.bind(null, orgId);
   const input =
     "mt-1 min-h-11 w-full rounded-md border border-line-strong bg-card px-3 text-base text-ink";
 
@@ -232,17 +234,34 @@ export default async function BankingPage({
                   {m.status === "void" ? (
                     <Badge tone="danger">{t("finance.banking.void")}</Badge>
                   ) : (
-                    <a
-                      className="text-xs text-accent underline"
-                      target="_blank"
-                      href={`/api/o/${orgId}/documents/${
-                        m.kind === "receipt" || m.kind === "bank_interest"
-                          ? "receipt_voucher"
-                          : "payment_voucher"
-                      }/${m.id}?print=1&lang=${locale}`}
-                    >
-                      {t("finance.journals.print")}
-                    </a>
+                    <>
+                      <a
+                        className="text-xs text-accent underline"
+                        target="_blank"
+                        href={`/api/o/${orgId}/documents/${
+                          m.kind === "receipt" || m.kind === "bank_interest"
+                            ? "receipt_voucher"
+                            : "payment_voucher"
+                        }/${m.id}?print=1&lang=${locale}`}
+                      >
+                        {t("finance.journals.print")}
+                      </a>
+                      {posts ? (
+                        <form action={voidTxn} className="flex items-center gap-1">
+                          <input type="hidden" name="id" value={m.id} />
+                          <input
+                            name="reason"
+                            required
+                            maxLength={300}
+                            placeholder={t("finance.banking.void_reason")}
+                            className="min-h-9 w-28 rounded-md border border-line-strong bg-card px-2 text-xs text-ink"
+                          />
+                          <button className="text-xs text-danger underline" type="submit">
+                            {t("finance.banking.void_action")}
+                          </button>
+                        </form>
+                      ) : null}
+                    </>
                   )}
                 </span>
               </li>

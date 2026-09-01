@@ -262,7 +262,12 @@ export async function inspectTallyFile(
   assertCan(archetype, "finance.manage");
   await requireCapability(ctx, "cap.finance");
   const input = z
-    .object({ filename: z.string().trim().min(1).max(260), content: z.string().min(1) })
+    .object({
+      filename: z.string().trim().min(1).max(260),
+      // 5 MB cap: the parsed vouchers are stored on the batch row (jsonb), so
+      // an unbounded upload would become an unbounded row. Split big books.
+      content: z.string().min(1).max(5_000_000, "file too large — split the export (max 5 MB)"),
+    })
     .parse(raw);
   const sha = createHash("sha256").update(input.content, "utf8").digest("hex");
   const format = detectTallyFormat(input.content);

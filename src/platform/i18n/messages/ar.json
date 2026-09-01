@@ -805,6 +805,8 @@
   "finance.banking.unmatched_ledger": "بنود دفترية غير مطابقة",
   "finance.banking.unmatched_statement": "بنود كشف غير مطابقة",
   "finance.banking.void": "ملغاة",
+  "finance.banking.void_action": "إلغاء",
+  "finance.banking.void_reason": "السبب",
   "finance.budgets.actual": "الفعلي",
   "finance.budgets.approve": "اعتماد",
   "finance.budgets.budget": "الموازنة",

@@ -36,3 +36,25 @@ interaction model is copied — coverage is functional only._
 | Data export (Excel/CSV/PDF/XML) | **covered/H24** | Existing export door + finance reports CSV; branded PDFs. |
 | Import from Tally | **H24** | TallyPrime XML (Masters + Day Book vouchers) and generic CSV — guided, validated, dry-run, idempotent (see D15). |
 | ODBC / API integrations | **later** | Export seams only; no live integration claimed. |
+
+## As built (H24J) — exact import support
+
+Stated to the user on the import page, and enforced by the parser
+(`src/modules/finance/tally.ts`):
+
+1. **Tally XML masters** — a "List of Accounts" export: `TALLYMESSAGE` blocks
+   containing `LEDGER` masters (NAME attribute or element, PARENT group).
+   Masters files feed the ledger-mapping step; they never post.
+2. **Tally XML vouchers** — a "Day Book" export: `TALLYMESSAGE` blocks
+   containing `VOUCHER` entries with `ALLLEDGERENTRIES.LIST`. The Tally
+   amount convention is implemented as stated by TallyHelp: a **negative
+   AMOUNT is a debit**, positive is a credit. `DATE` is `YYYYMMDD`.
+3. **Generic CSV** — header row `date, voucher_no, ledger, debit, credit`
+   (+ optional `narration`); amounts in major units; dates `YYYY-MM-DD`;
+   rows sharing a voucher number and date form one voucher.
+
+Not supported (stated, not silently ignored): Tally backup files (`.900`/
+`.tbk`), ODBC pulls, inventory/godown vouchers' stock allocations (voucher
+ledger lines import; stock allocations do not), and scenario/optional
+vouchers. Every unsupported or ambiguous voucher lands in the dry-run
+exception list by name.

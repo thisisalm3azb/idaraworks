@@ -113,6 +113,11 @@ async function cleanup(): Promise<void> {
     for (const u of [ownerUserId, employeeUserId].filter(Boolean)) {
       await tx.unsafe(`delete from public.sign_in_log where user_id = $1`, [u]);
       await tx.unsafe(`delete from public.user_profile where id = $1`, [u]);
+      // Sessions/identities first — deleting auth.users alone leaves orphans
+      // (the residue prod-health flagged after the H23 runs).
+      await tx.unsafe(`delete from auth.refresh_tokens where user_id = $1::text`, [u]);
+      await tx.unsafe(`delete from auth.sessions where user_id = $1`, [u]);
+      await tx.unsafe(`delete from auth.identities where user_id = $1`, [u]);
       await tx.unsafe(`delete from auth.users where id = $1`, [u]);
     }
   });
