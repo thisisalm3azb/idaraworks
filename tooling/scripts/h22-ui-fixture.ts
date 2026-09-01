@@ -61,6 +61,14 @@ async function wipe(): Promise<void> {
     await tx.unsafe("set local session_replication_role = default");
     const uids = users.map((u) => u.id);
     if (uids.length) {
+      /*
+       * sign_in_log carries no org_id, so the org-scoped sweep above never
+       * touches it — and it references user_profile, so the profile delete
+       * fails with a foreign-key violation. Only a fixture that actually SIGNS
+       * IN has a row here, which is why the production smokes wipe cleanly and
+       * this one did not.
+       */
+      await tx.unsafe(`delete from public.sign_in_log where user_id = any($1::uuid[])`, [uids]);
       await tx.unsafe(`delete from public.user_profile where id = any($1::uuid[])`, [uids]);
       await tx.unsafe(`delete from auth.users where id = any($1::uuid[])`, [uids]);
     }

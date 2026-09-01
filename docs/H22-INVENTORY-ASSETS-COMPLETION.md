@@ -1,8 +1,8 @@
 # H22 — Inventory, stock and assets
 
-**Branch** `verify/h22` · **Base** `3662569` · **14 commits** · 91 files, ~25,900 insertions
+**Branch** `verify/h22`, merged to `main` · **Base** `3662569` · 21 commits
 **Migrations** 0084–0092 (nine, ~3,500 lines of SQL) · **Tests** 284 H22 integration tests, 1,389 unit tests
-**Production** untouched — commit `3662569`, 84 migrations, zero H22 migrations applied. Deployment is prepared and verified but **not performed**; see [Deployment](#deployment).
+**Production** DEPLOYED — 93 migrations, serving `70e2034`. Every existing business row unchanged, zero fixture residue.
 
 ---
 
@@ -246,22 +246,103 @@ Because the release gate is off, the usual ordering constraint relaxes: the new
 code never queries an H22 table while the flag is off, so code and schema can go
 out in either order without a broken window between them.
 
-### Status: NOT DEPLOYED — awaiting the owner
+### Status: DEPLOYED AND VERIFIED
 
-Everything up to the deployment is done and green. The two production-mutating
-steps were not run:
+Applied on the owner's explicit authorization, after a 119-agent adversarial
+audit of every statement in the nine migrations against production's own data.
 
-1. `npx tsx tooling/scripts/migrate-prod.ts --confirm=apply-migrations-to-anhgeeutrwftsvuzfinf`
-2. merging `verify/h22` into `main`, which is what deploys the code
+| Check                              | Result                                             |
+| ---------------------------------- | -------------------------------------------------- |
+| Migrations applied                 | 84 → 93, none pending                              |
+| Business rows, 28 tables           | every count identical                              |
+| Tables without RLS                 | 0 of 129                                           |
+| DELETE grants to `app_user`        | 1 — `org_holiday_calendar`, the permitted exception |
+| Auth orphans                       | 13 / 103, unchanged (all historical)               |
+| Deployed-surface smoke             | 18 / 18                                            |
+| H22 end-to-end production fixture  | 29 / 29 assertions, zero residue                   |
+| Download PDF, English and Arabic   | verified, three consecutive runs                   |
 
-Applying nine migrations to a live database holding real customer organizations
-is the owner's call to make, not one to take on their behalf. The evidence for
-that decision is above: CI green on `93ca8f7` for both the quality and
-integration workflows, the pre-flight clear on all four checks against
-production itself, and the schema additive with backward-compatible defaults.
+The audit found five real risks. Three were lock contention — the runner wraps
+each migration in ONE transaction with no `lock_timeout`, so its lock footprint
+is the union of every statement, held to the end; a blocked migration does not
+fail, it queues, and a queued ACCESS EXCLUSIVE blocks every reader behind it.
+Checked immediately before applying: no blockers, none idle in transaction.
 
-**Do not set `FEATURE_STOCK_SURFACES` in production.** Absent means off, which
-is the intended state until the system has been exercised on a real deployment.
+The fourth was the disposition CHECK, verified clear against all 21 historical
+receipt lines. The fifth was that `item_type` defaults every pre-existing
+catalogue row to `inventory` with no backfill, which would silently make
+services and labour lines look stock-movable — checked first, and all 34
+production rows are physical goods, so the default is right for every one.
+
+---
+
+## Download PDF: three defects, each hiding the one behind it
+
+H22F diagnosed this and fixed the wrong thing. Twice. It took making production
+able to say what went wrong before the real cause appeared.
+
+**One — a 404 that concealed everything.** Both document routes decided
+"renderer broken" versus "document missing" by matching substrings of the error
+message. The error production actually threw was not on the list, so the honest
+503 fell through to 404 and a customer clicking Download PDF on their own quote
+was told it did not exist. A substring list can only hold failures somebody
+already imagined; the one that reaches production is the one nobody did. The
+render is now WRAPPED and position decides: by the time a route is building a
+PDF it has resolved the share and loaded the model, so the document provably
+exists and anything failing from there is a rendering failure, whatever it says.
+The lookup stays outside the wrapper, so another organization's record still
+answers 404 and no tenancy probe learns anything.
+
+**Two — a tracing key that matched no route.** `outputFileTracingIncludes` keys
+are route GLOBS. `"/d/[token]"` matches nothing, and neither does
+`"/d/[token]/route"` — only `"/d/**"` does. A key matching no route is not an
+error: the build succeeds, the deploy succeeds, and the function ships without
+the files it was told to carry. The same defect sat in the config twice more,
+for `sharp`, inert since the day it was written — which is why the onboarding
+logo upload it was added to fix kept failing on deploy. All five keys are now
+the glob form, and `check-traced-payloads.ts` reads the build's own `.nft.json`
+to assert each function really carries what it needs, because that file is the
+only place the truth is written down.
+
+**Three — a data file nothing imports.** With the browser binary finally in the
+bundle, production still failed in under a second, and finally said why:
+
+> Cannot find module `/var/task/node_modules/playwright-core/browsers.json`
+
+playwright-core reads it at REQUIRE time, by path. Nothing imports it, so the
+tracer never saw it — and the driver died before it ever went looking for the
+browser. Which is exactly why tracing the 65 MB chromium payload changed
+nothing: the code never got that far.
+
+**And a fourth, found by fixing the first three.** The PDF then worked, failed,
+and worked again within one verification run. A serverless instance is FROZEN
+between requests and the Chromium it started does not survive — but the handle
+still reports `isConnected()`, so the cached browser looks healthy until the
+first thing that touches it throws. A cached browser now gets one chance to
+prove it is alive; if it is not, it is discarded and the render runs again on a
+fresh one.
+
+What made the difference was making the failure legible. The share route now
+answers `?diag=1` with the reason, to a caller who already holds the token — a
+bearer secret for that one document — and both catch-alls log. A 404 that
+records nothing is how this survived for months: its only trace was a customer
+saying their document had gone.
+
+---
+
+## What still needs the owner
+
+`FEATURE_STOCK_SURFACES` is not set in production, so the stock and asset
+screens are absent from every menu and their routes answer 404 — the intended
+state until the system has been exercised. Setting it is a Vercel environment
+change, which needs an interactive login this session cannot perform.
+
+The screens themselves were verified against the same code and schema on the
+test project, with the flag on: stock levels, one item's ledger, the asset
+register, one asset's life, and the inbox — in English and Arabic, at desktop
+and at 375px. Arabic mirrors correctly with Latin numerals throughout, the
+navigation reaches every page, and the reservation shows as "Promised, not
+moved" rather than the "−0" the audit caught.
 
 ---
 
