@@ -49,9 +49,16 @@ export async function createPayGroup(
       nameEn: z.string().trim().min(1).max(120),
       nameAr: z.string().trim().max(120).optional(),
       frequency: z.enum(["monthly", "weekly", "biweekly", "custom"]).default("monthly"),
-      roundingMinor: z.union([
-        z.literal(1), z.literal(5), z.literal(10), z.literal(25), z.literal(50), z.literal(100),
-      ]).default(1),
+      roundingMinor: z
+        .union([
+          z.literal(1),
+          z.literal(5),
+          z.literal(10),
+          z.literal(25),
+          z.literal(50),
+          z.literal(100),
+        ])
+        .default(1),
     })
     .parse(raw);
   return command(
@@ -161,7 +168,13 @@ export async function createPayRun(
           );
         }
       }
-      const periodId = await ensurePeriod(tx, ctx, input.payGroupId, input.periodStart, input.periodEnd);
+      const periodId = await ensurePeriod(
+        tx,
+        ctx,
+        input.payGroupId,
+        input.periodStart,
+        input.periodEnd,
+      );
       const seq = await allocateReference(tx, ctx, "pay_run");
       const reference = formatRef("PAY", seq);
       const rows = (await tx.execute(sql`
@@ -348,9 +361,8 @@ export async function calculatePayRun(
       }
       const pack = packFor((run.country as string | null) ?? null);
 
-      await tx.execute(sql`
-        delete from public.pay_run_line where org_id = ${ctx.orgId} and pay_run_id = ${runId}
-      `);
+      // The guarded definer function is the only delete path (no DELETE grant).
+      await tx.execute(sql`select app.wipe_pay_run_lines(${runId})`);
 
       const employees = (await tx.execute(sql`
         select id::text as id, name, nationality from public.employee
@@ -359,10 +371,21 @@ export async function calculatePayRun(
         limit 2000
       `)) as unknown as Array<{ id: string; name: string; nationality: string | null }>;
 
-      let gross = 0, ded = 0, employer = 0, net = 0, exceptionCount = 0, lines = 0;
+      let gross = 0,
+        ded = 0,
+        employer = 0,
+        net = 0,
+        exceptionCount = 0,
+        lines = 0;
       for (const emp of employees) {
         const inputs = await inputsFor(
-          tx, ctx, emp, run.ps as string, run.pe as string, runId, pack,
+          tx,
+          ctx,
+          emp,
+          run.ps as string,
+          run.pe as string,
+          runId,
+          pack,
         );
         /*
          * An off-cycle or final-settlement run is a CORRECTION instrument: it
@@ -489,7 +512,10 @@ export async function finalizePayRun(
         returning currency
       `)) as unknown as Array<{ currency: string }>;
       if (!won[0]) {
-        throw new HrError("only an approved run can be finalized (or it already was)", "invalid_state");
+        throw new HrError(
+          "only an approved run can be finalized (or it already was)",
+          "invalid_state",
+        );
       }
 
       /*
@@ -703,7 +729,10 @@ export async function createReversalRun(
                deduction_minor::text as d, employer_minor::text as emp, net_minor::text as n
         from public.pay_run_line where org_id = ${ctx.orgId} and pay_run_id = ${originalRunId}
       `)) as unknown as Array<Record<string, unknown>>;
-      let gross = 0, ded = 0, employer = 0, net = 0;
+      let gross = 0,
+        ded = 0,
+        employer = 0,
+        net = 0;
       for (const l of lines) {
         const snap = {
           reversalOf: originalRunId,
@@ -754,7 +783,12 @@ export async function previewFinalSettlement(
   gratuityMinor: number | null;
   gratuityWorking: unknown;
   leaveEncashmentDays: number;
-  inputs: Array<{ kind: string; label: string; quantity: string | null; amountMinor: number | null }>;
+  inputs: Array<{
+    kind: string;
+    label: string;
+    quantity: string | null;
+    amountMinor: number | null;
+  }>;
   packVersion: string | null;
 }> {
   assertCan(archetype, "payroll.manage");
@@ -865,7 +899,14 @@ export async function listPayslips(
   ctx: Ctx,
   opts: { employeeId?: string; limit?: number } = {},
 ): Promise<
-  Array<{ id: string; slipNo: string; periodStart: string; periodEnd: string; netMinor: number; currency: string }>
+  Array<{
+    id: string;
+    slipNo: string;
+    periodStart: string;
+    periodEnd: string;
+    netMinor: number;
+    currency: string;
+  }>
 > {
   const limit = Math.min(Math.max(opts.limit ?? 24, 1), 100);
   const rows = (await withCtx(ctx, (tx) =>

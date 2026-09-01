@@ -60,11 +60,15 @@ export default async function PayRunPage({
         </p>
       ) : null}
       {sp.error ? (
-        <p className="rounded-md bg-danger-soft px-3 py-2 text-sm text-danger">{t("common.error")}</p>
+        <p className="rounded-md bg-danger-soft px-3 py-2 text-sm text-danger">
+          {t("common.error")}
+        </p>
       ) : null}
 
       <div className="flex flex-wrap items-center gap-2">
-        {manages && (run.status === "draft" || run.status === "review") && run.runKind !== "reversal" ? (
+        {manages &&
+        (run.status === "draft" || run.status === "review") &&
+        run.runKind !== "reversal" ? (
           <form action={step}>
             <input type="hidden" name="run_id" value={run.id} />
             <input type="hidden" name="step" value="calculate" />

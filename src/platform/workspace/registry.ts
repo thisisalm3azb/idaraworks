@@ -438,9 +438,19 @@ export const NAV_ITEM_INFO: Record<NavItemKey, NavItemInfo> = {
   // H23G — release-gated by FEATURE_HR_SURFACES in the builder; a blueprint may
   // hide them but can never conjure them before release.
   leave: { action: "hr.self", feature: "cap.leave", module: "cap.people", alwaysVisible: false },
-  claims: { action: "hr.self", feature: "cap.expense_claims", module: "cap.people", alwaysVisible: false },
+  claims: {
+    action: "hr.self",
+    feature: "cap.expense_claims",
+    module: "cap.people",
+    alwaysVisible: false,
+  },
   my_pay: { action: "hr.self", feature: "cap.payroll", module: "cap.people", alwaysVisible: false },
-  payroll: { action: "payroll.view", feature: "cap.payroll", module: "cap.people", alwaysVisible: false },
+  payroll: {
+    action: "payroll.view",
+    feature: "cap.payroll",
+    module: "cap.people",
+    alwaysVisible: false,
+  },
   members: { action: "members.view", feature: null, module: null, alwaysVisible: true },
   imports: {
     action: "imports.manage",

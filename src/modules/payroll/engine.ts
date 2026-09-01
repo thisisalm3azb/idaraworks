@@ -296,7 +296,8 @@ export function calculateGratuity(
   let days = 0;
   const bands: Array<Record<string, number>> = [];
   for (const band of eos.bands) {
-    const span = band.uptoYears === null ? remaining : Math.min(remaining, band.uptoYears - uptoPrev);
+    const span =
+      band.uptoYears === null ? remaining : Math.min(remaining, band.uptoYears - uptoPrev);
     if (span <= 0) continue;
     days += span * band.daysPerYear;
     bands.push({ years: span, daysPerYear: band.daysPerYear });
@@ -306,7 +307,9 @@ export function calculateGratuity(
   }
   let amount = roundHalfUp(days * dailyBasic);
   const cap =
-    eos.capMonthsOfWage != null ? eos.capMonthsOfWage * lastBasicMonthlyMinor : Number.MAX_SAFE_INTEGER;
+    eos.capMonthsOfWage != null
+      ? eos.capMonthsOfWage * lastBasicMonthlyMinor
+      : Number.MAX_SAFE_INTEGER;
   const capped = amount > cap;
   if (capped) amount = cap;
   return {

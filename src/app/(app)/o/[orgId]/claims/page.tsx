@@ -68,7 +68,9 @@ export default async function ClaimsPage({
                     </span>
                   </div>
                   <div className="flex flex-col items-end gap-1">
-                    <Badge tone={STATUS_TONE[c.status] ?? "info"}>{t(`hr.status.${c.status}`)}</Badge>
+                    <Badge tone={STATUS_TONE[c.status] ?? "info"}>
+                      {t(`hr.status.${c.status}`)}
+                    </Badge>
                     <span className="text-sm text-ink" dir="ltr">
                       {formatMoney(c.totalMinor, currency, { locale: "en" })}
                     </span>

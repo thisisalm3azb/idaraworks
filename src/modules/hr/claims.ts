@@ -372,10 +372,16 @@ export async function settleClaimToExpenseBook(
       const c = rows[0];
       if (!c) throw new HrError("claim not found", "not_found");
       if (c.status !== "approved") {
-        throw new HrError(`only an approved claim can settle (this one is ${c.status})`, "invalid_state");
+        throw new HrError(
+          `only an approved claim can settle (this one is ${c.status})`,
+          "invalid_state",
+        );
       }
       if (c.settlement_route !== "expense_book") {
-        throw new HrError("this claim settles through payroll, not the expense book", "invalid_state");
+        throw new HrError(
+          "this claim settles through payroll, not the expense book",
+          "invalid_state",
+        );
       }
       const lines = (await tx.execute(sql`
         select id::text as id, expense_date::text as expense_date, category_key, description,

@@ -238,9 +238,7 @@ function HrAttentionRow({
   const name = item.name ? (locale === "ar" ? (item.name.ar ?? item.name.en) : item.name.en) : "";
   const vars = { ...item.vars, name, date: item.on ? formatDate(item.on, { locale }) : "" };
   const href =
-    item.entityType === "pay_run"
-      ? `/o/${orgId}/payroll/${item.entityId}`
-      : `/o/${orgId}/people`;
+    item.entityType === "pay_run" ? `/o/${orgId}/payroll/${item.entityId}` : `/o/${orgId}/people`;
   return (
     <Card>
       <div className="flex flex-col gap-2">

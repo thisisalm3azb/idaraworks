@@ -62,7 +62,9 @@ export default async function ClaimDetailPage({
         </p>
       ) : null}
       {sp.error ? (
-        <p className="rounded-md bg-danger-soft px-3 py-2 text-sm text-danger">{t("common.error")}</p>
+        <p className="rounded-md bg-danger-soft px-3 py-2 text-sm text-danger">
+          {t("common.error")}
+        </p>
       ) : null}
 
       <Card>

@@ -149,7 +149,13 @@ async function payslipModel(
       noticeText: notice,
       fields: [
         ...(emp.employee_no
-          ? [{ label: t(language, "Employee no.", "الرقم الوظيفي"), value: emp.employee_no, ltr: true }]
+          ? [
+              {
+                label: t(language, "Employee no.", "الرقم الوظيفي"),
+                value: emp.employee_no,
+                ltr: true,
+              },
+            ]
           : []),
         {
           label: t(language, "Pay period", "فترة الراتب"),
@@ -183,7 +189,11 @@ async function payslipModel(
           label: t(language, "Total deductions", "إجمالي الاستقطاعات"),
           value: money(deductions.reduce((a, c) => a + c.amountMinor, 0)),
         },
-        { label: t(language, "Net pay", "صافي الراتب"), value: money(Number(row.net)), strong: true },
+        {
+          label: t(language, "Net pay", "صافي الراتب"),
+          value: money(Number(row.net)),
+          strong: true,
+        },
       ],
       showSignatory: false,
       showPaymentInstructions: false,
@@ -216,7 +226,10 @@ async function salaryCertificateModel(
       order by issued_at desc limit 1
     `)) as unknown as Array<Record<string, unknown>>;
     if (!slips[0]) {
-      throw new DocumentNotFoundError("payslip to certify from — none issued yet for employee", employeeId);
+      throw new DocumentNotFoundError(
+        "payslip to certify from — none issued yet for employee",
+        employeeId,
+      );
     }
     const snap = slips[0].snapshot as { inputs?: { basicMonthlyMinor?: number } };
     const basic = snap.inputs?.basicMonthlyMinor ?? null;
@@ -237,7 +250,13 @@ async function salaryCertificateModel(
       fields: [
         { label: t(language, "Employee", "الموظف"), value: name },
         ...(emp.employee_no
-          ? [{ label: t(language, "Employee no.", "الرقم الوظيفي"), value: emp.employee_no, ltr: true }]
+          ? [
+              {
+                label: t(language, "Employee no.", "الرقم الوظيفي"),
+                value: emp.employee_no,
+                ltr: true,
+              },
+            ]
           : []),
         ...(emp.position_name
           ? [
@@ -248,7 +267,12 @@ async function salaryCertificateModel(
             ]
           : []),
         ...(emp.hire_date
-          ? [{ label: t(language, "Employed since", "تاريخ الالتحاق"), value: fdate(language, emp.hire_date) }]
+          ? [
+              {
+                label: t(language, "Employed since", "تاريخ الالتحاق"),
+                value: fdate(language, emp.hire_date),
+              },
+            ]
           : []),
       ],
       sections: [
@@ -256,7 +280,12 @@ async function salaryCertificateModel(
           columns: [t(language, "Item", "البند"), t(language, "Amount", "المبلغ")],
           lines: [
             ...(basic != null
-              ? [{ description: t(language, "Basic monthly salary", "الراتب الأساسي الشهري"), amount: money(basic) }]
+              ? [
+                  {
+                    description: t(language, "Basic monthly salary", "الراتب الأساسي الشهري"),
+                    amount: money(basic),
+                  },
+                ]
               : []),
             {
               description: t(language, "Last net monthly pay", "آخر صافي راتب شهري"),
@@ -328,21 +357,38 @@ async function employmentContractModel(
       watermark: issued ? null : "draft",
       fields: [
         { label: t(language, "Contract type", "نوع العقد"), value: t(language, tt[0], tt[1]) },
-        { label: t(language, "Start date", "تاريخ البدء"), value: fdate(language, row.start_date as string) },
+        {
+          label: t(language, "Start date", "تاريخ البدء"),
+          value: fdate(language, row.start_date as string),
+        },
         ...(row.end_date
-          ? [{ label: t(language, "End date", "تاريخ الانتهاء"), value: fdate(language, row.end_date as string) }]
+          ? [
+              {
+                label: t(language, "End date", "تاريخ الانتهاء"),
+                value: fdate(language, row.end_date as string),
+              },
+            ]
           : []),
         ...(row.probation_months != null
           ? [
               {
                 label: t(language, "Probation", "فترة التجربة"),
-                value: t(language, `${row.probation_months} month(s)`, `${row.probation_months} شهر`),
+                value: t(
+                  language,
+                  `${row.probation_months} month(s)`,
+                  `${row.probation_months} شهر`,
+                ),
                 ltr: language === "en",
               },
             ]
           : []),
         ...(row.accepted_at
-          ? [{ label: t(language, "Accepted on", "تاريخ القبول"), value: fdate(language, row.accepted_at as string) }]
+          ? [
+              {
+                label: t(language, "Accepted on", "تاريخ القبول"),
+                value: fdate(language, row.accepted_at as string),
+              },
+            ]
           : []),
       ],
       sections: [],
@@ -373,7 +419,9 @@ async function experienceLetterModel(
     const emp = await employeeRow(tx, ctx, employeeId);
     const { issuer } = await resolveIssuer(ctx, null, false);
     const name = displayName(emp, language);
-    const since = emp.hire_date ? fdate(language, emp.hire_date) : t(language, "(not recorded)", "(غير مسجل)");
+    const since = emp.hire_date
+      ? fdate(language, emp.hire_date)
+      : t(language, "(not recorded)", "(غير مسجل)");
     const still = emp.lifecycle !== "terminated";
     const until = emp.end_date ? fdate(language, emp.end_date) : null;
     const position = emp.position_name
@@ -391,7 +439,9 @@ async function experienceLetterModel(
       dateText: fdate(language, new Date().toISOString()),
       fields: [
         { label: t(language, "Employee", "الموظف"), value: name },
-        ...(position ? [{ label: t(language, "Position", "المسمى الوظيفي"), value: position }] : []),
+        ...(position
+          ? [{ label: t(language, "Position", "المسمى الوظيفي"), value: position }]
+          : []),
         { label: t(language, "Employed since", "تاريخ الالتحاق"), value: since },
         ...(until ? [{ label: t(language, "Employed until", "حتى تاريخ"), value: until }] : []),
       ],
@@ -468,13 +518,26 @@ async function warningLetterModel(
       fields: [
         { label: t(language, "Employee", "الموظف"), value: displayName(emp, language) },
         ...(emp.employee_no
-          ? [{ label: t(language, "Employee no.", "الرقم الوظيفي"), value: emp.employee_no, ltr: true }]
+          ? [
+              {
+                label: t(language, "Employee no.", "الرقم الوظيفي"),
+                value: emp.employee_no,
+                ltr: true,
+              },
+            ]
           : []),
-        { label: t(language, "Date of matter", "تاريخ الواقعة"), value: fdate(language, row.occurred_on as string) },
+        {
+          label: t(language, "Date of matter", "تاريخ الواقعة"),
+          value: fdate(language, row.occurred_on as string),
+        },
       ],
       sections: [],
       notesTitle: t(language, "Subject", "الموضوع"),
-      notes: [row.summary, row.detail, row.outcome ? `${t(language, "Outcome", "النتيجة")}: ${row.outcome}` : null]
+      notes: [
+        row.summary,
+        row.detail,
+        row.outcome ? `${t(language, "Outcome", "النتيجة")}: ${row.outcome}` : null,
+      ]
         .filter(Boolean)
         .join("\n\n"),
       showSignatory: true,
@@ -509,7 +572,11 @@ async function leaveConfirmationModel(
     }
     const emp = await employeeRow(tx, ctx, row.employee_id as string);
     const { issuer } = await resolveIssuer(ctx, null, false);
-    const typeName = t(language, row.type_en as string, (row.type_ar as string | null) ?? (row.type_en as string));
+    const typeName = t(
+      language,
+      row.type_en as string,
+      (row.type_ar as string | null) ?? (row.type_en as string),
+    );
 
     return {
       kind: "leave_confirmation",
@@ -686,7 +753,11 @@ async function payrollRegisterModel(
       totals: [
         { label: t(language, "Gross", "الإجمالي"), value: money(Number(run.gross)) },
         { label: t(language, "Deductions", "الاستقطاعات"), value: money(Number(run.ded)) },
-        { label: t(language, "Net payable", "صافي المستحق"), value: money(Number(run.net)), strong: true },
+        {
+          label: t(language, "Net payable", "صافي المستحق"),
+          value: money(Number(run.net)),
+          strong: true,
+        },
       ],
       showSignatory: true,
       showPaymentInstructions: false,
@@ -733,15 +804,29 @@ async function finalSettlementModel(
       ),
       fields: [
         ...(preview.packVersion
-          ? [{ label: t(language, "Rule set", "حزمة القواعد"), value: preview.packVersion, ltr: true }]
+          ? [
+              {
+                label: t(language, "Rule set", "حزمة القواعد"),
+                value: preview.packVersion,
+                ltr: true,
+              },
+            ]
           : []),
         ...(emp.hire_date
-          ? [{ label: t(language, "Employed since", "تاريخ الالتحاق"), value: fdate(language, emp.hire_date) }]
+          ? [
+              {
+                label: t(language, "Employed since", "تاريخ الالتحاق"),
+                value: fdate(language, emp.hire_date),
+              },
+            ]
           : []),
       ],
       sections: [
         {
-          columns: [t(language, "Item", "البند"), t(language, "Amount / quantity", "المبلغ / الكمية")],
+          columns: [
+            t(language, "Item", "البند"),
+            t(language, "Amount / quantity", "المبلغ / الكمية"),
+          ],
           lines: [
             ...(preview.gratuityMinor != null
               ? [

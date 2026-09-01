@@ -45,7 +45,9 @@ export default async function PayrollPage({
     <div className="flex flex-col gap-4">
       <h1 className="text-lg font-semibold text-ink">{t("hr.payroll.title")}</h1>
       {sp.error ? (
-        <p className="rounded-md bg-danger-soft px-3 py-2 text-sm text-danger">{t("common.error")}</p>
+        <p className="rounded-md bg-danger-soft px-3 py-2 text-sm text-danger">
+          {t("common.error")}
+        </p>
       ) : null}
 
       {manages && groups.length === 0 ? (
@@ -146,12 +148,15 @@ export default async function PayrollPage({
                   <div className="flex flex-col">
                     <span className="font-medium text-ink">{r.reference}</span>
                     <span className="text-xs text-ink-muted" dir="ltr">
-                      {formatDate(r.periodStart, { locale })} – {formatDate(r.periodEnd, { locale })} ·{" "}
+                      {formatDate(r.periodStart, { locale })} –{" "}
+                      {formatDate(r.periodEnd, { locale })} ·{" "}
                       {t("hr.payroll.lines", { count: r.lines })}
                     </span>
                   </div>
                   <div className="flex flex-col items-end gap-1">
-                    <Badge tone={STATUS_TONE[r.status] ?? "info"}>{t(`hr.status.${r.status}`)}</Badge>
+                    <Badge tone={STATUS_TONE[r.status] ?? "info"}>
+                      {t(`hr.status.${r.status}`)}
+                    </Badge>
                     {resolved.ctx.costPrivileged ? (
                       <span className="text-sm text-ink" dir="ltr">
                         {formatMoney(r.netTotalMinor, currency, { locale: "en" })}

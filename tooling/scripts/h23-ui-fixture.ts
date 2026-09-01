@@ -219,7 +219,9 @@ async function seed(): Promise<void> {
     employeeId: w.id,
     title: "Toolbox restock (draft)",
     settlementRoute: "expense_book",
-    lines: [{ expenseDate: "2026-08-25", categoryKey, description: "Drill bits", amountMinor: 9_900 }],
+    lines: [
+      { expenseDate: "2026-08-25", categoryKey, description: "Drill bits", amountMinor: 9_900 },
+    ],
   });
 
   // Payroll: one FINALIZED July run (payslips + notification) and one August

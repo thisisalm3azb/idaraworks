@@ -240,7 +240,15 @@ export const EXPORT_ENTITIES = {
   // PostgREST cap never applies to these direct reads, and the pager proves
   // accuracy above 1,000 rows by construction.
   employees: {
-    headers: ["employee_no", "name", "name_ar", "lifecycle", "employment_type", "hire_date", "created_at"],
+    headers: [
+      "employee_no",
+      "name",
+      "name_ar",
+      "lifecycle",
+      "employment_type",
+      "hire_date",
+      "created_at",
+    ],
     page: async (tx, ctx, limit, offset) => {
       const rows = (await tx.execute(sql`
         select employee_no, name, name_ar, lifecycle, employment_type,
@@ -286,7 +294,15 @@ export const EXPORT_ENTITIES = {
     },
   },
   expense_claims: {
-    headers: ["reference", "employee", "title", "status", "total_minor", "settlement_route", "created_at"],
+    headers: [
+      "reference",
+      "employee",
+      "title",
+      "status",
+      "total_minor",
+      "settlement_route",
+      "created_at",
+    ],
     page: async (tx, ctx, limit, offset) => {
       const rows = (await tx.execute(sql`
         select c.reference, e.name as employee, c.title, c.status,
@@ -310,7 +326,15 @@ export const EXPORT_ENTITIES = {
     },
   },
   payslips: {
-    headers: ["slip_no", "employee", "period_start", "period_end", "gross_minor", "net_minor", "issued_at"],
+    headers: [
+      "slip_no",
+      "employee",
+      "period_start",
+      "period_end",
+      "gross_minor",
+      "net_minor",
+      "issued_at",
+    ],
     page: async (tx, ctx, limit, offset) => {
       const rows = (await tx.execute(sql`
         select s.slip_no, e.name as employee, s.period_start::text as period_start,

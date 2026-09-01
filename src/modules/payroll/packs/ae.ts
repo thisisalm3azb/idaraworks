@@ -53,7 +53,10 @@ export const AE_PACK: CountryPack = {
       requiresAttachment: false,
       countBasis: "working_days",
       annualDays: 30,
-      tiers: { partialYear: "2 days/month once service exceeds 6 months", carryover: "max half, employer approval (Cab Res 1/2022 Art 19(1))" },
+      tiers: {
+        partialYear: "2 days/month once service exceeds 6 months",
+        carryover: "max half, employer approval (Cab Res 1/2022 Art 19(1))",
+      },
     },
     {
       key: "sick",

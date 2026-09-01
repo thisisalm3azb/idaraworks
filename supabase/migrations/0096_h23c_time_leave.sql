@@ -10,7 +10,12 @@
 -- ═════════════════════════════════════════════════════════════════════════════
 
 -- Overlap prevention for leave needs range exclusion over equality columns.
-create extension if not exists btree_gist;
+-- Into the extensions schema, NEVER public: the extension ships C functions
+-- executable by PUBLIC, and the 0016 sweep (rightly) forbids that in public.
+-- Default gist opclasses are catalog-wide, so the exclusion constraints below
+-- resolve regardless of schema.
+create schema if not exists extensions;
+create extension if not exists btree_gist with schema extensions;
 
 -- ── work patterns and shifts ─────────────────────────────────────────────────
 -- A pattern is the WEEK template (which days, how many hours). A shift is a

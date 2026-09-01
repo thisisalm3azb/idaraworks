@@ -29,7 +29,9 @@ export default async function NewClaimPage({
     <div className="flex flex-col gap-4">
       <h1 className="text-lg font-semibold text-ink">{t("hr.claims.new")}</h1>
       {sp.error ? (
-        <p className="rounded-md bg-danger-soft px-3 py-2 text-sm text-danger">{t("common.error")}</p>
+        <p className="rounded-md bg-danger-soft px-3 py-2 text-sm text-danger">
+          {t("common.error")}
+        </p>
       ) : null}
       <form action={create} className="flex flex-col gap-3">
         <Card>

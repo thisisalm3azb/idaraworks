@@ -13,11 +13,7 @@ import { listPayslips } from "@/modules/payroll/service";
  * scopes the read to their own rows) and self-service letters rendered from
  * their records through the document pipeline.
  */
-export default async function MyPayPage({
-  params,
-}: {
-  params: Promise<{ orgId: string }>;
-}) {
+export default async function MyPayPage({ params }: { params: Promise<{ orgId: string }> }) {
   if (!hrSurfacesEnabled()) notFound();
   const { orgId } = await params;
   const resolved = await resolveCtx(orgId);

@@ -65,7 +65,11 @@ const BASE = (process.env.PDF_VERIFY_BASE ?? "https://www.idaraworks.com").repla
 const MARKER = "smoke.h23";
 const RUN = randomUUID().slice(0, 8);
 
-const owner = postgres(process.env.DIRECT_URL!, { max: 1, connect_timeout: 60, onnotice: () => {} });
+const owner = postgres(process.env.DIRECT_URL!, {
+  max: 1,
+  connect_timeout: 60,
+  onnotice: () => {},
+});
 const ownerUserId = randomUUID();
 let employeeUserId = "";
 let orgId = "";
@@ -79,7 +83,12 @@ const A = (): Ctx => ({
   pricePrivileged: true,
   requestId: `h23-smoke-${RUN}`,
 });
-const E = (): Ctx => ({ ...A(), userId: employeeUserId, costPrivileged: false, pricePrivileged: false });
+const E = (): Ctx => ({
+  ...A(),
+  userId: employeeUserId,
+  costPrivileged: false,
+  pricePrivileged: false,
+});
 
 let checks = 0;
 function check(what: string, ok: boolean, detail = ""): void {
@@ -131,8 +140,7 @@ async function employeeCookie(): Promise<string> {
   });
   if (error || !data.session) throw new Error(`employee sign-in failed: ${error?.message}`);
   const ref = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL!).hostname.split(".")[0];
-  const value =
-    "base64-" + Buffer.from(JSON.stringify(data.session), "utf8").toString("base64url");
+  const value = "base64-" + Buffer.from(JSON.stringify(data.session), "utf8").toString("base64url");
   // @supabase/ssr chunks long cookies; mirror its scheme.
   const CHUNK = 3180;
   if (value.length <= CHUNK) return `sb-${ref}-auth-token=${value}`;
@@ -170,7 +178,9 @@ async function main(): Promise<void> {
     process.exit(1);
   }
   const probe = (await owner`select current_database() as db`) as unknown as Array<{ db: string }>;
-  console.log(`production smoke against ${PRODUCTION_PROJECT_REF} (db=${probe[0]!.db}), run ${RUN}`);
+  console.log(
+    `production smoke against ${PRODUCTION_PROJECT_REF} (db=${probe[0]!.db}), run ${RUN}`,
+  );
 
   const before = (await owner`
     select (select count(*) from public.org) as orgs,
@@ -331,7 +341,10 @@ async function main(): Promise<void> {
     const latched = (await owner`
       select status, settled_pay_run_id::text as sp from public.expense_claim
       where id = ${claim.id}`) as unknown as Array<{ status: string; sp: string | null }>;
-    check("claim latched paid by the run", latched[0]!.status === "paid" && latched[0]!.sp === run.id);
+    check(
+      "claim latched paid by the run",
+      latched[0]!.status === "paid" && latched[0]!.sp === run.id,
+    );
     let refused = false;
     try {
       await settleClaimToExpenseBook(A(), "owner", { claimId: claim.id });

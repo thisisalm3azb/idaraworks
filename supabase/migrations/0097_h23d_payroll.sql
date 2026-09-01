@@ -326,10 +326,39 @@ create policy pay_run_line_update on public.pay_run_line
   for update to app_user
   using (org_id = (select app.current_org_id()) and (select app.is_cost_privileged()))
   with check (org_id = (select app.current_org_id()));
-create policy pay_run_line_delete on public.pay_run_line
-  for delete to app_user
-  using (org_id = (select app.current_org_id()) and (select app.is_cost_privileged()));
-grant select, insert, update, delete on public.pay_run_line to app_user;
+grant select, insert, update on public.pay_run_line to app_user;
+
+/*
+ * Recalculation wipes a run's lines — the ONE legitimate delete. app_user holds
+ * no DELETE grant anywhere (D-1.7), so the wipe is a SECURITY DEFINER function
+ * guarded on the caller's org GUC, cost privilege and the run's status.
+ */
+create or replace function app.wipe_pay_run_lines(p_run uuid) returns integer
+language plpgsql
+security definer
+set search_path = pg_catalog, public
+as $
+declare
+  v_org uuid;
+  n integer;
+begin
+  select app.current_org_id() into v_org;
+  if v_org is null or not app.is_cost_privileged() then
+    raise exception 'wipe_pay_run_lines requires an org context with cost privilege';
+  end if;
+  if not exists (
+    select 1 from public.pay_run
+    where id = p_run and org_id = v_org and status in ('draft', 'review')
+  ) then
+    raise exception 'only a draft or review run can be recalculated';
+  end if;
+  delete from public.pay_run_line where org_id = v_org and pay_run_id = p_run;
+  get diagnostics n = row_count;
+  return n;
+end;
+$;
+revoke all on function app.wipe_pay_run_lines(uuid) from public;
+grant execute on function app.wipe_pay_run_lines(uuid) to app_user;
 
 -- A line of a finalized run is frozen; recalculation deletes lines only while
 -- the run is draft/review (delete IS the recalculation mechanism, so it stays

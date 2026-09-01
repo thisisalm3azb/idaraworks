@@ -77,7 +77,12 @@ async function approvedRun(
   periodEnd: string,
   runKind: "regular" | "off_cycle" = "regular",
 ): Promise<string> {
-  const r = await createPayRun(M(), "accounts", { payGroupId: groupId, periodStart, periodEnd, runKind });
+  const r = await createPayRun(M(), "accounts", {
+    payGroupId: groupId,
+    periodStart,
+    periodEnd,
+    runKind,
+  });
   await calculatePayRun(M(), "accounts", r.id);
   await submitPayRunForApproval(M(), "accounts", r.id);
   const inbox = await listInbox(A(), "owner");
@@ -228,15 +233,19 @@ describe("pay run lifecycle", () => {
     expect(Number(t1[0]!.gross_total_minor)).toBe(1_300_000);
   });
 
-  it("refuses a second REGULAR run for the same period (database partial unique)", { timeout: 120_000 }, async () => {
-    await expect(
-      createPayRun(M(), "accounts", {
-        payGroupId: groupId,
-        periodStart: "2026-08-01",
-        periodEnd: "2026-08-31",
-      }),
-    ).rejects.toThrow();
-  });
+  it(
+    "refuses a second REGULAR run for the same period (database partial unique)",
+    { timeout: 120_000 },
+    async () => {
+      await expect(
+        createPayRun(M(), "accounts", {
+          payGroupId: groupId,
+          periodStart: "2026-08-01",
+          periodEnd: "2026-08-31",
+        }),
+      ).rejects.toThrow();
+    },
+  );
 
   it(
     "two approvers racing to finalize produce EXACTLY one finalization",
@@ -265,16 +274,22 @@ describe("pay run lifecycle", () => {
     },
   );
 
-  it("a finalized run and its payslips are immutable AT THE DATABASE", { timeout: 120_000 }, async () => {
-    await expect(owner`update public.pay_run set status = 'draft' where id = ${runId}`).rejects.toThrow();
-    await expect(
-      owner`update public.pay_run_line set net_minor = 1 where pay_run_id = ${runId}`,
-    ).rejects.toThrow();
-    await expect(
-      owner`update public.payslip set net_minor = 1 where pay_run_id = ${runId}`,
-    ).rejects.toThrow();
-    await expect(owner`delete from public.pay_run where id = ${runId}`).rejects.toThrow();
-  });
+  it(
+    "a finalized run and its payslips are immutable AT THE DATABASE",
+    { timeout: 120_000 },
+    async () => {
+      await expect(
+        owner`update public.pay_run set status = 'draft' where id = ${runId}`,
+      ).rejects.toThrow();
+      await expect(
+        owner`update public.pay_run_line set net_minor = 1 where pay_run_id = ${runId}`,
+      ).rejects.toThrow();
+      await expect(
+        owner`update public.payslip set net_minor = 1 where pay_run_id = ${runId}`,
+      ).rejects.toThrow();
+      await expect(owner`delete from public.pay_run where id = ${runId}`).rejects.toThrow();
+    },
+  );
 
   it("payslips carry the frozen issuer identity", { timeout: 120_000 }, async () => {
     const slips = await owner`
@@ -284,15 +299,19 @@ describe("pay run lifecycle", () => {
     expect(issuer.legalName).toBeTruthy();
   });
 
-  it("an employee reads only their OWN payslip (database row policy)", { timeout: 120_000 }, async () => {
-    const mine = await listPayslips(E());
-    expect(mine).toHaveLength(1);
-    const lines = (await withCtx(E(), (tx) =>
-      tx.execute(sql`select employee_id::text as e from public.pay_run_line`),
-    )) as unknown as Array<{ e: string }>;
-    expect(lines.every((l) => l.e === empE)).toBe(true);
-    expect(lines.length).toBeGreaterThan(0);
-  });
+  it(
+    "an employee reads only their OWN payslip (database row policy)",
+    { timeout: 120_000 },
+    async () => {
+      const mine = await listPayslips(E());
+      expect(mine).toHaveLength(1);
+      const lines = (await withCtx(E(), (tx) =>
+        tx.execute(sql`select employee_id::text as e from public.pay_run_line`),
+      )) as unknown as Array<{ e: string }>;
+      expect(lines.every((l) => l.e === empE)).toBe(true);
+      expect(lines.length).toBeGreaterThan(0);
+    },
+  );
 
   it("a reversal run negates the original line for line", { timeout: 300_000 }, async () => {
     const rev = await createReversalRun(A(), "owner", runId, "wrong period data");
@@ -345,34 +364,38 @@ describe("loans deduct capped at balance and settle themselves", () => {
 // ── claims ───────────────────────────────────────────────────────────────────
 
 describe("expense claims", () => {
-  it("mileage lines price from the configured rate; duplicates are WARNED, not blocked", { timeout: 300_000 }, async () => {
-    await setMileageRate(A(), "owner", { rateMinorPerKm: 100, effectiveFrom: "2026-01-01" });
-    const c1 = await createClaim(E(), "foreman", {
-      employeeId: empE,
-      title: "Site visit",
-      settlementRoute: "payroll",
-      lines: [
-        { expenseDate: "2026-11-03", categoryKey, description: "Parking", amountMinor: 2_000 },
-        { expenseDate: "2026-11-03", categoryKey, description: "Drive out", mileageKm: 12.5 },
-      ],
-    });
-    expect(c1.totalMinor).toBe(2_000 + 1_250);
+  it(
+    "mileage lines price from the configured rate; duplicates are WARNED, not blocked",
+    { timeout: 300_000 },
+    async () => {
+      await setMileageRate(A(), "owner", { rateMinorPerKm: 100, effectiveFrom: "2026-01-01" });
+      const c1 = await createClaim(E(), "foreman", {
+        employeeId: empE,
+        title: "Site visit",
+        settlementRoute: "payroll",
+        lines: [
+          { expenseDate: "2026-11-03", categoryKey, description: "Parking", amountMinor: 2_000 },
+          { expenseDate: "2026-11-03", categoryKey, description: "Drive out", mileageKm: 12.5 },
+        ],
+      });
+      expect(c1.totalMinor).toBe(2_000 + 1_250);
 
-    const c2 = await createClaim(E(), "foreman", {
-      employeeId: empE,
-      title: "Same parking again",
-      settlementRoute: "payroll",
-      lines: [
-        { expenseDate: "2026-11-03", categoryKey, description: "Parking", amountMinor: 2_000 },
-      ],
-    });
-    const sub = await submitClaim(E(), "foreman", { claimId: c2.id });
-    expect(sub.warnings.length).toBeGreaterThan(0);
-    expect(sub.warnings[0]!.claimReference).toBe(c1.reference);
-    // Warned — and still submitted for a human to judge.
-    const st = await owner`select status from public.expense_claim where id = ${c2.id}`;
-    expect(st[0]!.status).toBe("submitted");
-  });
+      const c2 = await createClaim(E(), "foreman", {
+        employeeId: empE,
+        title: "Same parking again",
+        settlementRoute: "payroll",
+        lines: [
+          { expenseDate: "2026-11-03", categoryKey, description: "Parking", amountMinor: 2_000 },
+        ],
+      });
+      const sub = await submitClaim(E(), "foreman", { claimId: c2.id });
+      expect(sub.warnings.length).toBeGreaterThan(0);
+      expect(sub.warnings[0]!.claimReference).toBe(c1.reference);
+      // Warned — and still submitted for a human to judge.
+      const st = await owner`select status from public.expense_claim where id = ${c2.id}`;
+      expect(st[0]!.status).toBe("submitted");
+    },
+  );
 
   it(
     "a payroll-routed claim pays through the run ONCE — the racing run must recalculate",
@@ -382,7 +405,9 @@ describe("expense claims", () => {
         employeeId: empE,
         title: "Reimburse me",
         settlementRoute: "payroll",
-        lines: [{ expenseDate: "2026-11-10", categoryKey, description: "Materials", amountMinor: 7_500 }],
+        lines: [
+          { expenseDate: "2026-11-10", categoryKey, description: "Materials", amountMinor: 7_500 },
+        ],
       });
       await submitClaim(E(), "foreman", { claimId: c.id });
       const inbox = await listInbox(A(), "owner");
@@ -411,68 +436,76 @@ describe("expense claims", () => {
       expect(relines[0]!.n).toBe(0);
 
       // And the paid claim cannot ALSO settle into the expense book.
-      await expect(
-        settleClaimToExpenseBook(A(), "owner", { claimId: c.id }),
-      ).rejects.toThrow(/only an approved claim/);
+      await expect(settleClaimToExpenseBook(A(), "owner", { claimId: c.id })).rejects.toThrow(
+        /only an approved claim/,
+      );
     },
   );
 
-  it("an expense_book claim posts one canonical expense per line and latches", { timeout: 300_000 }, async () => {
-    const c = await createClaim(M(), "accounts", {
-      employeeId: empF,
-      title: "Floor purchases",
-      settlementRoute: "expense_book",
-      lines: [
-        { expenseDate: "2026-11-20", categoryKey, description: "Screws", amountMinor: 3_000 },
-        { expenseDate: "2026-11-21", categoryKey, description: "Tape", amountMinor: 1_500 },
-      ],
-    });
-    await submitClaim(M(), "accounts", { claimId: c.id });
-    const inbox = await listInbox(A(), "owner");
-    const item = inbox.find((i) => i.subjectId === c.id);
-    await decideApproval(A(), "owner", { approvalId: item!.id, decision: "approved" });
+  it(
+    "an expense_book claim posts one canonical expense per line and latches",
+    { timeout: 300_000 },
+    async () => {
+      const c = await createClaim(M(), "accounts", {
+        employeeId: empF,
+        title: "Floor purchases",
+        settlementRoute: "expense_book",
+        lines: [
+          { expenseDate: "2026-11-20", categoryKey, description: "Screws", amountMinor: 3_000 },
+          { expenseDate: "2026-11-21", categoryKey, description: "Tape", amountMinor: 1_500 },
+        ],
+      });
+      await submitClaim(M(), "accounts", { claimId: c.id });
+      const inbox = await listInbox(A(), "owner");
+      const item = inbox.find((i) => i.subjectId === c.id);
+      await decideApproval(A(), "owner", { approvalId: item!.id, decision: "approved" });
 
-    const settled = await settleClaimToExpenseBook(A(), "owner", { claimId: c.id });
-    expect(settled.expenseReferences).toHaveLength(2);
-    const expenses = await owner`
+      const settled = await settleClaimToExpenseBook(A(), "owner", { claimId: c.id });
+      expect(settled.expenseReferences).toHaveLength(2);
+      const expenses = await owner`
       select e.total_minor::bigint as total from public.expense e
       join public.expense_claim_line l on l.settled_expense_id = e.id
       where l.claim_id = ${c.id} order by e.total_minor`;
-    expect(expenses.map((r) => Number(r.total))).toEqual([1_500, 3_000]);
-    const claim = await owner`select status from public.expense_claim where id = ${c.id}`;
-    expect(claim[0]!.status).toBe("paid");
+      expect(expenses.map((r) => Number(r.total))).toEqual([1_500, 3_000]);
+      const claim = await owner`select status from public.expense_claim where id = ${c.id}`;
+      expect(claim[0]!.status).toBe("paid");
 
-    // Latched: a second settlement and any line edit are refused.
-    await expect(settleClaimToExpenseBook(A(), "owner", { claimId: c.id })).rejects.toThrow();
-    await expect(
-      owner`update public.expense_claim_line set amount_minor = 9 where claim_id = ${c.id}`,
-    ).rejects.toThrow();
-  });
+      // Latched: a second settlement and any line edit are refused.
+      await expect(settleClaimToExpenseBook(A(), "owner", { claimId: c.id })).rejects.toThrow();
+      await expect(
+        owner`update public.expense_claim_line set amount_minor = 9 where claim_id = ${c.id}`,
+      ).rejects.toThrow();
+    },
+  );
 
-  it("a cash advance settles by converting into a payroll loan — never vanishing", { timeout: 300_000 }, async () => {
-    const adv = await recordCashAdvance(A(), "owner", {
-      employeeId: empF,
-      amountMinor: 50_000,
-      purpose: "Travel float",
-    });
-    await settleCashAdvance(A(), "owner", {
-      advanceId: adv.id,
-      via: { kind: "loan", installmentMinor: 25_000, startsOn: "2027-01-01" },
-    });
-    const rows = await owner`
+  it(
+    "a cash advance settles by converting into a payroll loan — never vanishing",
+    { timeout: 300_000 },
+    async () => {
+      const adv = await recordCashAdvance(A(), "owner", {
+        employeeId: empF,
+        amountMinor: 50_000,
+        purpose: "Travel float",
+      });
+      await settleCashAdvance(A(), "owner", {
+        advanceId: adv.id,
+        via: { kind: "loan", installmentMinor: 25_000, startsOn: "2027-01-01" },
+      });
+      const rows = await owner`
       select a.status, l.kind, l.principal_minor::bigint as principal
       from public.cash_advance a
       left join public.employee_loan l
         on l.org_id = a.org_id and l.employee_id = a.employee_id and l.kind = 'salary_advance'
       where a.id = ${adv.id}`;
-    expect(rows[0]!.status).toBe("converted_to_loan");
-    expect(Number(rows[0]!.principal)).toBe(50_000);
-    // Settled once — a second settlement is refused.
-    await expect(
-      settleCashAdvance(A(), "owner", {
-        advanceId: adv.id,
-        via: { kind: "loan", installmentMinor: 25_000, startsOn: "2027-01-01" },
-      }),
-    ).rejects.toThrow(/already settled/);
-  });
+      expect(rows[0]!.status).toBe("converted_to_loan");
+      expect(Number(rows[0]!.principal)).toBe(50_000);
+      // Settled once — a second settlement is refused.
+      await expect(
+        settleCashAdvance(A(), "owner", {
+          advanceId: adv.id,
+          via: { kind: "loan", installmentMinor: 25_000, startsOn: "2027-01-01" },
+        }),
+      ).rejects.toThrow(/already settled/);
+    },
+  );
 });

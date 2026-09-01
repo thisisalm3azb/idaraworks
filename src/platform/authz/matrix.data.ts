@@ -405,6 +405,13 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
   // today.view added (adversarial review): read-only Today composed ONLY from
   // the viewer's own read grants above (no money, no queues).
   viewer: [
-    "payroll.view","members.view", "jobs.view", "tasks.view", "week.view",
-    "hr.self", "attendance.view", "today.view"],
+    "payroll.view",
+    "members.view",
+    "jobs.view",
+    "tasks.view",
+    "week.view",
+    "hr.self",
+    "attendance.view",
+    "today.view",
+  ],
 };

@@ -148,9 +148,9 @@ create policy expense_claim_line_update on public.expense_claim_line
   for update to app_user
   using (org_id = (select app.current_org_id()))
   with check (org_id = (select app.current_org_id()));
-create policy expense_claim_line_delete on public.expense_claim_line
-  for delete to app_user using (org_id = (select app.current_org_id()));
-grant select, insert, update, delete on public.expense_claim_line to app_user;
+-- No DELETE (D-1.7): a wrong line is fixed by cancelling the draft claim and
+-- filing again — lines are cheap, history is not.
+grant select, insert, update on public.expense_claim_line to app_user;
 
 -- Lines freeze with their claim: editable only while draft/returned. The ONE
 -- exception is settlement stamping settled_expense_id on an approved claim —

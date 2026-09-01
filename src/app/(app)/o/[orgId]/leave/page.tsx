@@ -5,12 +5,7 @@ import { resolveCtx } from "@/platform/auth/resolve";
 import { can } from "@/platform/authz";
 import { hrSurfacesEnabled } from "@/platform/flags";
 import { formatDate } from "@/platform/format";
-import {
-  leaveBalances,
-  listLeaveRequests,
-  listLeaveTypes,
-  myEmployee,
-} from "@/modules/hr/service";
+import { leaveBalances, listLeaveRequests, listLeaveTypes, myEmployee } from "@/modules/hr/service";
 import { requestLeaveAction, cancelLeaveAction, requestOvertimeAction } from "./actions";
 
 const STATUS_TONE: Record<string, "success" | "warning" | "danger" | "info"> = {
@@ -157,8 +152,8 @@ export default async function LeavePage({
                     <div className="flex flex-col">
                       <span className="font-medium text-ink">{typeLabel(r.typeKey)}</span>
                       <span className="text-xs text-ink-muted" dir="ltr">
-                        {formatDate(r.startDate, { locale })} – {formatDate(r.endDate, { locale })} ·{" "}
-                        {t("hr.leave.days", { days: r.days })}
+                        {formatDate(r.startDate, { locale })} – {formatDate(r.endDate, { locale })}{" "}
+                        · {t("hr.leave.days", { days: r.days })}
                       </span>
                     </div>
                     <Badge tone={STATUS_TONE[r.status] ?? "info"}>

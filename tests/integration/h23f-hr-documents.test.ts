@@ -127,32 +127,40 @@ describe("payslip", () => {
 });
 
 describe("letters", () => {
-  it("salary certificate certifies from the LATEST ISSUED payslip — self-service", { timeout: 120_000 }, async () => {
-    const m = await documentModel(E(), "foreman", {
-      kind: "salary_certificate",
-      id: empE,
-      language: "en",
-    });
-    expect(m.notes).toContain("most recent issued payslip");
-    expect(m.sections[0]!.lines[0]!.amount).toContain("6,500");
-    // No payslip → no certificate, said plainly (a fresh employee).
-    const fresh = await createEmployee(A(), "owner", { name: `NoSlip ${run}` });
-    await expect(
-      documentModel(A(), "owner", { kind: "salary_certificate", id: fresh.id, language: "en" }),
-    ).rejects.toThrow(/none issued/);
-  });
+  it(
+    "salary certificate certifies from the LATEST ISSUED payslip — self-service",
+    { timeout: 120_000 },
+    async () => {
+      const m = await documentModel(E(), "foreman", {
+        kind: "salary_certificate",
+        id: empE,
+        language: "en",
+      });
+      expect(m.notes).toContain("most recent issued payslip");
+      expect(m.sections[0]!.lines[0]!.amount).toContain("6,500");
+      // No payslip → no certificate, said plainly (a fresh employee).
+      const fresh = await createEmployee(A(), "owner", { name: `NoSlip ${run}` });
+      await expect(
+        documentModel(A(), "owner", { kind: "salary_certificate", id: fresh.id, language: "en" }),
+      ).rejects.toThrow(/none issued/);
+    },
+  );
 
-  it("experience letter renders bilingually; self cannot letter a colleague", { timeout: 120_000 }, async () => {
-    const html = await documentHtml(E(), "foreman", {
-      kind: "experience_letter",
-      id: empE,
-      language: "ar",
-    });
-    expect(html).toContain("شهادة خبرة");
-    await expect(
-      documentModel(E(), "foreman", { kind: "experience_letter", id: empF, language: "en" }),
-    ).rejects.toThrow();
-  });
+  it(
+    "experience letter renders bilingually; self cannot letter a colleague",
+    { timeout: 120_000 },
+    async () => {
+      const html = await documentHtml(E(), "foreman", {
+        kind: "experience_letter",
+        id: empE,
+        language: "ar",
+      });
+      expect(html).toContain("شهادة خبرة");
+      await expect(
+        documentModel(E(), "foreman", { kind: "experience_letter", id: empF, language: "en" }),
+      ).rejects.toThrow();
+    },
+  );
 
   it("warning letter is HR-walled and renders the record", { timeout: 120_000 }, async () => {
     const d = await owner`
@@ -198,31 +206,39 @@ describe("letters", () => {
 });
 
 describe("registers", () => {
-  it("payroll register needs cost privilege and drops its watermark when finalized", { timeout: 120_000 }, async () => {
-    await expect(
-      documentModel(ctxOf(userA, false), "owner", {
+  it(
+    "payroll register needs cost privilege and drops its watermark when finalized",
+    { timeout: 120_000 },
+    async () => {
+      await expect(
+        documentModel(ctxOf(userA, false), "owner", {
+          kind: "payroll_register",
+          id: runId,
+          language: "en",
+        }),
+      ).rejects.toThrow();
+      const m = await documentModel(A(), "owner", {
         kind: "payroll_register",
         id: runId,
         language: "en",
-      }),
-    ).rejects.toThrow();
-    const m = await documentModel(A(), "owner", {
-      kind: "payroll_register",
-      id: runId,
-      language: "en",
-    });
-    expect(m.watermark).toBeNull();
-    expect(m.sections[0]!.lines).toHaveLength(2);
-    expect(m.totals!.find((x) => x.strong)!.value).toContain("10,500");
-  });
+      });
+      expect(m.watermark).toBeNull();
+      expect(m.sections[0]!.lines).toHaveLength(2);
+      expect(m.totals!.find((x) => x.strong)!.value).toContain("10,500");
+    },
+  );
 
-  it("final settlement preview is ALWAYS watermarked as a working paper", { timeout: 120_000 }, async () => {
-    const m = await documentModel(A(), "owner", {
-      kind: "final_settlement",
-      id: empE,
-      language: "en",
-    });
-    expect(m.watermark).toBe("draft");
-    expect(m.noticeText).toContain("Preview only");
-  });
+  it(
+    "final settlement preview is ALWAYS watermarked as a working paper",
+    { timeout: 120_000 },
+    async () => {
+      const m = await documentModel(A(), "owner", {
+        kind: "final_settlement",
+        id: empE,
+        language: "en",
+      });
+      expect(m.watermark).toBe("draft");
+      expect(m.noticeText).toContain("Preview only");
+    },
+  );
 });

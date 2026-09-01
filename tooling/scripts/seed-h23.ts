@@ -32,7 +32,10 @@ async function seedPayRunChain(o: Owner, org: string, u: string) {
   const group = randomUUID();
   const period = randomUUID();
   const run = randomUUID();
-  await o`insert into public.pay_group (id, org_id, name_en) values (${group}, ${org}, 'Bleed group')`;
+  // Inactive: the one-ACTIVE-group-per-org unique must stay free for the
+  // standalone pay_group seeder; FKs work against inactive groups.
+  await o`insert into public.pay_group (id, org_id, name_en, active)
+          values (${group}, ${org}, 'Bleed group', false)`;
   await o`insert into public.pay_period (id, org_id, pay_group_id, period_start, period_end)
           values (${period}, ${org}, ${group}, '2031-01-01', '2031-01-31')`;
   await o`insert into public.pay_run

@@ -331,14 +331,21 @@ describe("H23G release gate — leave, claims, my pay, payroll", () => {
       buildNavGroups({ orgId: ORG, archetype: a, features: allOn, hrSurfaces: true })
         .flatMap((g) => g.items)
         .map((i) => i.key);
-    expect(withFlag("owner")).toEqual(expect.arrayContaining(["leave", "claims", "my_pay", "payroll"]));
+    expect(withFlag("owner")).toEqual(
+      expect.arrayContaining(["leave", "claims", "my_pay", "payroll"]),
+    );
     expect(withFlag("foreman")).toEqual(expect.arrayContaining(["leave", "claims", "my_pay"]));
     expect(withFlag("foreman")).not.toContain("payroll");
   });
 
   it("entitlement off hides the module even when released", () => {
     const noPay = { ...allOn, "cap.payroll": false };
-    const keys = buildNavGroups({ orgId: ORG, archetype: "owner", features: noPay, hrSurfaces: true })
+    const keys = buildNavGroups({
+      orgId: ORG,
+      archetype: "owner",
+      features: noPay,
+      hrSurfaces: true,
+    })
       .flatMap((g) => g.items)
       .map((i) => i.key);
     expect(keys).not.toContain("payroll");
