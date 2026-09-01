@@ -4,8 +4,18 @@
     {
       "name": "stock-preview",
       "runtimeExecutable": "node",
-      "runtimeArgs": ["tooling/scripts/dev-stock-preview.mjs"],
+      "runtimeArgs": [
+        "tooling/scripts/dev-stock-preview.mjs"
+      ],
       "port": 3210
+    },
+    {
+      "name": "hr-preview",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "tooling/scripts/dev-hr-preview.mjs"
+      ],
+      "port": 3211
     }
   ]
 }
