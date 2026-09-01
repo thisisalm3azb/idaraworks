@@ -13,6 +13,7 @@ import { assertCan } from "@/platform/authz/can";
 import { requireCapability } from "@/platform/entitlements";
 import { allocateReference, formatRef } from "@/platform/reference/sequence";
 import { submitForApproval } from "@/modules/approvals/service";
+import { postPaymentReceivedIn, reverseSourcePostingIn } from "@/modules/finance/service";
 import { reconcileInvoiceStatus } from "@/modules/invoices/service";
 import { PAYMENT_RECORDED } from "@/platform/events";
 import type { CurrencyCode, RoleArchetype } from "@/platform/registries";
@@ -137,6 +138,9 @@ export async function recordPayment(
           `);
           }
         }
+        // H24D: money in posts once, at record time; a later reject/void
+        // reverses it explicitly.
+        await postPaymentReceivedIn(tx, ctx, id);
         return { id, reference, receiptReference, approvalId };
       },
     );
@@ -206,6 +210,13 @@ export async function voidPayment(
       `)) as unknown as Array<{ invoice_id: string | null }>;
       if (!rows[0]) throw new PaymentStateError("payment already voided or not found");
       if (rows[0].invoice_id) await reconcileInvoiceStatus(tx, ctx, rows[0].invoice_id);
+      // H24D: voiding reverses the receipt posting (if the org keeps books).
+      await reverseSourcePostingIn(tx, ctx, {
+        sourceType: "payment",
+        sourceId: paymentId,
+        eventKey: "received",
+        reason: `Payment voided: ${reason}`,
+      });
     },
   );
 }

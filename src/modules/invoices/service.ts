@@ -16,6 +16,7 @@ import { requireCapability } from "@/platform/entitlements";
 import { allocateReference, formatRef } from "@/platform/reference/sequence";
 import { getEInvoiceProvider } from "@/platform/einvoice/adapter";
 import { getDocBranding } from "@/modules/branding/service";
+import { postInvoiceIssuedIn } from "@/modules/finance/service";
 import { INVOICE_ISSUED, INVOICE_VOIDED, CREDIT_NOTE_ISSUED } from "@/platform/events";
 import type { CurrencyCode, RoleArchetype } from "@/platform/registries";
 import { CURRENCY_CODES } from "@/platform/registries";
@@ -218,6 +219,10 @@ export async function issueInvoice(
       // that makes the invoice legal. issued_at is set by the UPDATE above and
       // the capture coalesces, so it is never moved by a later call.
       await captureIssuer(tx, ctx, invoiceId, { stampIssuedAt: true });
+      // H24D: the ONE accounting event for this document (idempotent; no-op
+      // until the org adopts finance; loud failure once it has — books never
+      // diverge quietly).
+      await postInvoiceIssuedIn(tx, ctx, invoiceId);
       return { jobId: rows[0].job_id };
     },
   );
@@ -323,6 +328,8 @@ export async function createCreditNote(
       // inheriting the corrected invoice's. The two are separate legal documents
       // and the company may have changed between them.
       await captureIssuer(tx, ctx, rows[0]!.id, { stampIssuedAt: true });
+      // H24D: a credit note posts its mirroring entry the moment it exists.
+      await postInvoiceIssuedIn(tx, ctx, rows[0]!.id);
       await reconcileInvoiceStatus(tx, ctx, correctsInvoiceId);
       return { id: rows[0]!.id, reference };
     },

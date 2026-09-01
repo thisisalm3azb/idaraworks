@@ -13,6 +13,7 @@ import { sql, withCtx, type Ctx, type TenantTx } from "@/platform/tenancy";
 import { command } from "@/platform/audit/command";
 import { assertCan } from "@/platform/authz/can";
 import { requireCapability } from "@/platform/entitlements";
+import { postExpenseRecordedIn, reverseSourcePostingIn } from "@/modules/finance/service";
 import { allocateReference, formatRef } from "@/platform/reference/sequence";
 import { EXPENSE_CREATED, EXPENSE_VOIDED } from "@/platform/events";
 import type { RoleArchetype } from "@/platform/registries";
@@ -129,6 +130,8 @@ export async function createExpense(
                 ${input.receiptFileId ?? null}, ${ctx.userId})
         returning id::text as id
       `)) as unknown as Array<{ id: string }>;
+      // H24D: the cost posts once at record time.
+      await postExpenseRecordedIn(tx, ctx, rows[0]!.id);
       return { id: rows[0]!.id, reference };
     },
   );
@@ -171,6 +174,13 @@ export async function voidExpense(
         if (exists.length > 0) throw new ExpenseStateError("expense already voided");
         throw new ExpenseNotFoundError();
       }
+      // H24D: voiding reverses the cost posting (if any).
+      await reverseSourcePostingIn(tx, ctx, {
+        sourceType: "expense",
+        sourceId: input.expenseId,
+        eventKey: "recorded",
+        reason: "Expense voided: " + input.reason,
+      });
       return { id: rows[0].id, jobId: rows[0].job_id };
     },
   );
