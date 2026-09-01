@@ -19,7 +19,11 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { closeAppDb, type Ctx } from "@/platform/tenancy";
 import { createOrgForUser } from "@/platform/auth/identity";
 import { createPurchaseOrder, recordGoodsReceipt } from "@/modules/supply/service";
-import { postGoodsReceiptToStock, listStockLevels } from "@/modules/inventory/service";
+import {
+  postGoodsReceiptToStock,
+  postConsumptionToStock,
+  listStockLevels,
+} from "@/modules/inventory/service";
 import { markFixtureOrg, ownerSql, wipeOrgs } from "./helpers";
 
 const owner = ownerSql();
@@ -202,5 +206,61 @@ describe("the receiving action is actually wired to the ledger", () => {
     expect(src, "the receiving action no longer books stock").toContain("postGoodsReceiptToStock");
     // And the release gate is still on it, so this cannot switch itself on.
     expect(src).toContain("stockSurfacesEnabled()");
+  });
+});
+
+describe("the loop closes: what came in can go out", () => {
+  it("stock received against an order can be consumed by work", { timeout: 300_000 }, async () => {
+    /*
+     * The complete round trip, which no earlier slice could run because neither
+     * end was connected to anything a person can do. Order it, receive it, use
+     * it on a job, and the number on the shelf comes down by what was used.
+     */
+    const item = await anItem(`LOOP-${run}`);
+    const { id: poId, poLines } = await anApprovedPo([{ itemId: item, name: "Cable", qty: 20 }]);
+    const grn = await recordGoodsReceipt(ctx(), "owner", {
+      poId,
+      receivedDate: today,
+      lines: [{ poLineId: poLines[0]!.id, receivedQty: 20 }],
+    });
+    await postGoodsReceiptToStock(ctx(), "owner", grn.id);
+
+    const before = await listStockLevels(ctx(), "owner", { search: `LOOP-${run}` });
+    expect(Number(before.rows[0]!.available)).toBe(20);
+
+    // A reviewed daily report is this product's issue document.
+    const jobId = randomUUID();
+    const reportId = randomUUID();
+    await owner`
+      insert into public.job (id, org_id, reference, name, status_key, status_category, created_by)
+      values (${jobId}, ${orgA}, ${"J-" + run}, 'Wiring', 'active', 'active', ${userA})`;
+    await owner`
+      insert into public.daily_report (id, org_id, job_id, report_date, summary, status, submitted_by)
+      values (${reportId}, ${orgA}, ${jobId}, current_date, 'wiring', 'submitted', ${userA})`;
+    await owner`
+      insert into public.report_material_line (id, org_id, report_id, item_id, item_name, qty, unit)
+      values (${randomUUID()}, ${orgA}, ${reportId}, ${item}, 'Cable', 6, 'EA')`;
+
+    const consumed = await postConsumptionToStock(ctx(), "owner", reportId);
+    expect(consumed[0]!.posted).toBe(true);
+    // Charged at what it actually cost coming in, not at a list price.
+    expect(consumed[0]!.costMinor).toBe(9000);
+
+    const after = await listStockLevels(ctx(), "owner", { search: `LOOP-${run}` });
+    expect(
+      Number(after.rows[0]!.available),
+      "the material went out and the shelf did not move",
+    ).toBe(14);
+    expect(after.rows[0]!.valueMinor, "value did not follow the quantity").toBe(21_000);
+  });
+
+  it("the review action is wired to the ledger", async () => {
+    // The same absent-call defect as receiving, at the other end of the loop.
+    const fs = await import("node:fs/promises");
+    const src = await fs.readFile("src/app/(app)/o/[orgId]/reports/actions.ts", "utf8");
+    expect(src, "reviewing a report no longer books material out of stock").toContain(
+      "postConsumptionToStock",
+    );
+    expect(src, "the release gate was removed").toContain("stockSurfacesEnabled()");
   });
 });

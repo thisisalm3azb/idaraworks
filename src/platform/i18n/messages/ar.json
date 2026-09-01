@@ -2004,6 +2004,7 @@
   "reports.notice.submitted": "تم إرسال التقرير.",
   "reports.retry": "إعادة الإرسال",
   "reports.review.approve": "اعتماد",
+  "reports.review.not_stocked": "تم حفظ المراجعة، لكن لم تُخصم المواد من المخزون. راجع كميات تلك الأصناف.",
   "reports.review.queue_empty": "لا شيء بانتظار المراجعة.",
   "reports.review.return": "إعادة",
   "reports.review.return_reason": "سبب الإعادة",

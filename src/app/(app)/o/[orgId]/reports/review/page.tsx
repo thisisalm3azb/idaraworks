@@ -21,7 +21,7 @@ export default async function ReviewQueuePage({
   searchParams,
 }: {
   params: Promise<{ orgId: string }>;
-  searchParams: Promise<{ ok?: string; error?: string; focus?: string }>;
+  searchParams: Promise<{ ok?: string; error?: string; focus?: string; warn?: string }>;
 }) {
   const { orgId } = await params;
   const sp = await searchParams;
@@ -62,6 +62,16 @@ export default async function ReviewQueuePage({
       {ok === "reviewed" ? (
         <p className="rounded-md bg-success-soft px-3 py-2 text-sm text-success">
           {t("reports.review.reviewed_notice")}
+        </p>
+      ) : null}
+      {/*
+       * The review stands; the ledger did not take the material. Said plainly,
+       * because a silent failure here means a stock figure that never moved
+       * while the work that consumed it was signed off.
+       */}
+      {sp.warn === "not_stocked" ? (
+        <p className="rounded-md bg-warning-soft px-3 py-2 text-sm text-warning" role="alert">
+          {t("reports.review.not_stocked")}
         </p>
       ) : null}
       {ok === "returned" ? (

@@ -3,6 +3,10 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { resolveCtxForAction } from "@/platform/auth/resolve";
+import { can } from "@/platform/authz";
+import { postConsumptionToStock } from "@/modules/inventory/service";
+import { stockSurfacesEnabled } from "@/platform/flags";
+import { logger } from "@/platform/logger";
 import {
   submitDailyReport,
   reviewReport,
@@ -63,6 +67,42 @@ export async function reviewReportAction(orgId: string, formData: FormData): Pro
     if ((err as { digest?: string }).digest?.startsWith("NEXT_REDIRECT")) throw err;
     redirect(`${base}?error=${err instanceof ReportStateError ? "state" : "failed"}`);
   }
+
+  /*
+   * TAKE THE MATERIAL OUT OF STOCK.
+   *
+   * The other half of the chain the receiving action completes. A reviewed
+   * daily report is this product's record that material was USED — it is the
+   * issue document — and H22C built the posting for it that nothing ever
+   * called. Without this, stock in the ledger only ever goes up.
+   *
+   * After the review commits, never inside it, for the same reason receiving
+   * posts after recording: the review is a decision a person made about work
+   * that happened, and it must not be undone because a warehouse has no issuing
+   * bin or because the ledger has no opening balance for an item a site has
+   * plainly been using for months. That last case is the common one on a
+   * database with history, and it is precisely why this is release gated: on a
+   * deployment where the stock system is off, reviewing a report behaves
+   * exactly as it always has.
+   *
+   * Historical reports are untouched. Only a report reviewed from here on is
+   * posted, nothing rewrites a past one, and the legacy deducted_from_inventory
+   * flag stays unwritten.
+   */
+  if (stockSurfacesEnabled() && can(resolved.archetype, "inventory.issue")) {
+    try {
+      await postConsumptionToStock(resolved.ctx, resolved.archetype, reportId);
+    } catch (err) {
+      if ((err as { digest?: string }).digest?.startsWith("NEXT_REDIRECT")) throw err;
+      logger.warn(
+        { err: (err as Error).message, reportId, orgId },
+        "daily report reviewed but material not booked out of stock",
+      );
+      revalidatePath(base);
+      redirect(`${base}?ok=reviewed&warn=not_stocked`);
+    }
+  }
+
   revalidatePath(base);
   redirect(`${base}?ok=reviewed`);
 }

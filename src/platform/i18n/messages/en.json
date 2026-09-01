@@ -2004,6 +2004,7 @@
   "reports.notice.submitted": "Report submitted.",
   "reports.retry": "Retry submit",
   "reports.review.approve": "Approve",
+  "reports.review.not_stocked": "The review was saved, but the material was not taken out of stock. Check the stock levels for those items.",
   "reports.review.queue_empty": "Nothing waiting for review.",
   "reports.review.return": "Return",
   "reports.review.return_reason": "Reason for return",
