@@ -13,6 +13,7 @@ export {
   InsufficientStockError,
   StockMovementConflictError,
   LocationCannotHoldStockError,
+  TrackingRequiredError,
   type CostMethod,
   type PostMovementInput,
   type PostedMovement,
@@ -22,6 +23,8 @@ export {
   reconcileStockBalances,
   itemStock,
   type BalanceDrift,
+  type LotDrift,
+  type ValueDrift,
   type ReconcileResult,
 } from "./reconcile";
 
@@ -34,8 +37,22 @@ export {
   postStockCount,
   sendSupplierReturn,
   NotStockableError,
+  type ReceiptDisposition,
   type ReceiptPostResult,
 } from "./operations";
+
+export {
+  createBom,
+  activateBom,
+  getBom,
+  createAssemblyOrder,
+  completeAssembly,
+  cancelAssemblyOrder,
+  BomError,
+  CreateBomInput,
+  CreateAssemblyInput,
+  type AssemblyResult,
+} from "./assembly";
 
 export {
   planAllocation,

@@ -617,6 +617,24 @@ export async function submitPurchaseOrder(
 }
 
 // ── Goods Receipts (partial-receipt reconciliation) ──────────────────────────
+const DISPOSITION = z.enum(["accepted", "damaged", "quarantine"]);
+const DATE = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+
+/** A batch as the delivery note describes it. */
+const GrnLotInput = z.object({
+  lotCode: z.string().trim().min(1).max(64),
+  supplierLotCode: z.string().trim().max(64).optional(),
+  manufacturedOn: DATE.optional(),
+  expiryDate: DATE.optional(),
+  qty: z.number().positive().max(1_000_000_000),
+  disposition: DISPOSITION.optional().default("accepted"),
+});
+const GrnSerialInput = z.object({
+  serialNo: z.string().trim().min(1).max(64),
+  lotCode: z.string().trim().max(64).optional(),
+  disposition: DISPOSITION.optional().default("accepted"),
+});
+
 const GrnLineInput = z
   .object({
     poLineId: z.string().uuid(),
@@ -625,6 +643,8 @@ const GrnLineInput = z
     rejectedQty: z.number().min(0).max(1_000_000_000).optional().default(0),
     /** Held for inspection: owned, but not usable until someone decides. */
     quarantineQty: z.number().min(0).max(1_000_000_000).optional().default(0),
+    lots: z.array(GrnLotInput).max(200).optional(),
+    serials: z.array(GrnSerialInput).max(500).optional(),
   })
   /*
    * Everything that arrived is accounted for, and the balance is what was
@@ -645,6 +665,65 @@ export const RecordGrnInput = z.object({
     .transform((v) => (v ? v : undefined)),
   lines: z.array(GrnLineInput).min(1).max(200),
 });
+
+type GrnLine = z.infer<typeof GrnLineInput>;
+
+/**
+ * A tracked item must arrive with its labels, disposition by disposition.
+ *
+ * Checked at RECEIVING rather than at posting, because that is the only moment
+ * anybody is holding the goods. Discovering at posting time that nobody wrote
+ * down the batch number leaves a warehouse with stock it cannot legally issue
+ * and no way to recover the answer.
+ *
+ * Rejected quantity is excluded throughout: it was refused at the door and never
+ * became the organization's, so it needs no identity.
+ */
+function assertTrackingRecorded(line: GrnLine, tracking: string): void {
+  const owned: Record<"accepted" | "damaged" | "quarantine", number> = {
+    accepted: line.receivedQty - line.damagedQty - line.rejectedQty - line.quarantineQty,
+    damaged: line.damagedQty,
+    quarantine: line.quarantineQty,
+  };
+  const lots = line.lots ?? [];
+  const serials = line.serials ?? [];
+
+  if (tracking === "none") {
+    if (lots.length > 0 || serials.length > 0) {
+      throw new InvalidSupplyInputError(
+        "this item is not lot- or serial-tracked, so it has no batches or units to record",
+      );
+    }
+    return;
+  }
+  if (tracking === "lot" && serials.length > 0) {
+    throw new InvalidSupplyInputError("this item is lot-tracked, not serialised");
+  }
+  if (tracking === "serial" && lots.length > 0) {
+    throw new InvalidSupplyInputError("this item is serialised, not lot-tracked");
+  }
+
+  for (const d of ["accepted", "damaged", "quarantine"] as const) {
+    const expected = owned[d];
+    const recorded =
+      tracking === "lot"
+        ? lots.filter((l) => l.disposition === d).reduce((s, l) => s + l.qty, 0)
+        : serials.filter((s) => s.disposition === d).length;
+    if (Math.abs(recorded - expected) > 1e-9) {
+      throw new InvalidSupplyInputError(
+        tracking === "lot"
+          ? `${expected} ${d} unit(s) arrived but the batches account for ${recorded}`
+          : `${expected} ${d} unit(s) arrived but ${recorded} serial number(s) were recorded`,
+      );
+    }
+  }
+  if (tracking === "serial") {
+    const seen = new Set(serials.map((s) => s.serialNo));
+    if (seen.size !== serials.length) {
+      throw new InvalidSupplyInputError("the same serial number appears twice");
+    }
+  }
+}
 
 /** Recompute a PO's status from all RECORDED GRNs (self-healing reconciliation). */
 async function reconcilePoStatus(tx: TenantTx, ctx: Ctx, poId: string): Promise<void> {
@@ -744,8 +823,10 @@ export async function recordGoodsReceipt(
       const poLineIds = data.lines.map((l) => l.poLineId);
       const pol = (await tx.execute(sql`
         select pol.id::text as id, pol.qty::text as ordered,
+               coalesce(max(i.tracking), 'none') as tracking,
                coalesce(sum(grl.received_qty) filter (where grn.status = 'recorded'), 0)::text as prev
         from public.purchase_order_line pol
+        left join public.item i on i.id = pol.item_id and i.org_id = pol.org_id
         left join public.goods_receipt_line grl on grl.po_line_id = pol.id and grl.org_id = pol.org_id
         left join public.goods_receipt grn on grn.id = grl.grn_id and grn.org_id = grl.org_id
         where pol.po_id = ${data.poId} and pol.org_id = ${ctx.orgId}
@@ -754,7 +835,7 @@ export async function recordGoodsReceipt(
             sql`, `,
           )})
         group by pol.id, pol.qty
-      `)) as unknown as Array<{ id: string; ordered: string; prev: string }>;
+      `)) as unknown as Array<{ id: string; ordered: string; prev: string; tracking: string }>;
       const byId = new Map(pol.map((r) => [r.id, r]));
       for (const l of data.lines) {
         const info = byId.get(l.poLineId);
@@ -766,6 +847,7 @@ export async function recordGoodsReceipt(
             `over-receipt on line ${l.poLineId}: ${info.prev}+${l.receivedQty} > ordered ${info.ordered}`,
           );
         }
+        assertTrackingRecorded(l, info.tracking);
       }
 
       const seq = await allocateReference(tx, ctx, "goods_receipt", 1);
@@ -782,14 +864,34 @@ export async function recordGoodsReceipt(
         // what the business accepted. Derived here, and checked by the database
         // against received_qty, so the four can never drift apart.
         const accepted = l.receivedQty - l.damagedQty - l.rejectedQty - l.quarantineQty;
+        const grlId = randomUUID();
         await tx.execute(sql`
           insert into public.goods_receipt_line
             (id, org_id, grn_id, po_line_id, ordered_qty, previously_received, received_qty,
              accepted_qty, damaged_qty, rejected_qty, quarantine_qty, sort)
-          values (${randomUUID()}, ${ctx.orgId}, ${id}, ${l.poLineId}, ${info.ordered}, ${info.prev},
+          values (${grlId}, ${ctx.orgId}, ${id}, ${l.poLineId}, ${info.ordered}, ${info.prev},
                   ${l.receivedQty}, ${accepted}, ${l.damagedQty}, ${l.rejectedQty},
                   ${l.quarantineQty}, ${i})
         `);
+        // The labels on the goods, recorded while someone is holding them. They
+        // become ledger identity when the receipt is posted, not before.
+        for (const lot of l.lots ?? []) {
+          await tx.execute(sql`
+            insert into public.goods_receipt_line_lot
+              (org_id, grl_id, lot_code, supplier_lot_code, manufactured_on, expiry_date,
+               qty, disposition)
+            values (${ctx.orgId}, ${grlId}, ${lot.lotCode}, ${lot.supplierLotCode ?? null},
+                    ${lot.manufacturedOn ?? null}::date, ${lot.expiryDate ?? null}::date,
+                    ${lot.qty}, ${lot.disposition})
+          `);
+        }
+        for (const s of l.serials ?? []) {
+          await tx.execute(sql`
+            insert into public.goods_receipt_line_serial
+              (org_id, grl_id, serial_no, lot_code, disposition)
+            values (${ctx.orgId}, ${grlId}, ${s.serialNo}, ${s.lotCode ?? null}, ${s.disposition})
+          `);
+        }
       }
       await reconcilePoStatus(tx, ctx, data.poId);
       return { id, reference, poId: data.poId };

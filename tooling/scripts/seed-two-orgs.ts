@@ -70,6 +70,26 @@ async function seedStockChain(o: Owner, org: string, u: string) {
   return { unit, wh, bin, item };
 }
 
+/** A recorded receipt line, which the tracking-capture tables hang off. */
+async function seedReceiptLine(o: Owner, org: string, u: string): Promise<string> {
+  const sup = randomUUID();
+  const po = randomUUID();
+  const pol = randomUUID();
+  const grn = randomUUID();
+  const grl = randomUUID();
+  await o`insert into public.supplier (id, org_id, name) values (${sup}, ${org}, 'Bleed track Supplier')`;
+  await o`insert into public.purchase_order (id, org_id, reference, supplier_id, status, created_by)
+          values (${po}, ${org}, ${"BLTR-" + randomUUID().slice(0, 8)}, ${sup}, 'approved', ${u})`;
+  await o`insert into public.purchase_order_line (id, org_id, po_id, item_name, qty, unit, unit_cost_minor)
+          values (${pol}, ${org}, ${po}, 'Bleed', 5, 'ea', 1000)`;
+  await o`insert into public.goods_receipt (id, org_id, reference, po_id, status, received_date, created_by)
+          values (${grn}, ${org}, ${"BLTRR-" + randomUUID().slice(0, 8)}, ${po}, 'recorded', '2026-02-13', ${u})`;
+  await o`insert into public.goods_receipt_line
+            (id, org_id, grn_id, po_line_id, ordered_qty, received_qty, accepted_qty)
+          values (${grl}, ${org}, ${grn}, ${pol}, 5, 5, 5)`;
+  return grl;
+}
+
 function filePath(orgId: string): string {
   const attach = randomUUID();
   const fileId = randomUUID();
@@ -368,6 +388,124 @@ export const SEEDERS: Record<string, Seeder> = {
     await o`insert into public.goods_receipt_line
               (org_id, grn_id, po_line_id, ordered_qty, received_qty, accepted_qty)
             values (${org}, ${grn}, ${pol}, 5, 2, 2)`;
+  },
+  stock_lot: async (o, org, u) => {
+    const s = await seedStockChain(o, org, u);
+    await o`insert into public.stock_lot (org_id, item_id, code, expiry_date, created_by)
+            values (${org}, ${s.item}, ${"L" + randomUUID().slice(0, 8)}, '2027-01-01', ${u})`;
+  },
+  stock_serial: async (o, org, u) => {
+    const s = await seedStockChain(o, org, u);
+    await o`insert into public.stock_serial
+              (org_id, item_id, serial_no, status, warehouse_id, location_id, created_by)
+            values (${org}, ${s.item}, ${"SN" + randomUUID().slice(0, 8)}, 'in_stock',
+                    ${s.wh}, ${s.bin}, ${u})`;
+  },
+  stock_movement_lot: async (o, org, u) => {
+    const s = await seedStockChain(o, org, u);
+    const lot = randomUUID();
+    const mv = randomUUID();
+    // The item has to BE lot-tracked, or the deferred trigger rejects the pair.
+    await o`update public.item set tracking = 'lot' where id = ${s.item} and org_id = ${org}`;
+    await o`insert into public.stock_lot (id, org_id, item_id, code, created_by)
+            values (${lot}, ${org}, ${s.item}, ${"L" + randomUUID().slice(0, 8)}, ${u})`;
+    /*
+     * ONE transaction, because the tracking check is a deferred constraint: it
+     * fires at commit and asks whether the movement's lots add up. Two
+     * autocommitted statements commit the movement alone, with no lots yet, and
+     * it refuses — correctly.
+     */
+    await o.begin(async (tx) => {
+      await tx`insert into public.stock_movement
+                 (id, org_id, item_id, warehouse_id, location_id, movement_type, qty_delta,
+                  unit_id, idempotency_key, actor_user_id)
+               values (${mv}, ${org}, ${s.item}, ${s.wh}, ${s.bin}, 'adjustment_increase', 3,
+                       ${s.unit}, ${"bleed-" + randomUUID()}, ${u})`;
+      await tx`insert into public.stock_movement_lot (org_id, movement_id, lot_id, qty)
+               values (${org}, ${mv}, ${lot}, 3)`;
+    });
+  },
+  stock_movement_serial: async (o, org, u) => {
+    const s = await seedStockChain(o, org, u);
+    const serial = randomUUID();
+    const mv = randomUUID();
+    await o`update public.item set tracking = 'serial' where id = ${s.item} and org_id = ${org}`;
+    await o`insert into public.stock_serial
+              (id, org_id, item_id, serial_no, status, warehouse_id, location_id, created_by)
+            values (${serial}, ${org}, ${s.item}, ${"SN" + randomUUID().slice(0, 8)}, 'in_stock',
+                    ${s.wh}, ${s.bin}, ${u})`;
+    await o.begin(async (tx) => {
+      await tx`insert into public.stock_movement
+                 (id, org_id, item_id, warehouse_id, location_id, movement_type, qty_delta,
+                  unit_id, idempotency_key, actor_user_id)
+               values (${mv}, ${org}, ${s.item}, ${s.wh}, ${s.bin}, 'adjustment_increase', 1,
+                       ${s.unit}, ${"bleed-" + randomUUID()}, ${u})`;
+      await tx`insert into public.stock_movement_serial (org_id, movement_id, serial_id)
+               values (${org}, ${mv}, ${serial})`;
+    });
+  },
+  stock_lot_balance: async (o, org, u) => {
+    const s = await seedStockChain(o, org, u);
+    const lot = randomUUID();
+    await o`insert into public.stock_lot (id, org_id, item_id, code, created_by)
+            values (${lot}, ${org}, ${s.item}, ${"L" + randomUUID().slice(0, 8)}, ${u})`;
+    await o`insert into public.stock_lot_balance
+              (org_id, item_id, warehouse_id, location_id, lot_id, on_hand)
+            values (${org}, ${s.item}, ${s.wh}, ${s.bin}, ${lot}, 4)`;
+  },
+  goods_receipt_line_lot: async (o, org, u) => {
+    const grl = await seedReceiptLine(o, org, u);
+    await o`insert into public.goods_receipt_line_lot (org_id, grl_id, lot_code, qty)
+            values (${org}, ${grl}, ${"L" + randomUUID().slice(0, 8)}, 2)`;
+  },
+  goods_receipt_line_serial: async (o, org, u) => {
+    const grl = await seedReceiptLine(o, org, u);
+    await o`insert into public.goods_receipt_line_serial (org_id, grl_id, serial_no)
+            values (${org}, ${grl}, ${"SN" + randomUUID().slice(0, 8)})`;
+  },
+  bom: async (o, org, u) => {
+    const s = await seedStockChain(o, org, u);
+    await o`insert into public.bom (org_id, item_id, version, unit_id, created_by)
+            values (${org}, ${s.item}, 1, ${s.unit}, ${u})`;
+  },
+  bom_line: async (o, org, u) => {
+    const s = await seedStockChain(o, org, u);
+    const component = await seedStockChain(o, org, u);
+    const bom = randomUUID();
+    await o`insert into public.bom (id, org_id, item_id, version, unit_id, created_by)
+            values (${bom}, ${org}, ${s.item}, 1, ${s.unit}, ${u})`;
+    await o`insert into public.bom_line
+              (org_id, bom_id, component_item_id, qty_per, unit_id)
+            values (${org}, ${bom}, ${component.item}, 2, ${component.unit})`;
+  },
+  assembly_order: async (o, org, u) => {
+    const s = await seedStockChain(o, org, u);
+    await o`insert into public.assembly_order
+              (org_id, reference, direction, item_id, qty, unit_id, warehouse_id, created_by)
+            values (${org}, ${"ASM-" + randomUUID().slice(0, 8)}, 'assemble', ${s.item}, 1,
+                    ${s.unit}, ${s.wh}, ${u})`;
+  },
+  assembly_order_serial: async (o, org, u) => {
+    const s = await seedStockChain(o, org, u);
+    const order = randomUUID();
+    await o`insert into public.assembly_order
+              (id, org_id, reference, direction, item_id, qty, unit_id, warehouse_id, created_by)
+            values (${order}, ${org}, ${"ASM-" + randomUUID().slice(0, 8)}, 'assemble', ${s.item},
+                    1, ${s.unit}, ${s.wh}, ${u})`;
+    await o`insert into public.assembly_order_serial (org_id, order_id, serial_no)
+            values (${org}, ${order}, ${"SN" + randomUUID().slice(0, 8)})`;
+  },
+  assembly_order_line: async (o, org, u) => {
+    const s = await seedStockChain(o, org, u);
+    const component = await seedStockChain(o, org, u);
+    const order = randomUUID();
+    await o`insert into public.assembly_order
+              (id, org_id, reference, direction, item_id, qty, unit_id, warehouse_id, created_by)
+            values (${order}, ${org}, ${"ASM-" + randomUUID().slice(0, 8)}, 'assemble', ${s.item},
+                    1, ${s.unit}, ${s.wh}, ${u})`;
+    await o`insert into public.assembly_order_line
+              (org_id, order_id, component_item_id, qty, unit_id)
+            values (${org}, ${order}, ${component.item}, 2, ${component.unit})`;
   },
   supplier_return: async (o, org, u) => {
     const sup = randomUUID();

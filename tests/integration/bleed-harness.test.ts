@@ -61,7 +61,9 @@ beforeAll(async () => {
   // scoping — so a regression dropping org_id from a user-keyed policy is caught.
   await seedOrg(owner, orgA, userA, userA);
   await seedOrg(owner, orgB, userB, userA);
-}, 120_000);
+  // The fixture grows with the schema — it seeds every org-scoped table twice —
+  // so this budget is for round trips, not for anything the test is proving.
+}, 600_000);
 
 /** Order org-scoped tables children-first from the FK graph (pg_constraint). */
 async function fkTopologicalOrder(tables: string[]): Promise<string[]> {

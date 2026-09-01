@@ -36,6 +36,52 @@ export class NotStockableError extends Error {
 const STOCKABLE = new Set(["inventory", "asset", "kit", "manufactured"]);
 
 /**
+ * Kinds of location a TRANSFER may move stock out of.
+ *
+ * Wider than ordinary issuing on purpose: releasing goods from quarantine,
+ * moving damaged stock to a returns area and emptying a receiving bay are all
+ * transfers, and all of them start somewhere ordinary issuing must never touch.
+ * The transfer document is the authorization; the destination is where the
+ * goods become issuable again, or not.
+ */
+const TRANSFERABLE_KINDS = [
+  "storage",
+  "receiving",
+  "dispatch",
+  "quarantine",
+  "damaged",
+  "returns",
+  "transit",
+] as const;
+
+/**
+ * What this item is worth on average, anywhere it is held.
+ *
+ * The fallback when a count finds stock in a bin that has never held any: the
+ * location has no average of its own, but the organization plainly knows what
+ * the item costs. Null when it has never been costed at all, and then the
+ * correction stays uncosted rather than guessing.
+ */
+async function itemAverageCost(tx: TenantTx, ctx: Ctx, itemId: string): Promise<number | null> {
+  const rows = (await tx.execute(sql`
+    select round(sum(avg_unit_cost_minor * on_hand) / nullif(sum(on_hand), 0))::text as avg
+    from public.stock_balance
+    where org_id = ${ctx.orgId} and item_id = ${itemId}
+      and avg_unit_cost_minor is not null and on_hand > 0
+  `)) as unknown as Array<{ avg: string | null }>;
+  const avg = rows[0]?.avg;
+  return avg === null || avg === undefined ? null : Number(avg);
+}
+
+/** The organization's own money, for movements that create no new price. */
+async function baseCurrency(tx: TenantTx, ctx: Ctx): Promise<string> {
+  const rows = (await tx.execute(sql`
+    select base_currency from public.org where id = ${ctx.orgId}
+  `)) as unknown as Array<{ base_currency: string }>;
+  return rows[0]?.base_currency ?? "AED";
+}
+
+/**
  * What happened to what arrived.
  *
  * Rejected quantity is deliberately absent: it was refused at the door, so the
@@ -52,6 +98,7 @@ type ReceiptTarget = {
   unitCostMinor: number | null;
   currency: string | null;
   exchangeRate: number | null;
+  tracking: "none" | "lot" | "serial";
   /** One entry per disposition that actually has a quantity. */
   legs: Array<{ disposition: ReceiptDisposition; qty: number }>;
 };
@@ -93,7 +140,7 @@ async function resolveReceiptTarget(
            po.exchange_rate::text as exchange_rate,
            po.status as po_status,
            pol.superseded_at,
-           i.item_type, i.base_unit_id::text as base_unit_id
+           i.item_type, i.base_unit_id::text as base_unit_id, i.tracking
     from public.goods_receipt_line grl
     join public.purchase_order_line pol
       on pol.id = grl.po_line_id and pol.org_id = grl.org_id
@@ -149,8 +196,188 @@ async function resolveReceiptTarget(
     unitCostMinor: r.unit_cost_minor === null ? null : Number(r.unit_cost_minor),
     currency: r.currency ?? null,
     exchangeRate: r.exchange_rate === null ? null : Number(r.exchange_rate),
+    tracking: r.tracking === "lot" || r.tracking === "serial" ? r.tracking : "none",
     legs,
   };
+}
+
+/**
+ * Turn what the delivery note said into ledger identity.
+ *
+ * The receipt recorded "lot 24B, 40 units, expires April". This is where that
+ * becomes a `stock_lot` the ledger can reference — at POSTING, so a receipt that
+ * is never posted, or is cancelled, leaves no phantom batch in the catalogue.
+ *
+ * A lot code that already exists is reused rather than duplicated: the second
+ * delivery of lot 24B is the same batch, and giving it a second row would split
+ * its history and its expiry.
+ */
+async function identitiesForReceipt(
+  tx: TenantTx,
+  ctx: Ctx,
+  args: {
+    receiptLineId: string;
+    itemId: string;
+    tracking: "none" | "lot" | "serial";
+    disposition: ReceiptDisposition;
+    warehouseId: string;
+    locationId: string;
+  },
+): Promise<{ lots: Array<{ lotId: string; qty: number }> | null; serialIds: string[] | null }> {
+  if (args.tracking === "none") return { lots: null, serialIds: null };
+
+  if (args.tracking === "lot") {
+    const recorded = (await tx.execute(sql`
+      select lot_code, supplier_lot_code, manufactured_on, expiry_date, qty::text as qty
+      from public.goods_receipt_line_lot
+      where org_id = ${ctx.orgId} and grl_id = ${args.receiptLineId}
+        and disposition = ${args.disposition}
+      order by lot_code
+      limit 200
+    `)) as unknown as Array<Record<string, string | null>>;
+    if (recorded.length === 0) {
+      throw new NotStockableError(
+        "this item is lot-tracked but the receipt recorded no batch numbers",
+      );
+    }
+
+    const lots: Array<{ lotId: string; qty: number }> = [];
+    for (const row of recorded) {
+      await tx.execute(sql`
+        insert into public.stock_lot
+          (org_id, item_id, code, supplier_lot_code, manufactured_on, expiry_date, created_by)
+        values (${ctx.orgId}, ${args.itemId}, ${row.lot_code}, ${row.supplier_lot_code},
+                ${row.manufactured_on}::date, ${row.expiry_date}::date, ${ctx.userId})
+        on conflict (org_id, item_id, code) do nothing
+      `);
+      const found = (await tx.execute(sql`
+        select id::text as id, expiry_date::text as expiry_date, status
+        from public.stock_lot
+        where org_id = ${ctx.orgId} and item_id = ${args.itemId} and code = ${row.lot_code}
+        for update
+      `)) as unknown as Array<{ id: string; expiry_date: string | null; status: string }>;
+      if (!found[0]) throw new StockMovementConflictError(`could not open batch ${row.lot_code}`);
+      const lot = found[0];
+
+      /*
+       * A second delivery of the same batch may carry a different expiry — and
+       * that is a contradiction, not an update. Two deliveries claiming
+       * different dates for one batch means the batch numbers collide or the
+       * label is wrong, and quietly keeping the first date would put stock on
+       * the shelf that expires earlier than the system believes.
+       */
+      if (row.expiry_date && lot.expiry_date && row.expiry_date !== lot.expiry_date) {
+        throw new StockMovementConflictError(
+          `batch ${row.lot_code} already expires ${lot.expiry_date}, but this delivery says ${row.expiry_date}`,
+        );
+      }
+      if (row.expiry_date && !lot.expiry_date) {
+        // The batch existed without a date and this delivery supplies one.
+        await tx.execute(sql`
+          update public.stock_lot
+          set expiry_date = ${row.expiry_date}::date,
+              manufactured_on = coalesce(manufactured_on, ${row.manufactured_on}::date),
+              updated_at = now()
+          where id = ${lot.id} and org_id = ${ctx.orgId}
+        `);
+      }
+
+      /*
+       * A batch that had run out is receivable again: the same code arriving a
+       * second time is a second delivery of that batch. Quarantined, recalled or
+       * expired is different — somebody decided those, and more stock arriving
+       * does not undo the decision.
+       */
+      if (lot.status !== "active" && lot.status !== "depleted") {
+        throw new StockMovementConflictError(
+          `batch ${row.lot_code} is ${lot.status}; receiving into it needs that decision reversed first`,
+        );
+      }
+      await tx.execute(sql`
+        update public.stock_lot set status = 'active', updated_at = now()
+        where id = ${lot.id} and org_id = ${ctx.orgId} and status = 'depleted'
+      `);
+      lots.push({ lotId: lot.id, qty: Number(row.qty) });
+    }
+    return { lots, serialIds: null };
+  }
+
+  const recorded = (await tx.execute(sql`
+    select s.serial_no, s.lot_code
+    from public.goods_receipt_line_serial s
+    where s.org_id = ${ctx.orgId} and s.grl_id = ${args.receiptLineId}
+      and s.disposition = ${args.disposition}
+    order by s.serial_no
+    limit 500
+  `)) as unknown as Array<{ serial_no: string; lot_code: string | null }>;
+  if (recorded.length === 0) {
+    throw new NotStockableError(
+      "this item is serialised but the receipt recorded no serial numbers",
+    );
+  }
+
+  /*
+   * A serialised unit may also carry a batch, and the delivery note says so.
+   *
+   * Linking it is what lets a recall reach the units: without it, quarantining
+   * the batch leaves every serialised unit from that batch still issuable, and
+   * the expiry check on a serial's lot has nothing to check.
+   */
+  const lotIdByCode = new Map<string, string>();
+  for (const code of new Set(recorded.map((r) => r.lot_code).filter(Boolean) as string[])) {
+    await tx.execute(sql`
+      insert into public.stock_lot (org_id, item_id, code, created_by)
+      values (${ctx.orgId}, ${args.itemId}, ${code}, ${ctx.userId})
+      on conflict (org_id, item_id, code) do nothing
+    `);
+    const found = (await tx.execute(sql`
+      select id::text as id from public.stock_lot
+      where org_id = ${ctx.orgId} and item_id = ${args.itemId} and code = ${code}
+    `)) as unknown as Array<{ id: string }>;
+    if (found[0]) lotIdByCode.set(code, found[0].id);
+  }
+
+  const serialIds: string[] = [];
+  for (const row of recorded) {
+    const lotId = row.lot_code ? (lotIdByCode.get(row.lot_code) ?? null) : null;
+    const existing = (await tx.execute(sql`
+      select id::text as id, status from public.stock_serial
+      where org_id = ${ctx.orgId} and item_id = ${args.itemId} and serial_no = ${row.serial_no}
+      for update
+    `)) as unknown as Array<{ id: string; status: string }>;
+    if (existing[0]) {
+      /*
+       * A unit cannot arrive while it is already here.
+       *
+       * Either the same delivery was recorded twice or two suppliers used the
+       * same number, and both are things a storekeeper must resolve rather than
+       * have the system pick a winner.
+       */
+      if (existing[0].status === "in_stock" || existing[0].status === "reserved") {
+        throw new StockMovementConflictError(
+          `unit ${row.serial_no} is already in stock, so it cannot be received again`,
+        );
+      }
+      // A unit coming back belongs to whatever batch this delivery says it does.
+      if (lotId) {
+        await tx.execute(sql`
+          update public.stock_serial set lot_id = ${lotId}, updated_at = now()
+          where id = ${existing[0].id} and org_id = ${ctx.orgId}
+        `);
+      }
+      serialIds.push(existing[0].id);
+      continue;
+    }
+    const created = (await tx.execute(sql`
+      insert into public.stock_serial
+        (org_id, item_id, serial_no, lot_id, status, warehouse_id, location_id, created_by)
+      values (${ctx.orgId}, ${args.itemId}, ${row.serial_no}, ${lotId}, 'in_stock',
+              ${args.warehouseId}, ${args.locationId}, ${ctx.userId})
+      returning id::text as id
+    `)) as unknown as Array<{ id: string }>;
+    serialIds.push(created[0]!.id);
+  }
+  return { lots: null, serialIds };
 }
 
 export type ReceiptPostResult = {
@@ -255,6 +482,52 @@ export async function postGoodsReceiptToStock(
             leg.disposition === "accepted"
               ? accepted
               : await dispositionLocation(tx, ctx, leg.disposition, accepted.warehouseId);
+          const idempotencyKey = `grl:${line.id}:${leg.disposition}`;
+
+          /*
+           * One poster at a time for this line and disposition.
+           *
+           * The check below is a read, and two concurrent posts of the same
+           * receipt both pass it — then both try to register the same serial
+           * numbers, and the loser surfaces a raw unique-constraint violation
+           * instead of the quiet no-op a retry is supposed to be.
+           */
+          await tx.execute(sql`
+            select pg_advisory_xact_lock(hashtextextended(${`${ctx.orgId}:${idempotencyKey}`}, 0))
+          `);
+
+          /*
+           * Asked before any identity is created.
+           *
+           * Creating a batch or registering a serial is a WRITE, and postMovementIn
+           * only discovers a duplicate after those writes would already have
+           * happened. On a retry that means a serial found "already in stock" —
+           * which is an error the first time and a false alarm the second.
+           */
+          const done = (await tx.execute(sql`
+            select id::text as id from public.stock_movement
+            where org_id = ${ctx.orgId} and idempotency_key = ${idempotencyKey}
+          `)) as unknown as Array<{ id: string }>;
+          if (done[0]) {
+            booked.push({
+              disposition: leg.disposition,
+              qty: leg.qty,
+              locationId: place.locationId,
+              movementId: done[0].id,
+              posted: false,
+            });
+            continue;
+          }
+
+          const identity = await identitiesForReceipt(tx, ctx, {
+            receiptLineId: line.id,
+            itemId: resolved.itemId,
+            tracking: resolved.tracking,
+            disposition: leg.disposition,
+            warehouseId: place.warehouseId,
+            locationId: place.locationId,
+          });
+
           const posted = await postMovementIn(tx, ctx, {
             itemId: resolved.itemId,
             warehouseId: place.warehouseId,
@@ -267,9 +540,11 @@ export async function postGoodsReceiptToStock(
             exchangeRate: resolved.exchangeRate,
             sourceType: "goods_receipt_line",
             sourceId: line.id,
+            lots: identity.lots,
+            serialIds: identity.serialIds,
             // Derived from the line and the disposition, so a retry recomputes
             // both keys and posts nothing.
-            idempotencyKey: `grl:${line.id}:${leg.disposition}`,
+            idempotencyKey,
           });
           booked.push({
             disposition: leg.disposition,
@@ -538,10 +813,20 @@ export async function reserveStock(
     qty: number;
     forJobId?: string | null;
     expiresAt?: string | null;
+    /**
+     * The caller's own key for this request.
+     *
+     * Without one, every call mints a fresh reservation id and therefore a fresh
+     * idempotency key, so a double-clicked "reserve" holds the stock twice and
+     * nothing anywhere can tell. Supplying a key — a request id, a form
+     * submission id — makes the second attempt a no-op.
+     */
+    idempotencyKey?: string | null;
   },
 ): Promise<{ reservationId: string; movement: PostedMovement }> {
   assertCan(archetype, "inventory.issue");
   const reservationId = randomUUID();
+  const key = input.idempotencyKey ? `resv:${input.idempotencyKey}` : `resv:${reservationId}`;
 
   return command(
     ctx,
@@ -554,6 +839,38 @@ export async function reserveStock(
       },
     },
     async (tx) => {
+      /*
+       * A caller-supplied key means the same request twice reserves once.
+       *
+       * Checked before the reservation row is written, because writing it and
+       * then discovering the movement was a duplicate would leave a reservation
+       * holding nothing — visible in every list, backed by no promise.
+       */
+      if (input.idempotencyKey) {
+        const prior = (await tx.execute(sql`
+          select m.id::text as id, r.id::text as reservation_id
+          from public.stock_movement m
+          left join public.stock_reservation r
+            on r.org_id = m.org_id and r.item_id = m.item_id
+           and r.location_id = m.location_id and r.qty = m.reserved_delta
+          where m.org_id = ${ctx.orgId} and m.idempotency_key = ${key}
+          limit 1
+        `)) as unknown as Array<{ id: string; reservation_id: string | null }>;
+        if (prior[0]) {
+          return {
+            reservationId: prior[0].reservation_id ?? reservationId,
+            movement: {
+              id: prior[0].id,
+              posted: false,
+              onHand: "0",
+              reserved: "0",
+              costTotalMinor: null,
+              layerValueMinor: null,
+            },
+          };
+        }
+      }
+
       await tx.execute(sql`
         insert into public.stock_reservation
           (id, org_id, item_id, warehouse_id, location_id, unit_id, qty, for_job_id,
@@ -570,7 +887,7 @@ export async function reserveStock(
         qtyDelta: 0,
         reservedDelta: input.qty,
         unitId: input.unitId,
-        idempotencyKey: `resv:${reservationId}`,
+        idempotencyKey: key,
       });
       return { reservationId, movement };
     },
@@ -664,30 +981,64 @@ export async function dispatchTransfer(
         order by sort limit 500
       `)) as unknown as Array<Record<string, string>>;
       if (lines.length === 0) throw new StockMovementConflictError("the transfer has no lines");
+      const currency = await baseCurrency(tx, ctx);
 
       for (const line of lines) {
-        await postMovementIn(tx, ctx, {
+        /*
+         * Out through ordinary allocation, so the batches and units that leave
+         * are chosen by the same rules as any other issue — and so a tracked
+         * item can be transferred at all, which it could not when both legs were
+         * posted blind.
+         *
+         * Transfers may draw from ANY kind of location, not just storage:
+         * releasing goods from quarantine to a picking bin is a transfer, and
+         * so is moving damaged stock to a returns area. That is named here
+         * rather than assumed, because ordinary issuing must never do it.
+         */
+        const { legs, movements } = await allocateAndIssueIn(tx, ctx, {
           itemId: line.item_id!,
-          warehouseId: t.fw!,
-          locationId: t.fl!,
-          movementType: "transfer_out",
-          qtyDelta: -Number(line.qty),
           unitId: line.unit_id!,
+          qty: Number(line.qty),
+          movementType: "transfer_out",
+          warehouseId: t.fw,
+          locationIds: [t.fl!],
+          allowKinds: TRANSFERABLE_KINDS,
           sourceType: "stock_transfer",
           sourceId: transferId,
           idempotencyKey: `xfer-out:${line.id}`,
         });
-        await postMovementIn(tx, ctx, {
-          itemId: line.item_id!,
-          warehouseId: t.tw!,
-          locationId: t.tl!,
-          movementType: "transfer_in",
-          qtyDelta: Number(line.qty),
-          unitId: line.unit_id!,
-          sourceType: "stock_transfer",
-          sourceId: transferId,
-          idempotencyKey: `xfer-in:${line.id}`,
-        });
+
+        /*
+         * In at exactly the value that went out.
+         *
+         * Moving goods between two of your own bins changes nothing about what
+         * they cost. Posting the arrival with no cost — which is what happened
+         * before — drew the value out of the source layers and gave the
+         * destination quantity with nothing behind it, so every transfer quietly
+         * destroyed the value of what it moved.
+         */
+        for (const [i, leg] of legs.entries()) {
+          const out = movements[i]!;
+          await postMovementIn(tx, ctx, {
+            itemId: line.item_id!,
+            warehouseId: t.tw!,
+            locationId: t.tl!,
+            movementType: "transfer_in",
+            qtyDelta: leg.qty,
+            unitId: line.unit_id!,
+            // What the SOURCE layers gave up, not what the movement was charged:
+            // under weighted average those differ, and crediting the charge would
+            // invent or destroy the difference on every transfer.
+            inboundValueMinor: out.layerValueMinor,
+            currency,
+            exchangeRate: 1,
+            lots: leg.lots ?? null,
+            serialIds: leg.serialIds ?? null,
+            sourceType: "stock_transfer",
+            sourceId: transferId,
+            idempotencyKey: `xfer-in:${line.id}@${leg.locationId}`,
+          });
+        }
       }
       return { moved: lines.length };
     },
@@ -739,24 +1090,130 @@ export async function postStockCount(
         throw new StockMovementConflictError("a count must be reviewed before it is posted");
       }
 
-      const lines = (await tx.execute(sql`
-        select scl.id::text as id, scl.item_id::text as item_id,
-               scl.location_id::text as location_id, scl.unit_id::text as unit_id,
-               scl.counted_qty::text as counted_qty, scl.variance_reason,
-               coalesce(sb.on_hand, 0)::text as on_hand
-        from public.stock_count_line scl
-        left join public.stock_balance sb
-          on sb.org_id = scl.org_id and sb.item_id = scl.item_id
-         and sb.location_id = scl.location_id
-        where scl.count_id = ${countId} and scl.org_id = ${ctx.orgId}
-          and scl.counted_qty is not null
-        order by scl.sort limit 1000
-      `)) as unknown as Array<Record<string, string | null>>;
+      /*
+       * Every line, in pages.
+       *
+       * A full-warehouse count runs to thousands of lines. Reading the first
+       * thousand and then marking the whole count posted would drop the rest
+       * silently — their variances never corrected, their missing reasons never
+       * challenged — and the count would look complete.
+       */
+      const lines: Array<Record<string, string | null>> = [];
+      const PAGE = 500;
+      for (let offset = 0; ; offset += PAGE) {
+        const page = (await tx.execute(sql`
+          select scl.id::text as id, scl.item_id::text as item_id,
+                 scl.location_id::text as location_id, scl.unit_id::text as unit_id,
+                 scl.counted_qty::text as counted_qty, scl.variance_reason,
+                 scl.lot_id::text as lot_id, scl.serial_id::text as serial_id,
+                 i.tracking,
+                 coalesce(
+                   case
+                     when scl.serial_id is not null then
+                       (select case when s.status in ('in_stock', 'reserved')
+                                     and s.location_id = scl.location_id
+                                   then 1 else 0 end
+                        from public.stock_serial s
+                        where s.id = scl.serial_id and s.org_id = scl.org_id)
+                     when scl.lot_id is not null then
+                       (select lb.on_hand from public.stock_lot_balance lb
+                        where lb.org_id = scl.org_id and lb.item_id = scl.item_id
+                          and lb.location_id = scl.location_id and lb.lot_id = scl.lot_id)
+                     else sb.on_hand
+                   end, 0)::text as on_hand
+          from public.stock_count_line scl
+          join public.item i on i.id = scl.item_id and i.org_id = scl.org_id
+          left join public.stock_balance sb
+            on sb.org_id = scl.org_id and sb.item_id = scl.item_id
+           and sb.location_id = scl.location_id
+          where scl.count_id = ${countId} and scl.org_id = ${ctx.orgId}
+            and scl.counted_qty is not null
+          order by scl.sort, scl.id
+          limit ${PAGE} offset ${offset}
+        `)) as unknown as Array<Record<string, string | null>>;
+        lines.push(...page);
+        if (page.length < PAGE) break;
+      }
 
       let corrections = 0;
       let unchanged = 0;
       for (const line of lines) {
-        const delta = Number(line.counted_qty) - Number(line.on_hand);
+        /*
+         * Re-read what the ledger says, holding the row.
+         *
+         * The page above was an unlocked bulk read taken before any of this
+         * posted. A movement committed in between would make the delta stale,
+         * and a correction computed from a stale balance does not correct — it
+         * overshoots by exactly whatever moved. Locking here means the delta and
+         * the posting see the same number.
+         */
+        /*
+         * The identity rules come FIRST, before the delta shortcut.
+         *
+         * A batch-tracked line naming no batch, whose counted quantity happens
+         * to equal the location's total, is exactly the "40 of which batch?"
+         * case this refuses — and putting the check after `delta === 0` let it
+         * through whenever the count agreed with the books, which is most of the
+         * time.
+         */
+        const tracking = line.tracking ?? "none";
+        if (tracking === "lot" && !line.lot_id) {
+          throw new StockMovementConflictError(
+            "this item is counted by batch: every count line must name the batch it counted",
+          );
+        }
+        if (tracking === "serial" && !line.serial_id) {
+          throw new StockMovementConflictError(
+            "this item is counted by unit: every count line must name the unit it counted",
+          );
+        }
+        if (tracking === "none" && (line.lot_id || line.serial_id)) {
+          throw new StockMovementConflictError(
+            "this item is not tracked by batch or unit, so a count line cannot name one",
+          );
+        }
+
+        const held = line.serial_id
+          ? ((await tx.execute(sql`
+              select case when status in ('in_stock', 'reserved') and location_id = ${line.location_id}
+                          then 1 else 0 end::text as on_hand,
+                     case when status in ('in_stock', 'reserved')
+                               and location_id is distinct from ${line.location_id}
+                          then 1 else 0 end::text as elsewhere
+              from public.stock_serial
+              where id = ${line.serial_id} and org_id = ${ctx.orgId}
+              for update
+            `)) as unknown as Array<{ on_hand: string; elsewhere?: string }>)
+          : line.lot_id
+            ? ((await tx.execute(sql`
+                select on_hand::text as on_hand from public.stock_lot_balance
+                where org_id = ${ctx.orgId} and item_id = ${line.item_id}
+                  and location_id = ${line.location_id} and lot_id = ${line.lot_id}
+                for update
+              `)) as unknown as Array<{ on_hand: string; elsewhere?: string }>)
+            : ((await tx.execute(sql`
+                select on_hand::text as on_hand from public.stock_balance
+                where org_id = ${ctx.orgId} and item_id = ${line.item_id}
+                  and location_id = ${line.location_id}
+                for update
+              `)) as unknown as Array<{ on_hand: string; elsewhere?: string }>);
+        /*
+         * A unit found here that the books place somewhere ELSE is a misplaced
+         * unit, not a found one.
+         *
+         * Posting +1 where it was counted, with no -1 where it supposedly is,
+         * would put one physical unit on the books twice — and reconcile would
+         * report no drift, because the phantom is in the ledger itself. Moving
+         * it is a transfer, which is a different document with a different
+         * authorization.
+         */
+        if (line.serial_id && Number(held[0]?.elsewhere ?? 0) === 1) {
+          throw new StockMovementConflictError(
+            "that unit is recorded in another location: move it with a transfer, not a count",
+          );
+        }
+
+        const delta = Number(line.counted_qty) - Number(held[0]?.on_hand ?? 0);
         if (delta === 0) {
           unchanged++;
           continue;
@@ -766,6 +1223,36 @@ export async function postStockCount(
             "every variance needs a reason before the count can be posted",
           );
         }
+        if (tracking === "serial" && Math.abs(delta) !== 1) {
+          throw new StockMovementConflictError(
+            "a serialised unit is either there or it is not; a count line records one unit",
+          );
+        }
+
+        /*
+         * Stock a count FINDS has to be worth something.
+         *
+         * The goods are real and the business owns them, so adding quantity with
+         * no cost behind it means they are issued later for nothing. Valued at
+         * what the organization already believes this item is worth in this
+         * place — the running average — because a count discovers quantity, not
+         * a price. Where there is no average yet, the correction stays uncosted
+         * rather than inventing one.
+         */
+        let foundAtCost: number | null = null;
+        if (delta > 0) {
+          const avg = (await tx.execute(sql`
+            select avg_unit_cost_minor from public.stock_balance
+            where org_id = ${ctx.orgId} and item_id = ${line.item_id}
+              and location_id = ${line.location_id}
+          `)) as unknown as Array<{ avg_unit_cost_minor: string | null }>;
+          const here = avg[0]?.avg_unit_cost_minor;
+          foundAtCost =
+            here === null || here === undefined
+              ? await itemAverageCost(tx, ctx, line.item_id!)
+              : Number(here);
+        }
+
         await postMovementIn(tx, ctx, {
           itemId: line.item_id!,
           warehouseId: c.warehouse_id!,
@@ -773,6 +1260,11 @@ export async function postStockCount(
           movementType: "count_correction",
           qtyDelta: delta,
           unitId: line.unit_id!,
+          unitCostMinor: foundAtCost,
+          currency: foundAtCost === null ? null : await baseCurrency(tx, ctx),
+          exchangeRate: foundAtCost === null ? null : 1,
+          lots: line.lot_id ? [{ lotId: line.lot_id, qty: Math.abs(delta) }] : null,
+          serialIds: line.serial_id ? [line.serial_id] : null,
           sourceType: "stock_count_line",
           sourceId: line.id!,
           idempotencyKey: `count:${line.id}`,
@@ -889,6 +1381,22 @@ export async function sendSupplierReturn(
         const disposition = line.disposition as ReceiptDisposition;
         const place =
           disposition === "accepted" ? null : await dispositionLocation(tx, ctx, disposition);
+
+        /*
+         * Credit the price this delivery arrived at.
+         *
+         * The receipt posted one movement per disposition under a key derived
+         * from the line, so the layer this return should give back is findable
+         * exactly. Without naming it the return would draw the warehouse's
+         * oldest open layer, which is a different shipment at a different price
+         * — and the doc comment above would be a story rather than a fact.
+         */
+        const receiptMovement = (await tx.execute(sql`
+          select id::text as id from public.stock_movement
+          where org_id = ${ctx.orgId}
+            and idempotency_key = ${`grl:${line.grl_id}:${disposition}`}
+        `)) as unknown as Array<{ id: string }>;
+
         await allocateAndIssueIn(tx, ctx, {
           itemId: line.item_id!,
           unitId: line.unit_id!,
@@ -896,6 +1404,7 @@ export async function sendSupplierReturn(
           movementType: "supplier_return",
           locationIds: place ? [place.locationId] : null,
           allowKinds: place ? [disposition] : null,
+          preferLayersFromMovementId: receiptMovement[0]?.id ?? null,
           sourceType: "supplier_return_line",
           sourceId: line.id!,
           idempotencyKey: `sret:${line.id}`,
