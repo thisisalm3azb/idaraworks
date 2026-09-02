@@ -1,6 +1,6 @@
 # H25 — IdaraWorks Management Studio: completion report
 
-Status: **code complete on `verify/h25`; production deployment steps recorded below with their evidence** (sections marked PENDING are filled as each step lands).
+Status: **H25 shipped and live** on www.idaraworks.com at code commit `04c1093` with `FEATURE_MANAGEMENT_STUDIO=1`, verified on production by a marked smoke (28 checks) and a marked UI walk (EN, Arabic, mobile), with zero residue. Later commits on `main` are documentation and tooling only.
 
 ## 1. What was built (one living model, many perspectives)
 
@@ -43,26 +43,30 @@ ADR-1..12 (`docs/H25-TRUTH-MAP.md`) plus ADR-13..18 added while building: Realti
 
 ## 5. Evidence
 
-- Browser (test project, dev preview): canvas render, drag persisted (`studio.node.move` audit), inspector save routed to the real task (`task.update`), board move through the task lifecycle (`task.status` → in_progress), Gantt drag moved the real start date and re-computed the critical chain, all five first projections agreed; mobile 375 px chrome and canvas; screenshots captured in-session. Later projections (roadmap, calendar, workload, risk matrix, strategy, indicators, 3D, scenario panel, review panel) were verified by type-check, lint, the integration suites above and the production build; the Browser pane was hidden for the rest of the session, so their interactive verification is PENDING (production smoke plus a browser pass once the pane is available).
+- Browser (test project, dev preview): canvas render, drag persisted (`studio.node.move` audit), inspector save routed to the real task (`task.update`), board move through the task lifecycle (`task.status` → in_progress), Gantt drag moved the real start date and re-computed the critical chain, all five first projections agreed; mobile 375 px chrome and canvas; screenshots captured in-session. Later projections (roadmap, calendar, workload, risk matrix, strategy, indicators, 3D, scenario panel, review panel) were verified by type-check, lint, the integration suites above and the production build; the Browser pane was hidden for the rest of the session, so their verification came from the headless walks below (dev preview and production).
 - Headless walk (Playwright against the dev preview on the test project, signing in through the app's token-hash route): screenshots of every projection (canvas, board, gantt, network, roadmap, calendar, workload, risk matrix, 3D plan city on WebGL 2, strategy, indicators, table), the scenarios and review aside tabs, the command palette finding an element, the registers and portfolio pages, Arabic, and the 375 px mobile viewport for canvas/board/workload/indicators; each PNG was inspected. All projections agreed on dates, the critical chain and Rigging's one day of float.
 - Found by that walk and fixed: the Content Security Policy named only the https Supabase origin, so the Realtime websocket (wss://…supabase.co) was refused and presence never connected; `connect-src` now includes the ws(s) form of the same host (next.config.ts). Also two non-existent copy keys on the plans page.
+- Production UI walk (marked fixture on the live app, wiped afterwards, residue 0, counts intact): canvas, gantt, network, workload, risk matrix, 3D plan city (WebGL 2), indicators, portfolio, Arabic (`dir=rtl lang=ar`) and mobile canvas/board rendered with no console errors; PNGs inspected.
 - Code-split proof: three.js lives in one 799 KB chunk that the plan page's client manifest (12 chunks) does not reference; the 3D module loads only when the 3D view opens.
 - Truthfulness: the trailing-milestone finish bug, the scenario overlay gap (only start/due/duration were overlaid) and the stale-form overwrite were each found by a test or a browser check and fixed with a regression test.
 
-## 6. Deployment (H25R) — PENDING until each step lands
+## 6. Deployment (H25R) — complete, with evidence per step
 
 1. CI green on `verify/h25` at commit `04c1093` (run 33607750971).
 2. Pre-flight on production: **CLEAR** (2026-09-02; baseline orgs 39, tasks 0, deps 0, employees 37, approvals 13)
    - Production health before deploy: HEALTHY (106 migrations applied, 7 pending = 0107–0113, 197 public tables, 0 without RLS, no unexpected DELETE grants, 0 new orphan identities/sessions); `/api/health` reports commit `ea270e6` (H24 live).
    - `migrate-prod.ts --dry-run` lists exactly 0107–0113 as pending; `main` (ea270e6) fast-forwards to `verify/h25` (15 commits), so the deployed hash will equal the tested hash.
 3. Migrations 0107–0113 applied to production via `migrate-prod.ts` on 2026-09-02 after a second PRE-FLIGHT CLEAR; `prod-health.ts` afterwards: HEALTHY, 113 applied, 0 pending, 0 tables without RLS, no unexpected DELETE grants, 0 new orphan identities/sessions.
-4. `main` fast-forwarded to `04c1093` and pushed (Vercel builds main); deployed hash check: PENDING
-5. `FEATURE_MANAGEMENT_STUDIO` absent → `/o/<org>/studio` not found (smoke `--surfaces` off): PENDING
-6. Marked smoke on production (`h25-prod-smoke.ts`): PENDING
-7. `FEATURE_MANAGEMENT_STUDIO=1` set exactly, redeploy, smoke `--surfaces=on`: PENDING
-8. Fixtures removed, residue 0, historical counts intact: PENDING
+4. `main` fast-forwarded to `04c1093` and pushed; Vercel built it and `/api/health` reported commit `04c1093` (deployed hash == tested hash).
+5. With `FEATURE_MANAGEMENT_STUDIO` absent, the marked production smoke passed **all 26 checks** (run d9408358): template plan scheduled (12 working days, critical chain), draft converted and linked, allocation canonical, capacity demand 3/5, register scores, KPI insufficient-then-measured, scenario overlay/compare (+3 days)/Monte Carlo reproducible/submit/approve/apply (finish 12 → 15)/discard refused, saved view, advisor findings, assistant fails closed, portfolio 92, channel predicate owner-yes/stranger-no, viewer refused, `/studio` hidden (not-found body, no leak); residue 0; historical counts intact.
+6. Marked smoke on production: see 5 (surfaces off) and 8 (surfaces on).
+7. `vercel env add FEATURE_MANAGEMENT_STUDIO production --value 1 --yes` (listed in `vercel env ls production`), then `vercel redeploy` of the same build (deployment idaraworks-n9s0jvmmv, Ready in 2 m, aliased to www.idaraworks.com); `/api/health` still reports `04c1093`.
+8. Smoke with `--surfaces=on`: **all 28 checks passed** (the 26 above plus: studio visible with the flag on; the plan workspace renders on the deployed app; three.js is absent from the plan page's first load); residue 0; historical counts intact (orgs 39, plans 0, nodes 0, tasks 0, allocations 0, scenarios 0, skills 0 before and after).
 
 ## 7. Not built, deliberately or by blocker
+
+- Copy inside computed text is English in both locales: KPI basis sentences and insufficiency reasons, advisor finding titles/details, portfolio score bases, built-in template element titles. Labels, controls and navigation are fully bilingual.
+- Interactive drag/inspector checks were done on the test project (canvas drag, inspector save, board move, Gantt drag, connector edit through the suites); on production the walk rendered every projection but did not mutate through the UI beyond the smoke's service-level checks.
 
 - Assistant narrative: the platform provider is disabled (external-authority blocker: the owner must provision a model provider); the seam is wired and fails closed.
 - 3D "strategy landscape" and "process world": not built; city, tunnel and capacity are.
@@ -80,5 +84,5 @@ ADR-1..12 (`docs/H25-TRUTH-MAP.md`) plus ADR-13..18 added while building: Realti
 6. With `FEATURE_MANAGEMENT_STUDIO` absent: `npx tsx tooling/scripts/h25-prod-smoke.ts --confirm=<phrase>` (surfaces off) must pass all checks and leave residue 0.
 7. `vercel env add FEATURE_MANAGEMENT_STUDIO production --value 1 --yes` then a production redeploy; `vercel env ls production` shows the variable.
 8. `h25-prod-smoke.ts --confirm=<phrase> --surfaces=on`: studio visible, plan workspace renders, three.js absent from the first load; residue 0; historical counts intact.
-9. `prod-health.ts` again: HEALTHY, 113 migrations applied, 0 pending.
-10. Report finalised; handover memory updated.
+9. `prod-health.ts` after everything: HEALTHY, 113 migrations applied, 0 pending, 0 tables without RLS, no unexpected DELETE grants, orgs 39, users 60, 0 new orphan identities or sessions. Done.
+10. Report finalised; handover memory updated. The report and tooling commits after `04c1093` are documentation and scripts only; the live code hash remains `04c1093` until the next feature deploy.
