@@ -39,7 +39,7 @@ ADR-1..12 (`docs/H25-TRUTH-MAP.md`) plus ADR-13..18 added while building: Realti
 
 - Unit: CPM (17 hand-computed cases), Monte Carlo (7), leveling (3), scale (5,000 activities / ~10,000 dependencies in under 5 s, deterministic), permissions (2), registries/flags/workspace laws; full suite **1435 passing** at the time of writing.
 - Integration (test project `zwnnqaryouevnzuwtyaj`, migrations 0107–0113 applied): h25b-graph (5), h25d-schedule (4), h25d-edge (4), h25g-scenarios (7), h25h-capacity (5), h25l-realtime-policies (4), h25n-governance (7), bleed harness (2, with seeders for all 27 H25 tables).
-- CI on the exact commit: PENDING (link and hash recorded below).
+- CI on the exact commit: **green** at `04c1093` (https://github.com/thisisalm3azb/idaraworks/actions/runs/33607750971): quality (lint, unit, build) and integration (74 suites on CI's own Supabase stack, including all H25 suites and the bleed harness). Two earlier runs failed and were fixed: the bare CI stack has no `realtime.messages` (policies now guarded) and denies `authenticated` USAGE on the realtime schema (predicate tests pass the topic explicitly).
 
 ## 5. Evidence
 
@@ -51,12 +51,12 @@ ADR-1..12 (`docs/H25-TRUTH-MAP.md`) plus ADR-13..18 added while building: Realti
 
 ## 6. Deployment (H25R) — PENDING until each step lands
 
-1. CI green on `verify/h25` at commit: PENDING
+1. CI green on `verify/h25` at commit `04c1093` (run 33607750971).
 2. Pre-flight on production: **CLEAR** (2026-09-02; baseline orgs 39, tasks 0, deps 0, employees 37, approvals 13)
    - Production health before deploy: HEALTHY (106 migrations applied, 7 pending = 0107–0113, 197 public tables, 0 without RLS, no unexpected DELETE grants, 0 new orphan identities/sessions); `/api/health` reports commit `ea270e6` (H24 live).
    - `migrate-prod.ts --dry-run` lists exactly 0107–0113 as pending; `main` (ea270e6) fast-forwards to `verify/h25` (15 commits), so the deployed hash will equal the tested hash.
-3. Migrations 0107–0113 applied to production via `migrate-prod.ts`: PENDING
-4. Merge to `main`, Vercel build, deployed hash == tested hash: PENDING
+3. Migrations 0107–0113 applied to production via `migrate-prod.ts` on 2026-09-02 after a second PRE-FLIGHT CLEAR; `prod-health.ts` afterwards: HEALTHY, 113 applied, 0 pending, 0 tables without RLS, no unexpected DELETE grants, 0 new orphan identities/sessions.
+4. `main` fast-forwarded to `04c1093` and pushed (Vercel builds main); deployed hash check: PENDING
 5. `FEATURE_MANAGEMENT_STUDIO` absent → `/o/<org>/studio` not found (smoke `--surfaces` off): PENDING
 6. Marked smoke on production (`h25-prod-smoke.ts`): PENDING
 7. `FEATURE_MANAGEMENT_STUDIO=1` set exactly, redeploy, smoke `--surfaces=on`: PENDING
@@ -69,3 +69,16 @@ ADR-1..12 (`docs/H25-TRUTH-MAP.md`) plus ADR-13..18 added while building: Realti
 - Cost map and geo map views: no canonical geo data; cost amounts appear on elements but no dedicated map view.
 - Alignment/distribution tools and connector waypoint routing: not built.
 - Historical accounting conversion remains undecided (H24 ruling); PO-002 untouched.
+
+## 8. Production runbook (executed in this order; evidence recorded in §6)
+
+1. CI green on `verify/h25` at the candidate hash (GitHub Actions run URL recorded).
+2. `npx tsx tooling/scripts/h25-deploy-preflight.ts` (read-only) must print PRE-FLIGHT CLEAR.
+3. `npx tsx tooling/scripts/prod-health.ts` (read-only) must print HEALTHY.
+4. `npx tsx tooling/scripts/migrate-prod.ts --confirm=apply-migrations-to-anhgeeutrwftsvuzfinf` applies exactly 0107–0113 (additive; the old code keeps working because nothing existing changes shape).
+5. `git checkout main && git merge --ff-only verify/h25 && git push origin main`; Vercel builds main; `/api/health` must report the merged hash.
+6. With `FEATURE_MANAGEMENT_STUDIO` absent: `npx tsx tooling/scripts/h25-prod-smoke.ts --confirm=<phrase>` (surfaces off) must pass all checks and leave residue 0.
+7. `vercel env add FEATURE_MANAGEMENT_STUDIO production --value 1 --yes` then a production redeploy; `vercel env ls production` shows the variable.
+8. `h25-prod-smoke.ts --confirm=<phrase> --surfaces=on`: studio visible, plan workspace renders, three.js absent from the first load; residue 0; historical counts intact.
+9. `prod-health.ts` again: HEALTHY, 113 migrations applied, 0 pending.
+10. Report finalised; handover memory updated.
