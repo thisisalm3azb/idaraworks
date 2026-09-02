@@ -9,6 +9,9 @@ import type { NextConfig } from "next";
 const supabaseHost = process.env.NEXT_PUBLIC_SUPABASE_URL
   ? new URL(process.env.NEXT_PUBLIC_SUPABASE_URL).origin
   : "";
+// H25L: Realtime presence rides a websocket to the same project host; a CSP that
+// names only the https origin silently refuses it (the browser logs, the app degrades).
+const supabaseWs = supabaseHost.replace(/^http/, "ws");
 
 // Phase I: the Sentry BROWSER SDK posts events to the DSN's ingest origin —
 // allow it in connect-src only when client-side Sentry is configured (OA-4).
@@ -25,7 +28,7 @@ const csp = [
   "style-src 'self' 'unsafe-inline'",
   `img-src 'self' blob: data: ${supabaseHost}`.trim(),
   "font-src 'self'",
-  `connect-src 'self' ${supabaseHost} ${sentryIngest}`.replace(/\s+/g, " ").trim(),
+  `connect-src 'self' ${supabaseHost} ${supabaseWs} ${sentryIngest}`.replace(/\s+/g, " ").trim(),
   "frame-ancestors 'none'",
   "base-uri 'self'",
   "form-action 'self'",

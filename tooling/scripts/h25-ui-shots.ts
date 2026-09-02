@@ -131,30 +131,21 @@ async function main(): Promise<void> {
       `portfolio: ${(await page.locator("main, body").first().innerText()).replace(/\s+/g, " ").slice(0, 240)}`,
     );
 
-    // Arabic: set the person's locale on their profile (what the header switch does), look, restore.
-    const postgres = (await import("postgres")).default;
-    const owner = postgres(process.env.DIRECT_URL!, { max: 1, onnotice: () => {} });
-    const setLocale = (loc: string) =>
-      owner`update public.user_profile set locale = ${loc}
-             where id = (select user_id from public.membership where org_id = ${orgId!} limit 1)`;
-    try {
-      await setLocale("ar");
-      await page.goto(`${planUrl}?view=canvas`, { waitUntil: "load" });
-      await page.waitForTimeout(2000);
-      await page.screenshot({ path: path.join(OUT, "desktop-ar-canvas.png") });
-      await page.goto(`${planUrl}?view=board`, { waitUntil: "load" });
-      await page.waitForTimeout(1200);
-      await page.screenshot({ path: path.join(OUT, "desktop-ar-board.png") });
-      await page.goto(`${planUrl}?view=kpis`, { waitUntil: "load" });
-      await page.waitForTimeout(1200);
-      await page.screenshot({ path: path.join(OUT, "desktop-ar-kpis.png") });
-      notes.push(
-        `ar dir=${await page.locator("html").getAttribute("dir")} lang=${await page.locator("html").getAttribute("lang")}`,
-      );
-    } finally {
-      await setLocale("en");
-      await owner.end();
-    }
+    // Arabic: the app reads the 'locale' cookie (what the header switch sets).
+    await ctx.addCookies([{ name: "locale", value: "ar", url: BASE }]);
+    await page.goto(`${planUrl}?view=canvas`, { waitUntil: "load" });
+    await page.waitForTimeout(2000);
+    await page.screenshot({ path: path.join(OUT, "desktop-ar-canvas.png") });
+    await page.goto(`${planUrl}?view=board`, { waitUntil: "load" });
+    await page.waitForTimeout(1200);
+    await page.screenshot({ path: path.join(OUT, "desktop-ar-board.png") });
+    await page.goto(`${planUrl}?view=kpis`, { waitUntil: "load" });
+    await page.waitForTimeout(1200);
+    await page.screenshot({ path: path.join(OUT, "desktop-ar-kpis.png") });
+    notes.push(
+      `ar dir=${await page.locator("html").getAttribute("dir")} lang=${await page.locator("html").getAttribute("lang")}`,
+    );
+    await ctx.addCookies([{ name: "locale", value: "en", url: BASE }]);
 
     // Mobile.
     const mctx = await browser.newContext({

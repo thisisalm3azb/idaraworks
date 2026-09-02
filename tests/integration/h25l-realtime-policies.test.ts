@@ -1,7 +1,7 @@
 /**
  * H25L — the private channel law, tested where it is enforced: RLS on
  * realtime.messages. Supabase evaluates the policies at subscribe time as the
- * `authenticated` role with the JWT claims and `realtime.topic` set; we
+ * `authenticated` role with the JWT claims set (the topic is passed to the predicate); we
  * reproduce exactly that inside rolled-back transactions and assert (a) the
  * predicate the policies delegate to and (b) that both policies exist and
  * delegate to it. (An INSERT into realtime.messages cannot be used as the
@@ -59,11 +59,8 @@ async function allowed(userId: string, topic: string): Promise<boolean> {
       await tx.unsafe(`select set_config('request.jwt.claims', $1, true)`, [
         JSON.stringify({ sub: userId, role: "authenticated" }),
       ]);
-      await tx.unsafe(`select set_config('realtime.topic', $1, true)`, [topic]);
       await tx.unsafe(`set local role authenticated`);
-      const r = (await tx.unsafe(
-        `select app.studio_channel_allowed(realtime.topic()) as ok`,
-      )) as Array<{
+      const r = (await tx.unsafe(`select app.studio_channel_allowed($1) as ok`, [topic])) as Array<{
         ok: boolean;
       }>;
       ok = r[0]?.ok === true;

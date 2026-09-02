@@ -165,11 +165,8 @@ async function channelAllowed(userId: string, topic: string): Promise<boolean> {
       await tx.unsafe(`select set_config('request.jwt.claims', $1, true)`, [
         JSON.stringify({ sub: userId, role: "authenticated" }),
       ]);
-      await tx.unsafe(`select set_config('realtime.topic', $1, true)`, [topic]);
       await tx.unsafe(`set local role authenticated`);
-      const r = (await tx.unsafe(
-        `select app.studio_channel_allowed(realtime.topic()) as ok`,
-      )) as Array<{
+      const r = (await tx.unsafe(`select app.studio_channel_allowed($1) as ok`, [topic])) as Array<{
         ok: boolean;
       }>;
       ok = r[0]?.ok === true;
