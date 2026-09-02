@@ -6,8 +6,8 @@ import { resolveCtx } from "@/platform/auth/resolve";
 import { can } from "@/platform/authz";
 import { managementStudioEnabled } from "@/platform/flags";
 import { formatDate } from "@/platform/format";
-import { portfolioSummary } from "@/modules/studio/service";
-import { createPlanAction } from "./actions";
+import { portfolioSummary, listTemplates } from "@/modules/studio/service";
+import { createPlanAction, createFromTemplateAction } from "./actions";
 
 /** H25 — the Studio home: every plan the organization is shaping. */
 export default async function StudioPage({
@@ -29,6 +29,8 @@ export default async function StudioPage({
   const { rows, truncated } = await portfolioSummary(resolved.ctx, resolved.archetype);
   const plans = rows.map((r) => r.plan);
   const create = createPlanAction.bind(null, orgId);
+  const createFromTemplate = createFromTemplateAction.bind(null, orgId);
+  const templates = manages ? await listTemplates(resolved.ctx, resolved.archetype) : [];
   const input =
     "mt-1 min-h-11 w-full rounded-md border border-line-strong bg-card px-3 text-base text-ink";
 
@@ -64,6 +66,35 @@ export default async function StudioPage({
             </label>
             <div className="sm:col-span-3">
               <Button type="submit">{t("studio.new_plan")}</Button>
+            </div>
+          </form>
+          <form
+            action={createFromTemplate}
+            className="mt-3 grid grid-cols-1 gap-2 border-t border-line pt-3 sm:grid-cols-3"
+          >
+            <label className="text-xs text-ink-muted">
+              {t("studio.template.pick")}
+              <select name="template" required className={input}>
+                {templates.map((tp) => (
+                  <option key={tp.key} value={tp.key}>
+                    {tp.name} · {tp.nodes}
+                    {tp.builtIn ? "" : ` · ${t("studio.template.org")}`}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="text-xs text-ink-muted">
+              {t("studio.plan_name")}
+              <input name="name" required maxLength={200} className={input} />
+            </label>
+            <label className="text-xs text-ink-muted">
+              {t("studio.field.start_date")}
+              <input name="startDate" type="date" className={input} dir="ltr" />
+            </label>
+            <div className="sm:col-span-3">
+              <Button type="submit" variant="ghost">
+                {t("studio.template.create")}
+              </Button>
             </div>
           </form>
         </Card>

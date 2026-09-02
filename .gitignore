@@ -57,3 +57,4 @@ sim-credentials*
 sim-manifest*
 sim-screenshots/
 .sim-secrets/
+.build-*.log

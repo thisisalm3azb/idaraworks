@@ -44,6 +44,7 @@ import { KpiView } from "./KpiView";
 import { CommandPalette, type Command } from "./CommandPalette";
 import { SavedViewsBar } from "./SavedViewsBar";
 import { ReviewPanel } from "./ReviewPanel";
+import { StrategyView } from "./StrategyView";
 
 export type WorkspacePayload = {
   orgId: string;
@@ -175,6 +176,10 @@ export type StudioDict = {
   narrative: string;
   narrativeUnavailable: string;
   severities: Record<string, string>;
+  saveAsTemplate: string;
+  templateSaved: string;
+  strategyEmpty: string;
+  strategyOrphan: string;
   nodeTypes: Record<string, string>;
   statuses: Record<string, string>;
   edgeTypes: Record<string, string>;
@@ -252,6 +257,12 @@ export type StudioActions = {
   duplicateNode: (nodeId: string) => Promise<ActionResult<{ id: string }>>;
   saveView: (input: Record<string, unknown>) => Promise<ActionResult<{ id: string }>>;
   updateView: (input: Record<string, unknown>) => Promise<ActionResult<void>>;
+  saveAsTemplate: (input: {
+    planId: string;
+    key: string;
+    name: string;
+    description?: string;
+  }) => Promise<ActionResult<{ key: string; nodes: number; edges: number }>>;
   reviewNarrative: (input: {
     planId: string;
     scenarioId?: string;
@@ -269,6 +280,7 @@ const VIEWS = [
   "workload",
   "risk",
   "world",
+  "strategy",
   "kpis",
   "table",
 ] as const;
@@ -494,8 +506,33 @@ export function StudioWorkspace({
         run: () => setFilters((f) => ({ ...f, criticalOnly: !f.criticalOnly })),
       },
       { id: "scenarios", label: dict.scenario.title ?? "", run: () => setAsideTab("scenarios") },
+      ...(payload.canManage
+        ? [
+            {
+              id: "template",
+              label: dict.saveAsTemplate,
+              run: () =>
+                startTransition(async () => {
+                  const key =
+                    payload.planName
+                      .toLowerCase()
+                      .replace(/[^a-z0-9]+/g, "-")
+                      .replace(/^-+|-+$/g, "")
+                      .slice(0, 50) || "plan";
+                  settle(
+                    await actions.saveAsTemplate({
+                      planId: payload.planId,
+                      key,
+                      name: payload.planName,
+                    }),
+                    dict.templateSaved,
+                  );
+                }),
+            },
+          ]
+        : []),
     ],
-    [dict, focus, undo],
+    [dict, focus, undo, payload.canManage, payload.planId, payload.planName, actions, settle],
   );
 
   // Keyboard: Ctrl/Cmd+K palette, Ctrl/Cmd+Z undo (outside inputs), Escape leaves palette/focus.
@@ -717,6 +754,13 @@ export function StudioWorkspace({
               payload={visible}
               dict={dict}
               criticalIds={criticalIds}
+              selectedId={selectedId}
+              onSelect={setSelectedId}
+            />
+          ) : view === "strategy" ? (
+            <StrategyView
+              payload={visible}
+              dict={dict}
               selectedId={selectedId}
               onSelect={setSelectedId}
             />

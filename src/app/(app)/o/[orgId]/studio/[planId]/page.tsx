@@ -43,6 +43,7 @@ import {
   saveViewAction,
   updateViewAction,
   reviewNarrativeAction,
+  saveAsTemplateAction,
 } from "../actions";
 import { StudioWorkspace, type StudioDict, type WorkspacePayload } from "./StudioWorkspace";
 
@@ -168,6 +169,7 @@ export default async function PlanPage({
       risk: t("studio.view.risk"),
       world: t("studio.view.world"),
       kpis: t("studio.view.kpis"),
+      strategy: t("studio.view.strategy"),
     },
     add: t("studio.add"),
     shapes: t("studio.shapes"),
@@ -264,6 +266,10 @@ export default async function PlanPage({
       medium: t("studio.review.medium"),
       low: t("studio.review.low"),
     },
+    saveAsTemplate: t("studio.template.save"),
+    templateSaved: t("studio.template.saved"),
+    strategyEmpty: t("studio.strategy.empty"),
+    strategyOrphan: t("studio.strategy.orphan"),
     scenario: Object.fromEntries(
       [
         "title",
@@ -398,6 +404,7 @@ export default async function PlanPage({
         saveView: saveViewAction.bind(null, orgId),
         updateView: updateViewAction.bind(null, orgId),
         reviewNarrative: reviewNarrativeAction.bind(null, orgId),
+        saveAsTemplate: saveAsTemplateAction.bind(null, orgId),
       }}
     />
   );

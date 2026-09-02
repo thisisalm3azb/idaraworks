@@ -14,6 +14,7 @@ export * from "./registers";
 export * from "./kpis";
 export * from "./portfolio";
 export * from "./advisor";
+export * from "./templates";
 export type { SimulationResult, Percentiles } from "./engine/monte-carlo";
 export type {
   ScheduledTask,

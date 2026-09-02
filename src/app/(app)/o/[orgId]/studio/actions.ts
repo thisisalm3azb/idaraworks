@@ -29,6 +29,8 @@ import {
   saveView,
   updateView,
   draftReviewNarrative,
+  createPlanFromTemplate,
+  saveAsTemplate,
   type Narrative,
   type SimulationResult,
   type LevelingProposal,
@@ -304,4 +306,33 @@ export async function reviewNarrativeAction(
   input: { planId: string; scenarioId?: string; locale?: "en" | "ar" },
 ): Promise<ActionResult<Narrative>> {
   return run(orgId, (r) => draftReviewNarrative(r.ctx, r.archetype, input));
+}
+
+// ── H25N — templates ─────────────────────────────────────────────────────────
+
+export async function createFromTemplateAction(orgId: string, formData: FormData): Promise<void> {
+  const resolved = await resolveCtxForAction(orgId);
+  if (resolved === "mfa_required") redirect("/mfa");
+  if (typeof resolved === "string") redirect("/");
+  let id = "";
+  try {
+    const r = await createPlanFromTemplate(resolved.ctx, resolved.archetype, {
+      templateKey: String(formData.get("template") ?? ""),
+      name: String(formData.get("name") ?? ""),
+      ...(formData.get("startDate") ? { startDate: String(formData.get("startDate")) } : {}),
+    });
+    id = r.id;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "failed";
+    redirect(`/o/${orgId}/studio?error=${encodeURIComponent(message.slice(0, 200))}`);
+  }
+  revalidatePath(`/o/${orgId}/studio`);
+  redirect(`/o/${orgId}/studio/${id}`);
+}
+
+export async function saveAsTemplateAction(
+  orgId: string,
+  input: { planId: string; key: string; name: string; description?: string },
+): Promise<ActionResult<{ key: string; nodes: number; edges: number }>> {
+  return run(orgId, (r) => saveAsTemplate(r.ctx, r.archetype, input));
 }
