@@ -20,7 +20,13 @@ import { sql, withCtx, type Ctx, type TenantTx } from "@/platform/tenancy";
 import type { RoleArchetype } from "@/platform/registries";
 import { assertWorkMutableIn } from "./lifecycle";
 
-export const DEPENDENCY_KINDS = ["finish_to_start", "blocks"] as const;
+export const DEPENDENCY_KINDS = [
+  "finish_to_start",
+  "start_to_start",
+  "finish_to_finish",
+  "start_to_finish",
+  "blocks",
+] as const;
 export type DependencyKind = (typeof DEPENDENCY_KINDS)[number];
 
 /** Traversal bounds — a dependency graph this deep is a modelling problem, and
@@ -60,6 +66,8 @@ export const DependencyInput = z.object({
   taskId: z.string().uuid(),
   dependsOnTaskId: z.string().uuid(),
   kind: z.enum(DEPENDENCY_KINDS).default("finish_to_start"),
+  lagDays: z.number().int().min(-365).max(365).default(0),
+  allowCrossJob: z.boolean().optional(),
 });
 
 /**
@@ -171,16 +179,20 @@ export async function addDependency(
       const dependent = rows.find((r) => r.id === data.taskId);
       const prerequisite = rows.find((r) => r.id === data.dependsOnTaskId);
       if (!dependent || !prerequisite) throw new Error("task not found");
-      if (dependent.job_id !== prerequisite.job_id) throw new DependencyScopeError();
+      if (dependent.job_id !== prerequisite.job_id && data.allowCrossJob !== true) {
+        // Same-job by default (H21). The Studio passes allowCrossJob for
+        // portfolio-level links — still ONE org, still cycle-checked.
+        throw new DependencyScopeError();
+      }
       await assertWorkMutableIn(tx, ctx, dependent.job_id);
       if (await wouldCycle(tx, ctx, data.taskId, data.dependsOnTaskId)) {
         throw new DependencyCycleError();
       }
       await tx.execute(sql`
         insert into public.task_dependency
-          (id, org_id, task_id, depends_on_task_id, kind, created_by)
+          (id, org_id, task_id, depends_on_task_id, kind, lag_days, created_by)
         values (${id}, ${ctx.orgId}, ${data.taskId}, ${data.dependsOnTaskId}, ${data.kind},
-                ${ctx.userId})
+                ${data.lagDays}, ${ctx.userId})
         on conflict (org_id, task_id, depends_on_task_id) where removed_at is null do nothing
       `);
       // The new edge may have just blocked a task that called itself ready.

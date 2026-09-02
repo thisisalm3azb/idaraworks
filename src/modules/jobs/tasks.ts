@@ -204,6 +204,23 @@ export const TaskPatchInput = z.object({
     .optional(),
   estimatedMinutes: z.number().int().min(0).max(100000).nullable().optional(),
   requiresApproval: z.boolean().optional(),
+  // H25 — scheduling fields (working days; the engine refuses to simulate
+  // without explicit three-point estimates).
+  durationDays: z.number().int().min(0).max(3650).nullable().optional(),
+  isMilestone: z.boolean().optional(),
+  constraintKind: z.enum(["none", "start_no_earlier", "finish_no_later"]).optional(),
+  constraintDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .nullable()
+    .optional(),
+  deadlineDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .nullable()
+    .optional(),
+  estimateOptimisticDays: z.number().min(0).max(3650).nullable().optional(),
+  estimatePessimisticDays: z.number().min(0).max(3650).nullable().optional(),
 });
 
 export async function updateTask(
@@ -246,6 +263,9 @@ export async function updateTask(
         `)) as unknown as Array<{ ok: number }>;
         if (emp.length === 0) throw new Error("assignee not found");
       }
+      if (data.constraintKind && data.constraintKind !== "none" && !data.constraintDate) {
+        throw new Error("a dated constraint needs its date");
+      }
       await tx.execute(sql`
         update public.task set
           title = coalesce(${data.title ?? null}, title),
@@ -257,6 +277,13 @@ export async function updateTask(
           due_date = ${data.dueDate === undefined ? sql`due_date` : (data.dueDate ?? null)},
           estimated_minutes = ${data.estimatedMinutes === undefined ? sql`estimated_minutes` : (data.estimatedMinutes ?? null)},
           requires_approval = coalesce(${data.requiresApproval ?? null}, requires_approval),
+          duration_days = ${data.durationDays === undefined ? sql`duration_days` : (data.durationDays ?? null)},
+          is_milestone = coalesce(${data.isMilestone ?? null}, is_milestone),
+          constraint_kind = coalesce(${data.constraintKind ?? null}, constraint_kind),
+          constraint_date = ${data.constraintKind === undefined ? sql`constraint_date` : data.constraintKind === "none" ? null : (data.constraintDate ?? null)},
+          deadline_date = ${data.deadlineDate === undefined ? sql`deadline_date` : (data.deadlineDate ?? null)},
+          estimate_optimistic_days = ${data.estimateOptimisticDays === undefined ? sql`estimate_optimistic_days` : (data.estimateOptimisticDays ?? null)},
+          estimate_pessimistic_days = ${data.estimatePessimisticDays === undefined ? sql`estimate_pessimistic_days` : (data.estimatePessimisticDays ?? null)},
           updated_by = ${ctx.userId},
           updated_at = now()
         where org_id = ${ctx.orgId} and id = ${taskId}
@@ -474,6 +501,13 @@ export type TaskRow = {
   blockedReason: string | null;
   requiresApproval: boolean;
   archived: boolean;
+  durationDays: number | null;
+  isMilestone: boolean;
+  constraintKind: "none" | "start_no_earlier" | "finish_no_later";
+  constraintDate: string | null;
+  deadlineDate: string | null;
+  estimateOptimisticDays: number | null;
+  estimatePessimisticDays: number | null;
 };
 
 function mapTask(r: Record<string, unknown>): TaskRow {
@@ -495,6 +529,20 @@ function mapTask(r: Record<string, unknown>): TaskRow {
     blockedReason: (r.blocked_reason as string | null) ?? null,
     requiresApproval: r.requires_approval === true,
     archived: r.archived === true,
+    durationDays:
+      r.duration_days === null || r.duration_days === undefined ? null : Number(r.duration_days),
+    isMilestone: r.is_milestone === true,
+    constraintKind: (r.constraint_kind as TaskRow["constraintKind"]) ?? "none",
+    constraintDate: (r.constraint_date as string | null) ?? null,
+    deadlineDate: (r.deadline_date as string | null) ?? null,
+    estimateOptimisticDays:
+      r.estimate_optimistic_days === null || r.estimate_optimistic_days === undefined
+        ? null
+        : Number(r.estimate_optimistic_days),
+    estimatePessimisticDays:
+      r.estimate_pessimistic_days === null || r.estimate_pessimistic_days === undefined
+        ? null
+        : Number(r.estimate_pessimistic_days),
   };
 }
 
@@ -504,7 +552,9 @@ const TASK_SELECT = sql`
          e.name as assignee_name, t.start_date::text as start_date, t.due_date::text as due_date,
          t.completed_at::text as completed_at, t.estimated_minutes, t.actual_minutes,
          t.parent_task_id::text as parent_task_id, t.blocked_reason, t.requires_approval,
-         t.archived
+         t.archived, t.duration_days, t.is_milestone, t.constraint_kind,
+         t.constraint_date::text as constraint_date, t.deadline_date::text as deadline_date,
+         t.estimate_optimistic_days, t.estimate_pessimistic_days
   from public.task t
   left join public.employee e on e.id = t.assignee_employee_id
 `;

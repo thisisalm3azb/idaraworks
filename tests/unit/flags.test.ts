@@ -10,7 +10,12 @@
  * is verified end to end. This is the single line of code enforcing it.
  */
 import { afterEach, describe, expect, it } from "vitest";
-import { stockSurfacesEnabled, hrSurfacesEnabled, financeSurfacesEnabled } from "@/platform/flags";
+import {
+  stockSurfacesEnabled,
+  hrSurfacesEnabled,
+  financeSurfacesEnabled,
+  managementStudioEnabled,
+} from "@/platform/flags";
 
 const original = process.env.FEATURE_STOCK_SURFACES;
 
@@ -93,5 +98,31 @@ describe("the finance surfaces release gate", () => {
   it("is on for exactly one value", () => {
     process.env.FEATURE_FINANCE_SURFACES = "1";
     expect(financeSurfacesEnabled()).toBe(true);
+  });
+});
+
+/** H25 — the Studio gate obeys exactly the same law. */
+describe("the Management Studio release gate", () => {
+  const orig = process.env.FEATURE_MANAGEMENT_STUDIO;
+  afterEach(() => {
+    if (orig === undefined) delete process.env.FEATURE_MANAGEMENT_STUDIO;
+    else process.env.FEATURE_MANAGEMENT_STUDIO = orig;
+  });
+
+  it("is off when nothing is set", () => {
+    delete process.env.FEATURE_MANAGEMENT_STUDIO;
+    expect(managementStudioEnabled()).toBe(false);
+  });
+
+  it("is off for every near-miss spelling", () => {
+    for (const value of ["", "0", "false", "true", "yes", "on", "1 ", " 1", "TRUE"]) {
+      process.env.FEATURE_MANAGEMENT_STUDIO = value;
+      expect(managementStudioEnabled(), `"${value}" turned the surfaces on`).toBe(false);
+    }
+  });
+
+  it("is on for exactly one value", () => {
+    process.env.FEATURE_MANAGEMENT_STUDIO = "1";
+    expect(managementStudioEnabled()).toBe(true);
   });
 });

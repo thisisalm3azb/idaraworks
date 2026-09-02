@@ -51,6 +51,7 @@ export const APPROVABLE_TYPES = [
   "expense_claim",
   "pay_run",
   "journal_entry", // H24 — optional approval before posting (engine never touches its status)
+  "scenario_apply", // H25 — applying a scenario to live records (studio checks the state itself)
   // P3 (with QC): "stage_signoff", "qc_delivery_override"
 ] as const;
 export type ApprovableType = (typeof APPROVABLE_TYPES)[number];
@@ -78,6 +79,8 @@ export const ATTACHABLE_TYPES = [
   "overtime_request", // H23 — activity-feed identity; no file surface shipped
   "pay_run", // H23 — activity-feed identity; no file surface shipped
   "journal_entry", // H24 — supporting evidence attaches to journals
+  "studio_plan", // H25 — reference documents attach to a plan
+  "studio_node", // H25 — evidence and documents attach to canvas nodes
 ] as const;
 export type AttachableType = (typeof ATTACHABLE_TYPES)[number];
 
@@ -132,6 +135,12 @@ export const AUDIT_ENTITY_TYPES = [
   "currency_rate", // H24G — rate book entries are audited money config
   "asset_depreciation_run", // H24F — depreciation runs are audited
   "tally_import", // H24J — migration batches are audited
+  // H25 — every studio record's lifecycle is audited.
+  "studio_edge",
+  "studio_view",
+  "studio_scenario",
+  "studio_baseline",
+  "studio_version",
 ] as const;
 export type AuditEntityType = (typeof AUDIT_ENTITY_TYPES)[number];
 

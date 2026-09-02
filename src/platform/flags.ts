@@ -52,3 +52,16 @@ export function hrSurfacesEnabled(): boolean {
 export function financeSurfacesEnabled(): boolean {
   return process.env.FEATURE_FINANCE_SURFACES === "1";
 }
+
+/**
+ * The H25 Management Studio screens.
+ *
+ * Same law once more: off unless `FEATURE_MANAGEMENT_STUDIO=1`, exactly that
+ * spelling — "true", "yes", "on", padded values and absence all stay OFF.
+ * When off the navigation has no entries and the routes answer 404. A
+ * planning surface reaching users before the graph, scheduling and scenario
+ * isolation are verified would put wrong dates in front of managers.
+ */
+export function managementStudioEnabled(): boolean {
+  return process.env.FEATURE_MANAGEMENT_STUDIO === "1";
+}

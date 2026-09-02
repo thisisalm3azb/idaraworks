@@ -61,6 +61,8 @@ describe("registries (phase2 closed vocabularies)", () => {
         "pay_run",
         // H24: an org can require a second person before a journal posts.
         "journal_entry",
+        // H25: applying a scenario to live records can require a second person.
+        "scenario_apply",
       ].sort(),
     );
     // invoice_issue is explicitly OUT of the MVP enum (audit C-1)

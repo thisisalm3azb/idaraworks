@@ -137,7 +137,18 @@ export type Action =
   | "leads.manage"
   | "opportunities.view"
   | "opportunities.manage"
-  | "pipeline.configure";
+  | "pipeline.configure"
+  // ── H25 Management Studio. Segregation: editing a plan ≠ editing the
+  // schedule of real work ≠ applying a scenario to live records. A linked
+  // node NEVER widens access — each record's own view action still gates its
+  // details (ADR-8).
+  | "studio.view"
+  | "studio.manage"
+  | "studio.schedule"
+  | "scenario.manage"
+  | "scenario.apply"
+  | "kpi.manage"
+  | "register.manage";
 
 type Grantable = Exclude<RoleArchetype, "worker_reserved_p3">;
 
@@ -357,4 +368,13 @@ export const MATRIX: Record<Action, readonly Grantable[]> = {
   "opportunities.view": ["owner", "admin", "manager", "accounts"],
   "opportunities.manage": ["owner", "admin", "manager"],
   "pipeline.configure": ["owner", "admin"],
+  // H25 Studio: managers plan; owner/admin also apply scenarios to live
+  // records; accounts and viewer read (amounts still ride the money walls).
+  "studio.view": ["owner", "admin", "manager", "accounts", "viewer"],
+  "studio.manage": ["owner", "admin", "manager"],
+  "studio.schedule": ["owner", "admin", "manager"],
+  "scenario.manage": ["owner", "admin", "manager"],
+  "scenario.apply": ["owner", "admin"],
+  "kpi.manage": ["owner", "admin", "manager"],
+  "register.manage": ["owner", "admin", "manager"],
 };

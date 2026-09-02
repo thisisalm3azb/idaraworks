@@ -93,7 +93,7 @@ export async function getWeekView(
       from public.task t
       left join public.employee e on e.id = t.assignee_employee_id
       where t.org_id = ${ctx.orgId} and t.job_id in (${jobIdList})
-        and t.status in ('pending', 'in_progress')
+        and t.status in ('pending', 'ready', 'in_progress', 'blocked', 'awaiting_approval')
         and t.due_date >= ${weekStart}::date and t.due_date < ${weekStart}::date + 7
       order by t.due_date
     `)) as unknown as Array<{
