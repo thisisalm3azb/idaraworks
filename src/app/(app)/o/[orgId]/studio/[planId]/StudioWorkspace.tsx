@@ -27,6 +27,10 @@ import { GanttView } from "./GanttView";
 import { NetworkView } from "./NetworkView";
 import { BoardView } from "./BoardView";
 import { ScenarioPanel } from "./ScenarioPanel";
+import { RoadmapView } from "./RoadmapView";
+import { CalendarView } from "./CalendarView";
+import { WorkloadView } from "./WorkloadView";
+import { RiskMatrixView } from "./RiskMatrixView";
 
 export type WorkspacePayload = {
   orgId: string;
@@ -96,6 +100,13 @@ export type StudioDict = {
   reason: string;
   estimateOptimistic: string;
   estimatePessimistic: string;
+  unassigned: string;
+  capacity: string;
+  likelihood: string;
+  impact: string;
+  unscored: string;
+  today: string;
+  nothingScheduled: string;
   nodeTypes: Record<string, string>;
   statuses: Record<string, string>;
   edgeTypes: Record<string, string>;
@@ -146,7 +157,17 @@ export type StudioActions = {
   }) => Promise<ActionResult<SimulationDto>>;
 };
 
-const VIEWS = ["canvas", "board", "gantt", "network", "table"] as const;
+const VIEWS = [
+  "canvas",
+  "board",
+  "gantt",
+  "network",
+  "roadmap",
+  "calendar",
+  "workload",
+  "risk",
+  "table",
+] as const;
 
 export function StudioWorkspace({
   payload,
@@ -234,14 +255,17 @@ export function StudioWorkspace({
             </p>
           ) : null}
         </div>
-        <nav className="flex gap-1 rounded-full border border-line bg-card p-1" aria-label="views">
+        <nav
+          className="flex max-w-full gap-1 overflow-x-auto rounded-full border border-line bg-card p-1"
+          aria-label="views"
+        >
           {VIEWS.map((v) => (
             <button
               key={v}
               type="button"
               onClick={() => setView(v)}
               aria-pressed={view === v}
-              className={`min-h-9 rounded-full px-3 text-sm ${
+              className={`min-h-9 shrink-0 rounded-full px-3 text-sm ${
                 view === v ? "bg-sunken font-medium text-ink" : "text-ink-muted"
               }`}
             >
@@ -299,6 +323,36 @@ export function StudioWorkspace({
               payload={payload}
               dict={dict}
               criticalIds={criticalIds}
+              selectedId={selectedId}
+              onSelect={setSelectedId}
+            />
+          ) : view === "roadmap" ? (
+            <RoadmapView
+              payload={payload}
+              dict={dict}
+              criticalIds={criticalIds}
+              selectedId={selectedId}
+              onSelect={setSelectedId}
+            />
+          ) : view === "calendar" ? (
+            <CalendarView
+              payload={payload}
+              dict={dict}
+              criticalIds={criticalIds}
+              selectedId={selectedId}
+              onSelect={setSelectedId}
+            />
+          ) : view === "workload" ? (
+            <WorkloadView
+              payload={payload}
+              dict={dict}
+              selectedId={selectedId}
+              onSelect={setSelectedId}
+            />
+          ) : view === "risk" ? (
+            <RiskMatrixView
+              payload={payload}
+              dict={dict}
               selectedId={selectedId}
               onSelect={setSelectedId}
             />

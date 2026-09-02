@@ -122,7 +122,7 @@ beforeAll(async () => {
     edgeType: "dependency",
     depKind: "finish_to_start",
   });
-}, 120_000);
+}, 600_000); // the test project can take minutes to install a template under load
 
 afterAll(async () => {
   await wipeOrgs(owner, [orgA]);
@@ -142,9 +142,13 @@ describe("branching and overlay", () => {
         assumptions: [{ text: "Resin cures slower in October", confidence: "medium" }],
       })
     ).id;
-    const listed = await listScenarios(A(), "owner", planId);
-    expect(listed.map((s) => s.id)).toContain(scenarioId);
-    expect(listed[0]!.status).toBe("draft");
+    // A private draft is the author's until submitted: the owner does not see it yet.
+    const mine = await listScenarios(M(), "manager", planId);
+    expect(mine.map((s) => s.id)).toContain(scenarioId);
+    expect(mine[0]!.status).toBe("draft");
+    expect((await listScenarios(A(), "owner", planId)).some((s) => s.id === scenarioId)).toBe(
+      false,
+    );
   });
 
   it("a scenario edit overlays the plan and leaves the canonical task untouched", async () => {
@@ -153,11 +157,11 @@ describe("branching and overlay", () => {
     expect(await taskDuration(taskB)).toBe(5);
 
     const live = await scheduleForPlan(A(), "owner", { planId });
-    const branch = await scheduleForPlan(A(), "owner", { planId, scenarioId });
+    const branch = await scheduleForPlan(M(), "manager", { planId, scenarioId });
     expect(live.byNode.get(nodeB)!.durationDays).toBe(5);
     expect(branch.byNode.get(nodeB)!.durationDays).toBe(8);
 
-    const cmp = await compareScenario(A(), "owner", scenarioId);
+    const cmp = await compareScenario(M(), "manager", scenarioId);
     expect(cmp.changes).toHaveLength(1);
     expect(cmp.changes[0]).toMatchObject({
       field: "durationDays",
@@ -172,13 +176,13 @@ describe("branching and overlay", () => {
   });
 
   it("Monte Carlo is reproducible from its stored seed and refuses without estimates", async () => {
-    const r1 = await simulatePlan(A(), "owner", { planId, scenarioId, samples: 300, seed: 99 });
-    const r2 = await simulatePlan(A(), "owner", { planId, scenarioId, samples: 300, seed: 99 });
+    const r1 = await simulatePlan(M(), "manager", { planId, scenarioId, samples: 300, seed: 99 });
+    const r2 = await simulatePlan(M(), "manager", { planId, scenarioId, samples: 300, seed: 99 });
     expect(r1.ok && r2.ok).toBe(true);
     if (!r1.ok || !r2.ok) return;
     expect(r1.finish).toEqual(r2.finish);
     expect(r1.confidenceInDeterministic).toEqual(r2.confidenceInDeterministic);
-    const stored = (await listScenarios(A(), "owner", planId)).find((s) => s.id === scenarioId)!;
+    const stored = (await listScenarios(M(), "manager", planId)).find((s) => s.id === scenarioId)!;
     expect(stored.simulation).toMatchObject({ seed: 99, samples: 300, finish: r1.finish });
 
     // Strip B's estimates inside the scenario only → refusal names the node.
@@ -187,7 +191,7 @@ describe("branching and overlay", () => {
       scenarioId,
       estimateOptimisticDays: null,
     });
-    const r3 = await simulatePlan(A(), "owner", { planId, scenarioId, samples: 300, seed: 99 });
+    const r3 = await simulatePlan(M(), "manager", { planId, scenarioId, samples: 300, seed: 99 });
     expect(r3.ok).toBe(false);
     if (!r3.ok) {
       expect(r3.reason).toBe("insufficient_estimates");
@@ -200,7 +204,7 @@ describe("branching and overlay", () => {
 
 describe("review, approval and controlled apply", () => {
   it("submitting routes through the approval engine and does not apply", async () => {
-    const before = (await listScenarios(A(), "owner", planId)).find((s) => s.id === scenarioId)!;
+    const before = (await listScenarios(M(), "manager", planId)).find((s) => s.id === scenarioId)!;
     const res = await submitScenario(M(), "manager", {
       scenarioId,
       expectedRowVersion: before.rowVersion,
@@ -208,6 +212,8 @@ describe("review, approval and controlled apply", () => {
     expect(res.status).toBe("under_review");
     approvalId = res.approvalId;
     expect(await taskDuration(taskB)).toBe(5);
+    // Once under review the owner (the decider) can see it.
+    expect((await listScenarios(A(), "owner", planId)).some((s) => s.id === scenarioId)).toBe(true);
     await expect(applyScenario(A(), "owner", { scenarioId })).rejects.toMatchObject({
       code: "invalid_state",
     });
