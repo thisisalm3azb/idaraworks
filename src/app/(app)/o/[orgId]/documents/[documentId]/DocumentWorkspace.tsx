@@ -28,6 +28,9 @@ import { ActivityPane, type ActivityDict } from "./ActivityPane";
 import { DetailsPane, type DetailsDict } from "./DetailsPane";
 import { PreviewPane } from "./PreviewPane";
 import { WorkflowPane, type WorkflowDict } from "./WorkflowPane";
+import { ReviewPane, type ReviewDict } from "./ReviewPane";
+import { PresenceStrip, usePlanPresence } from "../../studio/[planId]/PresenceLayer";
+import type { CommentRow } from "@/modules/docstudio/service";
 import type { RunRow } from "@/modules/docstudio/service";
 
 export type WorkspaceDict = {
@@ -37,7 +40,10 @@ export type WorkspaceDict = {
   bindings: Record<string, string>;
   counterparty: Record<string, string>;
   recordKinds: Record<string, string>;
-  tabs: Record<"edit" | "preview" | "workflow" | "revisions" | "activity" | "details", string>;
+  tabs: Record<
+    "edit" | "preview" | "review" | "workflow" | "revisions" | "activity" | "details",
+    string
+  >;
   actions: {
     submit: string;
     returnDraft: string;
@@ -72,6 +78,8 @@ export type WorkspaceDict = {
   activity: ActivityDict;
   details: DetailsDict;
   workflow: WorkflowDict;
+  review: ReviewDict;
+  presence: string;
   saved: string;
   failed: string;
   conflict: string;
@@ -105,6 +113,7 @@ export function DocumentWorkspace({
   run,
   members,
   viewer,
+  comments,
 }: {
   orgId: string;
   locale: string;
@@ -116,12 +125,13 @@ export function DocumentWorkspace({
   vocab: Vocabulary;
   run: RunRow | null;
   members: Array<{ id: string; name: string }>;
-  viewer: { id: string; archetype: string; canReview: boolean };
+  viewer: { id: string; name: string; archetype: string; canReview: boolean; canComment: boolean };
+  comments: CommentRow[];
 }) {
   const router = useRouter();
   const [, startTransition] = useTransition();
   const d = detail.document;
-  const tabs: Tab[] = ["edit", "preview", "workflow", "revisions", "activity", "details"];
+  const tabs: Tab[] = ["edit", "preview", "review", "workflow", "revisions", "activity", "details"];
   const [tab, setTab] = useState<Tab>(
     tabs.includes(initialTab as Tab) ? (initialTab as Tab) : "preview",
   );
@@ -129,6 +139,15 @@ export function DocumentWorkspace({
   const [dialog, setDialog] = useState<null | "issue" | "terminate" | "return" | "supersede">(null);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
+  // Who else is on this document (a private Realtime channel keyed by the
+  // document id; the same org-membership predicate as the Studio, 0112).
+  const presence = usePlanPresence({
+    orgId,
+    planId: d.id,
+    viewer: { id: viewer.id, name: viewer.name },
+    view: tab,
+    selectedId: null,
+  });
 
   useEffect(() => {
     if (!notice || notice.tone !== "ok") return;
@@ -140,6 +159,7 @@ export function DocumentWorkspace({
     (res: ActionResult<unknown>, okText = dict.saved, quiet = false): boolean => {
       if (res.ok) {
         if (!quiet) setNotice({ tone: "ok", text: okText });
+        presence.changed();
         startTransition(() => router.refresh());
       } else {
         setNotice({
@@ -149,7 +169,7 @@ export function DocumentWorkspace({
       }
       return res.ok;
     },
-    [dict.saved, dict.failed, dict.conflict, router],
+    [dict.saved, dict.failed, dict.conflict, router, presence],
   );
 
   const act = async (fn: () => Promise<ActionResult<unknown>>, okText?: string) => {
@@ -188,6 +208,7 @@ export function DocumentWorkspace({
               </span>
             </div>
             <h1 className="truncate text-lg font-semibold text-ink">{d.title}</h1>
+            <PresenceStrip peers={presence.peers} label={dict.presence} />
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <a
@@ -329,6 +350,23 @@ export function DocumentWorkspace({
             failed: dict.actions.loadFailed,
             openTab: dict.actions.openTab,
           }}
+        />
+      ) : null}
+      {tab === "review" ? (
+        <ReviewPane
+          orgId={orgId}
+          documentId={d.id}
+          revisionId={working?.id ?? null}
+          body={working?.body ?? detail.snapshot?.snapshot.body ?? null}
+          comments={comments}
+          members={members}
+          currentUserId={viewer.id}
+          canEdit={caps.edit === true}
+          canComment={viewer.canComment}
+          language={d.language as "en" | "ar" | "bilingual"}
+          locale={locale}
+          dict={dict.review}
+          settle={settle}
         />
       ) : null}
       {tab === "workflow" ? (

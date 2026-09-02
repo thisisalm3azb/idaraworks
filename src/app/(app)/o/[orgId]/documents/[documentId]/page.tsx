@@ -16,9 +16,10 @@ import {
   documentCapabilities,
   getDocument,
   getRunForDocument,
+  listDocComments,
   listFolders,
 } from "@/modules/docstudio/service";
-import { listMembers } from "@/platform/auth/identity";
+import { getDisplayName, listMembers } from "@/platform/auth/identity";
 import { MVP_GRANTABLE_ARCHETYPES } from "@/platform/registries";
 import { DocumentWorkspace, type WorkspaceDict } from "./DocumentWorkspace";
 import { builderDict } from "./builderDict";
@@ -47,12 +48,17 @@ export default async function DocumentPage({
     if (err instanceof DocError && err.code === "not_found") notFound();
     throw err;
   }
-  const [folders, run, members] = await Promise.all([
+  const viewerName = await getDisplayName(resolved.ctx);
+  const [folders, run, members, comments] = await Promise.all([
     listFolders(resolved.ctx, resolved.archetype),
     getRunForDocument(resolved.ctx, resolved.archetype, documentId),
     listMembers(resolved.ctx, resolved.archetype).catch(() => []),
+    listDocComments(resolved.ctx, resolved.archetype, documentId),
   ]);
   const caps = documentCapabilities(resolved.archetype, detail.document);
+  // A running workflow owns the decision; issue opens only once the run completed.
+  if (detail.document.status === "approval" && run?.status !== "completed") caps.issue = false;
+  if (detail.document.status === "review" && run?.status === "running") caps.issue = false;
   const k = (key: string) => t(`docstudio.ws.${key}`);
   const dict: WorkspaceDict = {
     status: Object.fromEntries(DOC_STATUSES.map((s) => [s, t(`docstudio.status.${s}`)])),
@@ -75,6 +81,7 @@ export default async function DocumentPage({
     tabs: {
       edit: k("tab_edit"),
       preview: k("tab_preview"),
+      review: k("tab_review"),
       workflow: k("tab_workflow"),
       revisions: k("tab_revisions"),
       activity: k("tab_activity"),
@@ -235,6 +242,32 @@ export default async function DocumentPage({
         MVP_GRANTABLE_ARCHETYPES.map((a) => [a, t(`docstudio.role.${a}`)]),
       ),
     },
+    review: {
+      title: t("docstudio.rv.title"),
+      empty: t("docstudio.rv.empty"),
+      anchor: t("docstudio.rv.anchor"),
+      anchorNone: t("docstudio.rv.anchor_none"),
+      comment: t("docstudio.rv.comment"),
+      suggest: t("docstudio.rv.suggest"),
+      suggestionText: t("docstudio.rv.suggestion_text"),
+      suggestionTextAr: t("docstudio.rv.suggestion_text_ar"),
+      mention: t("docstudio.rv.mention"),
+      post: t("docstudio.rv.post"),
+      reply: t("docstudio.rv.reply"),
+      resolve: t("docstudio.rv.resolve"),
+      reopen: t("docstudio.rv.reopen"),
+      remove: t("docstudio.ws.remove"),
+      accept: t("docstudio.rv.accept"),
+      reject: t("docstudio.rv.reject"),
+      resolved: t("docstudio.rv.resolved"),
+      open: t("docstudio.rv.open"),
+      proposed: t("docstudio.rv.proposed"),
+      accepted: t("docstudio.rv.accepted"),
+      rejected: t("docstudio.rv.rejected"),
+      showResolved: t("docstudio.rv.show_resolved"),
+      onRevision: t("docstudio.rv.on_revision"),
+    },
+    presence: t("docstudio.ws.presence"),
     saved: t("docstudio.saved"),
     failed: t("docstudio.failed"),
     conflict: t("docstudio.conflict"),
@@ -254,9 +287,12 @@ export default async function DocumentPage({
       members={members.map((m) => ({ id: m.userId, name: m.fullName }))}
       viewer={{
         id: resolved.ctx.userId,
+        name: viewerName,
         archetype: resolved.archetype,
         canReview: can(resolved.archetype, "documents.review"),
+        canComment: can(resolved.archetype, "comments.create"),
       }}
+      comments={comments}
       vocab={{
         blockTypes: BLOCK_TYPES,
         fieldKinds: FIELD_KINDS,

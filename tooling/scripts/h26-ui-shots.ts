@@ -113,6 +113,18 @@ async function main(): Promise<void> {
       await page.waitForTimeout(2500);
       await shot("builder-inserted");
     }
+    // Review: post a real comment anchored to the first block, then screenshot.
+    await page.getByRole("tab", { name: "Review", exact: true }).click();
+    await page.waitForTimeout(1500);
+    const anchorSelect = page.locator("aside select").first();
+    if (await anchorSelect.count()) await anchorSelect.selectOption({ index: 1 });
+    const commentBox = page.locator("aside textarea").first();
+    if (await commentBox.count()) {
+      await commentBox.fill(`Walk comment ${Date.now()}`);
+      await page.getByRole("button", { name: "Post", exact: true }).click();
+      await page.waitForTimeout(3000);
+    }
+    await shot("doc-review", 1500);
     for (const tab of ["Preview", "Revisions", "Activity", "Details"]) {
       await page.getByRole("tab", { name: tab, exact: true }).click();
       await shot(`doc-${tab.toLowerCase()}`, tab === "Preview" ? 8000 : 2500);

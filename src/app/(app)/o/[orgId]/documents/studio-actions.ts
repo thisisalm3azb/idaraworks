@@ -32,6 +32,10 @@ import {
   decideReviewStep,
   delegateStep,
   WORKFLOW_PRESETS,
+  createDocComment,
+  resolveDocComment,
+  removeDocComment,
+  decideSuggestion,
   type RevisionDiff,
 } from "@/modules/docstudio/service";
 
@@ -416,4 +420,37 @@ export async function delegateStepAction(
     revalidatePath(`/o/${orgId}/documents`);
     return res;
   });
+}
+
+// ── collaboration (H26E) ─────────────────────────────────────────────────────
+export async function createDocCommentAction(
+  orgId: string,
+  input: Record<string, unknown>,
+): Promise<ActionResult<{ id: string }>> {
+  return run(orgId, async (r) => {
+    const res = await createDocComment(r.ctx, r.archetype, input);
+    revalidatePath(docPath(orgId, String(input.documentId)));
+    return res;
+  });
+}
+
+export async function resolveDocCommentAction(
+  orgId: string,
+  input: Record<string, unknown>,
+): Promise<ActionResult<{ id: string }>> {
+  return run(orgId, (r) => resolveDocComment(r.ctx, r.archetype, input));
+}
+
+export async function removeDocCommentAction(
+  orgId: string,
+  input: Record<string, unknown>,
+): Promise<ActionResult<{ id: string }>> {
+  return run(orgId, (r) => removeDocComment(r.ctx, r.archetype, input));
+}
+
+export async function decideSuggestionAction(
+  orgId: string,
+  input: Record<string, unknown>,
+): Promise<ActionResult<{ id: string; applied: boolean }>> {
+  return run(orgId, (r) => decideSuggestion(r.ctx, r.archetype, input));
 }
