@@ -66,7 +66,6 @@ import {
   signWithToken,
   submitForm,
   submitForReview,
-  WORKFLOW_PRESETS,
 } from "@/modules/docstudio/service";
 import {
   PRODUCTION_PROJECT_REF,
@@ -356,10 +355,21 @@ async function main(): Promise<void> {
     check("recurrence spawned the next item", completed.nextId !== null);
 
     // ── 4. governed workflow ────────────────────────────────────────────────
-    const preset = WORKFLOW_PRESETS.find((p) => p.key === "value_gate") ?? WORKFLOW_PRESETS[0]!;
+    // One approval step assigned to the owner archetype: the smoke has one person.
+    const definition = {
+      steps: [
+        {
+          id: "owner_approval",
+          kind: "approval",
+          name: { en: "Owner approval", ar: "اعتماد المالك" },
+          assignees: [{ type: "archetype", value: "owner" }],
+          dueDays: 3,
+        },
+      ],
+    };
     const wf = await createWorkflow(A(), "owner", {
       name: `Smoke gate ${RUN}`,
-      definition: preset.definition,
+      definition,
     });
     const gatedDoc = await createDocument(A(), "owner", {
       title: `Smoke charter ${RUN}`,
