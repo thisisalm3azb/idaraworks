@@ -278,6 +278,13 @@ async function main(): Promise<void> {
         waitUntil: "load",
       });
       await shot("doc-obligations", 2500);
+      await page.goto(`${BASE}/o/${orgId}/documents/${issuedId}?tab=assistant`, {
+        waitUntil: "load",
+      });
+      await shot("doc-assistant", 2500);
+      notes.push(
+        `assistant: ${(await page.locator("[data-ai]").first().getAttribute("data-ai")) ?? "missing"}`,
+      );
       const complete = page.getByRole("button", { name: /^Complete$/ }).first();
       if (await complete.count()) {
         await complete.click();

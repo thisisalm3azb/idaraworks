@@ -31,6 +31,7 @@ import { WorkflowPane, type WorkflowDict } from "./WorkflowPane";
 import { ReviewPane, type ReviewDict } from "./ReviewPane";
 import { SignaturesPane, type SignaturesDict } from "./SignaturesPane";
 import { FormsPane, type FormsDict } from "./FormsPane";
+import { AiPane, type AiDict } from "./AiPane";
 import { ObligationsBoard } from "../obligations/ObligationsBoard";
 import type { ObligationsDict } from "../obligations/obligationsDict";
 import type { ObligationRow } from "@/modules/docstudio/service";
@@ -55,6 +56,7 @@ export type WorkspaceDict = {
     | "signatures"
     | "forms"
     | "obligations"
+    | "assistant"
     | "revisions"
     | "activity"
     | "details",
@@ -99,6 +101,7 @@ export type WorkspaceDict = {
   forms: FormsDict;
   obligations: ObligationsDict;
   soonDays: number;
+  ai: AiDict;
   consentText: string;
   presence: string;
   saved: string;
@@ -141,6 +144,8 @@ export function DocumentWorkspace({
   submissions,
   obligations,
   userId,
+  aiAvailable,
+  aiOwnerAction,
 }: {
   orgId: string;
   locale: string;
@@ -160,6 +165,8 @@ export function DocumentWorkspace({
   submissions: SubmissionRow[];
   obligations: ObligationRow[];
   userId: string;
+  aiAvailable: boolean;
+  aiOwnerAction: string | null;
 }) {
   const router = useRouter();
   const [, startTransition] = useTransition();
@@ -172,6 +179,7 @@ export function DocumentWorkspace({
     "signatures",
     ...(d.category === "form" ? (["forms"] as Tab[]) : []),
     ...(d.issuedSnapshotId ? (["obligations"] as Tab[]) : []),
+    "assistant",
     "revisions",
     "activity",
     "details",
@@ -469,6 +477,16 @@ export function DocumentWorkspace({
           soonDays={dict.soonDays}
           fixedDocumentId={d.id}
           dict={dict.obligations}
+        />
+      ) : null}
+      {tab === "assistant" ? (
+        <AiPane
+          orgId={orgId}
+          documentId={d.id}
+          available={aiAvailable}
+          ownerAction={aiOwnerAction}
+          canAddObligations={caps.obligations === true}
+          dict={dict.ai}
         />
       ) : null}
       {tab === "revisions" ? (

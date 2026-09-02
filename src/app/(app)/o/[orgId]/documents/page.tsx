@@ -10,10 +10,12 @@ import {
   DOC_STATUSES,
   listDocViews,
   listDocuments,
+  attentionFeed,
   listFolders,
   listTags,
 } from "@/modules/docstudio/service";
 import { DocumentsHome, type HomeDict } from "./DocumentsHome";
+import { AttentionStrip, type AttentionDict } from "./AttentionStrip";
 
 const WINDOW = 500;
 
@@ -33,12 +35,25 @@ export default async function DocumentsPage({
   if (!can(resolved.archetype, "documents.view")) notFound();
   const t = await getT();
   const locale = await getServerLocale();
-  const [docs, folders, tags, views] = await Promise.all([
+  const [docs, folders, tags, views, feed] = await Promise.all([
     listDocuments(resolved.ctx, resolved.archetype, { limit: WINDOW, includeArchived: true }),
     listFolders(resolved.ctx, resolved.archetype),
     listTags(resolved.ctx, resolved.archetype),
     listDocViews(resolved.ctx, resolved.archetype),
+    attentionFeed(resolved.ctx, resolved.archetype),
   ]);
+  const attention: AttentionDict = {
+    title: t("docstudio.attn.title"),
+    overdue: t("docstudio.attn.overdue"),
+    dueSoon: t("docstudio.attn.due_soon"),
+    expiring: t("docstudio.attn.expiring"),
+    mySteps: t("docstudio.attn.my_steps"),
+    awaitingSignature: t("docstudio.attn.awaiting_signature"),
+    submissions: t("docstudio.attn.submissions"),
+    daysLeft: t("docstudio.attn.days_left"),
+    nothing: t("docstudio.attn.nothing"),
+    open: t("docstudio.attn.open"),
+  };
   const dict: HomeDict = {
     status: Object.fromEntries(DOC_STATUSES.map((s) => [s, t(`docstudio.status.${s}`)])),
     category: Object.fromEntries(DOC_CATEGORIES.map((c) => [c, t(`docstudio.category.${c}`)])),
@@ -131,6 +146,7 @@ export default async function DocumentsPage({
       {sp.error ? (
         <p className="rounded-md bg-danger-soft px-3 py-2 text-sm text-danger">{sp.error}</p>
       ) : null}
+      <AttentionStrip orgId={orgId} feed={feed} dict={attention} />
       <DocumentsHome
         orgId={orgId}
         locale={locale}

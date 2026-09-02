@@ -23,6 +23,7 @@ import {
   listSubmissions,
   listObligations,
   getDocSettings,
+  aiAvailability,
   signatureParties,
   CONSENT_TEXT,
 } from "@/modules/docstudio/service";
@@ -68,6 +69,7 @@ export default async function DocumentPage({
     submissions,
     obligations,
     docSettings,
+    ai,
   ] = await Promise.all([
     listFolders(resolved.ctx, resolved.archetype),
     getRunForDocument(resolved.ctx, resolved.archetype, documentId),
@@ -82,6 +84,7 @@ export default async function DocumentPage({
       ? listObligations(resolved.ctx, resolved.archetype, { documentId, limit: 500 })
       : Promise.resolve([]),
     getDocSettings(resolved.ctx, resolved.archetype),
+    aiAvailability(resolved.ctx),
   ]);
   const parties = signatureParties(
     detail.snapshot?.snapshot.body ?? detail.working?.body ?? { blocks: [] },
@@ -117,6 +120,7 @@ export default async function DocumentPage({
       signatures: k("tab_signatures"),
       forms: k("tab_forms"),
       obligations: k("tab_obligations"),
+      assistant: k("tab_assistant"),
       revisions: k("tab_revisions"),
       activity: k("tab_activity"),
       details: k("tab_details"),
@@ -386,6 +390,30 @@ export default async function DocumentPage({
     },
     obligations: obligationsDict(t),
     soonDays: Math.max(0, ...docSettings.reminderDays),
+    ai: {
+      title: t("docstudio.ai.title"),
+      intro: t("docstudio.ai.intro"),
+      unavailableTitle: t("docstudio.ai.unavailable_title"),
+      unavailableBody: t("docstudio.ai.unavailable_body"),
+      ownerAction: t("docstudio.ai.owner_action"),
+      summarise: t("docstudio.ai.summarise"),
+      summary: t("docstudio.ai.summary"),
+      keyTerms: t("docstudio.ai.key_terms"),
+      ask: t("docstudio.ai.ask"),
+      questionPlaceholder: t("docstudio.ai.question_placeholder"),
+      answer: t("docstudio.ai.answer"),
+      cited: t("docstudio.ai.cited"),
+      noEvidence: t("docstudio.ai.no_evidence"),
+      propose: t("docstudio.ai.propose"),
+      proposals: t("docstudio.ai.proposals"),
+      proposalsHint: t("docstudio.ai.proposals_hint"),
+      addObligation: t("docstudio.ai.add_obligation"),
+      added: t("docstudio.ai.added"),
+      notLegalAdvice: t("docstudio.ai.not_legal_advice"),
+      clause: t("docstudio.ai.clause"),
+      working: t("docstudio.ai.working"),
+      failed: t("docstudio.failed"),
+    },
     consentText: CONSENT_TEXT[locale === "ar" ? "ar" : "en"],
     presence: t("docstudio.ws.presence"),
     saved: t("docstudio.saved"),
@@ -419,6 +447,8 @@ export default async function DocumentPage({
       submissions={submissions}
       obligations={obligations}
       userId={resolved.ctx.userId}
+      aiAvailable={ai.available}
+      aiOwnerAction={ai.ownerAction}
       vocab={{
         blockTypes: BLOCK_TYPES,
         fieldKinds: FIELD_KINDS,

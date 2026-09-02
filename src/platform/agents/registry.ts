@@ -57,7 +57,8 @@ export type AgentToolId =
   | "read.money_overview"
   | "read.supply_overview"
   | "read.people_overview"
-  | "read.planning_overview";
+  | "read.planning_overview"
+  | "read.document_text";
 
 export type AgentToolDef = {
   id: AgentToolId;
@@ -112,6 +113,12 @@ export const AGENT_TOOLS: Record<AgentToolId, AgentToolDef> = {
     classification: "read_explain",
     sensitive: false,
   },
+  "read.document_text": {
+    id: "read.document_text",
+    action: "documents.view",
+    classification: "read_explain",
+    sensitive: false,
+  },
 };
 
 export function isAgentToolId(x: string): x is AgentToolId {
@@ -123,6 +130,7 @@ export function isAgentToolId(x: string): x is AgentToolId {
  * the acting user's permissions at run time, so it never widens authority. */
 export const AGENT_TOOL_ALLOW: Record<AgentId, readonly AgentToolId[]> = {
   executive: [
+    "read.document_text",
     "read.work_overview",
     "read.customer_overview",
     "read.money_overview",
@@ -144,6 +152,7 @@ export const AGENT_TOOL_ALLOW: Record<AgentId, readonly AgentToolId[]> = {
     "read.supply_overview",
   ],
   manager: [
+    "read.document_text",
     "read.work_overview",
     "read.operations_overview",
     "read.customer_overview",

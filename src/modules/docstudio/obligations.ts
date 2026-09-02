@@ -94,6 +94,8 @@ export const ObligationInput = z.object({
     .optional()
     .nullable(),
   linkedRecordId: uuid.optional().nullable(),
+  /** Who proposed it: a person, or the assistant (still created by a person). */
+  source: z.enum(["manual", "ai"]).default("manual"),
 });
 export type ObligationInput = z.infer<typeof ObligationInput>;
 
@@ -307,12 +309,12 @@ export async function createObligation(
         insert into public.doc_obligation
           (org_id, document_id, kind, title, description, clause_ref, side, owner_user_id, due_on,
            recurrence_months, amount_cents, currency, risk_level, requires_evidence,
-           linked_record_type, linked_record_id, created_by)
+           linked_record_type, linked_record_id, source, created_by)
         values (${ctx.orgId}, ${d.id}, ${input.kind}, ${input.title}, ${input.description ?? null},
                 ${input.clauseRef ?? null}, ${input.side}, ${input.ownerUserId ?? null}, ${input.dueOn}::date,
                 ${input.recurrenceMonths ?? null}, ${input.amountCents ?? null}, ${input.currency ?? null},
                 ${input.riskLevel ?? null}, ${input.requiresEvidence},
-                ${input.linkedRecordType ?? null}, ${input.linkedRecordId ?? null}, ${ctx.userId})
+                ${input.linkedRecordType ?? null}, ${input.linkedRecordId ?? null}, ${input.source}, ${ctx.userId})
         returning id::text as id
       `)) as unknown as Array<{ id: string }>;
       const id = rows[0]!.id;

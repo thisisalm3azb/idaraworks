@@ -55,6 +55,12 @@ import {
   reopenObligation,
   escalateObligation,
   type ObligationRow,
+  askDocument,
+  summariseDocument,
+  proposeObligations,
+  type AiAnswer,
+  type AiSummary,
+  type AiProposal,
   reviewSubmission,
   convertSubmission,
   type RevisionDiff,
@@ -643,4 +649,26 @@ export async function escalateObligationAction(
     obligationPaths(orgId, input.documentId);
     return res;
   });
+}
+
+// ── assistant (H26I) — read-only; fails closed without a provider ────────────
+export async function aiSummariseAction(
+  orgId: string,
+  input: { documentId: string },
+): Promise<ActionResult<AiSummary>> {
+  return run(orgId, (r) => summariseDocument(r.ctx, r.archetype, input.documentId));
+}
+
+export async function aiAskAction(
+  orgId: string,
+  input: { documentId: string; question: string },
+): Promise<ActionResult<AiAnswer>> {
+  return run(orgId, (r) => askDocument(r.ctx, r.archetype, input));
+}
+
+export async function aiProposeAction(
+  orgId: string,
+  input: { documentId: string },
+): Promise<ActionResult<AiProposal[]>> {
+  return run(orgId, (r) => proposeObligations(r.ctx, r.archetype, input.documentId));
 }
