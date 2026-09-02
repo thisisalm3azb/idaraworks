@@ -108,7 +108,7 @@ export async function GET(
       const revisionId =
         revParam ?? d.workingRevisionId ?? detail.revisions[detail.revisions.length - 1]?.id;
       if (!revisionId) throw new DocError("document has no content", "state");
-      const rev = await getRevision(resolved.ctx, resolved.archetype, revisionId);
+      const rev = await getRevision(resolved.ctx, resolved.archetype, revisionId, d.id);
       const profile = await getDocumentProfile(resolved.ctx);
       const values = await resolveValues(
         resolved.ctx,

@@ -16,10 +16,10 @@ describe("catalogue shape and coverage", () => {
     }
   });
 
-  it("covers the mandated surfaces: 18 formal documents + 25 data exports", () => {
+  it("covers the mandated surfaces: 19 formal documents + 25 data exports", () => {
     // 17 from 003B.1, plus the weekly work plan introduced with the document
-    // foundation in H22.0.
-    expect(DOCUMENT_EXPORTS.length).toBe(18);
+    // foundation in H22.0, plus the governed Document Studio document (H26).
+    expect(DOCUMENT_EXPORTS.length).toBe(19);
     // H23H added leave requests, expense claims and payslips; H24I added the
     // chart of accounts and journal entries.
     expect(DATA_EXPORTS.length).toBe(25);
@@ -77,7 +77,15 @@ describe("HONESTY LAW — availability never overstates reality", () => {
    * Keep this in step with the route, never with intent: it is the whole point
    * of the law that a catalogue entry cannot claim to work before it does.
    */
-  const SERVED = new Set(["doc_quote", "doc_invoice", "doc_credit_note", "doc_week_plan"]);
+  // H26: the Document Studio route (src/app/api/o/[orgId]/documents/studio/[id]/route.ts)
+  // renders any governed document as HTML or a real PDF.
+  const SERVED = new Set([
+    "doc_quote",
+    "doc_invoice",
+    "doc_credit_note",
+    "doc_week_plan",
+    "doc_studio_document",
+  ]);
 
   it("a document claims availability ONLY when the document route renders it", () => {
     for (const e of DOCUMENT_EXPORTS) {

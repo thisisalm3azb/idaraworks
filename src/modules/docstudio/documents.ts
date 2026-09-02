@@ -497,9 +497,20 @@ export async function getRevision(
   ctx: Ctx,
   archetype: RoleArchetype,
   revisionId: string,
+  /** When given, the revision must belong to this document (a foreign revision is not found). */
+  documentId?: string,
 ): Promise<RevisionRow> {
   assertCan(archetype, "documents.view");
-  return withCtx(ctx, (tx) => loadRevisionIn(tx, ctx, revisionId));
+  return withCtx(ctx, async (tx) => {
+    if (documentId) {
+      const owned = (await tx.execute(sql`
+        select 1 from public.doc_revision
+        where id = ${revisionId} and document_id = ${documentId} and org_id = ${ctx.orgId}
+      `)) as unknown[];
+      if (owned.length === 0) throw new DocError("revision not found", "not_found");
+    }
+    return loadRevisionIn(tx, ctx, revisionId);
+  });
 }
 
 export const ListDocumentsInput = z

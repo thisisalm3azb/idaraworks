@@ -172,6 +172,23 @@ export const EXPORT_CATALOGUE: readonly ExportCatalogueEntry[] = [
     availability: "future",
   }),
   doc({
+    id: "doc_studio_document",
+    nameEn: "Governed document (Document Studio)",
+    nameAr: "مستند محكوم (استوديو المستندات)",
+    source: "doc_document + doc_snapshot (modules/docstudio/render.ts)",
+    permission: "documents.view",
+    entitlementFeature: "cap.documents",
+    entitlementNote:
+      "cap.documents gates the Document Studio module; an issued document that exists stays readable and printable to documents.view holders (FR-9).",
+    redaction:
+      "None: the snapshot holds only the values the issuer resolved and approved at issue.",
+    statusEligibility:
+      "issued statuses render the immutable snapshot; drafts render the working revision with the DRAFT watermark",
+    draftWatermark: true,
+    requiresIssuerSnapshot: true,
+    availability: "available",
+  }),
+  doc({
     id: "doc_material_request",
     nameEn: "Material request",
     nameAr: "طلب مواد",

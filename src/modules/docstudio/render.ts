@@ -428,6 +428,7 @@ h2.ds-h{font-size:15pt}h3.ds-h{font-size:12.5pt}h4.ds-h{font-size:11pt}
 .ds-section{margin:4px 0}
 .ds-evidence code{font-size:8.5pt;word-break:break-all}
 [lang="ar"]{font-family:"Noto Naskh Arabic","Noto Sans",sans-serif}
+[lang="en"]{font-family:"Noto Sans","Noto Naskh Arabic",sans-serif}
 `;
 
 const WATERMARK: Record<DocSettings["watermark"], DocumentWatermark | null> = {
