@@ -27,6 +27,11 @@ import {
   updateFolder,
   updateTemplate,
   diffRevisions,
+  createWorkflow,
+  updateWorkflow,
+  decideReviewStep,
+  delegateStep,
+  WORKFLOW_PRESETS,
   type RevisionDiff,
 } from "@/modules/docstudio/service";
 
@@ -350,6 +355,65 @@ export async function retireTemplateAction(
   return run(orgId, async (r) => {
     const res = await retireTemplate(r.ctx, r.archetype, input);
     revalidatePath(`/o/${orgId}/documents/templates`);
+    return res;
+  });
+}
+
+// ── workflows (H26D) ─────────────────────────────────────────────────────────
+export async function createWorkflowAction(orgId: string, formData: FormData): Promise<void> {
+  const resolved = await resolveCtxForAction(orgId);
+  if (resolved === "mfa_required") redirect("/mfa");
+  if (typeof resolved === "string") redirect("/");
+  let id = "";
+  try {
+    const preset = String(formData.get("preset") ?? "");
+    const found = WORKFLOW_PRESETS.find((p) => p.key === preset);
+    const r = await createWorkflow(resolved.ctx, resolved.archetype, {
+      name: String(formData.get("name") ?? ""),
+      description: String(formData.get("description") ?? "") || undefined,
+      ...(found ? { definition: found.definition } : {}),
+    });
+    id = r.id;
+  } catch (err) {
+    if ((err as { digest?: string }).digest?.startsWith("NEXT_REDIRECT")) throw err;
+    redirect(
+      `/o/${orgId}/documents/workflows?error=${encodeURIComponent(messageOf(err).slice(0, 160))}`,
+    );
+  }
+  revalidatePath(`/o/${orgId}/documents/workflows`);
+  redirect(`/o/${orgId}/documents/workflows/${id}`);
+}
+
+export async function updateWorkflowAction(
+  orgId: string,
+  input: Record<string, unknown>,
+): Promise<ActionResult<{ rowVersion: number }>> {
+  return run(orgId, async (r) => {
+    const res = await updateWorkflow(r.ctx, r.archetype, input);
+    revalidatePath(`/o/${orgId}/documents/workflows`);
+    revalidatePath(`/o/${orgId}/documents/workflows/${String(input.workflowId)}`);
+    return res;
+  });
+}
+
+export async function decideReviewStepAction(
+  orgId: string,
+  input: Record<string, unknown>,
+): Promise<ActionResult<{ id: string }>> {
+  return run(orgId, async (r) => {
+    const res = await decideReviewStep(r.ctx, r.archetype, input);
+    revalidatePath(`/o/${orgId}/documents`);
+    return res;
+  });
+}
+
+export async function delegateStepAction(
+  orgId: string,
+  input: Record<string, unknown>,
+): Promise<ActionResult<{ id: string }>> {
+  return run(orgId, async (r) => {
+    const res = await delegateStep(r.ctx, r.archetype, input);
+    revalidatePath(`/o/${orgId}/documents`);
     return res;
   });
 }

@@ -78,6 +78,19 @@ type SubjectConfig = {
   onApprove: string;
   onReject: string;
   onWithdraw: string;
+  /**
+   * H26: a subject that orchestrates something ABOVE the engine (a document
+   * workflow run) advances itself here, in the SAME decision transaction, after
+   * the guarded status move succeeded. Imported dynamically so the engine never
+   * depends on a module at load time.
+   */
+  afterDecide?: (
+    tx: TenantTx,
+    ctx: Ctx,
+    subjectId: string,
+    outcome: "approved" | "rejected",
+    note: string | null,
+  ) => Promise<void>;
 };
 const SUBJECTS: Record<string, SubjectConfig> = {
   material_request: {
@@ -179,6 +192,20 @@ const SUBJECTS: Record<string, SubjectConfig> = {
     onApprove: "completed",
     onReject: "in_progress",
     onWithdraw: "in_progress",
+  },
+  // H26: one step of a document workflow run (ADR-22). The step run is the
+  // subject, so parallel approvers are distinct subjects and the engine's
+  // one-live-approval law holds; the run advances in afterDecide.
+  document_step: {
+    table: "doc_workflow_step_run",
+    live: "active",
+    onApprove: "completed",
+    onReject: "rejected",
+    onWithdraw: "cancelled",
+    afterDecide: async (tx, ctx, subjectId, outcome, note) => {
+      const { onStepDecidedIn } = await import("@/modules/docstudio/service");
+      await onStepDecidedIn(tx, ctx, subjectId, outcome, note);
+    },
   },
 };
 
@@ -450,6 +477,13 @@ export type SubmitForApprovalParams = {
   /** When true, the subject was auto-approved (e.g. an MR→PO conversion of an
    * already-approved MR) — skip routing, create an already-approved approval. */
   preApproved?: boolean;
+  /**
+   * H26: the caller already knows who decides (a workflow step names its
+   * assignee). Rules are bypassed; `userId` pins one person (their archetype
+   * is `role`), otherwise every member of `role` may decide. Self-approval
+   * escalation still applies so a requester never decides their own step.
+   */
+  assign?: { role: RoleArchetype; userId?: string | null };
 };
 
 /**
@@ -587,8 +621,12 @@ export async function submitForApproval(
     return { approvalId, assignedRole: "owner", decided: true };
   }
 
-  const rules = await loadActiveRules(tx, ctx, params.subjectType);
-  const resolved = resolveRule(rules, amount, params.urgency ?? null);
+  const rules = params.assign ? [] : await loadActiveRules(tx, ctx, params.subjectType);
+  const resolved = params.assign
+    ? { rule: null, assignedRole: params.assign.role, autoApprove: false }
+    : resolveRule(rules, amount, params.urgency ?? null);
+  const pinnedUser =
+    params.assign?.userId && params.assign.userId !== ctx.userId ? params.assign.userId : null;
 
   // Auto-approve below threshold (off by default, D-5.3): create an already-
   // approved approval attributed to the submission (self_approved stays false —
@@ -622,6 +660,7 @@ export async function submitForApproval(
   let role = resolved.assignedRole;
   let guard = 0;
   while (
+    !pinnedUser &&
     role !== "owner" &&
     (await countEligibleDeciders(tx, ctx, role, ctx.userId)) === 0 &&
     guard < 6
@@ -634,10 +673,10 @@ export async function submitForApproval(
     await tx.execute(sql`
       insert into public.approval
         (id, org_id, subject_type, subject_id, subject_summary, rule_id, requested_by,
-         assigned_role, state)
+         assigned_role, assigned_user_id, state)
       values (${approvalId}, ${ctx.orgId}, ${params.subjectType}, ${params.subjectId},
               ${JSON.stringify(params.subjectSummary)}::jsonb, ${resolved.rule?.id ?? null},
-              ${ctx.userId}, ${role}, 'pending')
+              ${ctx.userId}, ${role}, ${pinnedUser}, 'pending')
     `);
   } catch (err) {
     // A concurrent submit already opened the ONE live approval (0037 partial
@@ -651,13 +690,15 @@ export async function submitForApproval(
 
   // Push a REDACTED notification (NO amount, F-23) to every OTHER member of the
   // assigned role, in this same tx (atomic submission).
-  const members = (await tx.execute(sql`
-    select m.user_id::text as user_id
-    from public.membership m
-    join public.role_definition r on r.org_id = m.org_id and r.key = m.role_key
-    where m.org_id = ${ctx.orgId} and r.archetype = ${role}
-      and m.deactivated_at is null and m.user_id <> ${ctx.userId}
-  `)) as unknown as Array<{ user_id: string }>;
+  const members = pinnedUser
+    ? [{ user_id: pinnedUser }]
+    : ((await tx.execute(sql`
+        select m.user_id::text as user_id
+        from public.membership m
+        join public.role_definition r on r.org_id = m.org_id and r.key = m.role_key
+        where m.org_id = ${ctx.orgId} and r.archetype = ${role}
+          and m.deactivated_at is null and m.user_id <> ${ctx.userId}
+      `)) as unknown as Array<{ user_id: string }>);
   for (const m of members) {
     await createNotificationIn(tx, ctx, {
       recipientUserId: m.user_id,
@@ -745,7 +786,9 @@ export async function decideApproval(
                         ? "pay_run"
                         : r.subjectType === "scenario_apply"
                           ? "studio_scenario"
-                          : "material_request",
+                          : r.subjectType === "document_step"
+                            ? "document"
+                            : "material_request",
         entityId: r.subjectId,
         verb: r.outcome === "approved" ? "approved" : "rejected",
         summary: `${r.outcome} the ${r.subjectType.replace("_", " ")}${r.selfApproved ? " (self-approved)" : ""}`,
@@ -843,6 +886,17 @@ export async function decideApproval(
               reference: poRows[0]?.reference ?? row.subject_id,
             },
           });
+        }
+        // H26: a subject that orchestrates above the engine advances now, in
+        // this transaction, only when the guarded move actually happened.
+        if (moved[0] && cfg.afterDecide) {
+          await cfg.afterDecide(
+            tx,
+            ctx,
+            row.subject_id,
+            input.decision,
+            input.note?.trim() ?? null,
+          );
         }
       }
 

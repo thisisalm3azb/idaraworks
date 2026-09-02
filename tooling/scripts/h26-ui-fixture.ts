@@ -21,6 +21,8 @@ import {
   issueDocument,
   saveRevision,
   submitForReview,
+  createWorkflow,
+  WORKFLOW_PRESETS,
 } from "@/modules/docstudio/service";
 
 const MARKER = "fixture.h26_ui";
@@ -235,6 +237,51 @@ async function seed(): Promise<void> {
   });
   await submitForReview(A, "owner", { documentId: sup.id });
 
+  // 5. A value-gated workflow and a document waiting in it (manager approval open).
+  const wf = await createWorkflow(A, "owner", {
+    name: "Value gate (manager, then owner above 50,000)",
+    definition: WORKFLOW_PRESETS.find((p) => p.key === "value_gate")!.definition,
+  });
+  await createWorkflow(A, "owner", {
+    name: "Manager review then owner approval",
+    definition: WORKFLOW_PRESETS.find((p) => p.key === "manager_review")!.definition,
+  });
+  const gated = await createDocument(A, "owner", {
+    title: `Charter services 2027 ${run}`,
+    category: "agreement",
+    language: "bilingual",
+    builtinKey: "builtin.service_agreement",
+    counterparty: { kind: "customer", id: customer.id },
+    workflowId: wf.id,
+    tags: ["charter"],
+  });
+  const gatedRev = await getRevision(A, "owner", gated.revisionId);
+  await saveRevision(A, "owner", {
+    documentId: gated.id,
+    revisionId: gated.revisionId,
+    expectedRowVersion: gatedRev.rowVersion,
+    body: {
+      blocks: gatedRev.body.blocks.map((b) =>
+        b.type === "line_items"
+          ? {
+              ...b,
+              items: [
+                {
+                  description: { en: "Season charter support", ar: "دعم موسم التأجير" },
+                  qty: 1,
+                  unit: "lot",
+                  unitPriceMinor: 7500000,
+                  vatRate: 5,
+                },
+              ],
+            }
+          : b,
+      ),
+    },
+    variables: { payment_days: 30 },
+  });
+  await submitForReview(A, "owner", { documentId: gated.id });
+
   console.log("\nDOCUMENT STUDIO FIXTURE READY");
   console.log(`  org:        ${orgId}`);
   console.log(`  hub:        /o/${orgId}/documents`);
@@ -242,6 +289,8 @@ async function seed(): Promise<void> {
   console.log(`  issued:     /o/${orgId}/documents/${sa.id}`);
   console.log(`  offer:      /o/${orgId}/documents/${offer.id}`);
   console.log(`  in review:  /o/${orgId}/documents/${sup.id}`);
+  console.log(`  workflow:   /o/${orgId}/documents/workflows/${wf.id}`);
+  console.log(`  gated doc:  /o/${orgId}/documents/${gated.id}`);
   console.log(`  sign in:    ${email}  /  ${password}`);
 }
 

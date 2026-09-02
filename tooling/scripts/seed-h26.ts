@@ -50,6 +50,15 @@ async function workflowRow(o: Owner, org: string, u: string): Promise<string> {
   return id;
 }
 
+async function runRow(o: Owner, org: string, u: string): Promise<{ run: string; doc: string }> {
+  const doc = await documentRow(o, org, u);
+  const rev = await frozenRevisionRow(o, org, u, doc);
+  const id = randomUUID();
+  await o`insert into public.doc_workflow_run (id, org_id, document_id, revision_id, definition, started_by, created_by)
+          values (${id}, ${org}, ${doc}, ${rev}, '{"version":1,"steps":[]}'::jsonb, ${u}, ${u})`;
+  return { run: id, doc };
+}
+
 export const H26_SEEDERS: Record<string, Seeder> = {
   doc_folder: async (o, org, u) => {
     await o`insert into public.doc_folder (org_id, name, created_by) values (${org}, 'Bleed folder', ${u})`;
@@ -88,6 +97,14 @@ export const H26_SEEDERS: Record<string, Seeder> = {
     const d = await documentRow(o, org, u);
     await o`insert into public.doc_comment (org_id, document_id, body, author_user_id)
             values (${org}, ${d}, 'Bleed comment', ${u})`;
+  },
+  doc_workflow_run: async (o, org, u) => {
+    await runRow(o, org, u);
+  },
+  doc_workflow_step_run: async (o, org, u) => {
+    const { run, doc } = await runRow(o, org, u);
+    await o`insert into public.doc_workflow_step_run (org_id, run_id, document_id, step_id, step_index, kind, status, created_by)
+            values (${org}, ${run}, ${doc}, 's1', 0, 'review', 'skipped', ${u})`;
   },
   doc_saved_view: async (o, org, u) => {
     await o`insert into public.doc_saved_view (org_id, name, created_by, is_shared)

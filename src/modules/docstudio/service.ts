@@ -21,3 +21,4 @@ export {
 } from "./events";
 export * from "./signatures";
 export * from "./workflows";
+export * from "./workflow-runs";

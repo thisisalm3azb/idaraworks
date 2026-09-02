@@ -15,8 +15,11 @@ import {
   DocError,
   documentCapabilities,
   getDocument,
+  getRunForDocument,
   listFolders,
 } from "@/modules/docstudio/service";
+import { listMembers } from "@/platform/auth/identity";
+import { MVP_GRANTABLE_ARCHETYPES } from "@/platform/registries";
 import { DocumentWorkspace, type WorkspaceDict } from "./DocumentWorkspace";
 import { builderDict } from "./builderDict";
 
@@ -44,7 +47,11 @@ export default async function DocumentPage({
     if (err instanceof DocError && err.code === "not_found") notFound();
     throw err;
   }
-  const folders = await listFolders(resolved.ctx, resolved.archetype);
+  const [folders, run, members] = await Promise.all([
+    listFolders(resolved.ctx, resolved.archetype),
+    getRunForDocument(resolved.ctx, resolved.archetype, documentId),
+    listMembers(resolved.ctx, resolved.archetype).catch(() => []),
+  ]);
   const caps = documentCapabilities(resolved.archetype, detail.document);
   const k = (key: string) => t(`docstudio.ws.${key}`);
   const dict: WorkspaceDict = {
@@ -68,6 +75,7 @@ export default async function DocumentPage({
     tabs: {
       edit: k("tab_edit"),
       preview: k("tab_preview"),
+      workflow: k("tab_workflow"),
       revisions: k("tab_revisions"),
       activity: k("tab_activity"),
       details: k("tab_details"),
@@ -188,6 +196,45 @@ export default async function DocumentPage({
         bilingual: t("docstudio.language.bilingual"),
       },
     },
+    workflow: {
+      title: t("docstudio.wfp.title"),
+      none: t("docstudio.wfp.none"),
+      noneHint: t("docstudio.wfp.none_hint"),
+      run: Object.fromEntries(
+        ["running", "completed", "rejected", "cancelled"].map((x) => [
+          x,
+          t(`docstudio.wfp.run.${x}`),
+        ]),
+      ),
+      step: Object.fromEntries(
+        ["pending", "active", "completed", "rejected", "skipped", "cancelled"].map((x) => [
+          x,
+          t(`docstudio.wfp.step.${x}`),
+        ]),
+      ),
+      kinds: {
+        review: t("docstudio.wf.kind.review"),
+        approval: t("docstudio.wf.kind.approval"),
+        signature: t("docstudio.wf.kind.signature"),
+      },
+      started: t("docstudio.wfp.started"),
+      finished: t("docstudio.wfp.finished"),
+      outcome: t("docstudio.wfp.outcome"),
+      assignee: t("docstudio.wfp.assignee"),
+      due: t("docstudio.wfp.due"),
+      overdue: t("docstudio.wfp.overdue"),
+      decidedBy: t("docstudio.wfp.decided_by"),
+      approve: t("docstudio.wfp.approve"),
+      reject: t("docstudio.wfp.reject"),
+      note: t("docstudio.wfp.note"),
+      delegate: t("docstudio.wfp.delegate"),
+      delegateTo: t("docstudio.wfp.delegate_to"),
+      inInbox: t("docstudio.wfp.in_inbox"),
+      openInbox: t("docstudio.wfp.open_inbox"),
+      archetypeNames: Object.fromEntries(
+        MVP_GRANTABLE_ARCHETYPES.map((a) => [a, t(`docstudio.role.${a}`)]),
+      ),
+    },
     saved: t("docstudio.saved"),
     failed: t("docstudio.failed"),
     conflict: t("docstudio.conflict"),
@@ -203,6 +250,13 @@ export default async function DocumentPage({
       folders={folders.map((f) => ({ id: f.id, name: f.name }))}
       initialTab={sp.tab ?? (caps.edit ? "edit" : "preview")}
       dict={dict}
+      run={run}
+      members={members.map((m) => ({ id: m.userId, name: m.fullName }))}
+      viewer={{
+        id: resolved.ctx.userId,
+        archetype: resolved.archetype,
+        canReview: can(resolved.archetype, "documents.review"),
+      }}
       vocab={{
         blockTypes: BLOCK_TYPES,
         fieldKinds: FIELD_KINDS,

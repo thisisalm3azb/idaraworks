@@ -52,6 +52,7 @@ export const APPROVABLE_TYPES = [
   "pay_run",
   "journal_entry", // H24 — optional approval before posting (engine never touches its status)
   "scenario_apply", // H25 — applying a scenario to live records (studio checks the state itself)
+  "document_step", // H26 — one step of a document workflow run; the run advances in afterDecide
   // P3 (with QC): "stage_signoff", "qc_delivery_override"
 ] as const;
 export type ApprovableType = (typeof APPROVABLE_TYPES)[number];

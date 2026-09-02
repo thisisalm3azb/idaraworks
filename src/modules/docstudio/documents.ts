@@ -29,6 +29,7 @@ import { getDocSettingsIn } from "./library";
 import { visibleBlocks, type ResolvedValues } from "./render";
 import { contentHash } from "./snapshot";
 import { templateBodyIn } from "./templates";
+import { cancelRunIn, startRunIn } from "./workflow-runs";
 import {
   COUNTERPARTY_KINDS,
   DEFAULT_SETTINGS,
@@ -734,7 +735,7 @@ async function freezeWorkingIn(
 }
 
 /** Open a new working revision based on the latest frozen one. */
-async function openWorkingIn(tx: TenantTx, ctx: Ctx, d: DocumentRow): Promise<RevisionRow> {
+export async function openWorkingIn(tx: TenantTx, ctx: Ctx, d: DocumentRow): Promise<RevisionRow> {
   const latest = await latestRevisionIn(tx, ctx, d.id);
   if (!latest) throw new DocError("document has no revisions", "state");
   if (latest.state === "working") return latest;
@@ -803,7 +804,10 @@ export async function submitForReview(
         throw new DocError("only a draft can be submitted for review", "state");
       const rev = await freezeWorkingIn(tx, ctx, d, input.note ?? null);
       validateForIssue(rev);
-      await setStatusIn(tx, ctx, d, "review");
+      // A workflow (the document’s own, else its template’s default) starts here;
+      // the first active step decides whether the document waits in review or approval.
+      const started = await startRunIn(tx, ctx, d, rev);
+      await setStatusIn(tx, ctx, d, started ? started.initialStatus : "review");
       await appendEventIn(tx, ctx, {
         documentId: d.id,
         kind: "submitted_for_review",
@@ -852,6 +856,7 @@ export async function returnToDraft(
         kind: "review_returned",
         payload: { note: input.note },
       });
+      await cancelRunIn(tx, ctx, d.id, input.note);
       await setStatusIn(tx, ctx, d, "draft");
       const rev = await openWorkingIn(tx, ctx, await loadDocIn(tx, ctx, d.id));
       return { revisionId: rev.id };

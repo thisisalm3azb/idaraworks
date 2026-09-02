@@ -63,6 +63,8 @@ describe("registries (phase2 closed vocabularies)", () => {
         "journal_entry",
         // H25: applying a scenario to live records can require a second person.
         "scenario_apply",
+        // H26: each step of a document workflow run is its own subject.
+        "document_step",
       ].sort(),
     );
     // invoice_issue is explicitly OUT of the MVP enum (audit C-1)

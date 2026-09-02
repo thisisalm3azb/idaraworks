@@ -76,6 +76,28 @@ async function main(): Promise<void> {
     await shot("new");
     await page.goto(`${BASE}/o/${orgId}/documents/templates`, { waitUntil: "load" });
     await shot("templates-list", 2500);
+    await page.goto(`${BASE}/o/${orgId}/documents/workflows`, { waitUntil: "load" });
+    await shot("workflows-list", 2500);
+    const designerLink = page.getByRole("link", { name: "Open designer" }).first();
+    if (await designerLink.count()) {
+      await designerLink.click();
+      await page.waitForURL((u) => u.pathname.includes("/documents/workflows/"), {
+        timeout: 60_000,
+      });
+      await shot("workflow-designer", 3000);
+      const firstStep = page.locator("ol li button").first();
+      if (await firstStep.count()) {
+        await firstStep.click();
+        await shot("workflow-designer-step", 1500);
+      }
+    }
+    const gatedId = process.argv[6];
+    if (gatedId) {
+      await page.goto(`${BASE}/o/${orgId}/documents/${gatedId}?tab=workflow`, {
+        waitUntil: "load",
+      });
+      await shot("doc-workflow", 3000);
+    }
     const docUrl = `${BASE}/o/${orgId}/documents/${docId}`;
     await page.goto(`${docUrl}?tab=edit`, { waitUntil: "load" });
     await shot("builder", 2500);

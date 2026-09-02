@@ -27,6 +27,8 @@ import { RevisionsPane, type RevisionsDict } from "./RevisionsPane";
 import { ActivityPane, type ActivityDict } from "./ActivityPane";
 import { DetailsPane, type DetailsDict } from "./DetailsPane";
 import { PreviewPane } from "./PreviewPane";
+import { WorkflowPane, type WorkflowDict } from "./WorkflowPane";
+import type { RunRow } from "@/modules/docstudio/service";
 
 export type WorkspaceDict = {
   status: Record<string, string>;
@@ -35,7 +37,7 @@ export type WorkspaceDict = {
   bindings: Record<string, string>;
   counterparty: Record<string, string>;
   recordKinds: Record<string, string>;
-  tabs: Record<"edit" | "preview" | "revisions" | "activity" | "details", string>;
+  tabs: Record<"edit" | "preview" | "workflow" | "revisions" | "activity" | "details", string>;
   actions: {
     submit: string;
     returnDraft: string;
@@ -69,6 +71,7 @@ export type WorkspaceDict = {
   revisions: RevisionsDict;
   activity: ActivityDict;
   details: DetailsDict;
+  workflow: WorkflowDict;
   saved: string;
   failed: string;
   conflict: string;
@@ -99,6 +102,9 @@ export function DocumentWorkspace({
   initialTab,
   dict,
   vocab,
+  run,
+  members,
+  viewer,
 }: {
   orgId: string;
   locale: string;
@@ -108,11 +114,14 @@ export function DocumentWorkspace({
   initialTab: string;
   dict: WorkspaceDict;
   vocab: Vocabulary;
+  run: RunRow | null;
+  members: Array<{ id: string; name: string }>;
+  viewer: { id: string; archetype: string; canReview: boolean };
 }) {
   const router = useRouter();
   const [, startTransition] = useTransition();
   const d = detail.document;
-  const tabs: Tab[] = ["edit", "preview", "revisions", "activity", "details"];
+  const tabs: Tab[] = ["edit", "preview", "workflow", "revisions", "activity", "details"];
   const [tab, setTab] = useState<Tab>(
     tabs.includes(initialTab as Tab) ? (initialTab as Tab) : "preview",
   );
@@ -320,6 +329,19 @@ export function DocumentWorkspace({
             failed: dict.actions.loadFailed,
             openTab: dict.actions.openTab,
           }}
+        />
+      ) : null}
+      {tab === "workflow" ? (
+        <WorkflowPane
+          orgId={orgId}
+          run={run}
+          members={members}
+          currentUserId={viewer.id}
+          currentArchetype={viewer.archetype}
+          canReview={viewer.canReview}
+          locale={locale}
+          dict={dict.workflow}
+          settle={settle}
         />
       ) : null}
       {tab === "revisions" ? (

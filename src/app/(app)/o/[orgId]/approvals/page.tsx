@@ -24,6 +24,8 @@ const SUBJECT_PATH: Record<string, (id: string) => string> = {
   overtime_request: () => `/leave`,
   expense_claim: () => `/claims`,
   pay_run: (id) => `/payroll/${id}`,
+  // H26: the subject is a workflow step run; the page resolves it to its document.
+  document_step: (id) => `/documents/step/${id}`,
 };
 
 export default async function ApprovalsPage({
