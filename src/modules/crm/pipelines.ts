@@ -562,7 +562,8 @@ function boardWhere(ctx: Ctx, q: BoardQuery) {
   return sql`
     o.org_id = ${ctx.orgId} and o.archived = false
     and (${status}::text is null or o.status = ${status})
-    and (${q.pipelineId ?? null}::uuid is null or o.pipeline_id = ${q.pipelineId ?? null}::uuid)
+    and (${q.pipelineId ?? null}::uuid is null or o.pipeline_id = ${q.pipelineId ?? null}::uuid
+      or (o.pipeline_id is null and exists (select 1 from public.crm_pipeline p where p.id = ${q.pipelineId ?? null}::uuid and p.org_id = o.org_id and p.is_default)))
     and (${search}::text is null or o.name ilike ${search} or c.name ilike ${search})
     and (${q.ownerUserId ?? null}::uuid is null or o.owner_user_id = ${q.ownerUserId ?? null}::uuid)
     and (${q.customerId ?? null}::uuid is null or o.customer_id = ${q.customerId ?? null}::uuid)

@@ -86,8 +86,10 @@ async function main(): Promise<void> {
     // Command centre: Ctrl+K, search a deal, Enter opens it.
     await page.keyboard.press("Control+k");
     await page.waitForTimeout(400);
-    await page.keyboard.type("Hull refit 0001");
-    await page.waitForTimeout(1500);
+    await page.keyboard.type("Hull refit 0005");
+    await page
+      .waitForSelector("[role=option]", { timeout: 60_000 })
+      .catch(() => errors.push("palette: no results arrived"));
     await shot("palette", 300);
     await page.keyboard.press("Enter");
     await page.waitForURL((u) => /\/revenue\/deals\/[0-9a-f-]{36}/.test(u.pathname), {
@@ -122,7 +124,12 @@ async function main(): Promise<void> {
           .getByRole("button", { name: /^Move$|^نقل$/ })
           .last()
           .click();
-        await page.waitForTimeout(2500);
+        await page
+          .locator("[role=dialog]")
+          .getByText(/Moved|Missing|Changed by someone|Not possible|تم النقل|مفقود/)
+          .first()
+          .waitFor({ timeout: 90_000 })
+          .catch(() => errors.push("move: no outcome shown"));
         await shot("pipeline-move-result", 400);
         notes.push(
           `move-dialog: ${(
@@ -143,7 +150,7 @@ async function main(): Promise<void> {
     await shot("leads", 2500);
     const leadsText = await text(page);
     const leadTotal = Number(
-      (leadsText.match(/([\d,]+)\s+deals/) ?? [])[1]?.replace(/,/g, "") ?? 0,
+      (leadsText.match(/([\d,]+)\s+leads/) ?? [])[1]?.replace(/,/g, "") ?? 0,
     );
     notes.push(`leads total=${leadTotal}`);
     if (leadTotal <= 1000) errors.push(`leads: total ${leadTotal} is not past the 1,000-row cap`);
@@ -159,7 +166,9 @@ async function main(): Promise<void> {
       const trust = page.getByRole("button", { name: /^Trust$|^توثيق$/ }).first();
       if (await trust.count()) {
         await trust.click();
-        await page.waitForTimeout(2500);
+        await page
+          .waitForURL(/ok=reviewed/, { timeout: 90_000 })
+          .catch(() => errors.push("trust: no redirect"));
         await shot("lead-trusted", 500);
       }
     }
@@ -169,7 +178,9 @@ async function main(): Promise<void> {
     await page.locator('input[name="email"]').first().fill(`walk-${Date.now()}@example.invalid`);
     await page.locator('input[name="value_major"]').first().fill("125000");
     await page.getByRole("button", { name: /Capture lead|تسجيل العميل المحتمل/ }).click();
-    await page.waitForTimeout(3000);
+    await page
+      .waitForURL(/ok=captured/, { timeout: 90_000 })
+      .catch(() => errors.push("capture: no redirect"));
     await shot("lead-captured", 500);
     expectText("lead-captured", await text(page), /Lead captured|تم تسجيل/);
 
@@ -194,7 +205,9 @@ async function main(): Promise<void> {
       .getByRole("button", { name: /Log activity|تسجيل نشاط/ })
       .first()
       .click();
-    await page.waitForTimeout(2500);
+    await page
+      .waitForURL(/ok=logged/, { timeout: 90_000 })
+      .catch(() => errors.push("log: no redirect"));
     await shot("deal-history-logged", 500);
 
     // Customer 360 and merge preview (nothing applied).
@@ -205,7 +218,9 @@ async function main(): Promise<void> {
     if (await src.count()) {
       await src.selectOption({ index: 1 });
       await page.getByRole("button", { name: /Preview merge|معاينة الدمج/ }).click();
-      await page.waitForTimeout(2500);
+      await page
+        .waitForURL(/source=/, { timeout: 90_000 })
+        .catch(() => errors.push("merge: no preview"));
       await shot("customer-merge-preview", 500);
       expectText("merge-preview", await text(page), /Records that will move|السجلات التي ستنتقل/);
     }
@@ -227,7 +242,9 @@ async function main(): Promise<void> {
     const dry = page.getByRole("button", { name: /^Dry run$|^تجربة$/ }).first();
     if (await dry.count()) {
       await dry.click();
-      await page.waitForTimeout(4000);
+      await page
+        .waitForURL(/ok=ran/, { timeout: 90_000 })
+        .catch(() => errors.push("dry run: no redirect"));
       await shot("automations-dry-run", 500);
       expectText("automations-dry-run", await text(page), /matched|مطابق/);
     }

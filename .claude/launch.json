@@ -24,6 +24,12 @@
       "runtimeExecutable": "node",
       "runtimeArgs": ["tooling/scripts/dev-docstudio-preview.mjs"],
       "port": 3213
+    },
+    {
+      "name": "revenue-preview",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["tooling/scripts/dev-revenue-preview.mjs"],
+      "port": 3214
     }
   ]
 }

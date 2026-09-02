@@ -147,7 +147,8 @@ export async function computeForecast(
       left join public.user_profile u on u.id = o.owner_user_id
       left join public.pipeline_stage s on s.org_id = o.org_id and s.key = o.stage_key
       where o.org_id = ${ctx.orgId} and o.status = 'open' and o.archived = false
-        and (${q.pipelineId ?? null}::uuid is null or o.pipeline_id = ${q.pipelineId ?? null}::uuid)
+        and (${q.pipelineId ?? null}::uuid is null or o.pipeline_id = ${q.pipelineId ?? null}::uuid
+      or (o.pipeline_id is null and exists (select 1 from public.crm_pipeline p where p.id = ${q.pipelineId ?? null}::uuid and p.org_id = o.org_id and p.is_default)))
         and (${q.ownerUserId ?? null}::uuid is null or o.owner_user_id = ${q.ownerUserId ?? null}::uuid)
         and (${q.territoryId ?? null}::uuid is null or o.territory_id = ${q.territoryId ?? null}::uuid)
         and (${q.campaignId ?? null}::uuid is null or o.campaign_id = ${q.campaignId ?? null}::uuid)

@@ -51,7 +51,7 @@ function BarChart({
         <p className="text-sm text-ink-muted">{none}</p>
       ) : (
         <svg
-          viewBox={`0 0 400 ${h}`}
+          viewBox={`0 0 520 ${h}`}
           width="100%"
           height={h}
           role="img"
@@ -59,7 +59,7 @@ function BarChart({
           className="text-ink"
         >
           {bars.map((b, i) => {
-            const w = Math.max(2, Math.round((b.value / max) * 240));
+            const w = Math.max(2, Math.round((b.value / max) * 220));
             const y = i * rowH;
             return (
               <g key={b.key} transform={`translate(0 ${y})`}>

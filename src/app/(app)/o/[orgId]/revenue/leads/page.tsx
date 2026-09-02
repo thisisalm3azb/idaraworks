@@ -285,7 +285,7 @@ export default async function LeadsPage({
           </div>
         </form>
         <div className="mt-3 flex flex-wrap gap-2 text-xs">
-          <Badge tone="brand">{t("revenue.board.total", { n: leads.total })}</Badge>
+          <Badge tone="brand">{t("revenue.leads.total", { n: leads.total })}</Badge>
           {Object.entries(leads.byStatus).map(([s, n]) => (
             <Badge key={s} tone="neutral">
               {t(`revenue.lead_status.${s}`)} {n}

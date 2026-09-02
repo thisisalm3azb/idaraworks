@@ -113,17 +113,16 @@ function healthOf(
     {
       key: "satisfaction",
       label: "Satisfaction",
-      weight: 2,
-      value:
-        f.satisfaction === null ? null : f.satisfaction >= 4 ? 1 : f.satisfaction >= 3 ? 0 : -1,
-      evidence: f.satisfaction === null ? "not recorded" : `${f.satisfaction}/5`,
+      weight: 3,
+      value: f.satisfaction === null ? null : (f.satisfaction - 3) / 2,
+      evidence: f.satisfaction === null ? "no satisfaction record" : `${f.satisfaction}/5`,
     },
     {
       key: "churn",
-      label: "Churn risk",
-      weight: 3,
-      value: f.churn === null ? null : f.churn >= 60 ? -1 : 0.5,
-      evidence: f.churn === null ? "not recorded" : `${f.churn}/100`,
+      label: "Churn risk record",
+      weight: 2,
+      value: f.churn === null ? null : 1 - (f.churn / 100) * 2,
+      evidence: f.churn === null ? "no churn-risk record" : `${f.churn}/100`,
     },
   ]);
 }

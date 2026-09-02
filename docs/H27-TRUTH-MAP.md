@@ -260,3 +260,103 @@ third-party format compatibility beyond the documented CSV/XLSX columns.
 404 for every new surface, nav group hidden, public routes 404). Entitlement
 `cap.revenue_studio` on every plan (no pricing decision taken). Data-layer
 changes are additive and safe while the flag is off.
+
+
+## Part G — What was built (implementation record)
+
+Written after the slices landed; every claim below is backed by a test, a
+script, or a migration in the repository. Deployment evidence lives in
+`docs/H27-REPORT.md`.
+
+### G.1 Migrations (0120–0127, additive)
+
+| File | What it adds |
+| --- | --- |
+| `0120_h27a_revenue_foundation.sql` | `cap.revenue_studio` entitlement on every plan; approval subject `crm_discount`; `crm_territory`, `crm_pipeline` (one default per org), `crm_campaign`; `pipeline_stage.pipeline_id/requirements/exit_criteria/default_probability/max_age_days`; CRM columns on `customer`, `customer_contact`, `lead`, `opportunity`, `sales_activity` (widened `kind`, customer-only subject allowed) |
+| `0121_h27b_opportunity_context.sql` | stakeholders, product lines, competitors, risks, `crm_discount` (one live request per opportunity), `crm_deal_canvas` (row-versioned) |
+| `0122_h27c_consent_attribution.sql` | `crm_consent` (append-only), `crm_suppression` (unique per org/channel/address, never deleted by the app role), `crm_touch` |
+| `0123_h27d_forecast_targets.sql` | `crm_forecast_snapshot`, `crm_scenario`, `crm_target` (dated rows; latest `effective_from` wins) |
+| `0124_h27e_success_merge_automation.sql` | `crm_customer_signal`, `crm_merge` (immutable evidence), `crm_automation`, `crm_automation_run` (unique per automation × subject × occurrence × mode) |
+| `0125_h27f_merge_grants_imports.sql` | column-scoped `update (customer_id)` grants for the merge re-point, `update (status, result, error)` on runs, `import_batch.kind` widened to contacts/leads/opportunities |
+| `0126_h27f_automation_run_update_policy.sql` | the UPDATE policy the run finaliser needs (kept separate: 0125 was already applied on TEST) |
+| `0127_h27g_automation_sweep_discovery.sql` | `app.orgs_with_crm_automations()` platform discovery (guarded by `app.assert_platform_task()`) |
+
+Every table carries `org_id` + RLS, composite `(id, org_id)` foreign keys,
+column-scoped UPDATE grants and no DELETE grant. Nothing existing was
+replaced: H19 customers/contacts and H20 leads/opportunities/activities/
+stages were extended in place (ADR-32).
+
+### G.2 Modules (`src/modules/crm/`, one door: `service.ts`)
+
+| File | Owns |
+| --- | --- |
+| `pipelines.ts` | pipelines, stage settings, `unmetRequirements` (pure), `moveStage` (requirements → row version → history row → audit), `boardPage` (paged cards, aggregates across the full filtered result) |
+| `dealroom.ts` | stakeholders, product lines (`computeLine` in minor units; lines own the deal value once they exist), competitors, risks, commercial context, canvas, `gatherDealRoom`, `getOpportunityCommercial` |
+| `activities.ts` | widened activity model, templates, recurrence, `myCommercialQueue`, provider adapters declared and honestly disabled |
+| `leads.ts` | capture with quarantine for outside sources, duplicate lookup, qualification, disqualify with reason, quarantine review, `convertLeadSafely` (duplicate-safe, idempotent), paged lead list, source adapters (disabled until credentials exist) |
+| `customers.ts` | CRM fields, contact roles, `scoreHealth` (pure, evidence per signal, unknown never counts), `gatherRevenue360`, signals |
+| `consent.ts` | append-only consent, suppression, `canContact` (suppression outranks consent), marketing preview and the explicit send that fails closed without a provider |
+| `campaigns.ts` | campaigns, touches, `attribute` (first / last / linear, pure), attribution report naming the model |
+| `targets.ts` | territories with rules (`matchTerritory` pure), rule application only for unassigned customers, targets with a stated basis |
+| `forecast.ts` | deterministic forecast with named models, ISO week/quarter buckets, snapshots, accuracy, overlays (`applyOverlay`, `summarise` pure), scenarios applied only by an owner through the governed commands |
+| `merge.ts` | preview (conflicts + counts), one-transaction re-point across every referencing table plus Document Studio counterparties, immutable evidence, source pointer |
+| `automation.ts` | owner / trigger / conditions / actions / enabled / dry-run, idempotent claim per occurrence, savepoint per subject, explicit patch schema (a partial never re-applies defaults), bounded actions (task, notify, risk flag, forecast category, review request, owner assignment) |
+| `intelligence.ts` | the assistant behind `platform/agents`: fails closed, reads a bounded context, validates every evidence reference, never writes |
+| `reports.ts` | funnel, activity and win/loss aggregates with a basis sentence |
+| `success.ts` | paged success overview scored with the same model as the 360; band counts over the full set |
+| `discounts.ts` | discount requests routed through the shared approvals engine |
+
+The importer (`src/modules/imports`) gained contacts / leads / opportunities
+kinds, a read-only dry-run preview (in-batch and existing duplicates,
+unresolved customers), reviewer skip, and stays idempotent on apply. The
+export catalogue gained `leads`, `opportunities`, `sales_activities` CSVs
+with price redaction.
+
+### G.3 Screens (`src/app/(app)/o/[orgId]/revenue/`)
+
+Hub (command centre with database-side search, KPIs, funnel, lazy SVG
+charts, queue, stalled deals, targets, campaigns), pipeline (drag-and-drop
+with a keyboard/select path, governed move dialog with requirements and
+reason, bulk review, paged cards with full-result column aggregates), leads
+(capture, quarantine review, qualification, duplicate-aware conversion,
+disqualify), deal room (overview, stakeholders, products, risks and
+competitors, commercial, history, lazy React Flow canvas, fail-closed
+assistant), Customer 360 (ownership, contacts with buying roles and consent,
+documents, obligations, renewals, issues, signals, health evidence, timeline)
+and the reviewed merge screen, forecast (totals with model statements,
+buckets, conversion, snapshots and accuracy, scenario builder and compare,
+owner-only apply), campaigns (list, attribution by named model, touches,
+consent-checked explicit send), targets and territories, customer success,
+automations (create, dry run, enable, run history), reports (funnel, win/loss,
+activity, CSV exports, branded PDF through the platform renderer), pipeline
+and stage settings. Every list pages from the database; every count and
+total is computed across the full filtered result.
+
+### G.4 Gates and proofs
+
+Unit: `tests/unit/crm-pure.test.ts` (pricing, requirements, health,
+overlays, ISO buckets, territory rules, attribution, evidence validation),
+`flags.test.ts` (exact `"1"` gate), registries/nav/workspace laws.
+Integration (TEST project, wiped): `h27a-foundation`, `h27b-capture-forecast`,
+`h27c-merge-automation-ai`, `h27d-imports`, `h27e-reports-success-sweep`.
+Fixture + headless walk: `tooling/scripts/h27-ui-fixture.ts` (1,250 leads,
+1,150 deals) and `h27-ui-shots.ts` (desktop, Arabic, 375 px, PDF bytes,
+pagination past 1,000, governed move, capture, quarantine review, dry run,
+merge preview). Production: `h27-deploy-preflight.ts` (read-only),
+`h27-prod-smoke.ts` (module lifecycle + HTTP, flag off/on, residue 0),
+`h27-prod-ui-walk.ts` (screenshots, residue 0).
+
+### G.5 Honest limits
+
+- Email, calendar and messaging providers are declared and disabled until an
+  owner provisions credentials; marketing sends fail closed.
+- Inbound lead adapters (mailbox, messaging, API keys) are declared and
+  disabled; the public form path from H26 remains the only outside entry,
+  and it lands in quarantine.
+- The assistant is off until a model provider is configured for the
+  organisation.
+- Health scores use one shared, weighted model; a single churn record lowers
+  the score but does not by itself force the "at risk" band.
+- Attribution reports correlation only.
+- No exchange rates: a deal keeps its own currency; org totals are shown in
+  the deal's currency field or the base currency and never converted.

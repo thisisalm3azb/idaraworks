@@ -24,10 +24,8 @@ import {
   addRisk,
   addStakeholder,
   captureForecastSnapshot,
-  captureLead,
   createAutomation,
   createCampaign,
-  createOpportunity,
   createTerritory,
   listStageSettings,
   logActivity,
@@ -255,47 +253,56 @@ async function seed(): Promise<void> {
     currency: "AED",
   });
 
-  // 1,250 leads: mixed sources, some quarantined (form / email), a few duplicates.
-  const sources = ["manual", "form", "referral", "campaign", "email", "customer"] as const;
-  let quarantined = 0;
-  for (let i = 0; i < 1250; i++) {
-    const sourceKind = sources[i % sources.length]!;
-    const r = await captureLead(A, "owner", {
-      name: `Lead ${String(i + 1).padStart(4, "0")} ${["Marina", "Yacht", "Fisheries", "Charter", "Port"][i % 5]} ${run}`,
-      contactName: i % 7 === 0 ? "Repeat Contact" : `Person ${i + 1}`,
-      email: i % 50 === 0 ? `dup-${run}@example.invalid` : `lead${i + 1}-${run}@example.invalid`,
-      country: ["AE", "SA", "OM", "QA"][i % 4],
-      sourceKind,
-      campaignId: sourceKind === "campaign" ? boatShow.id : null,
-      estimatedValueMinor: (i % 9) * 2_500_000 + 1_000_000,
-      currency: "AED",
-      timeframe: (["immediate", "quarter", "half_year", "year", "unknown"] as const)[i % 5],
-    });
-    if (r.quarantined) quarantined++;
-  }
-
-  // 1,150 opportunities spread across stages, owners unset, values and close dates varied.
-  const oppIds: string[] = [];
-  for (let i = 0; i < 1150; i++) {
-    const customer = customers[i % customers.length]!;
-    const o = await createOpportunity(A, "owner", {
-      name: `${["Hull refit", "New 24C", "Engine package", "Annual service", "Fleet expansion"][i % 5]} ${String(i + 1).padStart(4, "0")}`,
-      customerId: customer.id,
-      stageKey: openStages[i % openStages.length] ?? "new",
-      estimatedValueMinor: ((i % 12) + 1) * 4_500_000,
-      expectedCloseDate: daysFromNow(((i % 8) + 1) * 15),
-      probability: [20, 40, 60, 80][i % 4],
-    });
-    oppIds.push(o.id);
-  }
+  // 1,250 leads and 1,150 opportunities in two statements (TEST-only fixture
+  // rows for the paging and aggregate proof; the showcase records below go
+  // through the governed services so history, audit and canvas are real).
+  const sources = ["manual", "form", "referral", "campaign", "email", "customer"];
+  await owner`
+    insert into public.lead (org_id, name, contact_name, email, country, source_kind, campaign_id,
+                             estimated_value_minor, currency, timeframe, quarantine, created_by, created_at)
+    select ${orgId}::uuid,
+           'Lead ' || lpad(i::text, 4, '0') || ' ' || (array['Marina','Yacht','Fisheries','Charter','Port'])[1 + i % 5] || ' ' || ${run},
+           case when i % 7 = 0 then 'Repeat Contact' else 'Person ' || i end,
+           case when i % 50 = 0 then 'dup-' || ${run} || '@example.invalid' else 'lead' || i || '-' || ${run} || '@example.invalid' end,
+           (array['AE','SA','OM','QA'])[1 + i % 4],
+           (${sources}::text[])[1 + i % 6],
+           case when (${sources}::text[])[1 + i % 6] = 'campaign' then ${boatShow.id}::uuid else null end,
+           (i % 9) * 2500000 + 1000000, 'AED',
+           (array['immediate','quarter','half_year','year','unknown'])[1 + i % 5],
+           case when (${sources}::text[])[1 + i % 6] in ('form', 'email') then 'quarantined' else 'trusted' end,
+           ${ownerId}::uuid, now() - (i || ' minutes')::interval
+    from generate_series(1, 1250) as i`;
+  const q =
+    (await owner`select count(*)::int as n from public.lead where org_id = ${orgId} and quarantine = 'quarantined'`) as unknown as Array<{
+      n: number;
+    }>;
+  const quarantined = Number(q[0]?.n ?? 0);
+  const customerIds = customers.map((c) => c.id);
+  await owner`
+    insert into public.opportunity (org_id, name, customer_id, stage_key, estimated_value_minor, currency,
+                                    expected_close_date, probability, created_by, created_at, stage_entered_at)
+    select ${orgId}::uuid,
+           (array['Hull refit','New 24C','Engine package','Annual service','Fleet expansion'])[1 + i % 5] || ' ' || lpad(i::text, 4, '0'),
+           (${customerIds}::uuid[])[1 + i % ${customerIds.length}],
+           (${openStages}::text[])[1 + i % ${openStages.length}],
+           ((i % 12) + 1) * 4500000, 'AED',
+           current_date + (((i % 8) + 1) * 15), (array[20,40,60,80])[1 + i % 4],
+           ${ownerId}::uuid, now() - ((i % 200) || ' days')::interval - (i || ' minutes')::interval,
+           now() - ((i % 200) || ' days')::interval - (i || ' minutes')::interval
+    from generate_series(1, 1150) as i`;
+  const oppRows = (await owner`
+    select id::text as id from public.opportunity where org_id = ${orgId} order by created_at desc limit 60`) as unknown as Array<{
+    id: string;
+  }>;
+  const oppIds = oppRows.map((r) => r.id);
   // History: a slice won and lost at various dates (fixture-only direct update; TEST project).
   await owner`
-    update public.opportunity set status = 'won', stage_key = 'won', won_at = now() - ((id_ord % 120) || ' days')::interval
+    update public.opportunity set status = 'won', stage_key = 'won', won_at = least(now(), public.opportunity.created_at + ((id_ord % 60) || ' days')::interval)
     from (select id, row_number() over (order by created_at) as id_ord from public.opportunity where org_id = ${orgId}) x
     where public.opportunity.id = x.id and x.id_ord % 23 = 0`;
   await owner`
-    update public.opportunity set status = 'lost', stage_key = 'lost', lost_at = now() - ((id_ord % 90) || ' days')::interval,
-      loss_reason = (array['price','timing','competitor','no_decision'])[1 + id_ord % 4]
+    update public.opportunity set status = 'lost', stage_key = 'lost', lost_at = least(now(), public.opportunity.created_at + ((id_ord % 45) || ' days')::interval),
+      loss_reason = (array['price','timing','competitor','no_budget'])[1 + id_ord % 4]
     from (select id, row_number() over (order by created_at) as id_ord from public.opportunity where org_id = ${orgId}) x
     where public.opportunity.id = x.id and x.id_ord % 29 = 0 and public.opportunity.status = 'open'`;
   // Age a few stage entries so stalled and ageing rules bite.
@@ -461,7 +468,7 @@ async function seed(): Promise<void> {
   console.log(`  automation:  ${automation.id}`);
   console.log(`  snapshot:    ${snapshot.id}`);
   console.log(`  leads:       1250 (quarantined ${quarantined})`);
-  console.log(`  deals:       ${oppIds.length}`);
+  console.log(`  deals:       1150 (showcase among the newest 60)`);
   console.log(`  sign in:     ${email}  /  ${password}`);
 }
 

@@ -141,7 +141,7 @@ export default async function SuccessPage({
       <Card>
         <CardHeader
           title={t("revenue.success.customers")}
-          meta={<Badge tone="brand">{t("revenue.board.total", { n: overview.total })}</Badge>}
+          meta={<Badge tone="brand">{t("revenue.success.total", { n: overview.total })}</Badge>}
         />
         <p className="mb-2 text-xs text-ink-muted">{t("revenue.health.hint")}</p>
         {overview.rows.length === 0 ? (
