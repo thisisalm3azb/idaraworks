@@ -111,9 +111,54 @@ schema, the branded document shell, the Brand & Documents settings surface with 
 the honest entitlement re-copy. Print/export routes, lifecycle snapshot writers and customer
 completeness follow as separate microsteps (003B.2+).
 
+## 6. Owner product direction — **2026-09-02** (approved; implementation begins with H27)
+
+Recorded verbatim in intent; the full mandate text is held in `docs/H27-TRUTH-MAP.md` Part A.
+Nothing in this section rewrites a historical roadmap claim: the north star (`docs/product/
+IDARAWORKS_BUSINESS_OS_NORTH_STAR.md`, adopted 2026-08-29) keeps its stage list and its status
+column as adopted; this entry records what the Owner approved on 2026-09-02.
+
+**H27 — CRM and Revenue Growth Studio.** Build the customer relationship, sales and revenue-growth
+system as a flagship tool: visual, interactive, intelligent, connected to the whole business.
+Core outcome: one company manages the complete commercial journey Enquiry → Lead → Qualification →
+Opportunity → Proposal/Quote → Approval → Contract → Project/Order → Invoice → Payment →
+Retention/Renewal, every stage connected to the systems already built (customers, contacts,
+projects, quotes, Document Studio, approvals, planning, finance, communications, reporting).
+
+Binding rules carried from the mandate:
+
+1. **Reuse, never compete.** Existing customer, contact, lead, opportunity, pipeline stage, sales
+   activity, quote, invoice, payment, job, document, approval, notification and import models are
+   the sources of truth; H27 extends them additively and reads financial and project facts from
+   their owning modules (Bible P4/P5, architecture rule 3).
+2. **Stage moves are governed.** A stage move validates stage requirements, records who moved it
+   and why, preserves history, and triggers only authorised downstream actions.
+3. **Conversion is idempotent.** Repeated clicks or retries never create duplicate customers,
+   projects, quotes, contracts or invoices (H20's advisory-locked `convertLead` is the pattern).
+4. **Consent is law.** No marketing communication without an explicit authorised action; consent,
+   unsubscribe, suppression and channel preferences are respected; mass delivery stays behind
+   provider adapters that fail closed without credentials.
+5. **Forecasts are explainable and never guaranteed.** Deterministic calculations, stored forecast
+   snapshots for prediction-versus-outcome comparison, attribution models labelled by name and never
+   presented as causal impact.
+6. **Automation and AI are governed.** Automations carry owner, trigger, conditions, actions, state,
+   preview, history, idempotency, failure reporting, permissions and audit; the AI seam fails closed
+   until a provider is configured and never autonomously sends, moves stages, approves discounts,
+   creates financial records, signs, merges, changes consent or fabricates interactions.
+7. **Release and untouched matters.** Every H27 surface sits behind `FEATURE_REVENUE_STUDIO`
+   (strict `"1"`). Historical accounting is not converted, the H24 transition ambiguities are not
+   resolved, PO-002 is not modified, the deferred H22 stock-posting problem is not mixed in, H28 is
+   not begun, and production data is preserved.
+
+**Implementation gate:** the H27 truth map (`docs/H27-TRUTH-MAP.md`) records the baseline, the
+inventory of existing models, the transition seams, the research consulted and the decisions
+(ADR-32 onward) before code changes; the completion report (`docs/H27-REPORT.md`) records the
+shipped commit, migrations, evidence and the exact owner actions for provider-backed capabilities.
+
 ## 5. Amendment log (this document, append-only)
 
 | Date | Entry | Approved |
 | --- | --- | --- |
 | 2026-08-26 | Document created: post-freeze implementation record (§1), divergence register (§2), owner directions recorded pending implementation (§3). Baseline audit at commit `d9c884c` accepted by owner. | Owner |
 | 2026-08-27 | §4 added: universal document/export contract, core document identity, canonical issuer model, historical-integrity rule, interaction-audit decisions D1–D8 ruled. Interaction Completeness Audit accepted (its §12 carries the full amendment). Implementation begins with microstep 003B.1. | Owner |
+| 2026-09-02 | §6 added: H27 CRM and Revenue Growth Studio approved as the next phase (reuse-first over the H19/H20 customer, lead, opportunity, pipeline and activity models; governed stage moves; idempotent conversion; consent as law; explainable forecasts; governed automation and fail-closed AI; `FEATURE_REVENUE_STUDIO`). North star status column intentionally left as adopted. | Owner |
