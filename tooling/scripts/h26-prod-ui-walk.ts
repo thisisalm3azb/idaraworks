@@ -27,6 +27,7 @@ import { installTemplate, TEMPLATE_BOATBUILDING } from "@/platform/config";
 import {
   createDocument,
   createFormLink,
+  getRevision,
   createObligation,
   issueDocument,
   saveRevision,
@@ -173,6 +174,7 @@ async function main(): Promise<void> {
     await saveRevision(A(), "owner", {
       documentId: sa.id,
       revisionId: sa.revisionId,
+      expectedRowVersion: (await getRevision(A(), "owner", sa.revisionId)).rowVersion,
       variables: { payment_days: 30 },
     });
     await issueDocument(A(), "owner", { documentId: sa.id });

@@ -47,6 +47,7 @@ import {
   convertSubmission,
   createDocument,
   createFormLink,
+  getRevision,
   createObligation,
   createSignatureRequest,
   createWorkflow,
@@ -248,6 +249,7 @@ async function main(): Promise<void> {
     await saveRevision(A(), "owner", {
       documentId: sa.id,
       revisionId: sa.revisionId,
+      expectedRowVersion: (await getRevision(A(), "owner", sa.revisionId)).rowVersion,
       variables: { payment_days: 30 },
     });
     await submitForReview(A(), "owner", { documentId: sa.id, note: "Smoke" });
@@ -369,6 +371,7 @@ async function main(): Promise<void> {
     await saveRevision(A(), "owner", {
       documentId: gatedDoc.id,
       revisionId: gatedDoc.revisionId,
+      expectedRowVersion: (await getRevision(A(), "owner", gatedDoc.revisionId)).rowVersion,
       variables: { payment_days: 30 },
     });
     await submitForReview(A(), "owner", { documentId: gatedDoc.id, note: "Smoke" });
