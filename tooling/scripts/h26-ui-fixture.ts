@@ -24,6 +24,7 @@ import {
   createWorkflow,
   WORKFLOW_PRESETS,
   createSignatureRequest,
+  createFormLink,
 } from "@/modules/docstudio/service";
 
 const MARKER = "fixture.h26_ui";
@@ -306,6 +307,21 @@ async function seed(): Promise<void> {
   });
   const signLink = room.invitations.find((i) => i.link)?.link ?? "";
 
+  // 7. An issued intake form with a public link (shown once; only its hash is stored).
+  const form = await createDocument(A, "owner", {
+    title: "Customer intake form",
+    category: "form",
+    language: "bilingual",
+    builtinKey: "builtin.intake_form",
+  });
+  await issueDocument(A, "owner", { documentId: form.id });
+  const formLink = await createFormLink(A, "owner", {
+    documentId: form.id,
+    label: "Website",
+    expiresInDays: 30,
+    maxUses: 20,
+  });
+
   console.log("\nDOCUMENT STUDIO FIXTURE READY");
   console.log(`  org:        ${orgId}`);
   console.log(`  hub:        /o/${orgId}/documents`);
@@ -316,6 +332,8 @@ async function seed(): Promise<void> {
   console.log(`  workflow:   /o/${orgId}/documents/workflows/${wf.id}`);
   console.log(`  gated doc:  /o/${orgId}/documents/${gated.id}`);
   console.log(`  sign link:  ${signLink}`);
+  console.log(`  form doc:   /o/${orgId}/documents/${form.id}`);
+  console.log(`  form link:  ${formLink.url}`);
   console.log(`  sign in:    ${email}  /  ${password}`);
 }
 

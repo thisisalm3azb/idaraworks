@@ -197,6 +197,74 @@ async function main(): Promise<void> {
         await shot("doc-signatures", 2500);
       }
     }
+    // The public form page (fresh context, only the token): validation, then a submission.
+    const formToken = process.argv[8];
+    const formDocId = process.argv[9];
+    if (formToken) {
+      const pub = await browser.newContext({ viewport: { width: 1200, height: 900 } });
+      const fp = await pub.newPage();
+      fp.on("pageerror", (e) => errors.push(`form pageerror: ${e.message}`));
+      await fp.goto(`${BASE}/f/${formToken}`, { waitUntil: "load" });
+      await fp.waitForTimeout(4000);
+      await fp.screenshot({ path: path.join(OUT, "form-page.png"), fullPage: true });
+      notes.push(
+        `form-page: ${(await fp.locator("body").innerText()).replace(/\s+/g, " ").slice(0, 160)}`,
+      );
+      // Empty submit: the server refuses and the page shows the problems.
+      await fp.locator('button[type="submit"]').click();
+      await fp.waitForURL((u) => u.searchParams.has("problems"), { timeout: 30_000 });
+      await fp.waitForTimeout(2500);
+      await fp.screenshot({ path: path.join(OUT, "form-page-problems.png"), fullPage: true });
+      const problemCount = await fp.locator("p.text-danger").count();
+      notes.push(`form problems shown: ${problemCount}`);
+      if (problemCount === 0) errors.push("form: no validation problems rendered");
+      // A real submission.
+      await fp.fill('input[name="__name"]', "Walk Tester");
+      await fp.fill('input[name="__email"]', "walk@example.invalid");
+      await fp.fill('input[name="company_name"]', "Walk Trading LLC");
+      await fp.fill('input[name="contact_name"]', "Walk Tester");
+      await fp.fill('input[name="email"]', "walk@example.invalid");
+      await fp.fill('input[name="phone"]', "+971500000001");
+      await fp.selectOption('select[name="customer_type"]', "0");
+      await fp.waitForTimeout(500);
+      await fp.fill('input[name="license_no"]', "CN-WALK-1");
+      await fp.locator('input[name="consent"]').check();
+      await fp.locator('button[type="submit"]').click();
+      await fp.waitForURL((u) => u.searchParams.get("outcome") === "submitted", {
+        timeout: 30_000,
+      });
+      await fp.waitForTimeout(1500);
+      await fp.screenshot({ path: path.join(OUT, "form-page-submitted.png"), fullPage: true });
+      notes.push(
+        `form-submitted: ${(await fp.locator("body").innerText()).replace(/\s+/g, " ").slice(0, 120)}`,
+      );
+      await fp.goto(`${BASE}/f/${formToken}?lang=ar`, { waitUntil: "load" });
+      await fp.waitForTimeout(3000);
+      await fp.screenshot({ path: path.join(OUT, "form-page-ar.png"), fullPage: true });
+      const mob = await browser.newContext({
+        viewport: { width: 375, height: 812 },
+        isMobile: true,
+        hasTouch: true,
+      });
+      const mp = await mob.newPage();
+      await mp.goto(`${BASE}/f/${formToken}`, { waitUntil: "load" });
+      await mp.waitForTimeout(3000);
+      await mp.screenshot({ path: path.join(OUT, "form-page-mobile.png"), fullPage: true });
+      await mob.close();
+      await pub.close();
+      // The inbox and the form document's tab, as the reviewer.
+      await page.goto(`${BASE}/o/${orgId}/documents/forms`, { waitUntil: "load" });
+      await shot("forms-inbox", 3000);
+      notes.push(
+        `forms-inbox: ${(await page.locator("main").innerText()).replace(/\s+/g, " ").slice(0, 200)}`,
+      );
+      if (formDocId) {
+        await page.goto(`${BASE}/o/${orgId}/documents/${formDocId}?tab=forms`, {
+          waitUntil: "load",
+        });
+        await shot("doc-forms-tab", 3000);
+      }
+    }
     // Arabic
     await ctx.addCookies([{ name: "locale", value: "ar", url: BASE }]);
     await page.goto(`${BASE}/o/${orgId}/documents`, { waitUntil: "load" });

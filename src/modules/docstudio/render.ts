@@ -16,6 +16,8 @@ import {
 import { formatMoney } from "@/platform/format";
 import type { CurrencyCode } from "@/platform/registries";
 import { evaluateConditions } from "./conditions";
+import type { Condition } from "@/platform/rules/conditions";
+import { fieldBlocks } from "./types";
 import type { Block, DocBody, DocLanguage, DocSettings, DocVariables, LocaleText } from "./types";
 
 export type ResolvedValues = {
@@ -139,16 +141,32 @@ function money(minor: number, currency: string): string {
   }
 }
 
-/** Blocks whose conditions hold, in order, with clause numbers assigned. */
+/** Every leaf key a condition reads. */
+export function conditionKeys(cond: Condition): string[] {
+  if ("all" in cond) return cond.all.flatMap(conditionKeys);
+  if ("any" in cond) return cond.any.flatMap(conditionKeys);
+  if ("not" in cond) return conditionKeys(cond.not);
+  return [cond.key];
+}
+
+/**
+ * Blocks whose conditions hold, in order. A condition that reads a
+ * party-filled field cannot be decided by the issuer: those blocks are kept
+ * (the snapshot carries the whole form) and decided when the party answers.
+ */
 export function visibleBlocks(body: DocBody, values: ResolvedValues): Block[] {
+  const partyKeys = new Set(
+    fieldBlocks(body)
+      .filter((f) => f.filledBy === "party")
+      .map((f) => f.key),
+  );
+  const shown = (cond: Condition | undefined): boolean =>
+    !cond || conditionKeys(cond).some((k) => partyKeys.has(k)) || evaluateConditions(cond, values);
   const out: Block[] = [];
   for (const b of body.blocks) {
-    if (b.condition && !evaluateConditions(b.condition, values)) continue;
+    if (!shown(b.condition)) continue;
     if (b.type === "section") {
-      out.push({
-        ...b,
-        blocks: b.blocks.filter((c) => !c.condition || evaluateConditions(c.condition, values)),
-      });
+      out.push({ ...b, blocks: b.blocks.filter((c) => shown(c.condition)) });
     } else out.push(b);
   }
   return out;

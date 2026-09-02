@@ -19,6 +19,8 @@ import {
   getSignatureRequest,
   listDocComments,
   listFolders,
+  listFormLinks,
+  listSubmissions,
   signatureParties,
   CONSENT_TEXT,
 } from "@/modules/docstudio/service";
@@ -52,13 +54,19 @@ export default async function DocumentPage({
     throw err;
   }
   const viewerName = await getDisplayName(resolved.ctx);
-  const [folders, run, members, comments, signatureRequest] = await Promise.all([
-    listFolders(resolved.ctx, resolved.archetype),
-    getRunForDocument(resolved.ctx, resolved.archetype, documentId),
-    listMembers(resolved.ctx, resolved.archetype).catch(() => []),
-    listDocComments(resolved.ctx, resolved.archetype, documentId),
-    getSignatureRequest(resolved.ctx, resolved.archetype, documentId),
-  ]);
+  const isForm = detail.document.category === "form";
+  const [folders, run, members, comments, signatureRequest, formLinks, submissions] =
+    await Promise.all([
+      listFolders(resolved.ctx, resolved.archetype),
+      getRunForDocument(resolved.ctx, resolved.archetype, documentId),
+      listMembers(resolved.ctx, resolved.archetype).catch(() => []),
+      listDocComments(resolved.ctx, resolved.archetype, documentId),
+      getSignatureRequest(resolved.ctx, resolved.archetype, documentId),
+      isForm ? listFormLinks(resolved.ctx, resolved.archetype, documentId) : Promise.resolve([]),
+      isForm
+        ? listSubmissions(resolved.ctx, resolved.archetype, { documentId })
+        : Promise.resolve([]),
+    ]);
   const parties = signatureParties(
     detail.snapshot?.snapshot.body ?? detail.working?.body ?? { blocks: [] },
   );
@@ -91,6 +99,7 @@ export default async function DocumentPage({
       review: k("tab_review"),
       workflow: k("tab_workflow"),
       signatures: k("tab_signatures"),
+      forms: k("tab_forms"),
       revisions: k("tab_revisions"),
       activity: k("tab_activity"),
       details: k("tab_details"),
@@ -331,6 +340,33 @@ export default async function DocumentPage({
       disclaimer: t("docstudio.evidence.disclaimer"),
       expires: t("docstudio.sg.expires"),
     },
+    forms: {
+      title: t("docstudio.fp.title"),
+      notForm: t("docstudio.fp.not_form"),
+      notActive: t("docstudio.fp.not_active"),
+      links: t("docstudio.fp.links"),
+      newLink: t("docstudio.fp.new_link"),
+      label: t("docstudio.fp.label"),
+      expiresInDays: t("docstudio.fp.expires_in_days"),
+      maxUses: t("docstudio.fp.max_uses"),
+      unlimited: t("docstudio.fp.unlimited"),
+      create: t("docstudio.fp.create"),
+      linkOnce: t("docstudio.fp.link_once"),
+      copy: t("docstudio.sg.copy"),
+      uses: t("docstudio.fp.uses"),
+      expires: t("docstudio.sg.expires"),
+      revoked: t("docstudio.sg.status.revoked"),
+      revoke: t("docstudio.sg.revoke"),
+      submissions: t("docstudio.fm.submissions"),
+      noSubmissions: t("docstudio.fm.no_submissions"),
+      inbox: t("docstudio.fp.inbox"),
+      status: Object.fromEntries(
+        ["received", "reviewed", "converted", "discarded"].map((s) => [
+          s,
+          t(`docstudio.fm.status.${s}`),
+        ]),
+      ),
+    },
     consentText: CONSENT_TEXT[locale === "ar" ? "ar" : "en"],
     presence: t("docstudio.ws.presence"),
     saved: t("docstudio.saved"),
@@ -360,6 +396,8 @@ export default async function DocumentPage({
       comments={comments}
       signatureRequest={signatureRequest}
       parties={parties}
+      formLinks={formLinks}
+      submissions={submissions}
       vocab={{
         blockTypes: BLOCK_TYPES,
         fieldKinds: FIELD_KINDS,

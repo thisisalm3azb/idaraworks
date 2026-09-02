@@ -30,6 +30,8 @@ import { PreviewPane } from "./PreviewPane";
 import { WorkflowPane, type WorkflowDict } from "./WorkflowPane";
 import { ReviewPane, type ReviewDict } from "./ReviewPane";
 import { SignaturesPane, type SignaturesDict } from "./SignaturesPane";
+import { FormsPane, type FormsDict } from "./FormsPane";
+import type { FormLinkRow, SubmissionRow } from "@/modules/docstudio/service";
 import type { SignatureRequestRow } from "@/modules/docstudio/service";
 import { PresenceStrip, usePlanPresence } from "../../studio/[planId]/PresenceLayer";
 import type { CommentRow } from "@/modules/docstudio/service";
@@ -48,6 +50,7 @@ export type WorkspaceDict = {
     | "review"
     | "workflow"
     | "signatures"
+    | "forms"
     | "revisions"
     | "activity"
     | "details",
@@ -89,6 +92,7 @@ export type WorkspaceDict = {
   workflow: WorkflowDict;
   review: ReviewDict;
   signatures: SignaturesDict;
+  forms: FormsDict;
   consentText: string;
   presence: string;
   saved: string;
@@ -127,6 +131,8 @@ export function DocumentWorkspace({
   comments,
   signatureRequest,
   parties,
+  formLinks,
+  submissions,
 }: {
   orgId: string;
   locale: string;
@@ -142,6 +148,8 @@ export function DocumentWorkspace({
   comments: CommentRow[];
   signatureRequest: SignatureRequestRow | null;
   parties: string[];
+  formLinks: FormLinkRow[];
+  submissions: SubmissionRow[];
 }) {
   const router = useRouter();
   const [, startTransition] = useTransition();
@@ -152,6 +160,7 @@ export function DocumentWorkspace({
     "review",
     "workflow",
     "signatures",
+    ...(d.category === "form" ? (["forms"] as Tab[]) : []),
     "revisions",
     "activity",
     "details",
@@ -420,6 +429,20 @@ export function DocumentWorkspace({
           consentText={dict.consentText}
           locale={locale}
           dict={dict.signatures}
+          settle={settle}
+        />
+      ) : null}
+      {tab === "forms" ? (
+        <FormsPane
+          orgId={orgId}
+          documentId={d.id}
+          category={d.category}
+          status={d.effectiveStatus}
+          links={formLinks}
+          submissions={submissions}
+          canManage={caps.forms === true}
+          locale={locale}
+          dict={dict.forms}
           settle={settle}
         />
       ) : null}

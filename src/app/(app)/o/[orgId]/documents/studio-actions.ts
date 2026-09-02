@@ -45,6 +45,10 @@ import {
   cancelSignatureRequest,
   signAsMember,
   type InvitationLink,
+  createFormLink,
+  revokeFormLink,
+  reviewSubmission,
+  convertSubmission,
   type RevisionDiff,
 } from "@/modules/docstudio/service";
 
@@ -514,4 +518,45 @@ export async function signAsMemberAction(
   input: Record<string, unknown>,
 ): Promise<ActionResult<{ completed: boolean; evidenceHash: string }>> {
   return run(orgId, async (r) => signAsMember(r.ctx, r.archetype, input, await signingInfo()));
+}
+
+// ── forms (H26G) ─────────────────────────────────────────────────────────────
+export async function createFormLinkAction(
+  orgId: string,
+  input: Record<string, unknown>,
+): Promise<ActionResult<{ id: string; url: string }>> {
+  return run(orgId, async (r) => {
+    const res = await createFormLink(r.ctx, r.archetype, input);
+    revalidatePath(docPath(orgId, String(input.documentId)));
+    return res;
+  });
+}
+
+export async function revokeFormLinkAction(
+  orgId: string,
+  input: Record<string, unknown>,
+): Promise<ActionResult<{ id: string }>> {
+  return run(orgId, (r) => revokeFormLink(r.ctx, r.archetype, input));
+}
+
+export async function reviewSubmissionAction(
+  orgId: string,
+  input: Record<string, unknown>,
+): Promise<ActionResult<{ id: string }>> {
+  return run(orgId, async (r) => {
+    const res = await reviewSubmission(r.ctx, r.archetype, input);
+    revalidatePath(`/o/${orgId}/documents/forms`);
+    return res;
+  });
+}
+
+export async function convertSubmissionAction(
+  orgId: string,
+  input: Record<string, unknown>,
+): Promise<ActionResult<{ recordType: string; recordId: string }>> {
+  return run(orgId, async (r) => {
+    const res = await convertSubmission(r.ctx, r.archetype, input);
+    revalidatePath(`/o/${orgId}/documents/forms`);
+    return res;
+  });
 }

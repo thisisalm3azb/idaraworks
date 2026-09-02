@@ -318,3 +318,52 @@ describe("renderer", () => {
     expect(html).toMatch(/211\.05/); // total
   });
 });
+
+describe("issue-time visibility", () => {
+  it("keeps sections gated on party-filled answers and prunes issuer-decided ones", () => {
+    const body = DocBody.parse({
+      blocks: [
+        {
+          id: "f1",
+          type: "field",
+          key: "kind",
+          kind: "choice",
+          label: { en: "Kind" },
+          required: true,
+          filledBy: "party",
+          party: "respondent",
+          options: [{ en: "A" }, { en: "B" }],
+        },
+        {
+          id: "s1",
+          type: "section",
+          title: { en: "Only for A" },
+          condition: { key: "kind", op: "eq", value: 0 },
+          blocks: [
+            {
+              id: "f2",
+              type: "field",
+              key: "extra",
+              kind: "text",
+              label: { en: "Extra" },
+              required: false,
+              filledBy: "party",
+              party: "respondent",
+            },
+          ],
+        },
+        {
+          id: "s2",
+          type: "section",
+          title: { en: "Deposit" },
+          condition: { key: "document.amount", op: "gte", value: 50000 },
+          blocks: [],
+        },
+      ],
+    });
+    const out = visibleBlocks(body, values({}));
+    expect(out.map((b) => b.id)).toEqual(["f1", "s1"]);
+    const withAmount = visibleBlocks(body, values({ bindings: { "document.amount": "60000" } }));
+    expect(withAmount.map((b) => b.id)).toEqual(["f1", "s1", "s2"]);
+  });
+});

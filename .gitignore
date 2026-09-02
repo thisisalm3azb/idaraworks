@@ -60,3 +60,6 @@ sim-screenshots/
 .build-*.log
 .h25-shots/
 .h25-shots-prod/
+
+# H26 local walk artefacts
+.h26-*

@@ -50,6 +50,22 @@ async function workflowRow(o: Owner, org: string, u: string): Promise<string> {
   return id;
 }
 
+async function signatureRequestRow(
+  o: Owner,
+  org: string,
+  u: string,
+): Promise<{ req: string; doc: string }> {
+  const doc = await documentRow(o, org, u);
+  const r = await frozenRevisionRow(o, org, u, doc);
+  const snap = randomUUID();
+  await o`insert into public.doc_snapshot (id, org_id, document_id, revision_id, snapshot, content_hash, issued_by, created_by)
+          values (${snap}, ${org}, ${doc}, ${r}, '{"version":1}'::jsonb, ${hex64(doc + "s")}, ${u}, ${u})`;
+  const req = randomUUID();
+  await o`insert into public.doc_signature_request (id, org_id, document_id, snapshot_id, expires_at, created_by)
+          values (${req}, ${org}, ${doc}, ${snap}, now() + interval '14 days', ${u})`;
+  return { req, doc };
+}
+
 async function runRow(o: Owner, org: string, u: string): Promise<{ run: string; doc: string }> {
   const doc = await documentRow(o, org, u);
   const rev = await frozenRevisionRow(o, org, u, doc);
@@ -105,6 +121,32 @@ export const H26_SEEDERS: Record<string, Seeder> = {
     const { run, doc } = await runRow(o, org, u);
     await o`insert into public.doc_workflow_step_run (org_id, run_id, document_id, step_id, step_index, kind, status, created_by)
             values (${org}, ${run}, ${doc}, 's1', 0, 'review', 'skipped', ${u})`;
+  },
+  doc_form_link: async (o, org, u) => {
+    const d = await documentRow(o, org, u);
+    const r = await frozenRevisionRow(o, org, u, d);
+    const snap = randomUUID();
+    await o`insert into public.doc_snapshot (id, org_id, document_id, revision_id, snapshot, content_hash, issued_by, created_by)
+            values (${snap}, ${org}, ${d}, ${r}, '{"version":1}'::jsonb, ${hex64(d + "s")}, ${u}, ${u})`;
+    await o`insert into public.doc_form_link (org_id, document_id, snapshot_id, token_hash, expires_at, created_by)
+            values (${org}, ${d}, ${snap}, ${hex64("link" + d)}, now() + interval '30 days', ${u})`;
+  },
+  doc_form_submission: async (o, org, u) => {
+    const d = await documentRow(o, org, u);
+    const r = await frozenRevisionRow(o, org, u, d);
+    const snap = randomUUID();
+    await o`insert into public.doc_snapshot (id, org_id, document_id, revision_id, snapshot, content_hash, issued_by, created_by)
+            values (${snap}, ${org}, ${d}, ${r}, '{"version":1}'::jsonb, ${hex64(d + "s")}, ${u}, ${u})`;
+    await o`insert into public.doc_form_submission (org_id, document_id, snapshot_id, answers)
+            values (${org}, ${d}, ${snap}, '{"name":"Bleed"}'::jsonb)`;
+  },
+  doc_signature_request: async (o, org, u) => {
+    await signatureRequestRow(o, org, u);
+  },
+  doc_signer: async (o, org, u) => {
+    const { req, doc } = await signatureRequestRow(o, org, u);
+    await o`insert into public.doc_signer (org_id, request_id, document_id, party, party_kind, name, email, created_by)
+            values (${org}, ${req}, ${doc}, 'counterparty', 'external', 'Bleed Signer', 'bleed@example.invalid', ${u})`;
   },
   doc_saved_view: async (o, org, u) => {
     await o`insert into public.doc_saved_view (org_id, name, created_by, is_shared)

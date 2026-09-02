@@ -102,33 +102,35 @@ export default async function SignPage({
   const ip = clientIpFromHeaders(h);
   const gate = await rateLimit("share", ip);
   const shell = (title: string, body: React.ReactNode) => (
-    <html lang={lang} dir={dir}>
-      <body
-        style={{
-          margin: 0,
-          background: "#f6f5f1",
-          color: "#1c2321",
-          fontFamily: "system-ui, sans-serif",
-        }}
-      >
-        <main style={{ maxWidth: 960, margin: "0 auto", padding: "24px 16px 64px" }}>
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              gap: 12,
-            }}
-          >
-            <h1 style={{ fontSize: 20, fontWeight: 600, margin: "8px 0" }}>{title}</h1>
-            <a href={`?lang=${lang === "ar" ? "en" : "ar"}`} style={{ fontSize: 14 }}>
-              {c.other}
-            </a>
-          </div>
-          {body}
-        </main>
-      </body>
-    </html>
+    <div
+      lang={lang}
+      dir={dir}
+      style={{
+        flex: 1,
+        minHeight: "100vh",
+        margin: 0,
+        background: "#f6f5f1",
+        color: "#1c2321",
+        fontFamily: "system-ui, sans-serif",
+      }}
+    >
+      <main style={{ maxWidth: 960, margin: "0 auto", padding: "24px 16px 64px" }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            gap: 12,
+          }}
+        >
+          <h1 style={{ fontSize: 20, fontWeight: 600, margin: "8px 0" }}>{title}</h1>
+          <a href={`?lang=${lang === "ar" ? "en" : "ar"}`} style={{ fontSize: 14 }}>
+            {c.other}
+          </a>
+        </div>
+        {body}
+      </main>
+    </div>
   );
 
   if (!gate.allowed) return shell(c.unavailable, <p>{c.unavailableHint}</p>);

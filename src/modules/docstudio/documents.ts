@@ -1333,5 +1333,6 @@ export function documentCapabilities(
     requestSignature: can(archetype, "documents.issue") && s === "signature",
     obligations: can(archetype, "documents.obligations.manage") && issued,
     share: can(archetype, "documents.share") && issued,
+    forms: can(archetype, "documents.forms.manage") && d.category === "form",
   };
 }
