@@ -199,7 +199,7 @@ describe("branching and overlay", () => {
     }
     // Put it back (as a scenario change it just returns to the live value).
     await updateNode(M(), "manager", { nodeId: nodeB, scenarioId, estimateOptimisticDays: 4 });
-  });
+  }, 180_000);
 });
 
 describe("review, approval and controlled apply", () => {

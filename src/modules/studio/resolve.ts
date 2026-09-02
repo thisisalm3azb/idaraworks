@@ -24,6 +24,7 @@ import {
   type LinkableRecordType,
   type NodeType,
   type StatusCategory,
+  FIELD_TO_PROP,
 } from "./types";
 
 export type EffectiveNode = {
@@ -308,6 +309,21 @@ export async function resolvePlanGraph(
         warnings: nodeWarnings,
         overlaidFields,
       };
+      // ADR-7: the scenario overlay wins over EVERY planning field, live values
+      // being the base. Status changes re-derive the normalized category so
+      // boards and filters agree with the overlaid raw status.
+      if (overlay) {
+        const target = base as unknown as Record<string, unknown>;
+        for (const [field, value] of overlay) {
+          const prop = (FIELD_TO_PROP as Record<string, string>)[field];
+          if (!prop) continue;
+          target[prop] = value;
+          if (field === "status" && typeof value === "string") {
+            base.statusCategory =
+              rt === "task" ? taskStatusCategory(value) : draftStatusCategory(value);
+          }
+        }
+      }
       return base;
     });
 

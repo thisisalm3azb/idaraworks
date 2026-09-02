@@ -142,6 +142,10 @@ export const AUDIT_ENTITY_TYPES = [
   "studio_scenario",
   "studio_baseline",
   "studio_version",
+  // H25H — skills and task allocations are audited like any master/work row.
+  "skill",
+  "employee_skill",
+  "task_allocation",
 ] as const;
 export type AuditEntityType = (typeof AUDIT_ENTITY_TYPES)[number];
 
