@@ -37,6 +37,7 @@ export type WorkspacePayload = {
   health: ScheduleHealth;
   projectStart: string | null;
   projectFinish: string | null;
+  calendar: { workingWeekdays: number[]; holidays: Array<{ start: string; end: string }> };
   jobs: LinkableJob[];
   canManage: boolean;
   canSchedule: boolean;

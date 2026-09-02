@@ -277,6 +277,12 @@ function CanvasInner({
   // (the React "adjust state while rendering" pattern, no effects).
   const [overrides, setOverrides] = useState<Map<string, Pos>>(() => new Map());
   const [selection, setSelection] = useState<Set<string>>(() => new Set());
+  // React Flow 12 only keeps `measured` from the node we hand it, so the DOM
+  // measurements it reports must be stored and handed back, or the minimap and
+  // fit-to-view see unmeasured nodes after every re-resolution.
+  const [measured, setMeasured] = useState<Map<string, { width: number; height: number }>>(
+    () => new Map(),
+  );
   const [seen, setSeen] = useState(payload);
   if (seen !== payload) {
     setSeen(payload);
@@ -293,13 +299,15 @@ function CanvasInner({
     () =>
       baseNodes.map((n) => {
         const o = overrides.get(n.id);
+        const m = measured.get(n.id);
         return {
           ...n,
           selected: selection.has(n.id) || n.id === selectedId,
           ...(o ? { position: o } : {}),
+          ...(m ? { measured: m } : {}),
         };
       }),
-    [baseNodes, overrides, selection, selectedId],
+    [baseNodes, overrides, selection, selectedId, measured],
   );
   const edges = useMemo(
     () => toFlowEdges(payload, dict, criticalIds),
@@ -311,8 +319,12 @@ function CanvasInner({
       const nextSel = new Set(selection);
       let selChanged = false;
       let nextOverrides: Map<string, Pos> | null = null;
+      let nextMeasured: Map<string, { width: number; height: number }> | null = null;
       for (const c of changes) {
-        if (c.type === "position" && c.position) {
+        if (c.type === "dimensions" && c.dimensions) {
+          nextMeasured = nextMeasured ?? new Map(measured);
+          nextMeasured.set(c.id, c.dimensions);
+        } else if (c.type === "position" && c.position) {
           nextOverrides = nextOverrides ?? new Map(overrides);
           nextOverrides.set(c.id, c.position);
         } else if (c.type === "select") {
@@ -321,13 +333,14 @@ function CanvasInner({
           else nextSel.delete(c.id);
         }
       }
+      if (nextMeasured) setMeasured(nextMeasured);
       if (nextOverrides) setOverrides(nextOverrides);
       if (selChanged) {
         setSelection(nextSel);
         onSelect(nextSel.size === 1 ? [...nextSel][0]! : null);
       }
     },
-    [overrides, selection, onSelect],
+    [overrides, selection, measured, onSelect],
   );
 
   const onNodeDragStart = useCallback((_: unknown, node: StudioNode, all: StudioNode[]) => {

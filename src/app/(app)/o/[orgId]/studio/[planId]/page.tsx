@@ -68,6 +68,7 @@ export default async function PlanPage({
     health: plan.result.health,
     projectStart: plan.result.projectStart,
     projectFinish: plan.result.projectFinish,
+    calendar: { workingWeekdays: plan.calendar.workingWeekdays, holidays: plan.calendar.holidays },
     jobs,
     canManage: can(resolved.archetype, "studio.manage"),
     canSchedule: can(resolved.archetype, "studio.schedule"),

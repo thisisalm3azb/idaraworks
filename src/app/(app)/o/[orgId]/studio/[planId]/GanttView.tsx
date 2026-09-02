@@ -139,11 +139,13 @@ export function GanttView({
           <div className="sticky top-0 z-10 flex h-9 border-b border-line bg-sunken text-[10px] text-ink-muted">
             {days.map((d) => {
               const dow = new Date(d + "T00:00:00Z").getUTCDay();
-              const weekend = dow === 5 || dow === 6;
+              const off =
+                !payload.calendar.workingWeekdays.includes(dow) ||
+                payload.calendar.holidays.some((h) => d >= h.start && d <= h.end);
               return (
                 <div
                   key={d}
-                  className={`shrink-0 border-e border-line px-1 leading-9 ${weekend ? "bg-line/40" : ""}`}
+                  className={`shrink-0 border-e border-line px-1 leading-9 ${off ? "bg-line/40" : ""}`}
                   style={{ width: DAY_PX }}
                   title={d}
                 >

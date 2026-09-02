@@ -276,3 +276,23 @@ describe("honesty: cycles, unschedulable work, missing logic", () => {
     expect(r.warnings[0]).toMatch(/no working days/);
   });
 });
+
+describe("project finish", () => {
+  // A(3) → M (milestone). M sits on the morning of ordinal 3 (Thu 09-10) and
+  // the project's finish is where the LAST displayed date is, not one day
+  // earlier because the milestone consumed no working day.
+  it("reaches a trailing zero-duration milestone", () => {
+    const r = computeSchedule(
+      FIVE_DAY,
+      [task("A", 3), task("M", null, { isMilestone: true })],
+      [fs("A", "M")],
+      { projectStart: START },
+    );
+    expect(r.ok).toBe(true);
+    expect(r.tasks.get("A")!.earlyFinish).toBe("2026-09-09");
+    expect(r.tasks.get("M")!.earlyStart).toBe("2026-09-10");
+    expect(r.tasks.get("M")!.earlyFinish).toBe("2026-09-10");
+    expect(r.projectFinish).toBe("2026-09-10");
+    expect(r.projectDurationDays).toBe(3);
+  });
+});

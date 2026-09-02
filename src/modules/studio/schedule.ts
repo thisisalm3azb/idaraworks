@@ -19,6 +19,8 @@ import { assertCan } from "@/platform/authz";
 import { sql, withCtx, type Ctx } from "@/platform/tenancy";
 import type { RoleArchetype } from "@/platform/registries";
 import { loadCalendar, workingDaysBetween, type Calendar } from "@/platform/calendar/calendar";
+
+const WEEKDAY_INDEX = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
 import {
   computeSchedule,
   type ScheduleDep,
@@ -46,7 +48,13 @@ export type PlanSchedule = {
   /** Scheduled activity per node id (absent when unscheduled). */
   byNode: Map<string, ScheduledTask>;
   unscheduled: Array<{ nodeId: string; title: string; reason: string }>;
-  calendar: { workingDaysPerWeek: number; holidayRanges: number };
+  calendar: {
+    workingDaysPerWeek: number;
+    holidayRanges: number;
+    /** UTC weekday indexes (0 = Sunday) the org works. */
+    workingWeekdays: number[];
+    holidays: Array<{ start: string; end: string }>;
+  };
   baseline: BaselineComparison | null;
 };
 
@@ -152,7 +160,12 @@ export async function scheduleForPlan(
   return {
     graph,
     ...scheduled,
-    calendar: { workingDaysPerWeek: cal.workingDays.size, holidayRanges: cal.holidays.length },
+    calendar: {
+      workingDaysPerWeek: cal.workingDays.size,
+      holidayRanges: cal.holidays.length,
+      workingWeekdays: [...cal.workingDays].map((d) => WEEKDAY_INDEX.indexOf(d)).sort(),
+      holidays: cal.holidays.map((h) => ({ start: h.start, end: h.end })),
+    },
     baseline,
   };
 }

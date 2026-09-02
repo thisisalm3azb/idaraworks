@@ -393,7 +393,9 @@ export function computeSchedule(
     cycle: [],
     tasks: out,
     projectStart: idx.toDate(Math.min(...[...ES.values()])),
-    projectFinish: idx.toDate(Math.max(0, projectEnd - 1)),
+    projectFinish: idx.toDate(
+      Math.max(0, ...tasks.map((t) => Math.max(ES.get(t.id)!, EF.get(t.id)! - 1))),
+    ),
     projectDurationDays: projectEnd - Math.min(...[...ES.values()]),
     criticalPaths,
     unscheduled,
