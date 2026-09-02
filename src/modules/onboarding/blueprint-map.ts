@@ -189,6 +189,9 @@ export function recommendModules(a: DraftAnswers): ModuleRecommendation[] {
       patterns.some((p) => p === "project" || p === "production") ? "studio_on" : "studio_off",
       ["work_patterns"],
     ),
+    // H26 — the Document Studio. Every business issues letters, agreements
+    // and forms, so it is recommended on; the founder can still switch it off.
+    rec("cap.documents", true, "documents", []),
   ];
 }
 

@@ -82,6 +82,7 @@ export const ATTACHABLE_TYPES = [
   "studio_plan", // H25 — reference documents attach to a plan
   "studio_node", // H25 — evidence and documents attach to canvas nodes
   "studio_scenario", // H25G — decision evidence attaches to a scenario; its lifecycle shows in activity
+  "document", // H26 — supporting papers and signed scans attach to an authored document
 ] as const;
 export type AttachableType = (typeof ATTACHABLE_TYPES)[number];
 
@@ -146,6 +147,15 @@ export const AUDIT_ENTITY_TYPES = [
   "skill",
   "employee_skill",
   "task_allocation",
+  // H26 — the Document Studio: every governed record's lifecycle is audited.
+  "document_template",
+  "document_workflow",
+  "document_folder",
+  "document_view",
+  "document_comment",
+  "document_signature",
+  "document_form",
+  "document_obligation",
 ] as const;
 export type AuditEntityType = (typeof AUDIT_ENTITY_TYPES)[number];
 
@@ -155,6 +165,7 @@ export const FILE_ACCESS_CLASSES = [
   "financial_doc", // requires finance.viewPrices; originals retained
   "hr_doc", // privileged bucket; originals retained
   "customer_share", // watermarked derivative behind the share-token surface
+  "document_file", // H26 — papers on an authored document; read = documents.view, write = documents.edit
 ] as const;
 export type FileAccessClass = (typeof FILE_ACCESS_CLASSES)[number];
 
@@ -245,5 +256,10 @@ export const NOTIFICATION_KINDS = [
   "approval_decided", // S4 — pushed to the requester on approve/reject
   "exception_raised", // S5 — pushed to a raised exception's audience (redacted body, F-23)
   "payslip_issued", // H23H — pushed to the employee's linked login on finalize (no amounts, F-23)
+  // H26 — document lifecycle pushes (titles and references only; never body text or amounts).
+  "document_review_requested",
+  "document_signature_requested",
+  "document_signed",
+  "document_obligation_due",
 ] as const;
 export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];

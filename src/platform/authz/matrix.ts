@@ -148,7 +148,23 @@ export type Action =
   | "scenario.manage"
   | "scenario.apply"
   | "kpi.manage"
-  | "register.manage";
+  | "register.manage"
+  // ── H26 Document Studio. Segregation: drafting ≠ reviewing ≠ issuing ≠
+  // signing ≠ terminating. Legal text is not a field-floor surface (foreman
+  // holds nothing); the viewer reads. Binding a record into a document never
+  // widens access to that record (its own view action still gates it).
+  | "documents.view"
+  | "documents.create"
+  | "documents.edit"
+  | "documents.review"
+  | "documents.issue"
+  | "documents.sign"
+  | "documents.terminate"
+  | "documents.archive"
+  | "documents.templates.manage"
+  | "documents.workflows.manage"
+  | "documents.obligations.manage"
+  | "documents.forms.manage";
 
 type Grantable = Exclude<RoleArchetype, "worker_reserved_p3">;
 
@@ -377,4 +393,18 @@ export const MATRIX: Record<Action, readonly Grantable[]> = {
   "scenario.apply": ["owner", "admin"],
   "kpi.manage": ["owner", "admin", "manager"],
   "register.manage": ["owner", "admin", "manager"],
+  // H26 Document Studio: office seats draft and sign; managers review and
+  // issue; owner/admin terminate and design workflows; the viewer reads.
+  "documents.view": ["owner", "admin", "manager", "procurement", "accounts", "viewer"],
+  "documents.create": ["owner", "admin", "manager", "procurement", "accounts"],
+  "documents.edit": ["owner", "admin", "manager", "procurement", "accounts"],
+  "documents.review": ["owner", "admin", "manager", "accounts"],
+  "documents.issue": ["owner", "admin", "manager"],
+  "documents.sign": ["owner", "admin", "manager", "procurement", "accounts"],
+  "documents.terminate": ["owner", "admin"],
+  "documents.archive": ["owner", "admin", "manager"],
+  "documents.templates.manage": ["owner", "admin", "manager"],
+  "documents.workflows.manage": ["owner", "admin"],
+  "documents.obligations.manage": ["owner", "admin", "manager", "accounts"],
+  "documents.forms.manage": ["owner", "admin", "manager"],
 };

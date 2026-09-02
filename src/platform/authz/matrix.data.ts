@@ -14,6 +14,18 @@ type Grantable = Exclude<RoleArchetype, "worker_reserved_p3">;
 export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
   // Full member management, file lifecycle, ALL config + masters + skeleton (doc 06 row-by-row).
   owner: [
+    "documents.view",
+    "documents.create",
+    "documents.edit",
+    "documents.review",
+    "documents.issue",
+    "documents.sign",
+    "documents.terminate",
+    "documents.archive",
+    "documents.templates.manage",
+    "documents.workflows.manage",
+    "documents.obligations.manage",
+    "documents.forms.manage",
     "studio.view",
     "studio.manage",
     "studio.schedule",
@@ -130,6 +142,18 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
     "pipeline.configure",
   ],
   admin: [
+    "documents.view",
+    "documents.create",
+    "documents.edit",
+    "documents.review",
+    "documents.issue",
+    "documents.sign",
+    "documents.terminate",
+    "documents.archive",
+    "documents.templates.manage",
+    "documents.workflows.manage",
+    "documents.obligations.manage",
+    "documents.forms.manage",
     "studio.view",
     "studio.manage",
     "studio.schedule",
@@ -246,6 +270,16 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
   // Manager (doc 08: the Workshop Manager variant): masters M, jobs/reports, NO
   // config, NO salary/HR side-tables, no invite/deactivate/legal-hold.
   manager: [
+    "documents.view",
+    "documents.create",
+    "documents.edit",
+    "documents.review",
+    "documents.issue",
+    "documents.sign",
+    "documents.archive",
+    "documents.templates.manage",
+    "documents.obligations.manage",
+    "documents.forms.manage",
     "studio.view",
     "studio.manage",
     "studio.schedule",
@@ -359,6 +393,10 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
     "digest.view",
   ],
   procurement: [
+    "documents.view",
+    "documents.create",
+    "documents.edit",
+    "documents.sign",
     "assets.view",
     "inventory.view",
     "inventory.receive",
@@ -391,6 +429,12 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
     "digest.view",
   ],
   accounts: [
+    "documents.view",
+    "documents.create",
+    "documents.edit",
+    "documents.review",
+    "documents.sign",
+    "documents.obligations.manage",
     "studio.view",
     "payroll.view",
     "payroll.manage",
@@ -451,6 +495,7 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
   // today.view added (adversarial review): read-only Today composed ONLY from
   // the viewer's own read grants above (no money, no queues).
   viewer: [
+    "documents.view",
     "studio.view",
     "payroll.view",
     "members.view",

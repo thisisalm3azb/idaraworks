@@ -921,6 +921,34 @@ export type SupplierRow = {
   active: boolean;
 };
 
+/** Single-supplier read (H26 document bindings). Null for a missing OR foreign id. */
+export async function getSupplier(
+  ctx: Ctx,
+  archetype: RoleArchetype,
+  id: string,
+): Promise<SupplierRow | null> {
+  assertCan(archetype, "catalog.view");
+  if (!z.string().uuid().safeParse(id).success) return null;
+  const rows = (await withCtx(ctx, (tx) =>
+    tx.execute(sql`
+      select id::text as id, name, tax_reg_no, terms_text, phone, email, active
+      from public.supplier
+      where org_id = ${ctx.orgId} and id = ${id}
+    `),
+  )) as unknown as Array<Record<string, unknown>>;
+  const r = rows[0];
+  if (!r) return null;
+  return {
+    id: r.id as string,
+    name: r.name as string,
+    taxRegNo: (r.tax_reg_no as string | null) ?? null,
+    termsText: (r.terms_text as string | null) ?? null,
+    phone: (r.phone as string | null) ?? null,
+    email: (r.email as string | null) ?? null,
+    active: r.active as boolean,
+  };
+}
+
 /**
  * A page of suppliers.
  *

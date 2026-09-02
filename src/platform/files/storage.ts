@@ -204,7 +204,7 @@ export async function getFile(ctx: Ctx, fileId: string): Promise<FileRecord | nu
 
 // ── signUpload ────────────────────────────────────────────────────────────────
 export const SignUploadInput = z.object({
-  accessClass: z.enum(["job_media", "financial_doc", "hr_doc", "customer_share"]),
+  accessClass: z.enum(["job_media", "financial_doc", "hr_doc", "customer_share", "document_file"]),
   attachedToType: z.enum(ATTACHABLE_TYPES as unknown as [string, ...string[]]),
   attachedToId: z.string().uuid(),
   fileName: z.string().trim().min(1).max(255),

@@ -71,6 +71,8 @@ type ItemSpec = {
   requiresFinanceSurfaces?: boolean;
   /** H25 release gate (platform/flags.ts managementStudioEnabled). */
   requiresStudioSurfaces?: boolean;
+  /** H26 release gate (platform/flags.ts documentStudioEnabled). */
+  requiresDocumentSurfaces?: boolean;
 };
 
 type GroupSpec = { key: string; labelKey: string; icon: IconName; items: ItemSpec[] };
@@ -341,6 +343,60 @@ const GROUPS: GroupSpec[] = [
     ],
   },
   {
+    // H26 — the Document Studio: the command centre plus its governed
+    // libraries. Behind BOTH cap.documents and FEATURE_DOCUMENT_STUDIO.
+    key: "documents",
+    labelKey: "nav.group.documents",
+    icon: "clipboard",
+    items: [
+      {
+        key: "documents",
+        labelKey: "nav.documents",
+        path: "/documents",
+        icon: "clipboard",
+        action: "documents.view",
+        feature: "cap.documents",
+        requiresDocumentSurfaces: true,
+      },
+      {
+        key: "documents_templates",
+        labelKey: "nav.documents_templates",
+        path: "/documents/templates",
+        icon: "grid",
+        action: "documents.templates.manage",
+        feature: "cap.documents",
+        requiresDocumentSurfaces: true,
+      },
+      {
+        key: "documents_workflows",
+        labelKey: "nav.documents_workflows",
+        path: "/documents/workflows",
+        icon: "check",
+        action: "documents.workflows.manage",
+        feature: "cap.documents",
+        requiresDocumentSurfaces: true,
+      },
+      {
+        key: "documents_obligations",
+        labelKey: "nav.documents_obligations",
+        path: "/documents/obligations",
+        icon: "calendar",
+        action: "documents.view",
+        feature: "cap.documents",
+        requiresDocumentSurfaces: true,
+      },
+      {
+        key: "documents_forms",
+        labelKey: "nav.documents_forms",
+        path: "/documents/forms",
+        icon: "inbox",
+        action: "documents.forms.manage",
+        feature: "cap.documents",
+        requiresDocumentSurfaces: true,
+      },
+    ],
+  },
+  {
     key: "customers",
     labelKey: "nav.group.customers",
     icon: "users",
@@ -536,6 +592,8 @@ export type BuildNavInput = {
   financeSurfaces?: boolean;
   /** Whether the H25 Management Studio is released. Same law. */
   studioSurfaces?: boolean;
+  /** Whether the H26 Document Studio is released. Same law. */
+  documentSurfaces?: boolean;
 };
 
 function resolveItem(spec: ItemSpec, input: BuildNavInput): NavItem | null {
@@ -544,6 +602,7 @@ function resolveItem(spec: ItemSpec, input: BuildNavInput): NavItem | null {
   if (spec.requiresHrSurfaces === true && input.hrSurfaces !== true) return null;
   if (spec.requiresFinanceSurfaces === true && input.financeSurfaces !== true) return null;
   if (spec.requiresStudioSurfaces === true && input.studioSurfaces !== true) return null;
+  if (spec.requiresDocumentSurfaces === true && input.documentSurfaces !== true) return null;
   if (!can(input.archetype, spec.action)) return null;
   const entitled = spec.feature === undefined || (input.features[spec.feature] ?? false);
   if (entitled) {

@@ -15,7 +15,34 @@ import {
   hrSurfacesEnabled,
   financeSurfacesEnabled,
   managementStudioEnabled,
+  documentStudioEnabled,
 } from "@/platform/flags";
+
+/** H26 — the Document Studio gate obeys exactly the same law. */
+describe("the document studio release gate", () => {
+  const orig = process.env.FEATURE_DOCUMENT_STUDIO;
+  afterEach(() => {
+    if (orig === undefined) delete process.env.FEATURE_DOCUMENT_STUDIO;
+    else process.env.FEATURE_DOCUMENT_STUDIO = orig;
+  });
+
+  it("is off when nothing is set", () => {
+    delete process.env.FEATURE_DOCUMENT_STUDIO;
+    expect(documentStudioEnabled()).toBe(false);
+  });
+
+  it("is off for every near-miss spelling", () => {
+    for (const value of ["", "0", "false", "true", "yes", "on", "1 ", " 1", "TRUE"]) {
+      process.env.FEATURE_DOCUMENT_STUDIO = value;
+      expect(documentStudioEnabled(), `"${value}" turned the surfaces on`).toBe(false);
+    }
+  });
+
+  it("is on for exactly one value", () => {
+    process.env.FEATURE_DOCUMENT_STUDIO = "1";
+    expect(documentStudioEnabled()).toBe(true);
+  });
+});
 
 const original = process.env.FEATURE_STOCK_SURFACES;
 

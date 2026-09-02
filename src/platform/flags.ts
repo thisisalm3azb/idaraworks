@@ -65,3 +65,16 @@ export function financeSurfacesEnabled(): boolean {
 export function managementStudioEnabled(): boolean {
   return process.env.FEATURE_MANAGEMENT_STUDIO === "1";
 }
+
+/**
+ * The H26 Document Studio screens.
+ *
+ * Same law: off unless `FEATURE_DOCUMENT_STUDIO=1`, exactly that spelling.
+ * When off the navigation has no entries and every document route answers
+ * 404. A signing surface reaching customers before the snapshot, evidence and
+ * permission laws are verified would put an unproven signature in front of a
+ * counterparty.
+ */
+export function documentStudioEnabled(): boolean {
+  return process.env.FEATURE_DOCUMENT_STUDIO === "1";
+}

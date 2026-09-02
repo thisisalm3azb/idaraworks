@@ -17,6 +17,8 @@ export const CLASS_MAP: Record<FileAccessClass, ClassSpec> = {
   job_media: { bucket: "tenant-media", retainOriginal: false, hasMemberPath: true },
   financial_doc: { bucket: "tenant-docs", retainOriginal: true, hasMemberPath: true },
   hr_doc: { bucket: "tenant-docs", retainOriginal: true, hasMemberPath: true },
+  // H26: papers on an authored document (signed scans keep their original).
+  document_file: { bucket: "tenant-docs", retainOriginal: true, hasMemberPath: true },
   // Minted by the S5 share surface (watermarked derivative); no member path.
   customer_share: { bucket: "tenant-media", retainOriginal: false, hasMemberPath: false },
 };

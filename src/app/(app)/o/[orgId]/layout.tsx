@@ -13,6 +13,7 @@ import {
   hrSurfacesEnabled,
   financeSurfacesEnabled,
   managementStudioEnabled,
+  documentStudioEnabled,
 } from "@/platform/flags";
 import { resolveEntitlements } from "@/platform/entitlements";
 import {
@@ -91,6 +92,8 @@ export default async function OrgLayout({
     financeSurfaces: financeSurfacesEnabled(),
     // H25 release gate — same law.
     studioSurfaces: managementStudioEnabled(),
+    // H26 release gate — same law.
+    documentSurfaces: documentStudioEnabled(),
   };
   const groups: NavGroupVM[] = filterGroupsByBlueprint(
     buildNavGroups(input).map((g) => ({

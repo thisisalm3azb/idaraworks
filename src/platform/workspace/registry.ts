@@ -92,6 +92,9 @@ export const WORKSPACE_MODULE_KEYS = [
   // H25 — the Management Studio (release-gated in the nav builder by
   // FEATURE_MANAGEMENT_STUDIO until verified end to end).
   "cap.studio",
+  // H26 — the Document Studio (release-gated in the nav builder by
+  // FEATURE_DOCUMENT_STUDIO until verified end to end).
+  "cap.documents",
 ] as const satisfies readonly FeatureKey[];
 export type WorkspaceModuleKey = (typeof WORKSPACE_MODULE_KEYS)[number];
 export function isWorkspaceModuleKey(x: string): x is WorkspaceModuleKey {
@@ -245,6 +248,13 @@ export const MODULE_INFO: Record<WorkspaceModuleKey, ModuleInfo> = {
     recommends: ["cap.people", "cap.finance"],
     termKeys: ["job", "task"],
   },
+  "cap.documents": {
+    availability: "shipped",
+    entitlement: "cap.documents",
+    requires: [],
+    recommends: ["cap.customers", "cap.quoting", "cap.people"],
+    termKeys: ["customer", "supplier", "employee"],
+  },
 };
 
 // ── Navigation item keys (parity-tested against the U5 nav builder) ─────────
@@ -302,6 +312,12 @@ export const NAV_ITEM_KEYS = [
   "finance_budgets",
   // H25 — the Studio; absent from every menu until the release gate opens.
   "studio",
+  // H26 — the Document Studio; absent from every menu until the release gate opens.
+  "documents",
+  "documents_templates",
+  "documents_workflows",
+  "documents_obligations",
+  "documents_forms",
   "members",
   "imports",
   "exports",
@@ -536,6 +552,37 @@ export const NAV_ITEM_INFO: Record<NavItemKey, NavItemInfo> = {
     action: "studio.view",
     feature: "cap.studio",
     module: "cap.studio",
+    alwaysVisible: false,
+  },
+  // H26 — mirrors the builder's documents group (release-gated there).
+  documents: {
+    action: "documents.view",
+    feature: "cap.documents",
+    module: "cap.documents",
+    alwaysVisible: false,
+  },
+  documents_templates: {
+    action: "documents.templates.manage",
+    feature: "cap.documents",
+    module: "cap.documents",
+    alwaysVisible: false,
+  },
+  documents_workflows: {
+    action: "documents.workflows.manage",
+    feature: "cap.documents",
+    module: "cap.documents",
+    alwaysVisible: false,
+  },
+  documents_obligations: {
+    action: "documents.view",
+    feature: "cap.documents",
+    module: "cap.documents",
+    alwaysVisible: false,
+  },
+  documents_forms: {
+    action: "documents.forms.manage",
+    feature: "cap.documents",
+    module: "cap.documents",
     alwaysVisible: false,
   },
   members: { action: "members.view", feature: null, module: null, alwaysVisible: true },

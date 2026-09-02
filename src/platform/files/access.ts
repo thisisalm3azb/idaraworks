@@ -20,7 +20,19 @@ const WRITE_ARCHETYPES: Record<
   job_media: ["owner", "admin", "manager", "foreman"],
   financial_doc: ["owner", "admin", "manager", "procurement", "accounts"],
   hr_doc: ["owner", "admin"],
+  // H26: the documents.edit lane.
+  document_file: ["owner", "admin", "manager", "procurement", "accounts"],
 };
+
+/** H26: the documents.view lane — every archetype but the field seat. */
+const DOCUMENT_FILE_READERS: readonly RoleArchetype[] = [
+  "owner",
+  "admin",
+  "manager",
+  "procurement",
+  "accounts",
+  "viewer",
+];
 
 /**
  * Does (archetype, pricePrivileged) grant read/write on this class?
@@ -41,6 +53,11 @@ export function canAccessFileClass(
       return write ? WRITE_ARCHETYPES.financial_doc.includes(archetype) : pricePrivileged;
     case "hr_doc":
       return WRITE_ARCHETYPES.hr_doc.includes(archetype);
+    case "document_file":
+      // Read: the documents.view lane. Write: the documents.edit lane.
+      return write
+        ? WRITE_ARCHETYPES.document_file.includes(archetype)
+        : DOCUMENT_FILE_READERS.includes(archetype);
     default:
       // customer_share: minted by the S5 share surface only — no member path.
       return false;

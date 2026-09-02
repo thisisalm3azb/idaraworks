@@ -44,6 +44,9 @@ export const FEATURE_KEYS = [
   // capability (H25): the Management Studio — seeded enabled on every plan
   // (0107); release-gated by FEATURE_MANAGEMENT_STUDIO until verified.
   "cap.studio",
+  // capability (H26): the Document Studio — seeded enabled on every plan
+  // (0114); release-gated by FEATURE_DOCUMENT_STUDIO until verified.
+  "cap.documents",
   // behaviour
   "feat.ai_onboarding",
   "feat.ai_narration",
@@ -117,6 +120,7 @@ export const FREE_PLAN_FEATURES: readonly FeatureKey[] = [
   "cap.expense_claims",
   "cap.finance",
   "cap.studio",
+  "cap.documents",
   "feat.ai_onboarding",
   "feat.ai_drafts",
   "feat.custom_fields",
