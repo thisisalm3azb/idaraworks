@@ -59,3 +59,4 @@ sim-screenshots/
 .sim-secrets/
 .build-*.log
 .h25-shots/
+.h25-shots-prod/
