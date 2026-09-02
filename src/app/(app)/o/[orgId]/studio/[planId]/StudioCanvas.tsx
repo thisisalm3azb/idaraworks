@@ -269,7 +269,7 @@ function CanvasInner({
   criticalIds: Set<string>;
   selectedId: string | null;
   onSelect: (id: string | null) => void;
-  settle: (res: ActionResult<unknown>, okText?: string) => boolean;
+  settle: (res: ActionResult<unknown>, okText?: string, quiet?: boolean) => boolean;
 }) {
   const rf = useReactFlow();
   // Local state is ONLY what the server cannot know yet: in-flight drag
@@ -363,7 +363,7 @@ function CanvasInner({
           y: Math.round(n.position.y),
         })),
       });
-      if (!res.ok) settle(res);
+      settle(res, undefined, true);
     },
     [actions, payload.planId, settle],
   );

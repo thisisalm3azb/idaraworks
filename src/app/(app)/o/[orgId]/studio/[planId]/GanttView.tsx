@@ -78,6 +78,14 @@ export function GanttView({
 
   const days = Array.from({ length: totalDays }, (_, i) => addDaysIso(from, i));
 
+  function isWorking(d: string): boolean {
+    const dow = new Date(d + "T00:00:00Z").getUTCDay();
+    return (
+      payload.calendar.workingWeekdays.includes(dow) &&
+      !payload.calendar.holidays.some((h) => d >= h.start && d <= h.end)
+    );
+  }
+
   function onPointerDown(e: React.PointerEvent, id: string) {
     if (!payload.canManage) return;
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
@@ -96,11 +104,14 @@ export function GanttView({
     const node = payload.nodes.find((n) => n.id === id);
     const sched = payload.schedule[id];
     if (!node || !sched) return;
+    // Snap forward to a working day so the stored date is the date the plan shows.
+    let startDate = addDaysIso(sched.earlyStart, deltaDays);
+    for (let i = 0; i < 14 && !isWorking(startDate); i++) startDate = addDaysIso(startDate, 1);
     const res = await actions.updateNode({
       nodeId: id,
       expectedRowVersion: node.rowVersion,
       ...(payload.scenarioId ? { scenarioId: payload.scenarioId } : {}),
-      startDate: addDaysIso(sched.earlyStart, deltaDays),
+      startDate,
       ...(node.durationDays === null ? { durationDays: sched.durationDays } : {}),
     });
     settle(res);

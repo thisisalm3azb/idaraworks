@@ -140,16 +140,21 @@ export function StudioWorkspace({
   const criticalIds = useMemo(() => new Set(payload.criticalPaths.flat()), [payload.criticalPaths]);
 
   useEffect(() => {
-    if (!notice) return;
+    // Successes fade; a refusal stays until the next action so it can be read.
+    if (!notice || notice.tone === "error") return;
     const id = setTimeout(() => setNotice(null), 3500);
     return () => clearTimeout(id);
   }, [notice]);
 
-  /** Every mutation ends here: report, then re-resolve the living model. */
+  /**
+   * Every mutation ends here: report, then re-resolve the living model.
+   * `quiet` skips the success notice (a drag is not worth a toast) but never
+   * skips the refresh: the client's row versions must follow the server.
+   */
   const settle = useCallback(
-    (res: ActionResult<unknown>, okText = dict.saved) => {
+    (res: ActionResult<unknown>, okText: string = dict.saved, quiet = false) => {
       if (res.ok) {
-        setNotice({ tone: "ok", text: okText });
+        if (!quiet) setNotice({ tone: "ok", text: okText });
         startTransition(() => router.refresh());
       } else {
         setNotice({

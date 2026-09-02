@@ -1,5 +1,7 @@
 "use server";
 
+import { ZodError } from "zod";
+
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { resolveCtxForAction } from "@/platform/auth/resolve";
@@ -44,7 +46,12 @@ async function run<T>(orgId: string, fn: (r: Resolved) => Promise<T>): Promise<A
     return { ok: true, data };
   } catch (err) {
     const code = (err as { code?: string }).code;
-    const message = err instanceof Error ? err.message : "failed";
+    const message =
+      err instanceof ZodError
+        ? err.issues.map((i) => `${i.path.join(".") || "input"}: ${i.message}`).join("; ")
+        : err instanceof Error
+          ? err.message
+          : "failed";
     return { ok: false, error: message.slice(0, 200), code };
   }
 }

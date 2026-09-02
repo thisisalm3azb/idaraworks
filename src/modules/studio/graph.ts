@@ -431,7 +431,12 @@ export async function updateNode(
         const patch: Record<string, unknown> = {};
         for (const [k, v] of liveBusiness) {
           if (!TASK_ROUTED_FIELDS.has(k)) continue;
-          patch[k] = v;
+          // The jobs door keeps description as a plain string and never
+          // accepts a blank title; the studio's "cleared" is its "".
+          if (k === "description") patch[k] = v ?? "";
+          else if (k === "title") {
+            if (typeof v === "string" && v.trim()) patch[k] = v;
+          } else patch[k] = v;
         }
         if (Object.keys(patch).length > 0) {
           await updateTask(ctx, archetype, node.record_id!, patch);
@@ -882,13 +887,14 @@ export async function moveNodes(
           if (m.parentNodeId === m.nodeId) throw new StudioError("a node cannot nest in itself");
         }
         const res = (await tx.execute(sql`
+          -- Placement is presentation: it never bumps the business row version.
           update public.studio_node set
             x = ${m.x}, y = ${m.y},
             w = ${m.w === undefined ? sql`w` : m.w},
             h = ${m.h === undefined ? sql`h` : m.h},
             z = coalesce(${m.z ?? null}, z),
             parent_node_id = ${m.parentNodeId === undefined ? sql`parent_node_id` : m.parentNodeId},
-            row_version = row_version + 1, updated_by = ${ctx.userId}, updated_at = now()
+            updated_by = ${ctx.userId}, updated_at = now()
           where org_id = ${ctx.orgId} and id = ${m.nodeId} and plan_id = ${input.planId}
             and archived_at is null and locked = false
           returning id

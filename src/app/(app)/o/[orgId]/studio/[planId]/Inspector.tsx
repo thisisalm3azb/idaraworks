@@ -55,14 +55,29 @@ export function Inspector({
 }) {
   const [pending, start] = useTransition();
   const [form, setForm] = useState<Form | null>(node ? seed(node) : null);
+  // Only fields the person actually typed in are sent on save; everything
+  // else follows the server, so a refresh landing mid-edit can neither be
+  // overwritten by a stale form nor wipe the person's typing.
+  const [dirty, setDirty] = useState<Set<keyof Form>>(() => new Set());
+  const sig = node ? `${node.id}:${JSON.stringify(seed(node))}` : null;
+  const [seededSig, setSeededSig] = useState<string | null>(sig);
   const [seededFor, setSeededFor] = useState<string | null>(node?.id ?? null);
   const [jobId, setJobId] = useState("");
   const [taskCount, setTaskCount] = useState<number | null>(null);
-  if ((node?.id ?? null) !== seededFor) {
+  if (sig !== seededSig) {
+    setSeededSig(sig);
+    const fresh = node ? seed(node) : null;
+    if (node && form && seededFor === node.id) {
+      const merged: Form = { ...(fresh as Form) };
+      for (const k of dirty) merged[k] = form[k];
+      setForm(merged);
+    } else {
+      setForm(fresh);
+      setDirty(new Set());
+      setJobId("");
+      setTaskCount(null);
+    }
     setSeededFor(node?.id ?? null);
-    setForm(node ? seed(node) : null);
-    setJobId("");
-    setTaskCount(null);
   }
 
   if (!node || !form) {
@@ -70,7 +85,12 @@ export function Inspector({
   }
   const current = node;
   const f = form;
-  const set = (patch: Partial<Form>) => setForm({ ...f, ...patch });
+  const set = (patch: Partial<Form>) => {
+    setForm({ ...f, ...patch });
+    const next = new Set(dirty);
+    for (const k of Object.keys(patch) as Array<keyof Form>) next.add(k);
+    setDirty(next);
+  };
 
   const sched = payload.schedule[current.id];
   const isLinked = current.recordId !== null;
@@ -80,20 +100,23 @@ export function Inspector({
   const canEdit = payload.canManage && !withheld;
 
   function save() {
+    const changed: Record<string, unknown> = {};
+    if (dirty.has("title")) changed.title = f.title.trim() || null;
+    if (dirty.has("description")) changed.description = f.description.trim() || null;
+    if (dirty.has("startDate")) changed.startDate = f.startDate || null;
+    if (dirty.has("dueDate")) changed.dueDate = f.dueDate || null;
+    if (dirty.has("duration")) changed.durationDays = f.duration === "" ? null : Number(f.duration);
+    if (dirty.has("priority")) changed.priority = f.priority;
+    if (!isLinked && dirty.has("status") && f.status) changed.status = f.status;
+    if (Object.keys(changed).length === 0) return;
     start(async () => {
       const res = await actions.updateNode({
         nodeId: current.id,
         expectedRowVersion: current.rowVersion,
         ...(payload.scenarioId ? { scenarioId: payload.scenarioId } : {}),
-        title: f.title.trim() || null,
-        description: f.description.trim() || null,
-        startDate: f.startDate || null,
-        dueDate: f.dueDate || null,
-        durationDays: f.duration === "" ? null : Number(f.duration),
-        priority: f.priority,
-        ...(isLinked ? {} : { status: f.status || undefined }),
+        ...changed,
       });
-      settle(res);
+      if (settle(res)) setDirty(new Set());
     });
   }
 
