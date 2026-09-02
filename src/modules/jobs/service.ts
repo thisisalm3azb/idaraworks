@@ -1132,3 +1132,11 @@ export {
 } from "./tasks";
 export { addCrewMember, removeCrewMember, listCrew, type CrewRow } from "./crew";
 export { getWeekView, type WeekJob } from "./week";
+
+// H25H — task allocations (who does the work, at what share).
+export {
+  listTaskAllocations,
+  allocateTask,
+  unallocateTask,
+  type AllocationRow,
+} from "./allocations";

@@ -8,8 +8,11 @@ import {
   listLinkableJobs,
   listScenarios,
   compareScenario,
+  capacityForPlan,
   StudioError,
 } from "@/modules/studio/service";
+import { listTaskAllocations } from "@/modules/jobs/service";
+import { listEmployees } from "@/modules/masters/service";
 import {
   addNodeAction,
   updateNodeAction,
@@ -27,6 +30,9 @@ import {
   applyScenarioAction,
   discardScenarioAction,
   simulateAction,
+  allocateTaskAction,
+  unallocateTaskAction,
+  levelAction,
 } from "../actions";
 import { StudioWorkspace, type StudioDict, type WorkspacePayload } from "./StudioWorkspace";
 
@@ -76,6 +82,26 @@ export default async function PlanPage({
     }
   }
 
+  // H25H — capacity projection + who is on each linked task + who can be added.
+  const capacity = await capacityForPlan(resolved.ctx, resolved.archetype, {
+    planId,
+    scenarioId: sp.scenario,
+  });
+  const taskIds = plan.graph.nodes
+    .filter((n) => n.recordType === "task" && n.recordId)
+    .map((n) => n.recordId!);
+  const allocationRows =
+    can(resolved.archetype, "tasks.view") && taskIds.length > 0
+      ? await listTaskAllocations(resolved.ctx, resolved.archetype, taskIds)
+      : [];
+  const allocations: Record<string, typeof allocationRows> = {};
+  for (const a of allocationRows) (allocations[a.taskId] ??= []).push(a);
+  const people = can(resolved.archetype, "employees.view")
+    ? (await listEmployees(resolved.ctx, resolved.archetype))
+        .filter((e) => e.active)
+        .map((e) => ({ id: e.id, name: e.name, teamName: e.teamName }))
+    : [];
+
   const payload: WorkspacePayload = {
     orgId,
     planId,
@@ -95,6 +121,11 @@ export default async function PlanPage({
     jobs,
     scenarios,
     scenario,
+    capacity,
+    allocations,
+    people,
+    canAllocate:
+      can(resolved.archetype, "tasks.manage") && can(resolved.archetype, "employees.view"),
     canManage: can(resolved.archetype, "studio.manage"),
     canSchedule: can(resolved.archetype, "studio.schedule"),
     canManageScenario: can(resolved.archetype, "scenario.manage"),
@@ -160,6 +191,14 @@ export default async function PlanPage({
     unscored: t("studio.risk.unscored"),
     today: t("studio.calendar.today"),
     nothingScheduled: t("studio.nothing_scheduled"),
+    peopleOnTask: t("studio.allocation.people"),
+    addPerson: t("studio.allocation.add"),
+    share: t("studio.allocation.share"),
+    level: t("studio.level"),
+    levelName: t("studio.level_name"),
+    overloads: t("studio.overloads"),
+    peopleWithheld: t("studio.people_withheld"),
+    implicit: t("studio.allocation.implicit"),
     scenario: Object.fromEntries(
       [
         "title",
@@ -286,6 +325,9 @@ export default async function PlanPage({
         applyScenario: applyScenarioAction.bind(null, orgId),
         discardScenario: discardScenarioAction.bind(null, orgId),
         simulate: simulateAction.bind(null, orgId),
+        allocateTask: allocateTaskAction.bind(null, orgId),
+        unallocateTask: unallocateTaskAction.bind(null, orgId),
+        level: levelAction.bind(null, orgId),
       }}
     />
   );

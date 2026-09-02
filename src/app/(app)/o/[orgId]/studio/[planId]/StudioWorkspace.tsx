@@ -12,11 +12,14 @@
 import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import type {
+  CapacityReport,
   EffectiveEdge,
   EffectiveNode,
+  LevelingProposal,
   ScenarioComparison,
   ScenarioRow,
 } from "@/modules/studio/service";
+import type { AllocationRow } from "@/modules/jobs/service";
 import type { ScheduledTask, ScheduleHealth } from "@/modules/studio/service";
 import type { LinkableJob } from "@/modules/studio/service";
 import type { ActionResult, SimulationDto } from "../actions";
@@ -52,6 +55,11 @@ export type WorkspacePayload = {
   /** H25G — the plan's scenarios and, when one is active, its comparison with live. */
   scenarios: ScenarioRow[];
   scenario: ScenarioComparison | null;
+  /** H25H — capacity projection of the same schedule, allocations per linked task, people to allocate. */
+  capacity: CapacityReport;
+  allocations: Record<string, AllocationRow[]>;
+  people: Array<{ id: string; name: string; teamName: string | null }>;
+  canAllocate: boolean;
   canManage: boolean;
   canSchedule: boolean;
   canManageScenario: boolean;
@@ -107,6 +115,14 @@ export type StudioDict = {
   unscored: string;
   today: string;
   nothingScheduled: string;
+  peopleOnTask: string;
+  addPerson: string;
+  share: string;
+  level: string;
+  levelName: string;
+  overloads: string;
+  peopleWithheld: string;
+  implicit: string;
   nodeTypes: Record<string, string>;
   statuses: Record<string, string>;
   edgeTypes: Record<string, string>;
@@ -155,6 +171,19 @@ export type StudioActions = {
     samples?: number;
     seed?: number;
   }) => Promise<ActionResult<SimulationDto>>;
+  allocateTask: (input: {
+    taskId: string;
+    employeeId: string;
+    sharePct?: number;
+    note?: string;
+  }) => Promise<ActionResult<{ id: string }>>;
+  unallocateTask: (allocationId: string) => Promise<ActionResult<void>>;
+  level: (input: {
+    planId: string;
+    name: string;
+  }) => Promise<
+    ActionResult<{ scenarioId: string; proposals: LevelingProposal[]; unresolved: number }>
+  >;
 };
 
 const VIEWS = [
@@ -346,8 +375,11 @@ export function StudioWorkspace({
             <WorkloadView
               payload={payload}
               dict={dict}
+              actions={actions}
               selectedId={selectedId}
               onSelect={setSelectedId}
+              settle={settle}
+              onOpenScenario={openScenario}
             />
           ) : view === "risk" ? (
             <RiskMatrixView

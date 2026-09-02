@@ -1239,3 +1239,13 @@ export async function listItemCategories(
   }>;
   return (rows[0]?.value?.categories ?? []).filter((c) => !c.retired);
 }
+
+// H25H — skills (read by the studio capacity views through this door).
+export {
+  listSkills,
+  createSkill,
+  listEmployeeSkills,
+  setEmployeeSkill,
+  type SkillRow,
+  type EmployeeSkillRow,
+} from "./skills";

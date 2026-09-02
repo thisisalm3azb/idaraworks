@@ -68,6 +68,8 @@ export function Inspector({
   const [seededFor, setSeededFor] = useState<string | null>(node?.id ?? null);
   const [jobId, setJobId] = useState("");
   const [taskCount, setTaskCount] = useState<number | null>(null);
+  const [allocEmployee, setAllocEmployee] = useState("");
+  const [allocShare, setAllocShare] = useState("100");
   if (sig !== seededSig) {
     setSeededSig(sig);
     const fresh = node ? seed(node) : null;
@@ -329,6 +331,95 @@ export function Inspector({
           <Button type="button" variant="ghost" onClick={remove} disabled={pending}>
             {dict.remove}
           </Button>
+        </div>
+      ) : null}
+
+      {isLinked && current.recordType === "task" && current.recordId ? (
+        <div className="rounded-md border border-line p-2">
+          <p className="text-xs font-semibold text-ink">{dict.peopleOnTask}</p>
+          <ul className="mt-1 flex flex-col gap-1">
+            {(payload.allocations[current.recordId] ?? []).map((a) => (
+              <li
+                key={a.id}
+                className="flex items-center justify-between gap-2 rounded-md bg-sunken px-2 py-1 text-xs"
+              >
+                <span className="truncate text-ink">
+                  {a.employeeName} · {a.sharePct}%
+                </span>
+                {payload.canAllocate ? (
+                  <button
+                    type="button"
+                    aria-label={dict.remove}
+                    disabled={pending}
+                    onClick={() =>
+                      start(async () => {
+                        settle(await actions.unallocateTask(a.id));
+                      })
+                    }
+                    className="min-h-6 min-w-6 rounded text-ink-muted hover:text-danger"
+                  >
+                    ×
+                  </button>
+                ) : null}
+              </li>
+            ))}
+            {(payload.allocations[current.recordId] ?? []).length === 0 && current.assigneeName ? (
+              <li className="text-[11px] text-ink-muted">
+                {current.assigneeName} · {dict.implicit}
+              </li>
+            ) : null}
+          </ul>
+          {payload.canAllocate && payload.people.length > 0 ? (
+            <form
+              className="mt-2 flex flex-wrap items-end gap-1"
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!allocEmployee) return;
+                start(async () => {
+                  const res = await actions.allocateTask({
+                    taskId: current.recordId!,
+                    employeeId: allocEmployee,
+                    sharePct: Math.min(100, Math.max(1, Number(allocShare) || 100)),
+                  });
+                  if (settle(res)) setAllocEmployee("");
+                });
+              }}
+            >
+              <select
+                value={allocEmployee}
+                onChange={(e) => setAllocEmployee(e.target.value)}
+                aria-label={dict.addPerson}
+                className="min-h-9 min-w-0 flex-1 rounded-md border border-line bg-card px-1 text-xs text-ink"
+              >
+                <option value="">{dict.addPerson}</option>
+                {payload.people.map((pp) => (
+                  <option key={pp.id} value={pp.id}>
+                    {pp.name}
+                    {pp.teamName ? ` · ${pp.teamName}` : ""}
+                  </option>
+                ))}
+              </select>
+              <label className="text-[10px] text-ink-muted">
+                {dict.share}
+                <input
+                  type="number"
+                  min={1}
+                  max={100}
+                  value={allocShare}
+                  onChange={(e) => setAllocShare(e.target.value)}
+                  className="mt-0.5 block min-h-9 w-20 rounded-md border border-line-strong bg-card px-2 text-xs text-ink"
+                  dir="ltr"
+                />
+              </label>
+              <button
+                type="submit"
+                disabled={pending || !allocEmployee}
+                className="min-h-9 rounded-md border border-line px-2 text-xs text-ink disabled:opacity-50"
+              >
+                {dict.addPerson}
+              </button>
+            </form>
+          ) : null}
         </div>
       ) : null}
 

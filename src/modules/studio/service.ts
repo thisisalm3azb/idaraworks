@@ -8,6 +8,7 @@ export * from "./resolve";
 export * from "./schedule";
 export * from "./links";
 export * from "./scenarios";
+export * from "./capacity";
 export type { SimulationResult, Percentiles } from "./engine/monte-carlo";
 export type {
   ScheduledTask,

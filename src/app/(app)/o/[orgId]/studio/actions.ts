@@ -23,8 +23,11 @@ import {
   applyScenario,
   discardScenario,
   simulatePlan,
+  levelIntoScenario,
   type SimulationResult,
+  type LevelingProposal,
 } from "@/modules/studio/service";
+import { allocateTask, unallocateTask } from "@/modules/jobs/service";
 
 /**
  * H25 server actions for the canvas. Unlike the form pages, the canvas is a
@@ -231,4 +234,29 @@ export async function simulateAction(
       finishByNode: Object.fromEntries(res.finishByNode),
     };
   });
+}
+
+// ── H25H — resources ─────────────────────────────────────────────────────────
+
+export async function allocateTaskAction(
+  orgId: string,
+  input: { taskId: string; employeeId: string; sharePct?: number; note?: string },
+): Promise<ActionResult<{ id: string }>> {
+  return run(orgId, (r) => allocateTask(r.ctx, r.archetype, input));
+}
+
+export async function unallocateTaskAction(
+  orgId: string,
+  allocationId: string,
+): Promise<ActionResult<void>> {
+  return run(orgId, (r) => unallocateTask(r.ctx, r.archetype, allocationId));
+}
+
+export async function levelAction(
+  orgId: string,
+  input: { planId: string; name: string },
+): Promise<
+  ActionResult<{ scenarioId: string; proposals: LevelingProposal[]; unresolved: number }>
+> {
+  return run(orgId, (r) => levelIntoScenario(r.ctx, r.archetype, input));
 }
