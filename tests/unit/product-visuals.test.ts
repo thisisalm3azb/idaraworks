@@ -249,12 +249,13 @@ describe("H3.3B hero — the Living Control Surface", () => {
     for (const bad of ["<img", "<canvas", "<video", "webgl", "three", "framer-motion", "gsap"]) {
       expect(heroSrc.toLowerCase()).not.toContain(bad);
     }
-    const pkg = JSON.parse(
-      readFileSync(fileURLToPath(new URL("../../package.json", import.meta.url)), "utf8"),
-    ) as { dependencies?: Record<string, string> };
-    for (const dep of Object.keys(pkg.dependencies ?? {})) {
-      expect(dep).not.toMatch(/framer|three|gsap|lottie|animejs|motion/);
-    }
+    // This surface imports none of these libraries. A SOURCE check on the
+    // surface itself, not a name regex over package.json: the app's gated
+    // Studio 3D route dynamically imports `three` (H25 ADR-4) and must not
+    // be mistaken for a hero animation.
+    expect(heroSrc).not.toMatch(
+      /from\s+["'](framer|three|gsap|lottie|animejs|motion|@xyflow\/react)/,
+    );
   });
 
   it("hero copy exists in both catalogs, natural Arabic, no em dash; retired keys stay retired", () => {

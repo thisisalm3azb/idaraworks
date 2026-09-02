@@ -89,6 +89,9 @@ export const WORKSPACE_MODULE_KEYS = [
   // H24K — the accounting, banking and tax system (release-gated in the nav
   // builder by FEATURE_FINANCE_SURFACES until verified end to end).
   "cap.finance",
+  // H25 — the Management Studio (release-gated in the nav builder by
+  // FEATURE_MANAGEMENT_STUDIO until verified end to end).
+  "cap.studio",
 ] as const satisfies readonly FeatureKey[];
 export type WorkspaceModuleKey = (typeof WORKSPACE_MODULE_KEYS)[number];
 export function isWorkspaceModuleKey(x: string): x is WorkspaceModuleKey {
@@ -235,6 +238,13 @@ export const MODULE_INFO: Record<WorkspaceModuleKey, ModuleInfo> = {
     recommends: ["cap.invoicing", "cap.expenses"],
     termKeys: [],
   },
+  "cap.studio": {
+    availability: "shipped",
+    entitlement: "cap.studio",
+    requires: ["cap.jobs"],
+    recommends: ["cap.people", "cap.finance"],
+    termKeys: ["job", "task"],
+  },
 };
 
 // ── Navigation item keys (parity-tested against the U5 nav builder) ─────────
@@ -290,6 +300,8 @@ export const NAV_ITEM_KEYS = [
   "finance_reports",
   "finance_tax",
   "finance_budgets",
+  // H25 — the Studio; absent from every menu until the release gate opens.
+  "studio",
   "members",
   "imports",
   "exports",
@@ -517,6 +529,13 @@ export const NAV_ITEM_INFO: Record<NavItemKey, NavItemInfo> = {
     action: "budget.manage",
     feature: "cap.finance",
     module: "cap.finance",
+    alwaysVisible: false,
+  },
+  // H25 — mirrors the builder's studio group (release-gated there).
+  studio: {
+    action: "studio.view",
+    feature: "cap.studio",
+    module: "cap.studio",
     alwaysVisible: false,
   },
   members: { action: "members.view", feature: null, module: null, alwaysVisible: true },

@@ -175,11 +175,10 @@ describe("H8 — accessibility, RTL, motion, scope", () => {
     for (const bad of ["<img", "<canvas", "<video", "webgl", "three"]) {
       expect(src.toLowerCase()).not.toContain(bad);
     }
-    const pkg = JSON.parse(
-      readFileSync(fileURLToPath(new URL("../../package.json", import.meta.url)), "utf8"),
-    ) as { dependencies?: Record<string, string> };
-    for (const dep of Object.keys(pkg.dependencies ?? {})) {
-      expect(dep).not.toMatch(/framer|three|gsap|lottie|animejs|motion/);
-    }
+    // This surface imports none of these libraries. A SOURCE check on the
+    // surface itself, not a name regex over package.json: the app's gated
+    // Studio 3D route dynamically imports `three` (H25 ADR-4) and must not
+    // be mistaken for a hero animation.
+    expect(src).not.toMatch(/from\s+["'](framer|three|gsap|lottie|animejs|motion|@xyflow\/react)/);
   });
 });

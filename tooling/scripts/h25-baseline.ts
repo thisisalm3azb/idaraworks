@@ -58,7 +58,9 @@ async function main(): Promise<void> {
         console.log(`${t}: (absent)`);
         continue;
       }
-      const rows = (await sql.unsafe(`select count(*)::int as n from public.${t}`)) as unknown as Array<{ n: number }>;
+      const rows = (await sql.unsafe(
+        `select count(*)::int as n from public.${t}`,
+      )) as unknown as Array<{ n: number }>;
       console.log(`${t}: ${rows[0]!.n}`);
     }
     const jobStatus = await sql`

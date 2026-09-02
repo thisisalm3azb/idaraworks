@@ -69,6 +69,8 @@ type ItemSpec = {
   requiresHrSurfaces?: boolean;
   /** H24K release gate (platform/flags.ts financeSurfacesEnabled). */
   requiresFinanceSurfaces?: boolean;
+  /** H25 release gate (platform/flags.ts managementStudioEnabled). */
+  requiresStudioSurfaces?: boolean;
 };
 
 type GroupSpec = { key: string; labelKey: string; icon: IconName; items: ItemSpec[] };
@@ -321,6 +323,24 @@ const GROUPS: GroupSpec[] = [
     ],
   },
   {
+    // H25 — the Management Studio: one destination, many projections inside.
+    // Behind BOTH cap.studio and FEATURE_MANAGEMENT_STUDIO; hidden while off.
+    key: "studio",
+    labelKey: "nav.group.studio",
+    icon: "chart",
+    items: [
+      {
+        key: "studio",
+        labelKey: "nav.studio",
+        path: "/studio",
+        icon: "chart",
+        action: "studio.view",
+        feature: "cap.studio",
+        requiresStudioSurfaces: true,
+      },
+    ],
+  },
+  {
     key: "customers",
     labelKey: "nav.group.customers",
     icon: "users",
@@ -514,6 +534,8 @@ export type BuildNavInput = {
   hrSurfaces?: boolean;
   /** Whether the H24 finance/banking/tax screens are released. Same law. */
   financeSurfaces?: boolean;
+  /** Whether the H25 Management Studio is released. Same law. */
+  studioSurfaces?: boolean;
 };
 
 function resolveItem(spec: ItemSpec, input: BuildNavInput): NavItem | null {
@@ -521,6 +543,7 @@ function resolveItem(spec: ItemSpec, input: BuildNavInput): NavItem | null {
   if (spec.requiresStockSurfaces === true && input.stockSurfaces !== true) return null;
   if (spec.requiresHrSurfaces === true && input.hrSurfaces !== true) return null;
   if (spec.requiresFinanceSurfaces === true && input.financeSurfaces !== true) return null;
+  if (spec.requiresStudioSurfaces === true && input.studioSurfaces !== true) return null;
   if (!can(input.archetype, spec.action)) return null;
   const entitled = spec.feature === undefined || (input.features[spec.feature] ?? false);
   if (entitled) {

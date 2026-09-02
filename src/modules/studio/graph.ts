@@ -12,7 +12,7 @@
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { command } from "@/platform/audit";
-import { assertCan, can } from "@/platform/authz";
+import { assertCan } from "@/platform/authz";
 import { sql, withCtx, type Ctx, type TenantTx } from "@/platform/tenancy";
 import type { RoleArchetype } from "@/platform/registries";
 import { allocateReference, formatRef } from "@/platform/reference/sequence";
@@ -767,11 +767,11 @@ export async function convertNode(
       },
     },
     async (tx) => {
+      // The link columns sit outside the UPDATE grant on purpose; the definer
+      // function (0108) allows exactly one direction — unlinked → linked —
+      // so a node can never be re-pointed at a different record.
       await tx.execute(sql`
-        update public.studio_node set
-          record_type = ${out!.recordType}, record_id = ${out!.recordId},
-          row_version = row_version + 1, updated_by = ${ctx.userId}, updated_at = now()
-        where org_id = ${ctx.orgId} and id = ${input.nodeId}
+        select app.link_studio_node(${input.nodeId}, ${out!.recordType}, ${out!.recordId})
       `);
       await touchPlanIn(tx, ctx, node.plan_id);
     },

@@ -267,6 +267,7 @@ describe("H14 — registry parity with the platform sources of truth", () => {
           // H23G — parity is judged with every release gate open, same as stock.
           hrSurfaces: true,
           financeSurfaces: true,
+          studioSurfaces: true,
         })
           .flatMap((g) => g.items)
           .map((i) => i.key),
@@ -299,6 +300,7 @@ describe("H14 — registry parity with the platform sources of truth", () => {
         stockSurfaces: true,
         hrSurfaces: true,
         financeSurfaces: true,
+        studioSurfaces: true,
       }).flatMap((g) => g.items);
       const byKey = new Map(items.map((i) => [i.key, i]));
       for (const key of NAV_ITEM_KEYS) {

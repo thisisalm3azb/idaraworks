@@ -180,6 +180,15 @@ export function recommendModules(a: DraftAnswers): ModuleRecommendation[] {
       a.vat_registered_q === "yes" ? "finance_vat_on" : "finance_off",
       ["vat_registered_q"],
     ),
+    // H25 — the Management Studio. Recommended where work is delivered as
+    // planned engagements (dependencies, schedules, capacity matter); other
+    // businesses opt in when they start planning ahead.
+    rec(
+      "cap.studio",
+      patterns.some((p) => p === "project" || p === "production"),
+      patterns.some((p) => p === "project" || p === "production") ? "studio_on" : "studio_off",
+      ["work_patterns"],
+    ),
   ];
 }
 
