@@ -14,6 +14,7 @@ import {
   financeSurfacesEnabled,
   managementStudioEnabled,
   documentStudioEnabled,
+  revenueStudioEnabled,
 } from "@/platform/flags";
 import { resolveEntitlements } from "@/platform/entitlements";
 import {
@@ -94,6 +95,7 @@ export default async function OrgLayout({
     studioSurfaces: managementStudioEnabled(),
     // H26 release gate — same law.
     documentSurfaces: documentStudioEnabled(),
+    revenueSurfaces: revenueStudioEnabled(),
   };
   const groups: NavGroupVM[] = filterGroupsByBlueprint(
     buildNavGroups(input).map((g) => ({

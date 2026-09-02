@@ -269,6 +269,7 @@ describe("H14 — registry parity with the platform sources of truth", () => {
           financeSurfaces: true,
           studioSurfaces: true,
           documentSurfaces: true,
+          revenueSurfaces: true,
         })
           .flatMap((g) => g.items)
           .map((i) => i.key),
@@ -303,6 +304,7 @@ describe("H14 — registry parity with the platform sources of truth", () => {
         financeSurfaces: true,
         studioSurfaces: true,
         documentSurfaces: true,
+        revenueSurfaces: true,
       }).flatMap((g) => g.items);
       const byKey = new Map(items.map((i) => [i.key, i]));
       for (const key of NAV_ITEM_KEYS) {

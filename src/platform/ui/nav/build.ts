@@ -73,6 +73,8 @@ type ItemSpec = {
   requiresStudioSurfaces?: boolean;
   /** H26 release gate (platform/flags.ts documentStudioEnabled). */
   requiresDocumentSurfaces?: boolean;
+  /** H27 release gate (platform/flags.ts revenueStudioEnabled). */
+  requiresRevenueSurfaces?: boolean;
 };
 
 type GroupSpec = { key: string; labelKey: string; icon: IconName; items: ItemSpec[] };
@@ -397,6 +399,97 @@ const GROUPS: GroupSpec[] = [
     ],
   },
   {
+    // H27 — the Revenue Studio: pipeline, leads, forecast, campaigns,
+    // targets, success, automation, reports. Behind BOTH cap.revenue_studio
+    // and FEATURE_REVENUE_STUDIO.
+    key: "revenue",
+    labelKey: "nav.group.revenue",
+    icon: "chart",
+    items: [
+      {
+        key: "revenue",
+        labelKey: "nav.revenue",
+        path: "/revenue",
+        icon: "chart",
+        action: "opportunities.view",
+        feature: "cap.revenue_studio",
+        requiresRevenueSurfaces: true,
+      },
+      {
+        key: "revenue_pipeline",
+        labelKey: "nav.revenue_pipeline",
+        path: "/revenue/pipeline",
+        icon: "grid",
+        action: "opportunities.view",
+        feature: "cap.revenue_studio",
+        requiresRevenueSurfaces: true,
+      },
+      {
+        key: "revenue_leads",
+        labelKey: "nav.revenue_leads",
+        path: "/revenue/leads",
+        icon: "inbox",
+        action: "leads.view",
+        feature: "cap.revenue_studio",
+        requiresRevenueSurfaces: true,
+      },
+      {
+        key: "revenue_forecast",
+        labelKey: "nav.revenue_forecast",
+        path: "/revenue/forecast",
+        icon: "chart",
+        action: "crm.forecast.view",
+        feature: "cap.revenue_studio",
+        requiresRevenueSurfaces: true,
+      },
+      {
+        key: "revenue_campaigns",
+        labelKey: "nav.revenue_campaigns",
+        path: "/revenue/campaigns",
+        icon: "calendar",
+        action: "crm.campaigns.manage",
+        feature: "cap.revenue_studio",
+        requiresRevenueSurfaces: true,
+      },
+      {
+        key: "revenue_targets",
+        labelKey: "nav.revenue_targets",
+        path: "/revenue/targets",
+        icon: "check",
+        action: "crm.targets.manage",
+        feature: "cap.revenue_studio",
+        requiresRevenueSurfaces: true,
+      },
+      {
+        key: "revenue_success",
+        labelKey: "nav.revenue_success",
+        path: "/revenue/success",
+        icon: "users",
+        action: "customers.view",
+        feature: "cap.revenue_studio",
+        requiresRevenueSurfaces: true,
+      },
+      {
+        key: "revenue_automations",
+        labelKey: "nav.revenue_automations",
+        path: "/revenue/automations",
+        icon: "clipboard",
+        action: "crm.automations.manage",
+        feature: "cap.revenue_studio",
+        requiresRevenueSurfaces: true,
+      },
+      {
+        key: "revenue_reports",
+        labelKey: "nav.revenue_reports",
+        path: "/revenue/reports",
+        icon: "chart",
+        action: "crm.forecast.view",
+        feature: "cap.revenue_studio",
+        requiresRevenueSurfaces: true,
+      },
+    ],
+  },
+  {
     key: "customers",
     labelKey: "nav.group.customers",
     icon: "users",
@@ -594,6 +687,8 @@ export type BuildNavInput = {
   studioSurfaces?: boolean;
   /** Whether the H26 Document Studio is released. Same law. */
   documentSurfaces?: boolean;
+  /** H27 release gate (platform/flags.ts revenueStudioEnabled). */
+  revenueSurfaces?: boolean;
 };
 
 function resolveItem(spec: ItemSpec, input: BuildNavInput): NavItem | null {
@@ -603,6 +698,7 @@ function resolveItem(spec: ItemSpec, input: BuildNavInput): NavItem | null {
   if (spec.requiresFinanceSurfaces === true && input.financeSurfaces !== true) return null;
   if (spec.requiresStudioSurfaces === true && input.studioSurfaces !== true) return null;
   if (spec.requiresDocumentSurfaces === true && input.documentSurfaces !== true) return null;
+  if (spec.requiresRevenueSurfaces === true && input.revenueSurfaces !== true) return null;
   if (!can(input.archetype, spec.action)) return null;
   const entitled = spec.feature === undefined || (input.features[spec.feature] ?? false);
   if (entitled) {

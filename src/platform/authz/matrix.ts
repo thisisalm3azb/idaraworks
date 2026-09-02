@@ -164,7 +164,17 @@ export type Action =
   | "documents.templates.manage"
   | "documents.workflows.manage"
   | "documents.obligations.manage"
-  | "documents.forms.manage";
+  | "documents.forms.manage"
+  // ── H27 Revenue Studio: forecasting, targets, campaigns, automation,
+  // consent, merge, import/export — on top of the H20 sales lanes.
+  | "crm.forecast.view"
+  | "crm.targets.manage"
+  | "crm.campaigns.manage"
+  | "crm.automations.manage"
+  | "crm.consent.manage"
+  | "crm.merge"
+  | "crm.import"
+  | "crm.export";
 
 type Grantable = Exclude<RoleArchetype, "worker_reserved_p3">;
 
@@ -384,6 +394,16 @@ export const MATRIX: Record<Action, readonly Grantable[]> = {
   "opportunities.view": ["owner", "admin", "manager", "accounts"],
   "opportunities.manage": ["owner", "admin", "manager"],
   "pipeline.configure": ["owner", "admin"],
+  // H27: managers forecast and run campaigns; owner/admin govern automation,
+  // merges and imports; accounts read forecasts (amounts ride pricePrivileged).
+  "crm.forecast.view": ["owner", "admin", "manager", "accounts"],
+  "crm.targets.manage": ["owner", "admin"],
+  "crm.campaigns.manage": ["owner", "admin", "manager"],
+  "crm.automations.manage": ["owner", "admin"],
+  "crm.consent.manage": ["owner", "admin", "manager"],
+  "crm.merge": ["owner", "admin"],
+  "crm.import": ["owner", "admin"],
+  "crm.export": ["owner", "admin", "manager", "accounts"],
   // H25 Studio: managers plan; owner/admin also apply scenarios to live
   // records; accounts and viewer read (amounts still ride the money walls).
   "studio.view": ["owner", "admin", "manager", "accounts", "viewer"],

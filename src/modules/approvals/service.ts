@@ -207,6 +207,18 @@ const SUBJECTS: Record<string, SubjectConfig> = {
       await onStepDecidedIn(tx, ctx, subjectId, outcome, note);
     },
   },
+  // H27 — a discount or commercial exception on an opportunity.
+  crm_discount: {
+    table: "crm_discount",
+    live: "pending",
+    onApprove: "approved",
+    onReject: "rejected",
+    onWithdraw: "withdrawn",
+    afterDecide: async (tx, ctx, subjectId, outcome, note) => {
+      const { onDiscountDecidedIn } = await import("@/modules/crm/service");
+      await onDiscountDecidedIn(tx, ctx, subjectId, outcome, note);
+    },
+  },
 };
 
 // ── role escalation (F-4): one step up until a non-requester decider exists ───

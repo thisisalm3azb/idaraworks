@@ -95,6 +95,9 @@ export const WORKSPACE_MODULE_KEYS = [
   // H26 — the Document Studio (release-gated in the nav builder by
   // FEATURE_DOCUMENT_STUDIO until verified end to end).
   "cap.documents",
+  // H27 — the Revenue Studio (release-gated in the nav builder by
+  // FEATURE_REVENUE_STUDIO until verified end to end).
+  "cap.revenue_studio",
 ] as const satisfies readonly FeatureKey[];
 export type WorkspaceModuleKey = (typeof WORKSPACE_MODULE_KEYS)[number];
 export function isWorkspaceModuleKey(x: string): x is WorkspaceModuleKey {
@@ -255,6 +258,13 @@ export const MODULE_INFO: Record<WorkspaceModuleKey, ModuleInfo> = {
     recommends: ["cap.customers", "cap.quoting", "cap.people"],
     termKeys: ["customer", "supplier", "employee"],
   },
+  "cap.revenue_studio": {
+    availability: "shipped",
+    entitlement: "cap.revenue_studio",
+    requires: ["cap.customers"],
+    recommends: ["cap.quoting", "cap.documents"],
+    termKeys: ["customer"],
+  },
 };
 
 // ── Navigation item keys (parity-tested against the U5 nav builder) ─────────
@@ -318,6 +328,15 @@ export const NAV_ITEM_KEYS = [
   "documents_workflows",
   "documents_obligations",
   "documents_forms",
+  "revenue",
+  "revenue_pipeline",
+  "revenue_leads",
+  "revenue_forecast",
+  "revenue_campaigns",
+  "revenue_targets",
+  "revenue_success",
+  "revenue_automations",
+  "revenue_reports",
   "members",
   "imports",
   "exports",
@@ -583,6 +602,61 @@ export const NAV_ITEM_INFO: Record<NavItemKey, NavItemInfo> = {
     action: "documents.forms.manage",
     feature: "cap.documents",
     module: "cap.documents",
+    alwaysVisible: false,
+  },
+  // H27 — mirrors the builder's revenue group (release-gated there).
+  revenue: {
+    action: "opportunities.view",
+    feature: "cap.revenue_studio",
+    module: "cap.revenue_studio",
+    alwaysVisible: false,
+  },
+  revenue_pipeline: {
+    action: "opportunities.view",
+    feature: "cap.revenue_studio",
+    module: "cap.revenue_studio",
+    alwaysVisible: false,
+  },
+  revenue_leads: {
+    action: "leads.view",
+    feature: "cap.revenue_studio",
+    module: "cap.revenue_studio",
+    alwaysVisible: false,
+  },
+  revenue_forecast: {
+    action: "crm.forecast.view",
+    feature: "cap.revenue_studio",
+    module: "cap.revenue_studio",
+    alwaysVisible: false,
+  },
+  revenue_campaigns: {
+    action: "crm.campaigns.manage",
+    feature: "cap.revenue_studio",
+    module: "cap.revenue_studio",
+    alwaysVisible: false,
+  },
+  revenue_targets: {
+    action: "crm.targets.manage",
+    feature: "cap.revenue_studio",
+    module: "cap.revenue_studio",
+    alwaysVisible: false,
+  },
+  revenue_success: {
+    action: "customers.view",
+    feature: "cap.revenue_studio",
+    module: "cap.revenue_studio",
+    alwaysVisible: false,
+  },
+  revenue_automations: {
+    action: "crm.automations.manage",
+    feature: "cap.revenue_studio",
+    module: "cap.revenue_studio",
+    alwaysVisible: false,
+  },
+  revenue_reports: {
+    action: "crm.forecast.view",
+    feature: "cap.revenue_studio",
+    module: "cap.revenue_studio",
     alwaysVisible: false,
   },
   members: { action: "members.view", feature: null, module: null, alwaysVisible: true },

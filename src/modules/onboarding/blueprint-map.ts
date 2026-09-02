@@ -192,6 +192,8 @@ export function recommendModules(a: DraftAnswers): ModuleRecommendation[] {
     // H26 — the Document Studio. Every business issues letters, agreements
     // and forms, so it is recommended on; the founder can still switch it off.
     rec("cap.documents", true, "documents", []),
+    // H27 — the Revenue Studio: recommended wherever customers are managed.
+    rec("cap.revenue_studio", true, "revenue", []),
   ];
 }
 

@@ -54,6 +54,8 @@ describe("registries (phase2 closed vocabularies)", () => {
         "task_completion",
         // H22E: taking an owned asset off the books needs a second person.
         "asset_disposal",
+        // H27: a discount or commercial exception on an opportunity.
+        "crm_discount",
         // H23: HR and payroll decisions ride the same engine as supply and money.
         "leave_request",
         "overtime_request",

@@ -36,6 +36,11 @@ import { customerWork } from "@/modules/jobs/service";
 
 // H20 — the sales CRM engine (module public surface).
 export * from "./sales";
+export * from "./discounts";
+export * from "./pipelines";
+export * from "./dealroom";
+export * from "./activities";
+export * from "./customers";
 
 // ── The canonical customer presentation model (H19 Part B) ──────────────────
 // Honest to the real schema: the customer table has no organization vs

@@ -52,7 +52,8 @@ export const APPROVABLE_TYPES = [
   "pay_run",
   "journal_entry", // H24 — optional approval before posting (engine never touches its status)
   "scenario_apply", // H25 — applying a scenario to live records (studio checks the state itself)
-  "document_step", // H26 — one step of a document workflow run; the run advances in afterDecide
+  "document_step",
+  "crm_discount", // H27 — a commercial exception (discount) needs a second person // H26 — one step of a document workflow run; the run advances in afterDecide
   // P3 (with QC): "stage_signoff", "qc_delivery_override"
 ] as const;
 export type ApprovableType = (typeof APPROVABLE_TYPES)[number];
@@ -156,6 +157,19 @@ export const AUDIT_ENTITY_TYPES = [
   "document_comment",
   "document_signature",
   "document_form",
+  // H27 — CRM satellites (audit identity only)
+  "crm_pipeline",
+  "crm_campaign",
+  "crm_territory",
+  "crm_target",
+  "crm_consent",
+  "crm_merge",
+  "crm_automation",
+  "crm_scenario",
+  "crm_forecast_snapshot",
+  "crm_discount",
+  "crm_deal_canvas",
+  "customer_contact",
   "document_obligation",
 ] as const;
 export type AuditEntityType = (typeof AUDIT_ENTITY_TYPES)[number];
@@ -262,5 +276,12 @@ export const NOTIFICATION_KINDS = [
   "document_signature_requested",
   "document_signed",
   "document_obligation_due",
+  // H27 — CRM pushes (titles and references only; never amounts).
+  "crm_lead_assigned",
+  "crm_follow_up_due",
+  "crm_opportunity_stalled",
+  "crm_discount_requested",
+  "crm_customer_at_risk",
+  "crm_renewal_due",
 ] as const;
 export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];

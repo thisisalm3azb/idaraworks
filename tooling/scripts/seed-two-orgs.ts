@@ -15,6 +15,7 @@ import { H24_SEEDERS } from "./seed-h24";
 import { H25_SEEDERS } from "./seed-h25";
 import { H25H_SEEDERS } from "./seed-h25h";
 import { H26_SEEDERS } from "./seed-h26";
+import { H27_SEEDERS } from "./seed-h27";
 
 type Owner = ReturnType<typeof postgres>;
 /**
@@ -133,6 +134,7 @@ export const SEEDERS: Record<string, Seeder> = {
   ...H25H_SEEDERS,
   // H26 — the Document Studio tables (tooling/scripts/seed-h26.ts).
   ...H26_SEEDERS,
+  ...H27_SEEDERS,
   // ── seeded by org creation ──
   company: noop,
   membership: noop,

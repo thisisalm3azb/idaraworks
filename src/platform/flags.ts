@@ -78,3 +78,14 @@ export function managementStudioEnabled(): boolean {
 export function documentStudioEnabled(): boolean {
   return process.env.FEATURE_DOCUMENT_STUDIO === "1";
 }
+
+/**
+ * The H27 CRM and Revenue Growth Studio screens.
+ *
+ * Same law: off unless `FEATURE_REVENUE_STUDIO=1`, exactly that spelling.
+ * When off the navigation has no revenue entries and every revenue route
+ * answers 404; the additive data layer stays inert.
+ */
+export function revenueStudioEnabled(): boolean {
+  return process.env.FEATURE_REVENUE_STUDIO === "1";
+}

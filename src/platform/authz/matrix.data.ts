@@ -140,6 +140,14 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
     "opportunities.view",
     "opportunities.manage",
     "pipeline.configure",
+    "crm.forecast.view",
+    "crm.targets.manage",
+    "crm.campaigns.manage",
+    "crm.automations.manage",
+    "crm.consent.manage",
+    "crm.merge",
+    "crm.import",
+    "crm.export",
   ],
   admin: [
     "documents.view",
@@ -266,6 +274,14 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
     "opportunities.view",
     "opportunities.manage",
     "pipeline.configure",
+    "crm.forecast.view",
+    "crm.targets.manage",
+    "crm.campaigns.manage",
+    "crm.automations.manage",
+    "crm.consent.manage",
+    "crm.merge",
+    "crm.import",
+    "crm.export",
   ],
   // Manager (doc 08: the Workshop Manager variant): masters M, jobs/reports, NO
   // config, NO salary/HR side-tables, no invite/deactivate/legal-hold.
@@ -360,6 +376,10 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
     "leads.view",
     "leads.manage",
     "opportunities.view",
+    "crm.forecast.view",
+    "crm.campaigns.manage",
+    "crm.consent.manage",
+    "crm.export",
     "opportunities.manage",
   ],
   // Field seat (doc 06 literal row): assigned jobs (v) + own reports. NO
@@ -490,6 +510,8 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
     "data.export",
     // H20 Sell: read-only forecast context (amounts still ride pricePrivileged).
     "opportunities.view",
+    "crm.forecast.view",
+    "crm.export",
   ],
   // Viewer (doc 06): jobs v (redacted) + week view + attendance V — other rows −.
   // today.view added (adversarial review): read-only Today composed ONLY from
