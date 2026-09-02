@@ -54,7 +54,11 @@ const M = () => ctxOf(userM);
 const info = { ip: "203.0.113.5", userAgent: "vitest" };
 
 async function issuedNda(title: string): Promise<string> {
-  const d = await createDocument(A(), "owner", { title, builtinKey: "builtin.nda", language: "en" });
+  const d = await createDocument(A(), "owner", {
+    title,
+    builtinKey: "builtin.nda",
+    language: "en",
+  });
   const rev = await getRevision(A(), "owner", d.revisionId);
   await saveRevision(A(), "owner", {
     documentId: d.id,
@@ -112,7 +116,12 @@ describe("the signature room", () => {
       mode: "parallel",
       signers: [
         { party: "company", kind: "member", userId: userM, name: "Manager", title: "Director" },
-        { party: "counterparty", kind: "external", name: "Maha Saleh", email: `maha-${run}@example.invalid` },
+        {
+          party: "counterparty",
+          kind: "external",
+          name: "Maha Saleh",
+          email: `maha-${run}@example.invalid`,
+        },
       ],
     });
     expect(r.invitations.length).toBe(2);
@@ -122,7 +131,9 @@ describe("the signature room", () => {
     expect(ext.link).toMatch(/\/sign\/[A-Za-z0-9_-]{40,}$/);
     externalToken = ext.link!.split("/sign/")[1]!;
     const stored = (await owner`
-      select token_hash from public.doc_signer where id = ${ext.signerId}`) as unknown as Array<{ token_hash: string }>;
+      select token_hash from public.doc_signer where id = ${ext.signerId}`) as unknown as Array<{
+      token_hash: string;
+    }>;
     expect(stored[0]!.token_hash).toBe(createHash("sha256").update(externalToken).digest("hex"));
     expect(stored[0]!.token_hash).not.toBe(externalToken);
     const req = await getSignatureRequest(A(), "owner", docId);
@@ -142,13 +153,23 @@ describe("the signature room", () => {
   });
 
   it("a member signs only their own party, in-app", async () => {
-    const capture = { kind: "typed" as const, data: "Manager", name: "Manager", consent: true as const, locale: "en" as const };
-    await expect(signAsMember(A(), "owner", { signerId: memberSignerId, capture }, info)).rejects.toMatchObject({ code: "forbidden" });
+    const capture = {
+      kind: "typed" as const,
+      data: "Manager",
+      name: "Manager",
+      consent: true as const,
+      locale: "en" as const,
+    };
+    await expect(
+      signAsMember(A(), "owner", { signerId: memberSignerId, capture }, info),
+    ).rejects.toMatchObject({ code: "forbidden" });
     const res = await signAsMember(M(), "manager", { signerId: memberSignerId, capture }, info);
     expect(res.completed).toBe(false);
     expect(res.evidenceHash).toMatch(/^[0-9a-f]{64}$/);
     // Signed rows are immutable even for the owner connection.
-    await expect(owner`update public.doc_signer set name = 'x' where id = ${memberSignerId}`).rejects.toThrow(/immutable/);
+    await expect(
+      owner`update public.doc_signer set name = 'x' where id = ${memberSignerId}`,
+    ).rejects.toThrow(/immutable/);
     const req = await getSignatureRequest(A(), "owner", docId);
     const s = req!.signers.find((x) => x.id === memberSignerId)!;
     expect(s.status).toBe("signed");
@@ -161,13 +182,26 @@ describe("the signature room", () => {
     expect(await resolveSignerToken("not-a-real-token-value-at-all-1234567890")).toBeNull();
     const res = await signWithToken(
       resolved!,
-      { kind: "drawn", data: "M10 60 L120 40 Q160 20 200 60 L390 50", name: "Maha Saleh", title: "Owner", consent: true, locale: "ar" },
+      {
+        kind: "drawn",
+        data: "M10 60 L120 40 Q160 20 200 60 L390 50",
+        name: "Maha Saleh",
+        title: "Owner",
+        consent: true,
+        locale: "ar",
+      },
       info,
     );
     expect(res.completed).toBe(true);
     // The token is dead now.
     expect(await resolveSignerToken(externalToken)).toBeNull();
-    await expect(signWithToken(resolved!, { kind: "typed", data: "Maha", name: "Maha", consent: true, locale: "en" }, info)).rejects.toMatchObject({
+    await expect(
+      signWithToken(
+        resolved!,
+        { kind: "typed", data: "Maha", name: "Maha", consent: true, locale: "en" },
+        info,
+      ),
+    ).rejects.toMatchObject({
       code: "state",
     });
     const d = await getDocument(A(), "owner", docId);
@@ -178,9 +212,13 @@ describe("the signature room", () => {
     expect(kinds).toContain("invitation_sent");
     expect(kinds.filter((k) => k === "signed").length).toBe(2);
     expect(kinds).toContain("activated");
-    const signedEvent = d.events.find((e) => e.kind === "signed" && e.actorLabel?.includes("Maha"))!;
+    const signedEvent = d.events.find(
+      (e) => e.kind === "signed" && e.actorLabel?.includes("Maha"),
+    )!;
     expect(signedEvent.actorUserId).toBeNull();
-    expect((signedEvent.payload as { evidenceHash: string }).evidenceHash).toMatch(/^[0-9a-f]{64}$/);
+    expect((signedEvent.payload as { evidenceHash: string }).evidenceHash).toMatch(
+      /^[0-9a-f]{64}$/,
+    );
     const render = await listSignaturesForRender(A(), "owner", docId, "en");
     expect(render.rows.filter((r) => r.signedAt !== null).length).toBe(2);
     expect(render.evidenceLines.some((l) => l.includes("Maha Saleh signed at"))).toBe(true);
@@ -193,15 +231,28 @@ describe("the signature room", () => {
       documentId: doc2,
       mode: "sequential",
       signers: [
-        { party: "company", kind: "external", name: "First", email: `first-${run}@example.invalid` },
-        { party: "counterparty", kind: "external", name: "Second", email: `second-${run}@example.invalid` },
+        {
+          party: "company",
+          kind: "external",
+          name: "First",
+          email: `first-${run}@example.invalid`,
+        },
+        {
+          party: "counterparty",
+          kind: "external",
+          name: "Second",
+          email: `second-${run}@example.invalid`,
+        },
       ],
     });
     // Sequential: only the first signer is invited now.
     expect(r.invitations.length).toBe(1);
     const t1 = r.invitations[0]!.link!.split("/sign/")[1]!;
     expect(await resolveSignerToken(t1)).not.toBeNull();
-    await revokeSigner(A(), "owner", { signerId: r.invitations[0]!.signerId, reason: "wrong person" });
+    await revokeSigner(A(), "owner", {
+      signerId: r.invitations[0]!.signerId,
+      reason: "wrong person",
+    });
     expect(await resolveSignerToken(t1)).toBeNull();
     // Cancel the whole request.
     await cancelSignatureRequest(A(), "owner", { requestId: r.id, reason: "restart" });
@@ -211,7 +262,12 @@ describe("the signature room", () => {
       documentId: doc2,
       signers: [
         { party: "company", kind: "member", userId: userA, name: "Owner" },
-        { party: "counterparty", kind: "external", name: "Second", email: `second-${run}@example.invalid` },
+        {
+          party: "counterparty",
+          kind: "external",
+          name: "Second",
+          email: `second-${run}@example.invalid`,
+        },
       ],
     });
     const t2 = r2.invitations.find((i) => i.name === "Second")!.link!.split("/sign/")[1]!;

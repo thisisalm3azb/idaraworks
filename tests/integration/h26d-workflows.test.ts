@@ -56,7 +56,10 @@ let reviewFlowId = "";
 const withLines = (rev: Awaited<ReturnType<typeof getRevision>>, unitPriceMinor: number) => ({
   blocks: rev.body.blocks.map((b) =>
     b.type === "line_items"
-      ? { ...b, items: [{ description: { en: "Work" }, qty: 1, unit: "lot", unitPriceMinor, vatRate: 0 }] }
+      ? {
+          ...b,
+          items: [{ description: { en: "Work" }, qty: 1, unit: "lot", unitPriceMinor, vatRate: 0 }],
+        }
       : b,
   ),
 });
@@ -133,7 +136,9 @@ describe("value-gated approval workflow", () => {
     expect(r?.steps.filter((s) => s.status === "active").map((s) => s.stepId)).toEqual(["manager"]);
     const inbox = await listInbox(M(), "manager");
     expect(inbox.some((a) => a.subjectType === "document_step")).toBe(true);
-    await expect(issueDocument(A(), "owner", { documentId: d.id })).rejects.toMatchObject({ code: "state" });
+    await expect(issueDocument(A(), "owner", { documentId: d.id })).rejects.toMatchObject({
+      code: "state",
+    });
     const mine = await listMySteps(M(), "manager");
     expect(mine.some((s) => s.documentId === d.id && s.kind === "approval")).toBe(true);
   });
@@ -208,7 +213,11 @@ describe("value-gated approval workflow", () => {
     await submitForReview(A(), "owner", { documentId: d.id });
     const inbox = await listInbox(M(), "manager");
     const item = inbox.find((a) => a.subjectType === "document_step")!;
-    await decideApproval(M(), "manager", { approvalId: item.id, decision: "rejected", note: "price is wrong" });
+    await decideApproval(M(), "manager", {
+      approvalId: item.id,
+      decision: "rejected",
+      note: "price is wrong",
+    });
     const detail = await getDocument(A(), "owner", d.id);
     expect(detail.document.status).toBe("draft");
     expect(detail.working?.revisionNo).toBe(2);
@@ -226,7 +235,9 @@ describe("value-gated approval workflow", () => {
     expect((await getRunForDocument(A(), "owner", d.id))?.status).toBe("cancelled");
     const pending = (await owner`
       select count(*)::int as n from public.approval
-      where org_id = ${orgA} and subject_type = 'document_step' and state = 'pending'`) as unknown as Array<{ n: number }>;
+      where org_id = ${orgA} and subject_type = 'document_step' and state = 'pending'`) as unknown as Array<{
+      n: number;
+    }>;
     expect(Number(pending[0]!.n)).toBe(0);
   });
 });
@@ -260,7 +271,11 @@ describe("review steps", () => {
     await expect(
       decideReviewStep(A(), "owner", { stepRunId: step.id, decision: "approved" }),
     ).rejects.toMatchObject({ code: "forbidden" });
-    await decideReviewStep(M(), "manager", { stepRunId: step.id, decision: "approved", note: "fine" });
+    await decideReviewStep(M(), "manager", {
+      stepRunId: step.id,
+      decision: "approved",
+      note: "fine",
+    });
     const after = await getRunForDocument(A(), "owner", d.id);
     expect(after?.currentStepIndex).toBe(1);
     expect(after?.steps.find((s) => s.stepId === "approve")?.status).toBe("active");

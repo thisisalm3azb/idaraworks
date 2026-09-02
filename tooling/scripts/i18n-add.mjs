@@ -32,7 +32,11 @@ for (const locale of ["en", "ar"]) {
     catalog[key] = text;
     if (locale === "en") added += 1;
   }
-  const sorted = Object.fromEntries(Object.keys(catalog).sort().map((k) => [k, catalog[k]]));
+  const sorted = Object.fromEntries(
+    Object.keys(catalog)
+      .sort()
+      .map((k) => [k, catalog[k]]),
+  );
   fs.writeFileSync(path, JSON.stringify(sorted, null, 2) + "\n");
 }
 console.log(`added ${added}, skipped ${skipped} existing`);

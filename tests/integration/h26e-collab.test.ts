@@ -81,7 +81,10 @@ describe("comments and suggestions", () => {
   let revId = "";
   let rootId = "";
   it("anchored comments, replies and mentions", async () => {
-    const d = await createDocument(A(), "owner", { title: `NDA ${run}`, builtinKey: "builtin.nda" });
+    const d = await createDocument(A(), "owner", {
+      title: `NDA ${run}`,
+      builtinKey: "builtin.nda",
+    });
     docId = d.id;
     revId = d.revisionId;
     const root = await createDocComment(M(), "manager", {
@@ -92,22 +95,34 @@ describe("comments and suggestions", () => {
       mentions: [userA],
     });
     rootId = root.id;
-    await createDocComment(A(), "owner", { documentId: docId, parentId: root.id, body: "Agreed, tighten it" });
+    await createDocComment(A(), "owner", {
+      documentId: docId,
+      parentId: root.id,
+      body: "Agreed, tighten it",
+    });
     const list = await listDocComments(V(), "viewer", docId);
     expect(list.length).toBe(2);
     expect(list.find((c) => c.id === root.id)?.blockId).toBe("c3");
     expect(list.find((c) => c.parentId === root.id)?.body).toBe("Agreed, tighten it");
     const mine = await listMyNotifications(A(), true, { limit: 20 });
-    expect(mine.some((n) => n.kind === "document_review_requested" && n.entityId === docId)).toBe(true);
+    expect(mine.some((n) => n.kind === "document_review_requested" && n.entityId === docId)).toBe(
+      true,
+    );
     // A viewer may read but not comment (no comments.create lane).
-    await expect(createDocComment(V(), "viewer", { documentId: docId, body: "x" })).rejects.toBeInstanceOf(ForbiddenError);
+    await expect(
+      createDocComment(V(), "viewer", { documentId: docId, body: "x" }),
+    ).rejects.toBeInstanceOf(ForbiddenError);
   });
 
   it("resolution is reversible and recorded", async () => {
     await resolveDocComment(M(), "manager", { commentId: rootId });
-    expect((await listDocComments(A(), "owner", docId)).find((c) => c.id === rootId)?.resolvedAt).not.toBeNull();
+    expect(
+      (await listDocComments(A(), "owner", docId)).find((c) => c.id === rootId)?.resolvedAt,
+    ).not.toBeNull();
     await resolveDocComment(M(), "manager", { commentId: rootId, resolved: false });
-    expect((await listDocComments(A(), "owner", docId)).find((c) => c.id === rootId)?.resolvedAt).toBeNull();
+    expect(
+      (await listDocComments(A(), "owner", docId)).find((c) => c.id === rootId)?.resolvedAt,
+    ).toBeNull();
   });
 
   it("a suggestion changes the working revision only when accepted, through the row-version guard", async () => {
@@ -116,23 +131,43 @@ describe("comments and suggestions", () => {
       revisionId: revId,
       blockId: "c3",
       body: "Narrow the obligations",
-      suggestion: { blockId: "c3", text: { en: "Each party shall use the confidential information only for the Purpose.", ar: "يلتزم كل طرف باستخدام المعلومات السرية للغرض فقط." } },
+      suggestion: {
+        blockId: "c3",
+        text: {
+          en: "Each party shall use the confidential information only for the Purpose.",
+          ar: "يلتزم كل طرف باستخدام المعلومات السرية للغرض فقط.",
+        },
+      },
     });
     const before = await getRevision(A(), "owner", revId);
     // A viewer/manager without documents.edit cannot accept.
-    await expect(decideSuggestion(V(), "viewer", { commentId: s.id, decision: "accepted" })).rejects.toBeInstanceOf(ForbiddenError);
+    await expect(
+      decideSuggestion(V(), "viewer", { commentId: s.id, decision: "accepted" }),
+    ).rejects.toBeInstanceOf(ForbiddenError);
     // A stale row version is refused.
     await expect(
-      decideSuggestion(A(), "owner", { commentId: s.id, decision: "accepted", expectedRowVersion: before.rowVersion + 5 }),
+      decideSuggestion(A(), "owner", {
+        commentId: s.id,
+        decision: "accepted",
+        expectedRowVersion: before.rowVersion + 5,
+      }),
     ).rejects.toMatchObject({ code: "conflict" });
-    const r = await decideSuggestion(A(), "owner", { commentId: s.id, decision: "accepted", expectedRowVersion: before.rowVersion });
+    const r = await decideSuggestion(A(), "owner", {
+      commentId: s.id,
+      decision: "accepted",
+      expectedRowVersion: before.rowVersion,
+    });
     expect(r.applied).toBe(true);
     const after = await getRevision(A(), "owner", revId);
     const clause = after.body.blocks.find((b) => b.id === "c3");
     expect(clause?.type === "clause" && clause.text.en).toContain("only for the Purpose.");
     expect(after.rowVersion).toBe(before.rowVersion + 1);
-    expect((await listDocComments(A(), "owner", docId)).find((c) => c.id === s.id)?.suggestionStatus).toBe("accepted");
-    await expect(decideSuggestion(A(), "owner", { commentId: s.id, decision: "rejected" })).rejects.toMatchObject({ code: "state" });
+    expect(
+      (await listDocComments(A(), "owner", docId)).find((c) => c.id === s.id)?.suggestionStatus,
+    ).toBe("accepted");
+    await expect(
+      decideSuggestion(A(), "owner", { commentId: s.id, decision: "rejected" }),
+    ).rejects.toMatchObject({ code: "state" });
     const events = (await getDocument(A(), "owner", docId)).events.map((e) => e.kind);
     expect(events).toContain("comment_added");
     expect(events).toContain("suggestion_accepted");
