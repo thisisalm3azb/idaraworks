@@ -15,8 +15,9 @@
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import type { RealtimeChannel } from "@supabase/supabase-js";
 import { supabaseBrowser } from "@/platform/tenancy/supabase";
+
+type RealtimeChannel = ReturnType<ReturnType<typeof supabaseBrowser>["channel"]>;
 
 export type Peer = {
   userId: string;

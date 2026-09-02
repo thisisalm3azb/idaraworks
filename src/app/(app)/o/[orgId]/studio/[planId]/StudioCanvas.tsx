@@ -49,6 +49,7 @@ type StudioNodeData = {
   withheld: boolean;
   warnings: number;
   typeLabel: string;
+  remote: string[];
 };
 type StudioNode = Node<StudioNodeData, "studio">;
 
@@ -102,6 +103,7 @@ function StudioNodeView({ data, selected }: NodeProps<StudioNode>) {
   const container = CONTAINERS.has(data.nodeType);
   return (
     <div
+      style={data.remote.length > 0 ? { boxShadow: `0 0 0 3px ${data.remote[0]}` } : undefined}
       className={`min-h-11 border border-line bg-card px-3 py-2 text-start shadow-sm transition-shadow ${shapeClass(
         data.nodeType,
       )} ${selected ? "ring-2 ring-accent" : ""} ${data.critical ? "border-danger" : ""} ${
@@ -150,6 +152,7 @@ function toFlowNodes(
   payload: WorkspacePayload,
   dict: StudioDict,
   criticalIds: Set<string>,
+  remoteSelections: Record<string, string[]> = {},
 ): StudioNode[] {
   return nodes.map((n) => {
     const sched = payload.schedule[n.id];
@@ -183,6 +186,7 @@ function toFlowNodes(
         withheld: n.recordId !== null && !n.recordVisible,
         warnings: n.warnings.length,
         typeLabel: dict.nodeTypes[n.nodeType] ?? n.nodeType,
+        remote: remoteSelections[n.id] ?? [],
       },
     };
   });
@@ -253,6 +257,7 @@ const PALETTE: string[] = [
 ];
 
 type Pos = { x: number; y: number };
+const NO_REMOTE: Record<string, string[]> = {};
 
 function CanvasInner({
   payload,
@@ -262,6 +267,7 @@ function CanvasInner({
   selectedId,
   onSelect,
   settle,
+  remoteSelections = NO_REMOTE,
 }: {
   payload: WorkspacePayload;
   dict: StudioDict;
@@ -270,6 +276,7 @@ function CanvasInner({
   selectedId: string | null;
   onSelect: (id: string | null) => void;
   settle: (res: ActionResult<unknown>, okText?: string, quiet?: boolean) => boolean;
+  remoteSelections?: Record<string, string[]>;
 }) {
   const rf = useReactFlow();
   // Local state is ONLY what the server cannot know yet: in-flight drag
@@ -292,8 +299,8 @@ function CanvasInner({
   const dragStart = useRef<Map<string, Pos>>(new Map());
 
   const baseNodes = useMemo(
-    () => toFlowNodes(payload.nodes, payload, dict, criticalIds),
-    [payload, dict, criticalIds],
+    () => toFlowNodes(payload.nodes, payload, dict, criticalIds, remoteSelections),
+    [payload, dict, criticalIds, remoteSelections],
   );
   const nodes = useMemo(
     () =>
@@ -534,7 +541,8 @@ export function StudioCanvas(props: {
   criticalIds: Set<string>;
   selectedId: string | null;
   onSelect: (id: string | null) => void;
-  settle: (res: ActionResult<unknown>, okText?: string) => boolean;
+  settle: (res: ActionResult<unknown>, okText?: string, quiet?: boolean) => boolean;
+  remoteSelections?: Record<string, string[]>;
 }) {
   return (
     <ReactFlowProvider>

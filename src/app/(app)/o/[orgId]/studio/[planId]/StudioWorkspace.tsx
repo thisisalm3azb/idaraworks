@@ -34,6 +34,8 @@ import { RoadmapView } from "./RoadmapView";
 import { CalendarView } from "./CalendarView";
 import { WorkloadView } from "./WorkloadView";
 import { RiskMatrixView } from "./RiskMatrixView";
+import { PresenceStrip, usePlanPresence } from "./PresenceLayer";
+import { ThreeView } from "./ThreeView";
 
 export type WorkspacePayload = {
   orgId: string;
@@ -60,6 +62,8 @@ export type WorkspacePayload = {
   allocations: Record<string, AllocationRow[]>;
   people: Array<{ id: string; name: string; teamName: string | null }>;
   canAllocate: boolean;
+  /** H25L — who is looking (presence key + display name; nothing else). */
+  viewer: { id: string; name: string };
   canManage: boolean;
   canSchedule: boolean;
   canManageScenario: boolean;
@@ -123,6 +127,11 @@ export type StudioDict = {
   overloads: string;
   peopleWithheld: string;
   implicit: string;
+  peers: string;
+  worlds: Record<string, string>;
+  worldHint: string;
+  worldFallback: string;
+  worldLoading: string;
   nodeTypes: Record<string, string>;
   statuses: Record<string, string>;
   edgeTypes: Record<string, string>;
@@ -195,6 +204,7 @@ const VIEWS = [
   "calendar",
   "workload",
   "risk",
+  "world",
   "table",
 ] as const;
 
@@ -237,6 +247,21 @@ export function StudioWorkspace({
     if (selectedId) setAsideTab("inspector");
   }
   const criticalIds = useMemo(() => new Set(payload.criticalPaths.flat()), [payload.criticalPaths]);
+  // Presence rides a private channel; `changed` tells peers to re-resolve.
+  const presence = usePlanPresence({
+    orgId: payload.orgId,
+    planId: payload.planId,
+    viewer: payload.viewer,
+    view,
+    selectedId,
+  });
+  const remoteSelections = useMemo(() => {
+    const m: Record<string, string[]> = {};
+    for (const p of presence.peers) {
+      if (p.selectedId) (m[p.selectedId] ??= []).push(p.color);
+    }
+    return m;
+  }, [presence.peers]);
 
   useEffect(() => {
     // Successes fade; a refusal stays until the next action so it can be read.
@@ -254,6 +279,7 @@ export function StudioWorkspace({
     (res: ActionResult<unknown>, okText: string = dict.saved, quiet = false) => {
       if (res.ok) {
         if (!quiet) setNotice({ tone: "ok", text: okText });
+        presence.changed();
         startTransition(() => router.refresh());
       } else {
         setNotice({
@@ -263,7 +289,7 @@ export function StudioWorkspace({
       }
       return res.ok;
     },
-    [dict.saved, dict.failed, dict.conflict, router],
+    [dict.saved, dict.failed, dict.conflict, router, presence],
   );
 
   return (
@@ -284,6 +310,7 @@ export function StudioWorkspace({
             </p>
           ) : null}
         </div>
+        <PresenceStrip peers={presence.peers} label={dict.peers} />
         <nav
           className="flex max-w-full gap-1 overflow-x-auto rounded-full border border-line bg-card p-1"
           aria-label="views"
@@ -323,6 +350,7 @@ export function StudioWorkspace({
               dict={dict}
               actions={actions}
               criticalIds={criticalIds}
+              remoteSelections={remoteSelections}
               selectedId={selectedId}
               onSelect={setSelectedId}
               settle={settle}
@@ -385,6 +413,14 @@ export function StudioWorkspace({
             <RiskMatrixView
               payload={payload}
               dict={dict}
+              selectedId={selectedId}
+              onSelect={setSelectedId}
+            />
+          ) : view === "world" ? (
+            <ThreeView
+              payload={payload}
+              dict={dict}
+              criticalIds={criticalIds}
               selectedId={selectedId}
               onSelect={setSelectedId}
             />

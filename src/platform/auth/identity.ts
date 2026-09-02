@@ -440,3 +440,11 @@ export async function deactivateMember(
     },
   );
 }
+
+/** The signed-in person's display name (their own profile row), for presence. */
+export async function getDisplayName(ctx: Ctx): Promise<string> {
+  const rows = (await withCtx(ctx, (tx) =>
+    tx.execute(sql`select full_name from public.user_profile where id = ${ctx.userId}`),
+  )) as unknown as Array<{ full_name: string | null }>;
+  return rows[0]?.full_name?.trim() || "Member";
+}

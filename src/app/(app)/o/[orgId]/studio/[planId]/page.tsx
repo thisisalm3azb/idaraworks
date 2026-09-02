@@ -13,6 +13,7 @@ import {
 } from "@/modules/studio/service";
 import { listTaskAllocations } from "@/modules/jobs/service";
 import { listEmployees } from "@/modules/masters/service";
+import { getDisplayName } from "@/platform/auth/identity";
 import {
   addNodeAction,
   updateNodeAction,
@@ -126,6 +127,7 @@ export default async function PlanPage({
     people,
     canAllocate:
       can(resolved.archetype, "tasks.manage") && can(resolved.archetype, "employees.view"),
+    viewer: { id: resolved.ctx.userId, name: await getDisplayName(resolved.ctx) },
     canManage: can(resolved.archetype, "studio.manage"),
     canSchedule: can(resolved.archetype, "studio.schedule"),
     canManageScenario: can(resolved.archetype, "scenario.manage"),
@@ -145,6 +147,7 @@ export default async function PlanPage({
       calendar: t("studio.view.calendar"),
       workload: t("studio.view.workload"),
       risk: t("studio.view.risk"),
+      world: t("studio.view.world"),
     },
     add: t("studio.add"),
     shapes: t("studio.shapes"),
@@ -199,6 +202,15 @@ export default async function PlanPage({
     overloads: t("studio.overloads"),
     peopleWithheld: t("studio.people_withheld"),
     implicit: t("studio.allocation.implicit"),
+    peers: t("studio.peers"),
+    worlds: {
+      city: t("studio.world.city"),
+      tunnel: t("studio.world.tunnel"),
+      capacity: t("studio.world.capacity"),
+    },
+    worldHint: t("studio.world.hint"),
+    worldFallback: t("studio.world.fallback"),
+    worldLoading: t("studio.world.loading"),
     scenario: Object.fromEntries(
       [
         "title",
