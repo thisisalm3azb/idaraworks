@@ -17,7 +17,7 @@
 import { z } from "zod";
 import { command } from "@/platform/audit";
 import { assertCan, can } from "@/platform/authz";
-import { captureIssuerSnapshot } from "@/platform/documents";
+import { captureIssuerSnapshot } from "@/platform/documents/issuer";
 import { requireCapability } from "@/platform/entitlements";
 import { allocateReference, formatRef } from "@/platform/reference/sequence";
 import type { RoleArchetype } from "@/platform/registries";
@@ -512,7 +512,7 @@ export const ListDocumentsInput = z
     recordId: z.string().uuid().optional(),
     search: z.string().trim().max(200).optional(),
     sort: z.enum(["updated", "created", "title", "expires"]).default("updated"),
-    limit: z.number().int().min(1).max(200).default(50),
+    limit: z.number().int().min(1).max(500).default(50),
     offset: z.number().int().min(0).default(0),
     includeArchived: z.boolean().default(false),
   })

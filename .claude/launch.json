@@ -4,20 +4,34 @@
     {
       "name": "stock-preview",
       "runtimeExecutable": "node",
-      "runtimeArgs": ["tooling/scripts/dev-stock-preview.mjs"],
+      "runtimeArgs": [
+        "tooling/scripts/dev-stock-preview.mjs"
+      ],
       "port": 3210
     },
     {
       "name": "hr-preview",
       "runtimeExecutable": "node",
-      "runtimeArgs": ["tooling/scripts/dev-hr-preview.mjs"],
+      "runtimeArgs": [
+        "tooling/scripts/dev-hr-preview.mjs"
+      ],
       "port": 3211
     },
     {
       "name": "studio-preview",
       "runtimeExecutable": "node",
-      "runtimeArgs": ["tooling/scripts/dev-studio-preview.mjs"],
+      "runtimeArgs": [
+        "tooling/scripts/dev-studio-preview.mjs"
+      ],
       "port": 3212
+    },
+    {
+      "name": "docstudio-preview",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "tooling/scripts/dev-docstudio-preview.mjs"
+      ],
+      "port": 3213
     }
   ]
 }

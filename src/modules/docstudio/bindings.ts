@@ -9,7 +9,7 @@ import { ForbiddenError } from "@/platform/authz";
 import { formatDate, formatMoney } from "@/platform/format";
 import type { CurrencyCode, RoleArchetype } from "@/platform/registries";
 import type { Ctx } from "@/platform/tenancy";
-import { formatIssuerAddress } from "@/platform/documents";
+import { formatIssuerAddress } from "@/platform/documents/issuer";
 import { getDocumentProfile, type DocumentProfile } from "@/modules/branding/service";
 import { getCustomer, getSupplier } from "@/modules/masters/service";
 import { getEmployeeProfile } from "@/modules/hr/service";

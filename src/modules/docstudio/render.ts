@@ -12,7 +12,7 @@ import {
   renderDocumentShell,
   type DocumentShellIssuer,
   type DocumentWatermark,
-} from "@/platform/documents";
+} from "@/platform/documents/shell";
 import { formatMoney } from "@/platform/format";
 import type { CurrencyCode } from "@/platform/registries";
 import { evaluateConditions } from "./conditions";
@@ -94,6 +94,11 @@ function label(key: keyof typeof L, lang: Lang): string {
   return L[key][lang];
 }
 
+/** lang + dir for one language block: English runs LTR even inside a bilingual (RTL) document. */
+function langAttr(l: Lang): string {
+  return `lang="${l}" dir="${l === "ar" ? "rtl" : "ltr"}"`;
+}
+
 /** The languages a document renders, in order. */
 export function renderLanguages(language: DocLanguage): Lang[] {
   return language === "bilingual" ? ["ar", "en"] : [language];
@@ -161,19 +166,21 @@ export function renderBody(input: RenderInput): string {
         return langs
           .map(
             (l) =>
-              `<${tag} class="ds-h" lang="${l}">${text(pick(b.text, l), input.values, l)}</${tag}>`,
+              `<${tag} class="ds-h" ${langAttr(l)}>${text(pick(b.text, l), input.values, l)}</${tag}>`,
           )
           .join("");
       }
       case "paragraph":
         return langs
-          .map((l) => `<p class="ds-p" lang="${l}">${text(pick(b.text, l), input.values, l)}</p>`)
+          .map(
+            (l) => `<p class="ds-p" ${langAttr(l)}>${text(pick(b.text, l), input.values, l)}</p>`,
+          )
           .join("");
       case "note":
         return langs
           .map(
             (l) =>
-              `<p class="ds-note ds-note-${b.tone}" lang="${l}">${text(pick(b.text, l), input.values, l)}</p>`,
+              `<p class="ds-note ds-note-${b.tone}" ${langAttr(l)}>${text(pick(b.text, l), input.values, l)}</p>`,
           )
           .join("");
       case "clause": {
@@ -187,7 +194,7 @@ export function renderBody(input: RenderInput): string {
               b.title && pick(b.title, l)
                 ? `<strong>${text(pick(b.title, l), input.values, l)}</strong> `
                 : "";
-            return `<p class="ds-clause" lang="${l}">${num}${title}${text(pick(b.text, l), input.values, l)}</p>`;
+            return `<p class="ds-clause" ${langAttr(l)}>${num}${title}${text(pick(b.text, l), input.values, l)}</p>`;
           })
           .join("");
       }
@@ -196,7 +203,7 @@ export function renderBody(input: RenderInput): string {
         return langs
           .map(
             (l) =>
-              `<${tag} class="ds-list" lang="${l}">${b.items.map((i) => `<li>${text(pick(i, l), input.values, l)}</li>`).join("")}</${tag}>`,
+              `<${tag} class="ds-list" ${langAttr(l)}>${b.items.map((i) => `<li>${text(pick(i, l), input.values, l)}</li>`).join("")}</${tag}>`,
           )
           .join("");
       }
@@ -204,7 +211,7 @@ export function renderBody(input: RenderInput): string {
         return langs
           .map(
             (l) =>
-              `<table class="ds-table" lang="${l}"><thead><tr>${b.columns
+              `<table class="ds-table" ${langAttr(l)}><thead><tr>${b.columns
                 .map((c) => `<th>${text(pick(c, l), input.values, l)}</th>`)
                 .join("")}</tr></thead><tbody>${b.rows
                 .map(
@@ -250,7 +257,7 @@ export function renderBody(input: RenderInput): string {
                   : "") +
                 `<tr class="ds-grand"><td colspan="${cols}" class="ds-total-label">${label("total", l)}</td><td class="ds-num">${ltr(money(subtotal + vat, b.currency))}</td></tr></tfoot>`
               : "";
-            return `<table class="ds-table ds-lines" lang="${l}"><thead><tr>${head}</tr></thead><tbody>${body}</tbody>${totals}</table>`;
+            return `<table class="ds-table ds-lines" ${langAttr(l)}><thead><tr>${head}</tr></thead><tbody>${body}</tbody>${totals}</table>`;
           })
           .join("");
       }
@@ -271,7 +278,7 @@ export function renderBody(input: RenderInput): string {
             const value = opt
               ? `<span class="ds-field-value">${b.kind === "number" || b.kind === "money" || b.kind === "date" ? ltr(esc(opt)) : esc(opt)}</span>`
               : `<span class="ds-field-blank"></span>`;
-            return `<p class="ds-field" lang="${l}"><span class="ds-field-label">${esc(pick(b.label, l))}${b.required ? " *" : ""}</span> ${value}</p>`;
+            return `<p class="ds-field" ${langAttr(l)}><span class="ds-field-label">${esc(pick(b.label, l))}${b.required ? " *" : ""}</span> ${value}</p>`;
           })
           .join("");
       }
@@ -287,7 +294,7 @@ export function renderBody(input: RenderInput): string {
               v === null || v === undefined
                 ? `<span class="ds-field-blank">[${label("notAvailable", l)}]</span>`
                 : `<span class="ds-field-value">${b.format === "text" ? esc(v) : ltr(esc(v))}</span>`;
-            return `<p class="ds-field" lang="${l}">${lab}${val}</p>`;
+            return `<p class="ds-field" ${langAttr(l)}>${lab}${val}</p>`;
           })
           .join("");
       }
@@ -317,7 +324,7 @@ export function renderBody(input: RenderInput): string {
             const status = sig?.signedAt
               ? `<div class="ds-sig-status">${label("signedElectronically", l)} · ${ltr(esc(sig.signedAt.replace("T", " ").slice(0, 16)))} UTC</div>`
               : `<div class="ds-sig-status ds-muted">${label("notSigned", l)}</div>`;
-            return `<div class="ds-sig" lang="${l}"><div class="ds-sig-party">${esc(pick(b.label, l))}</div>${parts}${status}</div>`;
+            return `<div class="ds-sig" ${langAttr(l)}><div class="ds-sig-party">${esc(pick(b.label, l))}</div>${parts}${status}</div>`;
           })
           .join("");
       }
@@ -331,7 +338,7 @@ export function renderBody(input: RenderInput): string {
           ? langs
               .map((l) =>
                 pick(b.caption, l)
-                  ? `<figcaption lang="${l}">${esc(pick(b.caption, l))}</figcaption>`
+                  ? `<figcaption ${langAttr(l)}>${esc(pick(b.caption, l))}</figcaption>`
                   : "",
               )
               .join("")
@@ -345,7 +352,7 @@ export function renderBody(input: RenderInput): string {
           ? langs
               .map((l) =>
                 pick(b.title, l)
-                  ? `<h3 class="ds-h" lang="${l}">${text(pick(b.title, l), input.values, l)}</h3>`
+                  ? `<h3 class="ds-h" ${langAttr(l)}>${text(pick(b.title, l), input.values, l)}</h3>`
                   : "",
               )
               .join("")
@@ -361,8 +368,8 @@ export function renderBody(input: RenderInput): string {
   if (input.evidence) {
     const lang: Lang = input.language === "en" ? "en" : "ar";
     parts.push(
-      `<div class="ds-break"></div><section class="ds-evidence" lang="${lang}"><h3 class="ds-h">${label("evidence", lang)}</h3>` +
-        `<p class="ds-p"><span class="ds-field-label">${label("contentHash", lang)}</span> ${ltr(`<code>${esc(input.evidence.contentHash)}</code>`)}</p>` +
+      `<div class="ds-break"></div><section class="ds-evidence" ${langAttr(lang)}><h3 class="ds-h">${label("evidence", lang)}</h3>` +
+        `<p class="ds-p"><span class="ds-field-label">${label("contentHash", lang)}</span> <bdi dir="ltr"><code>${esc(input.evidence.contentHash)}</code></bdi></p>` +
         `<ul class="ds-list">${input.evidence.lines.map((l) => `<li>${esc(l)}</li>`).join("")}</ul></section>`,
     );
   }
