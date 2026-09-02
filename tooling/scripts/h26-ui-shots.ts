@@ -72,6 +72,22 @@ async function main(): Promise<void> {
       await page.getByRole("button", { name: layout, exact: true }).first().click();
       await shot(`hub-${layout.toLowerCase()}`, 2500);
     }
+    // Command palette: Ctrl+K, search by reference, Enter opens the document.
+    await page.goto(`${BASE}/o/${orgId}/documents`, { waitUntil: "load" });
+    await page.waitForTimeout(1500);
+    await page.keyboard.press("Control+k");
+    await page.waitForTimeout(500);
+    await page.keyboard.type("DOC-002");
+    await page.waitForTimeout(500);
+    await shot("palette", 300);
+    notes.push(
+      `palette: ${(await page.locator("[data-palette]").innerText()).replace(/\s+/g, " ").slice(0, 120)}`,
+    );
+    await page.keyboard.press("Enter");
+    await page.waitForURL((u) => /\/documents\/[0-9a-f-]{36}/.test(u.pathname), {
+      timeout: 30_000,
+    });
+    notes.push(`palette-open: ${page.url().split("/documents/")[1]?.slice(0, 8)}`);
     await page.goto(`${BASE}/o/${orgId}/documents/new`, { waitUntil: "load" });
     await shot("new");
     await page.goto(`${BASE}/o/${orgId}/documents/templates`, { waitUntil: "load" });
@@ -324,6 +340,12 @@ async function main(): Promise<void> {
     await m.goto(`${BASE}/o/${orgId}/documents/new`, { waitUntil: "load" });
     await m.waitForTimeout(2000);
     await m.screenshot({ path: path.join(OUT, "mobile-new.png"), fullPage: true });
+    await m.goto(`${BASE}/o/${orgId}/documents/obligations`, { waitUntil: "load" });
+    await m.waitForTimeout(2000);
+    await m.screenshot({ path: path.join(OUT, "mobile-obligations.png"), fullPage: true });
+    await m.goto(`${BASE}/o/${orgId}/documents/forms`, { waitUntil: "load" });
+    await m.waitForTimeout(2000);
+    await m.screenshot({ path: path.join(OUT, "mobile-forms.png"), fullPage: true });
     await mctx.close();
   } finally {
     await browser.close();

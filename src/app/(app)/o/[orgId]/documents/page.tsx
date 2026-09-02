@@ -112,6 +112,25 @@ export default async function DocumentsPage({
     saved: t("docstudio.saved"),
     failed: t("docstudio.failed"),
     cancel: t("docstudio.cancel"),
+    palette: {
+      open: t("docstudio.cmd.open"),
+      placeholder: t("docstudio.cmd.placeholder"),
+      nothing: t("docstudio.cmd.nothing"),
+      commands: t("docstudio.cmd.commands"),
+      documents: t("docstudio.cmd.documents"),
+      shortcut: "Ctrl+K",
+    },
+    paletteCommands: [
+      { id: "new", label: t("docstudio.new"), href: `/o/${orgId}/documents/new` },
+      { id: "templates", label: t("docstudio.templates"), href: `/o/${orgId}/documents/templates` },
+      { id: "workflows", label: t("docstudio.workflows"), href: `/o/${orgId}/documents/workflows` },
+      {
+        id: "obligations",
+        label: t("docstudio.obligations"),
+        href: `/o/${orgId}/documents/obligations`,
+      },
+      { id: "forms", label: t("docstudio.fm.title"), href: `/o/${orgId}/documents/forms` },
+    ],
   };
 
   return (

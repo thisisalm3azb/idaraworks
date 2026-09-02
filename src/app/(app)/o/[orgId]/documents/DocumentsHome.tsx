@@ -12,6 +12,7 @@ import { Badge, Button, EmptyState } from "@/platform/ui";
 import { formatDate } from "@/platform/format";
 import type { DocumentRow, FolderRow, SavedViewRow, ViewConfig } from "@/modules/docstudio/service";
 import { saveViewAction, updateViewAction } from "./studio-actions";
+import { DocCommandPalette, type PaletteCommand, type PaletteDict } from "./DocCommandPalette";
 
 const RelationshipGraph = lazy(() => import("./RelationshipGraph"));
 
@@ -53,6 +54,8 @@ export type HomeDict = {
   saved: string;
   failed: string;
   cancel: string;
+  palette: PaletteDict;
+  paletteCommands: PaletteCommand[];
 };
 
 type Layout = "list" | "board" | "timeline" | "graph";
@@ -222,316 +225,329 @@ export function DocumentsHome({
   const off = "border-line bg-card text-ink-secondary hover:bg-sunken";
 
   return (
-    <div className="flex flex-col gap-4">
-      <section aria-label={dict.kpi.window} className="grid grid-cols-2 gap-2 sm:grid-cols-5">
-        {(
-          [
-            ["drafts", kpis.drafts, ["draft"]],
-            ["review", kpis.review, ["review", "approval"]],
-            ["signature", kpis.signature, ["signature"]],
-            ["active", kpis.active, ["active"]],
-            ["expiring", kpis.expiring, ["active"]],
-          ] as const
-        ).map(([key, value, statuses]) => (
-          <button
-            key={key}
-            type="button"
-            onClick={() => {
-              setStatus([...statuses]);
-              setActiveView(null);
-            }}
-            className="rounded-lg border border-line bg-card p-3 text-start shadow-card hover:bg-sunken"
+    <>
+      <div className="flex justify-end">
+        <DocCommandPalette
+          rows={rows}
+          commands={dict.paletteCommands}
+          statusLabels={dict.status}
+          orgId={orgId}
+          dict={dict.palette}
+        />
+      </div>
+      <div className="flex flex-col gap-4">
+        <section aria-label={dict.kpi.window} className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+          {(
+            [
+              ["drafts", kpis.drafts, ["draft"]],
+              ["review", kpis.review, ["review", "approval"]],
+              ["signature", kpis.signature, ["signature"]],
+              ["active", kpis.active, ["active"]],
+              ["expiring", kpis.expiring, ["active"]],
+            ] as const
+          ).map(([key, value, statuses]) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => {
+                setStatus([...statuses]);
+                setActiveView(null);
+              }}
+              className="rounded-lg border border-line bg-card p-3 text-start shadow-card hover:bg-sunken"
+            >
+              <div className="text-2xl font-semibold tabular-nums text-ink">{value}</div>
+              <div className="text-xs text-ink-muted">{dict.kpi[key]}</div>
+            </button>
+          ))}
+          {total > rows.length ? (
+            <p className="col-span-full text-xs text-ink-muted">{dict.kpi.window}</p>
+          ) : null}
+        </section>
+
+        {notice ? (
+          <p
+            className={`rounded-md px-3 py-2 text-sm ${notice.tone === "ok" ? "bg-success-soft text-success" : "bg-danger-soft text-danger"}`}
+            role="status"
           >
-            <div className="text-2xl font-semibold tabular-nums text-ink">{value}</div>
-            <div className="text-xs text-ink-muted">{dict.kpi[key]}</div>
-          </button>
-        ))}
-        {total > rows.length ? (
-          <p className="col-span-full text-xs text-ink-muted">{dict.kpi.window}</p>
+            {notice.text}
+          </p>
         ) : null}
-      </section>
 
-      {notice ? (
-        <p
-          className={`rounded-md px-3 py-2 text-sm ${notice.tone === "ok" ? "bg-success-soft text-success" : "bg-danger-soft text-danger"}`}
-          role="status"
-        >
-          {notice.text}
-        </p>
-      ) : null}
-
-      <section className="flex flex-col gap-2 rounded-lg border border-line bg-card p-3 shadow-card">
-        <div className="flex flex-wrap items-center gap-2">
-          <input
-            type="search"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder={dict.filter.search}
-            aria-label={dict.filter.search}
-            className="min-h-11 flex-1 rounded-md border border-line-strong bg-card px-3 text-base text-ink"
-          />
-          <div role="group" aria-label={dict.layout.list} className="flex gap-1">
-            {(["list", "board", "timeline", "graph"] as Layout[]).map((l) => (
+        <section className="flex flex-col gap-2 rounded-lg border border-line bg-card p-3 shadow-card">
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              type="search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder={dict.filter.search}
+              aria-label={dict.filter.search}
+              className="min-h-11 flex-1 rounded-md border border-line-strong bg-card px-3 text-base text-ink"
+            />
+            <div role="group" aria-label={dict.layout.list} className="flex gap-1">
+              {(["list", "board", "timeline", "graph"] as Layout[]).map((l) => (
+                <button
+                  key={l}
+                  type="button"
+                  aria-pressed={layout === l}
+                  onClick={() => setLayout(l)}
+                  className={`${chip} ${layout === l ? on : off}`}
+                >
+                  {dict.layout[l]}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div
+            className="flex flex-wrap items-center gap-1"
+            role="group"
+            aria-label={dict.filter.status}
+          >
+            <span className="me-1 text-xs text-ink-muted">{dict.filter.status}</span>
+            {Object.entries(dict.status).map(([k, label]) => (
               <button
-                key={l}
+                key={k}
                 type="button"
-                aria-pressed={layout === l}
-                onClick={() => setLayout(l)}
-                className={`${chip} ${layout === l ? on : off}`}
+                aria-pressed={status.includes(k)}
+                onClick={() => toggle(status, setStatus, k)}
+                className={`${chip} ${status.includes(k) ? on : off}`}
               >
-                {dict.layout[l]}
+                {label}
               </button>
             ))}
           </div>
-        </div>
-        <div
-          className="flex flex-wrap items-center gap-1"
-          role="group"
-          aria-label={dict.filter.status}
-        >
-          <span className="me-1 text-xs text-ink-muted">{dict.filter.status}</span>
-          {Object.entries(dict.status).map(([k, label]) => (
-            <button
-              key={k}
-              type="button"
-              aria-pressed={status.includes(k)}
-              onClick={() => toggle(status, setStatus, k)}
-              className={`${chip} ${status.includes(k) ? on : off}`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-        <div
-          className="flex flex-wrap items-center gap-1"
-          role="group"
-          aria-label={dict.filter.category}
-        >
-          <span className="me-1 text-xs text-ink-muted">{dict.filter.category}</span>
-          {Object.entries(dict.category).map(([k, label]) => (
-            <button
-              key={k}
-              type="button"
-              aria-pressed={category.includes(k)}
-              onClick={() => toggle(category, setCategory, k)}
-              className={`${chip} ${category.includes(k) ? on : off}`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-        {folders.length > 0 || tags.length > 0 ? (
-          <div className="flex flex-wrap items-center gap-2">
-            {folders.length > 0 ? (
-              <label className="text-xs text-ink-muted">
-                {dict.filter.folder}
-                <select
-                  value={folderId === undefined ? "" : (folderId ?? "none")}
-                  onChange={(e) =>
-                    setFolderId(
-                      e.target.value === ""
-                        ? undefined
-                        : e.target.value === "none"
-                          ? null
-                          : e.target.value,
-                    )
-                  }
-                  className="ms-1 min-h-9 rounded-md border border-line-strong bg-card px-2 text-sm text-ink"
-                >
-                  <option value="">{dict.filter.all}</option>
-                  <option value="none">{dict.filter.noFolder}</option>
-                  {folders.map((f) => (
-                    <option key={f.id} value={f.id}>
-                      {f.name} ({f.documents})
-                    </option>
-                  ))}
-                </select>
-              </label>
-            ) : null}
-            {tags.length > 0 ? (
-              <label className="text-xs text-ink-muted">
-                {dict.filter.tag}
-                <select
-                  value={tag ?? ""}
-                  onChange={(e) => setTag(e.target.value || undefined)}
-                  className="ms-1 min-h-9 rounded-md border border-line-strong bg-card px-2 text-sm text-ink"
-                >
-                  <option value="">{dict.filter.all}</option>
-                  {tags.map((x) => (
-                    <option key={x.tag} value={x.tag}>
-                      {x.tag} ({x.count})
-                    </option>
-                  ))}
-                </select>
-              </label>
-            ) : null}
-          </div>
-        ) : null}
-        <div className="flex flex-wrap items-center gap-2 border-t border-line pt-2">
-          <span className="text-xs text-ink-muted">{dict.views.title}</span>
-          {views.map((v) => (
-            <span key={v.id} className="inline-flex items-center gap-1">
+          <div
+            className="flex flex-wrap items-center gap-1"
+            role="group"
+            aria-label={dict.filter.category}
+          >
+            <span className="me-1 text-xs text-ink-muted">{dict.filter.category}</span>
+            {Object.entries(dict.category).map(([k, label]) => (
               <button
+                key={k}
                 type="button"
-                aria-pressed={activeView === v.id}
-                onClick={() => applyView(v)}
-                className={`${chip} ${activeView === v.id ? on : off}`}
+                aria-pressed={category.includes(k)}
+                onClick={() => toggle(category, setCategory, k)}
+                className={`${chip} ${category.includes(k) ? on : off}`}
               >
-                {v.name}
-                {v.isShared ? " ·" : ""}
+                {label}
               </button>
-              {v.mine ? (
+            ))}
+          </div>
+          {folders.length > 0 || tags.length > 0 ? (
+            <div className="flex flex-wrap items-center gap-2">
+              {folders.length > 0 ? (
+                <label className="text-xs text-ink-muted">
+                  {dict.filter.folder}
+                  <select
+                    value={folderId === undefined ? "" : (folderId ?? "none")}
+                    onChange={(e) =>
+                      setFolderId(
+                        e.target.value === ""
+                          ? undefined
+                          : e.target.value === "none"
+                            ? null
+                            : e.target.value,
+                      )
+                    }
+                    className="ms-1 min-h-9 rounded-md border border-line-strong bg-card px-2 text-sm text-ink"
+                  >
+                    <option value="">{dict.filter.all}</option>
+                    <option value="none">{dict.filter.noFolder}</option>
+                    {folders.map((f) => (
+                      <option key={f.id} value={f.id}>
+                        {f.name} ({f.documents})
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
+              {tags.length > 0 ? (
+                <label className="text-xs text-ink-muted">
+                  {dict.filter.tag}
+                  <select
+                    value={tag ?? ""}
+                    onChange={(e) => setTag(e.target.value || undefined)}
+                    className="ms-1 min-h-9 rounded-md border border-line-strong bg-card px-2 text-sm text-ink"
+                  >
+                    <option value="">{dict.filter.all}</option>
+                    {tags.map((x) => (
+                      <option key={x.tag} value={x.tag}>
+                        {x.tag} ({x.count})
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
+            </div>
+          ) : null}
+          <div className="flex flex-wrap items-center gap-2 border-t border-line pt-2">
+            <span className="text-xs text-ink-muted">{dict.views.title}</span>
+            {views.map((v) => (
+              <span key={v.id} className="inline-flex items-center gap-1">
                 <button
                   type="button"
-                  aria-label={dict.views.remove}
-                  onClick={() => removeView(v.id)}
-                  className="min-h-9 px-1 text-xs text-ink-muted hover:text-danger"
+                  aria-pressed={activeView === v.id}
+                  onClick={() => applyView(v)}
+                  className={`${chip} ${activeView === v.id ? on : off}`}
                 >
-                  ×
+                  {v.name}
+                  {v.isShared ? " ·" : ""}
                 </button>
-              ) : null}
-            </span>
-          ))}
-          <input
-            value={viewName}
-            onChange={(e) => setViewName(e.target.value)}
-            placeholder={dict.views.name}
-            aria-label={dict.views.name}
-            className="min-h-9 w-40 rounded-md border border-line-strong bg-card px-2 text-sm text-ink"
-          />
-          <label className="flex items-center gap-1 text-xs text-ink-muted">
-            <input
-              type="checkbox"
-              checked={viewShared}
-              onChange={(e) => setViewShared(e.target.checked)}
-            />
-            {dict.views.shared}
-          </label>
-          <Button variant="secondary" onClick={saveView} disabled={!viewName.trim()}>
-            {dict.views.save}
-          </Button>
-          {hasFilters ? (
-            <Button variant="ghost" onClick={clear}>
-              {dict.filter.clear}
-            </Button>
-          ) : null}
-        </div>
-      </section>
-
-      {rows.length === 0 ? (
-        <EmptyState
-          title={dict.empty.title}
-          description={dict.empty.body}
-          action={
-            canCreate ? (
-              <Link href={`/o/${orgId}/documents/new`}>
-                <Button>{dict.newDocument}</Button>
-              </Link>
-            ) : null
-          }
-        />
-      ) : filtered.length === 0 ? (
-        <EmptyState
-          title={dict.empty.filtered}
-          action={
-            <Button variant="secondary" onClick={clear}>
-              {dict.filter.clear}
-            </Button>
-          }
-        />
-      ) : layout === "list" ? (
-        <div className="overflow-x-auto rounded-lg border border-line bg-card shadow-card">
-          <table className="w-full text-sm">
-            <thead className="bg-sunken text-xs uppercase tracking-wide text-ink-muted">
-              <tr>
-                <th className="px-3 py-2 text-start">{dict.columns.reference}</th>
-                <th className="px-3 py-2 text-start">{dict.columns.title}</th>
-                <th className="px-3 py-2 text-start">{dict.columns.status}</th>
-                <th className="hidden px-3 py-2 text-start md:table-cell">
-                  {dict.columns.counterparty}
-                </th>
-                <th className="hidden px-3 py-2 text-start md:table-cell">
-                  {dict.columns.updated}
-                </th>
-                <th className="hidden px-3 py-2 text-start lg:table-cell">
-                  {dict.columns.expires}
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((r) => (
-                <tr key={r.id} className="border-t border-line hover:bg-sunken">
-                  <td className="px-3 py-2 font-mono text-xs text-ink-secondary">
-                    <Link href={`/o/${orgId}/documents/${r.id}`} className="block min-h-9 py-1">
-                      <bdi dir="ltr">{r.reference}</bdi>
-                    </Link>
-                  </td>
-                  <td className="px-3 py-2">
-                    <Link
-                      href={`/o/${orgId}/documents/${r.id}`}
-                      className="block min-h-9 py-1 font-medium text-ink"
-                    >
-                      {r.title}
-                    </Link>
-                    <div className="text-xs text-ink-muted">
-                      {dict.category[r.category] ?? r.category}
-                      {r.tags.length ? ` · ${r.tags.join(", ")}` : ""}
-                    </div>
-                  </td>
-                  <td className="px-3 py-2">
-                    <Badge className={STATUS_TONE[r.effectiveStatus] ?? ""}>
-                      {dict.status[r.effectiveStatus] ?? r.effectiveStatus}
-                    </Badge>
-                  </td>
-                  <td className="hidden px-3 py-2 text-ink-secondary md:table-cell">{cp(r)}</td>
-                  <td className="hidden px-3 py-2 text-ink-secondary md:table-cell">
-                    {fmt(r.updatedAt)}
-                  </td>
-                  <td className="hidden px-3 py-2 text-ink-secondary lg:table-cell">
-                    {fmt(r.expiresAt)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ) : layout === "board" ? (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-          {BOARD_COLUMNS.map((col) => {
-            const cards = filtered.filter((r) => r.effectiveStatus === col);
-            return (
-              <section
-                key={col}
-                className="flex flex-col gap-2 rounded-lg border border-line bg-sunken p-2"
-              >
-                <h3 className="flex items-center justify-between text-xs font-semibold uppercase tracking-wide text-ink-muted">
-                  {dict.status[col]} <span className="tabular-nums">{cards.length}</span>
-                </h3>
-                {cards.map((r) => (
-                  <Link
-                    key={r.id}
-                    href={`/o/${orgId}/documents/${r.id}`}
-                    className="rounded-md border border-line bg-card p-2 text-sm shadow-card hover:bg-accent-soft"
+                {v.mine ? (
+                  <button
+                    type="button"
+                    aria-label={dict.views.remove}
+                    onClick={() => removeView(v.id)}
+                    className="min-h-9 px-1 text-xs text-ink-muted hover:text-danger"
                   >
-                    <div className="font-mono text-xs text-ink-muted">
-                      <bdi dir="ltr">{r.reference}</bdi>
-                    </div>
-                    <div className="font-medium text-ink">{r.title}</div>
-                    <div className="text-xs text-ink-secondary">{cp(r)}</div>
-                  </Link>
+                    ×
+                  </button>
+                ) : null}
+              </span>
+            ))}
+            <input
+              value={viewName}
+              onChange={(e) => setViewName(e.target.value)}
+              placeholder={dict.views.name}
+              aria-label={dict.views.name}
+              className="min-h-9 w-40 rounded-md border border-line-strong bg-card px-2 text-sm text-ink"
+            />
+            <label className="flex items-center gap-1 text-xs text-ink-muted">
+              <input
+                type="checkbox"
+                checked={viewShared}
+                onChange={(e) => setViewShared(e.target.checked)}
+              />
+              {dict.views.shared}
+            </label>
+            <Button variant="secondary" onClick={saveView} disabled={!viewName.trim()}>
+              {dict.views.save}
+            </Button>
+            {hasFilters ? (
+              <Button variant="ghost" onClick={clear}>
+                {dict.filter.clear}
+              </Button>
+            ) : null}
+          </div>
+        </section>
+
+        {rows.length === 0 ? (
+          <EmptyState
+            title={dict.empty.title}
+            description={dict.empty.body}
+            action={
+              canCreate ? (
+                <Link href={`/o/${orgId}/documents/new`}>
+                  <Button>{dict.newDocument}</Button>
+                </Link>
+              ) : null
+            }
+          />
+        ) : filtered.length === 0 ? (
+          <EmptyState
+            title={dict.empty.filtered}
+            action={
+              <Button variant="secondary" onClick={clear}>
+                {dict.filter.clear}
+              </Button>
+            }
+          />
+        ) : layout === "list" ? (
+          <div className="overflow-x-auto rounded-lg border border-line bg-card shadow-card">
+            <table className="w-full text-sm">
+              <thead className="bg-sunken text-xs uppercase tracking-wide text-ink-muted">
+                <tr>
+                  <th className="px-3 py-2 text-start">{dict.columns.reference}</th>
+                  <th className="px-3 py-2 text-start">{dict.columns.title}</th>
+                  <th className="px-3 py-2 text-start">{dict.columns.status}</th>
+                  <th className="hidden px-3 py-2 text-start md:table-cell">
+                    {dict.columns.counterparty}
+                  </th>
+                  <th className="hidden px-3 py-2 text-start md:table-cell">
+                    {dict.columns.updated}
+                  </th>
+                  <th className="hidden px-3 py-2 text-start lg:table-cell">
+                    {dict.columns.expires}
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((r) => (
+                  <tr key={r.id} className="border-t border-line hover:bg-sunken">
+                    <td className="px-3 py-2 font-mono text-xs text-ink-secondary">
+                      <Link href={`/o/${orgId}/documents/${r.id}`} className="block min-h-9 py-1">
+                        <bdi dir="ltr">{r.reference}</bdi>
+                      </Link>
+                    </td>
+                    <td className="px-3 py-2">
+                      <Link
+                        href={`/o/${orgId}/documents/${r.id}`}
+                        className="block min-h-9 py-1 font-medium text-ink"
+                      >
+                        {r.title}
+                      </Link>
+                      <div className="text-xs text-ink-muted">
+                        {dict.category[r.category] ?? r.category}
+                        {r.tags.length ? ` · ${r.tags.join(", ")}` : ""}
+                      </div>
+                    </td>
+                    <td className="px-3 py-2">
+                      <Badge className={STATUS_TONE[r.effectiveStatus] ?? ""}>
+                        {dict.status[r.effectiveStatus] ?? r.effectiveStatus}
+                      </Badge>
+                    </td>
+                    <td className="hidden px-3 py-2 text-ink-secondary md:table-cell">{cp(r)}</td>
+                    <td className="hidden px-3 py-2 text-ink-secondary md:table-cell">
+                      {fmt(r.updatedAt)}
+                    </td>
+                    <td className="hidden px-3 py-2 text-ink-secondary lg:table-cell">
+                      {fmt(r.expiresAt)}
+                    </td>
+                  </tr>
                 ))}
-              </section>
-            );
-          })}
-        </div>
-      ) : layout === "timeline" ? (
-        <Timeline rows={filtered} orgId={orgId} dict={dict} locale={locale} today={today} />
-      ) : (
-        <Suspense fallback={<div className="h-[420px] rounded-lg border border-line bg-sunken" />}>
-          <RelationshipGraph rows={filtered} orgId={orgId} dict={dict} />
-        </Suspense>
-      )}
-    </div>
+              </tbody>
+            </table>
+          </div>
+        ) : layout === "board" ? (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+            {BOARD_COLUMNS.map((col) => {
+              const cards = filtered.filter((r) => r.effectiveStatus === col);
+              return (
+                <section
+                  key={col}
+                  className="flex flex-col gap-2 rounded-lg border border-line bg-sunken p-2"
+                >
+                  <h3 className="flex items-center justify-between text-xs font-semibold uppercase tracking-wide text-ink-muted">
+                    {dict.status[col]} <span className="tabular-nums">{cards.length}</span>
+                  </h3>
+                  {cards.map((r) => (
+                    <Link
+                      key={r.id}
+                      href={`/o/${orgId}/documents/${r.id}`}
+                      className="rounded-md border border-line bg-card p-2 text-sm shadow-card hover:bg-accent-soft"
+                    >
+                      <div className="font-mono text-xs text-ink-muted">
+                        <bdi dir="ltr">{r.reference}</bdi>
+                      </div>
+                      <div className="font-medium text-ink">{r.title}</div>
+                      <div className="text-xs text-ink-secondary">{cp(r)}</div>
+                    </Link>
+                  ))}
+                </section>
+              );
+            })}
+          </div>
+        ) : layout === "timeline" ? (
+          <Timeline rows={filtered} orgId={orgId} dict={dict} locale={locale} today={today} />
+        ) : (
+          <Suspense
+            fallback={<div className="h-[420px] rounded-lg border border-line bg-sunken" />}
+          >
+            <RelationshipGraph rows={filtered} orgId={orgId} dict={dict} />
+          </Suspense>
+        )}
+      </div>
+    </>
   );
 }
 
