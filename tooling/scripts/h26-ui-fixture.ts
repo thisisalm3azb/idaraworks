@@ -25,6 +25,7 @@ import {
   WORKFLOW_PRESETS,
   createSignatureRequest,
   createFormLink,
+  createObligation,
 } from "@/modules/docstudio/service";
 
 const MARKER = "fixture.h26_ui";
@@ -306,6 +307,51 @@ async function seed(): Promise<void> {
     ],
   });
   const signLink = room.invitations.find((i) => i.link)?.link ?? "";
+
+  // 6b. Obligations on the issued service agreement: an overdue deposit, a
+  // monthly report due soon, an upcoming risk review, and one already done.
+  const deposit = await createObligation(A, "owner", {
+    documentId: sa.id,
+    kind: "payment",
+    title: "Deposit invoice (30%)",
+    dueOn: (() => {
+      const x = new Date();
+      x.setUTCDate(x.getUTCDate() + -4);
+      return x.toISOString().slice(0, 10);
+    })(),
+    amountCents: 4500000,
+    currency: "AED",
+    side: "theirs",
+    ownerUserId: ownerId,
+    clauseRef: "payment",
+  });
+  await createObligation(A, "owner", {
+    documentId: sa.id,
+    kind: "notice",
+    title: "Monthly progress report to the customer",
+    dueOn: (() => {
+      const x = new Date();
+      x.setUTCDate(x.getUTCDate() + 6);
+      return x.toISOString().slice(0, 10);
+    })(),
+    recurrenceMonths: 1,
+    ownerUserId: ownerId,
+    requiresEvidence: true,
+  });
+  await createObligation(A, "owner", {
+    documentId: sa.id,
+    kind: "risk",
+    title: "Late delivery penalty exposure",
+    description: "Penalty of 0.5% per week applies after the delivery date.",
+    dueOn: (() => {
+      const x = new Date();
+      x.setUTCDate(x.getUTCDate() + 45);
+      return x.toISOString().slice(0, 10);
+    })(),
+    riskLevel: "high",
+    requiresEvidence: false,
+  });
+  void deposit;
 
   // 7. An issued intake form with a public link (shown once; only its hash is stored).
   const form = await createDocument(A, "owner", {

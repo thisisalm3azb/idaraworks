@@ -7,6 +7,8 @@ export { storageReconcile, reconcileOrg, reconcileAllOrgs } from "./functions/st
 export { outboxRelay, outboxRetention } from "./functions/outbox-relay";
 export { demoHeartbeat } from "./functions/demo-heartbeat";
 export { approvalStuckEvaluator, sweepStuckApprovals } from "./functions/approval-stuck";
+// H26H: document obligation and expiry reminders (daily).
+export { docObligationReminders, sweepDocumentReminders } from "./functions/doc-reminders";
 export { lpoPdfRenderer, buildLpoForPo } from "./functions/lpo-pdf";
 // U2 branding: the quote print template's render seam (mirrors lpo-pdf).
 export { quotePdfRenderer, buildQuoteForAccept } from "./functions/quote-pdf";
@@ -44,6 +46,7 @@ import { storageReconcile } from "./functions/storage-reconcile";
 import { outboxRelay, outboxRetention } from "./functions/outbox-relay";
 import { demoHeartbeat } from "./functions/demo-heartbeat";
 import { approvalStuckEvaluator } from "./functions/approval-stuck";
+import { docObligationReminders } from "./functions/doc-reminders";
 import { lpoPdfRenderer } from "./functions/lpo-pdf";
 import { quotePdfRenderer } from "./functions/quote-pdf";
 import {
@@ -91,4 +94,5 @@ export const workerFunctions = [
   paymentReconcileOnDecision,
   subscriptionLifecycleCron,
   retentionPruneCron,
+  docObligationReminders,
 ];

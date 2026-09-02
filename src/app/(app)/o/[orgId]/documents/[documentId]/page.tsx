@@ -21,6 +21,8 @@ import {
   listFolders,
   listFormLinks,
   listSubmissions,
+  listObligations,
+  getDocSettings,
   signatureParties,
   CONSENT_TEXT,
 } from "@/modules/docstudio/service";
@@ -28,6 +30,7 @@ import { getDisplayName, listMembers } from "@/platform/auth/identity";
 import { MVP_GRANTABLE_ARCHETYPES } from "@/platform/registries";
 import { DocumentWorkspace, type WorkspaceDict } from "./DocumentWorkspace";
 import { builderDict } from "./builderDict";
+import { obligationsDict } from "../obligations/obligationsDict";
 
 /** H26 — one document: build it, review it, issue it, follow it. */
 export default async function DocumentPage({
@@ -55,18 +58,31 @@ export default async function DocumentPage({
   }
   const viewerName = await getDisplayName(resolved.ctx);
   const isForm = detail.document.category === "form";
-  const [folders, run, members, comments, signatureRequest, formLinks, submissions] =
-    await Promise.all([
-      listFolders(resolved.ctx, resolved.archetype),
-      getRunForDocument(resolved.ctx, resolved.archetype, documentId),
-      listMembers(resolved.ctx, resolved.archetype).catch(() => []),
-      listDocComments(resolved.ctx, resolved.archetype, documentId),
-      getSignatureRequest(resolved.ctx, resolved.archetype, documentId),
-      isForm ? listFormLinks(resolved.ctx, resolved.archetype, documentId) : Promise.resolve([]),
-      isForm
-        ? listSubmissions(resolved.ctx, resolved.archetype, { documentId })
-        : Promise.resolve([]),
-    ]);
+  const [
+    folders,
+    run,
+    members,
+    comments,
+    signatureRequest,
+    formLinks,
+    submissions,
+    obligations,
+    docSettings,
+  ] = await Promise.all([
+    listFolders(resolved.ctx, resolved.archetype),
+    getRunForDocument(resolved.ctx, resolved.archetype, documentId),
+    listMembers(resolved.ctx, resolved.archetype).catch(() => []),
+    listDocComments(resolved.ctx, resolved.archetype, documentId),
+    getSignatureRequest(resolved.ctx, resolved.archetype, documentId),
+    isForm ? listFormLinks(resolved.ctx, resolved.archetype, documentId) : Promise.resolve([]),
+    isForm
+      ? listSubmissions(resolved.ctx, resolved.archetype, { documentId })
+      : Promise.resolve([]),
+    detail.document.issuedSnapshotId
+      ? listObligations(resolved.ctx, resolved.archetype, { documentId, limit: 500 })
+      : Promise.resolve([]),
+    getDocSettings(resolved.ctx, resolved.archetype),
+  ]);
   const parties = signatureParties(
     detail.snapshot?.snapshot.body ?? detail.working?.body ?? { blocks: [] },
   );
@@ -100,6 +116,7 @@ export default async function DocumentPage({
       workflow: k("tab_workflow"),
       signatures: k("tab_signatures"),
       forms: k("tab_forms"),
+      obligations: k("tab_obligations"),
       revisions: k("tab_revisions"),
       activity: k("tab_activity"),
       details: k("tab_details"),
@@ -367,6 +384,8 @@ export default async function DocumentPage({
         ]),
       ),
     },
+    obligations: obligationsDict(t),
+    soonDays: Math.max(0, ...docSettings.reminderDays),
     consentText: CONSENT_TEXT[locale === "ar" ? "ar" : "en"],
     presence: t("docstudio.ws.presence"),
     saved: t("docstudio.saved"),
@@ -398,6 +417,8 @@ export default async function DocumentPage({
       parties={parties}
       formLinks={formLinks}
       submissions={submissions}
+      obligations={obligations}
+      userId={resolved.ctx.userId}
       vocab={{
         blockTypes: BLOCK_TYPES,
         fieldKinds: FIELD_KINDS,

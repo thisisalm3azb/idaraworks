@@ -25,3 +25,5 @@ export * from "./workflow-runs";
 export * from "./comments";
 export * from "./providers";
 export * from "./forms";
+export * from "./obligations";
+export * from "./attention";

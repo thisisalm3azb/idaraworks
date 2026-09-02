@@ -148,6 +148,11 @@ export const H26_SEEDERS: Record<string, Seeder> = {
     await o`insert into public.doc_signer (org_id, request_id, document_id, party, party_kind, name, email, created_by)
             values (${org}, ${req}, ${doc}, 'counterparty', 'external', 'Bleed Signer', 'bleed@example.invalid', ${u})`;
   },
+  doc_obligation: async (o, org, u) => {
+    const d = await documentRow(o, org, u);
+    await o`insert into public.doc_obligation (org_id, document_id, kind, title, due_on, created_by)
+            values (${org}, ${d}, 'obligation', 'Bleed obligation', current_date + 7, ${u})`;
+  },
   doc_saved_view: async (o, org, u) => {
     await o`insert into public.doc_saved_view (org_id, name, created_by, is_shared)
             values (${org}, 'Bleed view', ${u}, true)`;

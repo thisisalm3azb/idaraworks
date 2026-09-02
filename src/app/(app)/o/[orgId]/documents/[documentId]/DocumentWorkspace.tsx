@@ -31,6 +31,9 @@ import { WorkflowPane, type WorkflowDict } from "./WorkflowPane";
 import { ReviewPane, type ReviewDict } from "./ReviewPane";
 import { SignaturesPane, type SignaturesDict } from "./SignaturesPane";
 import { FormsPane, type FormsDict } from "./FormsPane";
+import { ObligationsBoard } from "../obligations/ObligationsBoard";
+import type { ObligationsDict } from "../obligations/obligationsDict";
+import type { ObligationRow } from "@/modules/docstudio/service";
 import type { FormLinkRow, SubmissionRow } from "@/modules/docstudio/service";
 import type { SignatureRequestRow } from "@/modules/docstudio/service";
 import { PresenceStrip, usePlanPresence } from "../../studio/[planId]/PresenceLayer";
@@ -51,6 +54,7 @@ export type WorkspaceDict = {
     | "workflow"
     | "signatures"
     | "forms"
+    | "obligations"
     | "revisions"
     | "activity"
     | "details",
@@ -93,6 +97,8 @@ export type WorkspaceDict = {
   review: ReviewDict;
   signatures: SignaturesDict;
   forms: FormsDict;
+  obligations: ObligationsDict;
+  soonDays: number;
   consentText: string;
   presence: string;
   saved: string;
@@ -133,6 +139,8 @@ export function DocumentWorkspace({
   parties,
   formLinks,
   submissions,
+  obligations,
+  userId,
 }: {
   orgId: string;
   locale: string;
@@ -150,6 +158,8 @@ export function DocumentWorkspace({
   parties: string[];
   formLinks: FormLinkRow[];
   submissions: SubmissionRow[];
+  obligations: ObligationRow[];
+  userId: string;
 }) {
   const router = useRouter();
   const [, startTransition] = useTransition();
@@ -161,6 +171,7 @@ export function DocumentWorkspace({
     "workflow",
     "signatures",
     ...(d.category === "form" ? (["forms"] as Tab[]) : []),
+    ...(d.issuedSnapshotId ? (["obligations"] as Tab[]) : []),
     "revisions",
     "activity",
     "details",
@@ -444,6 +455,20 @@ export function DocumentWorkspace({
           locale={locale}
           dict={dict.forms}
           settle={settle}
+        />
+      ) : null}
+      {tab === "obligations" ? (
+        <ObligationsBoard
+          orgId={orgId}
+          locale={locale}
+          userId={userId}
+          items={obligations}
+          documents={[{ id: d.id, reference: d.reference, title: d.title }]}
+          members={members}
+          canManage={caps.obligations === true}
+          soonDays={dict.soonDays}
+          fixedDocumentId={d.id}
+          dict={dict.obligations}
         />
       ) : null}
       {tab === "revisions" ? (

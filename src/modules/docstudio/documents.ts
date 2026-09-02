@@ -25,6 +25,7 @@ import { sql, withCtx, type Ctx, type TenantTx } from "@/platform/tenancy";
 import { getDocumentProfile } from "@/modules/branding/service";
 import { resolveValues, type DocFacts } from "./bindings";
 import { appendEventIn, listEventsIn, verifyEventRows, type DocEventRow } from "./events";
+import { seedObligationsAtIssueIn } from "./obligations";
 import { getDocSettingsIn } from "./library";
 import { visibleBlocks, type ResolvedValues } from "./render";
 import { contentHash } from "./snapshot";
@@ -1036,6 +1037,12 @@ export async function issueDocument(
         },
       });
       if (status === "active") await activatedIn(tx, ctx, d.id);
+      await seedObligationsAtIssueIn(tx, ctx, {
+        id: d.id,
+        title: d.title,
+        expiresAt: d.expiresAt,
+        ownerUserId: d.ownerUserId,
+      });
       if (d.supersedesDocumentId) await markSupersededIn(tx, ctx, d.supersedesDocumentId, d.id);
       return { snapshotId: rows[0]!.id, contentHash: hash, status, parties };
     },

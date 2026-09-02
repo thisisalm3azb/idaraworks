@@ -24,6 +24,7 @@ import {
 } from "@/modules/docstudio/service";
 import { eventHash } from "@/modules/docstudio/snapshot";
 import { DEFAULT_SETTINGS } from "@/modules/docstudio/types";
+import { dueStateOf } from "@/modules/docstudio/obligations";
 
 const values = (v: Partial<ResolvedValues> = {}): ResolvedValues => ({
   bindings: {},
@@ -365,5 +366,16 @@ describe("issue-time visibility", () => {
     expect(out.map((b) => b.id)).toEqual(["f1", "s1"]);
     const withAmount = visibleBlocks(body, values({ bindings: { "document.amount": "60000" } }));
     expect(withAmount.map((b) => b.id)).toEqual(["f1", "s1", "s2"]);
+  });
+});
+
+describe("due states", () => {
+  it("classifies open items by days left against the reminder window; closed items are closed", () => {
+    expect(dueStateOf("open", -1, 30)).toBe("overdue");
+    expect(dueStateOf("open", 0, 30)).toBe("due_soon");
+    expect(dueStateOf("open", 30, 30)).toBe("due_soon");
+    expect(dueStateOf("open", 31, 30)).toBe("upcoming");
+    expect(dueStateOf("done", -10, 30)).toBe("closed");
+    expect(dueStateOf("waived", 5, 30)).toBe("closed");
   });
 });

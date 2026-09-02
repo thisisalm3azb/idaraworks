@@ -265,6 +265,27 @@ async function main(): Promise<void> {
         await shot("doc-forms-tab", 3000);
       }
     }
+    // Obligations: the four views, a document tab, and the evidence dialog.
+    for (const v of ["list", "timeline", "calendar", "relationships"]) {
+      await page.goto(`${BASE}/o/${orgId}/documents/obligations?view=${v}`, { waitUntil: "load" });
+      await shot(`obligations-${v}`, 2500);
+    }
+    notes.push(
+      `obligations: ${(await page.locator("main").innerText()).replace(/\s+/g, " ").slice(0, 220)}`,
+    );
+    if (issuedId) {
+      await page.goto(`${BASE}/o/${orgId}/documents/${issuedId}?tab=obligations`, {
+        waitUntil: "load",
+      });
+      await shot("doc-obligations", 2500);
+      const complete = page.getByRole("button", { name: /^Complete$/ }).first();
+      if (await complete.count()) {
+        await complete.click();
+        await page.waitForTimeout(800);
+        await shot("obligation-complete-dialog", 500);
+        await page.keyboard.press("Escape");
+      }
+    }
     // Arabic
     await ctx.addCookies([{ name: "locale", value: "ar", url: BASE }]);
     await page.goto(`${BASE}/o/${orgId}/documents`, { waitUntil: "load" });

@@ -47,6 +47,14 @@ import {
   type InvitationLink,
   createFormLink,
   revokeFormLink,
+  createObligation,
+  updateObligation,
+  completeObligation,
+  waiveObligation,
+  cancelObligation,
+  reopenObligation,
+  escalateObligation,
+  type ObligationRow,
   reviewSubmission,
   convertSubmission,
   type RevisionDiff,
@@ -557,6 +565,82 @@ export async function convertSubmissionAction(
   return run(orgId, async (r) => {
     const res = await convertSubmission(r.ctx, r.archetype, input);
     revalidatePath(`/o/${orgId}/documents/forms`);
+    return res;
+  });
+}
+
+// ── obligations (H26H) ───────────────────────────────────────────────────────
+function obligationPaths(orgId: string, documentId?: string): void {
+  revalidatePath(`/o/${orgId}/documents/obligations`);
+  revalidatePath(`/o/${orgId}/documents`);
+  if (documentId) revalidatePath(docPath(orgId, documentId));
+}
+
+export async function createObligationAction(
+  orgId: string,
+  input: Record<string, unknown>,
+): Promise<ActionResult<ObligationRow>> {
+  return run(orgId, async (r) => {
+    const res = await createObligation(r.ctx, r.archetype, input);
+    obligationPaths(orgId, res.documentId);
+    return res;
+  });
+}
+
+export async function updateObligationAction(
+  orgId: string,
+  input: Record<string, unknown>,
+): Promise<ActionResult<ObligationRow>> {
+  return run(orgId, async (r) => {
+    const res = await updateObligation(r.ctx, r.archetype, input);
+    obligationPaths(orgId, res.documentId);
+    return res;
+  });
+}
+
+export async function completeObligationAction(
+  orgId: string,
+  input: Record<string, unknown> & { documentId?: string },
+): Promise<ActionResult<{ id: string; nextId: string | null }>> {
+  return run(orgId, async (r) => {
+    const res = await completeObligation(r.ctx, r.archetype, input);
+    obligationPaths(orgId, input.documentId);
+    return res;
+  });
+}
+
+export async function closeObligationAction(
+  orgId: string,
+  input: Record<string, unknown> & { documentId?: string; mode: "waive" | "cancel" },
+): Promise<ActionResult<{ id: string }>> {
+  return run(orgId, async (r) => {
+    const res =
+      input.mode === "waive"
+        ? await waiveObligation(r.ctx, r.archetype, input)
+        : await cancelObligation(r.ctx, r.archetype, input);
+    obligationPaths(orgId, input.documentId);
+    return res;
+  });
+}
+
+export async function reopenObligationAction(
+  orgId: string,
+  input: Record<string, unknown> & { documentId?: string },
+): Promise<ActionResult<{ id: string }>> {
+  return run(orgId, async (r) => {
+    const res = await reopenObligation(r.ctx, r.archetype, input);
+    obligationPaths(orgId, input.documentId);
+    return res;
+  });
+}
+
+export async function escalateObligationAction(
+  orgId: string,
+  input: Record<string, unknown> & { documentId?: string },
+): Promise<ActionResult<{ id: string }>> {
+  return run(orgId, async (r) => {
+    const res = await escalateObligation(r.ctx, r.archetype, input);
+    obligationPaths(orgId, input.documentId);
     return res;
   });
 }
