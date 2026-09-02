@@ -27,6 +27,7 @@ import type { AllocationRow } from "@/modules/jobs/service";
 import type { ScheduledTask, ScheduleHealth } from "@/modules/studio/service";
 import type { LinkableJob } from "@/modules/studio/service";
 import type { ActionResult, SimulationDto } from "../actions";
+import type { Comment } from "@/platform/comments";
 import { StudioCanvas } from "./StudioCanvas";
 import { Inspector } from "./Inspector";
 import { TableView } from "./TableView";
@@ -45,6 +46,7 @@ import { CommandPalette, type Command } from "./CommandPalette";
 import { SavedViewsBar } from "./SavedViewsBar";
 import { ReviewPanel } from "./ReviewPanel";
 import { StrategyView } from "./StrategyView";
+import { EdgeInspector } from "./EdgeInspector";
 
 export type WorkspacePayload = {
   orgId: string;
@@ -180,6 +182,12 @@ export type StudioDict = {
   templateSaved: string;
   strategyEmpty: string;
   strategyOrphan: string;
+  comments: string;
+  addComment: string;
+  edgeLabel: string;
+  lag: string;
+  lagHint: string;
+  depKinds: Record<string, string>;
   nodeTypes: Record<string, string>;
   statuses: Record<string, string>;
   edgeTypes: Record<string, string>;
@@ -257,6 +265,17 @@ export type StudioActions = {
   duplicateNode: (nodeId: string) => Promise<ActionResult<{ id: string }>>;
   saveView: (input: Record<string, unknown>) => Promise<ActionResult<{ id: string }>>;
   updateView: (input: Record<string, unknown>) => Promise<ActionResult<void>>;
+  listNodeComments: (nodeId: string) => Promise<ActionResult<Comment[]>>;
+  addNodeComment: (input: {
+    nodeId: string;
+    body: string;
+  }) => Promise<ActionResult<{ id: string }>>;
+  updateEdge: (input: {
+    edgeId: string;
+    label?: string | null;
+    depKind?: string;
+    lagDays?: number;
+  }) => Promise<ActionResult<{ taskDependencyId: string | null }>>;
   saveAsTemplate: (input: {
     planId: string;
     key: string;
@@ -316,6 +335,7 @@ export function StudioWorkspace({
   const [focus, setFocus] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [focusNodeId, setFocusNodeId] = useState<string | null>(payload.initialFocus);
+  const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const undoStack = useRef<Array<() => Promise<ActionResult<unknown>>>>([]);
   const [notice, setNotice] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
   const [, startTransition] = useTransition();
@@ -684,6 +704,13 @@ export function StudioWorkspace({
               criticalIds={criticalIds}
               remoteSelections={remoteSelections}
               focusNodeId={focusNodeId}
+              onEdgeSelect={(id) => {
+                setSelectedEdgeId(id);
+                if (id) {
+                  setSelectedId(null);
+                  setAsideTab("inspector");
+                }
+              }}
               selectedId={selectedId}
               onSelect={setSelectedId}
               settle={settle}
@@ -798,7 +825,16 @@ export function StudioWorkspace({
               </button>
             ))}
           </div>
-          {asideTab === "inspector" ? (
+          {asideTab === "inspector" && selectedEdgeId && !selected ? (
+            <EdgeInspector
+              edgeId={selectedEdgeId}
+              payload={payload}
+              dict={dict}
+              actions={actions}
+              settle={settle}
+              onClose={() => setSelectedEdgeId(null)}
+            />
+          ) : asideTab === "inspector" ? (
             <Inspector
               node={selected}
               payload={payload}

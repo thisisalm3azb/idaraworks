@@ -7,7 +7,8 @@
  * Form state re-seeds when the selected node changes using React's
  * adjust-state-while-rendering pattern (no effects).
  */
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
+import type { Comment } from "@/platform/comments";
 import { Button } from "@/platform/ui";
 import type { EffectiveNode } from "@/modules/studio/service";
 import type { ActionResult } from "../actions";
@@ -70,6 +71,26 @@ export function Inspector({
   const [taskCount, setTaskCount] = useState<number | null>(null);
   const [allocEmployee, setAllocEmployee] = useState("");
   const [linkJob, setLinkJob] = useState("");
+  const [comments, setComments] = useState<Comment[] | null>(null);
+  const [commentBody, setCommentBody] = useState("");
+  const nodeId = node?.id ?? null;
+  // A new selection starts with an unknown comment list (adjust-state, no effect setState).
+  const [commentsFor, setCommentsFor] = useState<string | null>(nodeId);
+  if (commentsFor !== nodeId) {
+    setCommentsFor(nodeId);
+    setComments(null);
+    setCommentBody("");
+  }
+  useEffect(() => {
+    let cancelled = false;
+    if (!nodeId) return;
+    void actions.listNodeComments(nodeId).then((res) => {
+      if (!cancelled && res.ok) setComments(res.data);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [nodeId, actions]);
   const [linkTasks, setLinkTasks] = useState<Array<{ id: string; title: string }>>([]);
   const [linkTask, setLinkTask] = useState("");
   const [allocShare, setAllocShare] = useState("100");
@@ -425,6 +446,54 @@ export function Inspector({
           ) : null}
         </div>
       ) : null}
+
+      <section className="rounded-md border border-line p-2">
+        <p className="text-xs font-semibold text-ink">
+          {dict.comments}
+          {comments ? ` (${comments.length})` : ""}
+        </p>
+        <ul className="mt-1 flex max-h-40 flex-col gap-1 overflow-y-auto">
+          {(comments ?? []).map((c) => (
+            <li key={c.id} className="rounded-md bg-sunken px-2 py-1 text-xs">
+              <span className="block text-[10px] text-ink-muted">
+                {c.authorName} · <span dir="ltr">{c.createdAt.slice(0, 16).replace("T", " ")}</span>
+              </span>
+              <span className="block whitespace-pre-wrap text-ink">{c.body}</span>
+            </li>
+          ))}
+        </ul>
+        <form
+          className="mt-1 flex gap-1"
+          onSubmit={(e) => {
+            e.preventDefault();
+            const body = commentBody.trim();
+            if (!body) return;
+            start(async () => {
+              const res = await actions.addNodeComment({ nodeId: current.id, body });
+              if (res.ok) {
+                setCommentBody("");
+                const list = await actions.listNodeComments(current.id);
+                if (list.ok) setComments(list.data);
+              } else settle(res);
+            });
+          }}
+        >
+          <input
+            value={commentBody}
+            onChange={(e) => setCommentBody(e.target.value)}
+            placeholder={dict.addComment}
+            maxLength={4000}
+            className="min-h-9 w-full rounded-md border border-line-strong bg-card px-2 text-xs text-ink"
+          />
+          <button
+            type="submit"
+            disabled={pending || !commentBody.trim()}
+            className="min-h-9 rounded-md border border-line px-2 text-xs text-ink disabled:opacity-50"
+          >
+            {dict.addComment}
+          </button>
+        </form>
+      </section>
 
       {canEdit &&
       !isLinked &&

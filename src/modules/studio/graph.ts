@@ -1112,3 +1112,92 @@ export async function duplicateNode(
     },
   );
 }
+
+// ── H25D — edit a connector: label, dependency kind, lead/lag ────────────────
+
+export const UpdateEdgeInput = z.object({
+  edgeId: z.string().uuid(),
+  label: z.string().trim().max(200).nullable().optional(),
+  depKind: z.enum(DEP_KINDS).optional(),
+  lagDays: z.number().int().min(-365).max(365).optional(),
+});
+
+/**
+ * A materialised dependency (two linked tasks) is re-made through the jobs
+ * door so its rules and audit apply; the studio edge follows. A draft edge
+ * just changes. Kind and lag on a non-dependency edge are refused.
+ */
+export async function updateEdge(
+  ctx: Ctx,
+  archetype: RoleArchetype,
+  raw: unknown,
+): Promise<{ taskDependencyId: string | null }> {
+  assertCan(archetype, "studio.manage");
+  const input = UpdateEdgeInput.parse(raw);
+  let taskDependencyId: string | null = null;
+  await command(
+    ctx,
+    {
+      audit: {
+        action: "studio.edge.update",
+        entityType: "studio_edge",
+        entityId: input.edgeId,
+        summary: "Updated connector",
+      },
+    },
+    async (tx) => {
+      const rows = (await tx.execute(sql`
+        select e.plan_id::text as plan_id, e.edge_type, e.dep_kind, e.lag_days,
+               e.task_dependency_id::text as task_dependency_id,
+               s.record_type as s_type, s.record_id::text as s_id,
+               t.record_type as t_type, t.record_id::text as t_id
+        from public.studio_edge e
+        join public.studio_node s on s.id = e.source_node_id and s.org_id = e.org_id
+        join public.studio_node t on t.id = e.target_node_id and t.org_id = e.org_id
+        where e.org_id = ${ctx.orgId} and e.id = ${input.edgeId} and e.removed_at is null
+      `)) as unknown as Array<{
+        plan_id: string;
+        edge_type: string;
+        dep_kind: string | null;
+        lag_days: number;
+        task_dependency_id: string | null;
+        s_type: string | null;
+        s_id: string | null;
+        t_type: string | null;
+        t_id: string | null;
+      }>;
+      const e = rows[0];
+      if (!e) throw new StudioError("connector not found", "not_found");
+      const changesLogic = input.depKind !== undefined || input.lagDays !== undefined;
+      if (changesLogic && e.edge_type !== "dependency") {
+        throw new StudioError("only a dependency carries a kind and a lag", "invalid_state");
+      }
+      const depKind = (input.depKind ?? e.dep_kind) as (typeof DEP_KINDS)[number] | null;
+      const lagDays = input.lagDays ?? Number(e.lag_days ?? 0);
+      taskDependencyId = e.task_dependency_id;
+      if (changesLogic && e.task_dependency_id && e.s_type === "task" && e.t_type === "task") {
+        assertCan(archetype, "studio.schedule");
+        await removeDependency(ctx, archetype, e.task_dependency_id);
+        const dep = await addDependency(ctx, archetype, {
+          taskId: e.t_id!,
+          dependsOnTaskId: e.s_id!,
+          kind: depKind ?? "finish_to_start",
+          lagDays,
+          allowCrossJob: true,
+        });
+        taskDependencyId = dep.id;
+      }
+      await tx.execute(sql`
+        update public.studio_edge set
+          label = ${input.label === undefined ? sql`label` : (input.label ?? null)},
+          dep_kind = ${depKind},
+          lag_days = ${lagDays},
+          task_dependency_id = ${taskDependencyId},
+          row_version = row_version + 1
+        where org_id = ${ctx.orgId} and id = ${input.edgeId}
+      `);
+      await touchPlanIn(tx, ctx, e.plan_id);
+    },
+  );
+  return { taskDependencyId };
+}

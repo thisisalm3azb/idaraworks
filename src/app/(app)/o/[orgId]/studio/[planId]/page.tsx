@@ -44,6 +44,9 @@ import {
   updateViewAction,
   reviewNarrativeAction,
   saveAsTemplateAction,
+  updateEdgeAction,
+  listNodeCommentsAction,
+  addNodeCommentAction,
 } from "../actions";
 import { StudioWorkspace, type StudioDict, type WorkspacePayload } from "./StudioWorkspace";
 
@@ -270,6 +273,17 @@ export default async function PlanPage({
     templateSaved: t("studio.template.saved"),
     strategyEmpty: t("studio.strategy.empty"),
     strategyOrphan: t("studio.strategy.orphan"),
+    comments: t("studio.comments"),
+    addComment: t("studio.add_comment"),
+    edgeLabel: t("studio.edge_label"),
+    lag: t("studio.lag"),
+    lagHint: t("studio.lag_hint"),
+    depKinds: Object.fromEntries(
+      ["finish_to_start", "start_to_start", "finish_to_finish", "start_to_finish"].map((k) => [
+        k,
+        t(`studio.dep.${k}`),
+      ]),
+    ),
     scenario: Object.fromEntries(
       [
         "title",
@@ -405,6 +419,9 @@ export default async function PlanPage({
         updateView: updateViewAction.bind(null, orgId),
         reviewNarrative: reviewNarrativeAction.bind(null, orgId),
         saveAsTemplate: saveAsTemplateAction.bind(null, orgId),
+        updateEdge: updateEdgeAction.bind(null, orgId),
+        listNodeComments: listNodeCommentsAction.bind(null, orgId),
+        addNodeComment: addNodeCommentAction.bind(null, orgId),
       }}
     />
   );

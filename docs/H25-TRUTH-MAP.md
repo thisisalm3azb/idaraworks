@@ -218,3 +218,45 @@ approvals (new subjects `scenario_apply`, and the 0107 CHECK repair),
 events registry untouched in v1 (studio live-refresh is Realtime, not the
 outbox). The `week_plan` document stays; the Studio links to it rather
 than replacing it.
+
+## ADRs added while building (H25C–H25N)
+
+**ADR-13 — Realtime authorisation runs as a definer.** The `realtime.messages`
+policies for `studio:<org>:<plan>` topics delegate to
+`app.studio_channel_allowed(topic)` (SECURITY DEFINER, executable by
+`authenticated` only) because the `authenticated` role holds no grant on
+`public.membership`; a direct subquery fails at subscribe time. Migration 0111
+recorded the first form (kept as applied on the test project); 0112 replaces the
+policies with the definer form. Broadcast and presence only; no business data
+rides a message; every edit stays a server action.
+
+**ADR-14 — Leveling proposes, never moves.** Resource leveling is a pure
+heuristic over the capacity report (delay the task with the most float by whole
+working weeks, never critical work, never past its float) whose output is
+recorded as a DRAFT scenario. It reaches the live plan only through review and
+apply like any other change.
+
+**ADR-15 — Allocations and skills are canonical.** `task_allocation` belongs to
+the jobs module and `skill`/`employee_skill` to masters; the studio reads them
+through the doors. An assignee without an allocation counts full time and is
+flagged implicit. Capacity is working days over the org calendar; no pay or
+cost-rate data enters the studio.
+
+**ADR-16 — Templates anchor.** A template is a bounded snapshot of DRAFT
+elements (never links). Instantiation goes through the normal doors and anchors
+the activities nothing depends on to a start date (given or the next Monday),
+because the engine refuses a plan with no anchor rather than inventing one.
+
+**ADR-17 — Presentation state never becomes a second truth.** Filters, focus
+mode, saved views, the palette and undo are client-side or `studio_view`
+config; undo replays inverse ACTIONS on the server (moves, field edits, status)
+rather than restoring local copies. Scenario overlays apply generically over
+every planning field via `FIELD_TO_PROP`, and status overlays re-derive the
+normalised category.
+
+**ADR-18 — Assistance in two tiers, fail closed.** `reviewPlan` computes
+findings deterministically (DCMA, estimates, capacity, registers, baselines,
+scenarios), each with a fact and an explicit next step a person runs.
+`draftReviewNarrative` uses the platform agent provider, which is disabled
+until the owner provisions one; the answer is text for a person, never an
+instruction the system acts on.

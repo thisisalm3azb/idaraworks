@@ -5,6 +5,7 @@ import { ZodError } from "zod";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { resolveCtxForAction } from "@/platform/auth/resolve";
+import { createComment, listComments, type Comment } from "@/platform/comments";
 import {
   createStudioPlan,
   addNode,
@@ -31,6 +32,7 @@ import {
   draftReviewNarrative,
   createPlanFromTemplate,
   saveAsTemplate,
+  updateEdge,
   type Narrative,
   type SimulationResult,
   type LevelingProposal,
@@ -335,4 +337,33 @@ export async function saveAsTemplateAction(
   input: { planId: string; key: string; name: string; description?: string },
 ): Promise<ActionResult<{ key: string; nodes: number; edges: number }>> {
   return run(orgId, (r) => saveAsTemplate(r.ctx, r.archetype, input));
+}
+
+export async function updateEdgeAction(
+  orgId: string,
+  input: { edgeId: string; label?: string | null; depKind?: string; lagDays?: number },
+): Promise<ActionResult<{ taskDependencyId: string | null }>> {
+  return run(orgId, (r) => updateEdge(r.ctx, r.archetype, input));
+}
+
+// ── H25C — comments on elements (platform comments, studio_node is attachable) ─
+
+export async function listNodeCommentsAction(
+  orgId: string,
+  nodeId: string,
+): Promise<ActionResult<Comment[]>> {
+  return run(orgId, (r) => listComments(r.ctx, "studio_node", nodeId));
+}
+
+export async function addNodeCommentAction(
+  orgId: string,
+  input: { nodeId: string; body: string },
+): Promise<ActionResult<{ id: string }>> {
+  return run(orgId, async (r) => ({
+    id: await createComment(r.ctx, {
+      entityType: "studio_node",
+      entityId: input.nodeId,
+      body: input.body,
+    }),
+  }));
 }

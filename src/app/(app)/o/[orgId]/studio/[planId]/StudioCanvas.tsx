@@ -269,6 +269,7 @@ function CanvasInner({
   settle,
   remoteSelections = NO_REMOTE,
   focusNodeId = null,
+  onEdgeSelect,
 }: {
   payload: WorkspacePayload;
   dict: StudioDict;
@@ -279,6 +280,7 @@ function CanvasInner({
   settle: (res: ActionResult<unknown>, okText?: string, quiet?: boolean) => boolean;
   remoteSelections?: Record<string, string[]>;
   focusNodeId?: string | null;
+  onEdgeSelect?: (edgeId: string | null) => void;
 }) {
   const rf = useReactFlow();
   // Centre on an element chosen elsewhere (palette, registers link, table row).
@@ -458,6 +460,8 @@ function CanvasInner({
         edges={edges}
         nodeTypes={nodeTypes}
         onNodesChange={onNodesChange}
+        onEdgeClick={(_, edge) => onEdgeSelect?.(edge.id)}
+        onPaneClick={() => onEdgeSelect?.(null)}
         onNodeDragStart={onNodeDragStart}
         onNodeDragStop={onNodeDragStop}
         onConnect={onConnect}
@@ -554,6 +558,7 @@ export function StudioCanvas(props: {
   settle: (res: ActionResult<unknown>, okText?: string, quiet?: boolean) => boolean;
   remoteSelections?: Record<string, string[]>;
   focusNodeId?: string | null;
+  onEdgeSelect?: (edgeId: string | null) => void;
 }) {
   return (
     <ReactFlowProvider>
