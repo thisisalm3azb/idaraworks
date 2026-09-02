@@ -316,14 +316,17 @@ async function main(): Promise<void> {
     check("pre-books expense did NOT post (D7)", preEntry[0]!.n === 0);
 
     // ── 5. manual journal: draft → post → immutable → reversed ─────────────
-    const cash = accounts.find((a) => a.systemKey === "cash_on_hand")!.id;
+    // Non-control accounts only: an ordinary journal touching a control
+    // account is exactly what app.post_journal_entry refuses (proven above
+    // by an earlier run of this very smoke).
     const misc = accounts.find((a) => a.systemKey === "overhead_expense")!.id;
+    const accrual = accounts.find((a) => a.systemKey === "accrued_expenses")!.id;
     const je = await createJournalEntry(A(), "owner", {
       entryDate: "2026-09-01",
       memo: "smoke manual entry",
       lines: [
         { accountId: misc, debitMinor: 5_000, creditMinor: 0 },
-        { accountId: cash, debitMinor: 0, creditMinor: 5_000 },
+        { accountId: accrual, debitMinor: 0, creditMinor: 5_000 },
       ],
     });
     await postJournalEntry(A(), "owner", je.id);
@@ -479,7 +482,7 @@ async function main(): Promise<void> {
         entryDate: "2026-09-01",
         lines: [
           { accountId: misc, debitMinor: 100, creditMinor: 0 },
-          { accountId: cash, debitMinor: 0, creditMinor: 100 },
+          { accountId: accrual, debitMinor: 0, creditMinor: 100 },
         ],
       });
     } catch {

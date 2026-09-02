@@ -1,8 +1,8 @@
 # H24 — Accounting, finance, banking and taxation: completion report
 
-_Status: engine complete on `verify/h24`; production deployment section is
-filled in as each gate passes. Nothing in this report is claimed before it
-happened._
+_Status: **DEPLOYED AND LIVE** (2026-09-02, production commit `51c2f79`).
+The engine and surfaces are live behind cap.finance + the finance permission
+lanes; production history was deliberately NOT converted (§4)._
 
 ## 1. What was built (slices A–M)
 
@@ -114,16 +114,48 @@ balances posted, no org's books installed.**
 
 ## 6. Production deployment record
 
+**DEPLOYED AND LIVE — 2026-09-02.** The exact production application commit
+is `51c2f79`.
+
 - Pre-flight health: **HEALTHY** (2026-09-02; 3 orphaned auth records left
-  by H23's own smoke runs were identified and removed first — the H24 smoke
-  cleanup now deletes identities/sessions too).
+  by H23's own smoke runs were identified and removed first — both smoke
+  cleanups now delete identities/sessions too).
 - Migration dry run: exactly 0100–0106 pending, nothing else.
-- CI on `verify/h24`: _[filled in at deploy]_
-- Guarded apply (0100–0106): _[filled in at deploy]_
-- Deploy + tested==deployed proof: _[filled in at deploy]_
-- Backend smoke (marked fixture, self-destructing): _[filled in at deploy]_
-- `FEATURE_FINANCE_SURFACES=1` enabled AFTER smoke: _[filled in at deploy]_
-- Post-enable verification: _[filled in at deploy]_
+- CI on `verify/h24`: **green on the exact commit `51c2f79`.** Two earlier
+  CI failures were real and were fixed first: a scratch wiring script
+  committed by accident (prettier refused it), and two browserslist high
+  advisories published upstream mid-deploy (pinned >=4.28.7). The
+  integration job — the part that exercises H24 — passed on every run.
+- Guarded apply: 0100–0106 applied through the production runner only
+  (99 → 106). Post-verify: HEALTHY (RLS + DELETE-grant sweeps), cap.finance
+  on all 4 plans, the new ledger completely EMPTY (0 entries, 0 accounts,
+  0 orgs with books — no invented history), business counts unchanged.
+- `main` fast-forwarded `53fec57 → 51c2f79`; the deployed health endpoint
+  confirmed the hash (tested == deployed).
+- Backend smoke with the flag still off: **ALL 24 CHECKS PASSED** — invoice
+  posted once (AR 210,000), void → linked reversal, pre-books expense
+  refused (D7), posted entry immutable against the table owner, reversal
+  linked both ways, AR allocation without double-counting, statement import
+  → evidence-carrying suggestion → accepted match → completed
+  reconciliation, VAT201 box 1b 200,000/10,000 with zero control drift, CT
+  at 0% below the bracket, trial balance + balance-sheet identity +
+  cash-flow identity, EN and AR PDFs (journal voucher, trial balance, VAT
+  working paper) as real 200/application/pdf/%PDF responses from the
+  deployed route, viewer refused tax papers and posting, and the release
+  gate hiding /finance. Zero residue; historical counts identical. (The
+  first smoke attempt failed honestly: its manual-journal fixture used a
+  CONTROL account and `app.post_journal_entry` refused it — the invariant
+  proving itself; the fixture was corrected to non-control accounts.)
+- `FEATURE_FINANCE_SURFACES=1` set in the Vercel production environment
+  (authenticated CLI, `--value 1`; a first piped-stdin attempt stored an
+  EMPTY value and the strict `=== "1"` gate kept every surface hidden —
+  exactly the near-miss behavior the flag was built for) and the same
+  commit redeployed.
+- Post-enable verification: the full smoke re-run with `--surfaces=on` —
+  **ALL 24 CHECKS PASSED**, now including /finance rendering live for the
+  signed-in owner. One interrupted run (connection reset mid-setup) left a
+  single early-stage fixture org; it was wiped by org id with verified
+  zero residue and global counts restored before the passing run.
 
 ## 7. What was deliberately not done
 
