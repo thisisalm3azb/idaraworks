@@ -17,7 +17,13 @@ import { sql, withCtx, type Ctx, type TenantTx } from "@/platform/tenancy";
 import type { RoleArchetype } from "@/platform/registries";
 import { allocateReference, formatRef } from "@/platform/reference/sequence";
 import { requireCapability } from "@/platform/entitlements";
-import { addDependency, removeDependency, createTask, updateTask } from "@/modules/jobs/service";
+import {
+  addDependency,
+  removeDependency,
+  createTask,
+  updateTask,
+  updateTaskStatus,
+} from "@/modules/jobs/service";
 import { createIssue } from "@/modules/issues/service";
 import {
   DEP_KINDS,
@@ -819,4 +825,145 @@ export async function convertNode(
     }
   }
   return out;
+}
+
+// ── canvas placement: one round trip per gesture ────────────────────────────
+
+export const MoveNodesInput = z.object({
+  planId: z.string().uuid(),
+  moves: z
+    .array(
+      z.object({
+        nodeId: z.string().uuid(),
+        x: z.number().finite(),
+        y: z.number().finite(),
+        w: z.number().finite().positive().max(100000).nullable().optional(),
+        h: z.number().finite().positive().max(100000).nullable().optional(),
+        z: z.number().int().optional(),
+        parentNodeId: z.string().uuid().nullable().optional(),
+      }),
+    )
+    .min(1)
+    .max(500),
+});
+
+/**
+ * Batch placement update after a drag, resize or group gesture. Canvas-only
+ * fields (placement, size, stacking, nesting) — never business fields — so
+ * this is studio-local even for linked nodes, needs only studio.manage, and
+ * touches nothing outside the plan. One audit row per gesture.
+ */
+export async function moveNodes(
+  ctx: Ctx,
+  archetype: RoleArchetype,
+  raw: unknown,
+): Promise<{ moved: number }> {
+  assertCan(archetype, "studio.manage");
+  const input = MoveNodesInput.parse(raw);
+  return command(
+    ctx,
+    {
+      audit: {
+        action: "studio.node.move",
+        entityType: "studio_plan",
+        entityId: input.planId,
+        summary: `Moved ${input.moves.length} node(s)`,
+      },
+    },
+    async (tx) => {
+      await planRowIn(tx, ctx, input.planId);
+      let moved = 0;
+      for (const m of input.moves) {
+        if (m.parentNodeId) {
+          const parent = await nodeRowIn(tx, ctx, m.parentNodeId);
+          if (parent.plan_id !== input.planId) {
+            throw new StudioError("parent node belongs to another plan", "invalid_state");
+          }
+          if (m.parentNodeId === m.nodeId) throw new StudioError("a node cannot nest in itself");
+        }
+        const res = (await tx.execute(sql`
+          update public.studio_node set
+            x = ${m.x}, y = ${m.y},
+            w = ${m.w === undefined ? sql`w` : m.w},
+            h = ${m.h === undefined ? sql`h` : m.h},
+            z = coalesce(${m.z ?? null}, z),
+            parent_node_id = ${m.parentNodeId === undefined ? sql`parent_node_id` : m.parentNodeId},
+            row_version = row_version + 1, updated_by = ${ctx.userId}, updated_at = now()
+          where org_id = ${ctx.orgId} and id = ${m.nodeId} and plan_id = ${input.planId}
+            and archived_at is null and locked = false
+          returning id
+        `)) as unknown as unknown[];
+        moved += res.length;
+      }
+      await touchPlanIn(tx, ctx, input.planId);
+      return { moved };
+    },
+  );
+}
+
+// ── status: one vocabulary in, the record's own lifecycle underneath ────────
+
+const TASK_STATUS_FOR_CATEGORY: Record<string, string> = {
+  planned: "pending",
+  ready: "ready",
+  active: "in_progress",
+  blocked: "blocked",
+  done: "completed",
+  dropped: "cancelled",
+};
+const DRAFT_STATUS_FOR_CATEGORY: Record<string, string> = {
+  planned: "proposed",
+  active: "active",
+  done: "done",
+  dropped: "dropped",
+};
+
+export const SetNodeStatusInput = z.object({
+  nodeId: z.string().uuid(),
+  statusCategory: z.enum(["planned", "ready", "active", "blocked", "waiting", "done", "dropped"]),
+  reason: z.string().trim().min(1).max(500).optional(),
+  expectedRowVersion: z.number().int().positive().optional(),
+  scenarioId: z.string().uuid().optional(),
+});
+
+/**
+ * Move a node between the normalized status columns. A linked task goes
+ * through the task lifecycle (its transition graph, blocked reasons and
+ * approval hand-offs intact); a draft node changes its own status; a linked
+ * non-task record is refused — its status lives on the record. Scenario
+ * status changes are not modelled yet and are refused, never faked.
+ */
+export async function setNodeStatus(
+  ctx: Ctx,
+  archetype: RoleArchetype,
+  raw: unknown,
+): Promise<{ routed: "task" | "draft" }> {
+  const input = SetNodeStatusInput.parse(raw);
+  if (input.scenarioId) {
+    throw new StudioError(
+      "status changes inside a scenario are not supported yet",
+      "invalid_state",
+    );
+  }
+  const node = await withCtx(ctx, (tx) => nodeRowIn(tx, ctx, input.nodeId));
+  if (node.record_type === "task" && node.record_id) {
+    const status = TASK_STATUS_FOR_CATEGORY[input.statusCategory];
+    if (!status) throw new StudioError("that column is set by the approval flow, not by hand");
+    await updateTaskStatus(ctx, archetype, node.record_id, {
+      status,
+      ...(input.reason ? { reason: input.reason } : {}),
+    });
+    return { routed: "task" };
+  }
+  if (node.record_type) {
+    throw new StudioError("change this status on the linked record itself", "invalid_state");
+  }
+  const draft = DRAFT_STATUS_FOR_CATEGORY[input.statusCategory];
+  if (!draft) throw new StudioError("that column does not apply to a planning-only element");
+  await updateNode(ctx, archetype, {
+    nodeId: input.nodeId,
+    expectedRowVersion: input.expectedRowVersion,
+    status: draft,
+  });
+  return { routed: "draft" };
 }

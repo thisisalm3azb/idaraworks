@@ -12,6 +12,12 @@
       "runtimeExecutable": "node",
       "runtimeArgs": ["tooling/scripts/dev-hr-preview.mjs"],
       "port": 3211
+    },
+    {
+      "name": "studio-preview",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["tooling/scripts/dev-studio-preview.mjs"],
+      "port": 3212
     }
   ]
 }
