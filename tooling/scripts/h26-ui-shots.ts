@@ -163,6 +163,40 @@ async function main(): Promise<void> {
       if (res.status() !== 200 || latin.slice(0, 5) !== "%PDF-")
         errors.push("pdf: not a PDF response");
     }
+    // The public signing page (a fresh context: no session, only the token).
+    const signToken = process.argv[7];
+    if (signToken) {
+      const pub = await browser.newContext({ viewport: { width: 1200, height: 900 } });
+      const sp = await pub.newPage();
+      sp.on("pageerror", (e) => errors.push(`sign pageerror: ${e.message}`));
+      await sp.goto(`${BASE}/sign/${signToken}`, { waitUntil: "load" });
+      await sp.waitForTimeout(4000);
+      await sp.screenshot({ path: path.join(OUT, "sign-page.png"), fullPage: true });
+      notes.push(
+        `sign-page: ${(await sp.locator("body").innerText()).replace(/\s+/g, " ").slice(0, 200)}`,
+      );
+      await sp.goto(`${BASE}/sign/${signToken}?lang=ar`, { waitUntil: "load" });
+      await sp.waitForTimeout(3000);
+      await sp.screenshot({ path: path.join(OUT, "sign-page-ar.png"), fullPage: true });
+      const mob = await browser.newContext({
+        viewport: { width: 375, height: 812 },
+        isMobile: true,
+        hasTouch: true,
+      });
+      const mp = await mob.newPage();
+      await mp.goto(`${BASE}/sign/${signToken}`, { waitUntil: "load" });
+      await mp.waitForTimeout(3000);
+      await mp.screenshot({ path: path.join(OUT, "sign-page-mobile.png"), fullPage: true });
+      await mob.close();
+      await pub.close();
+      // Signatures tab on the issued document.
+      if (issuedId) {
+        await page.goto(`${BASE}/o/${orgId}/documents/${issuedId}?tab=signatures`, {
+          waitUntil: "load",
+        });
+        await shot("doc-signatures", 2500);
+      }
+    }
     // Arabic
     await ctx.addCookies([{ name: "locale", value: "ar", url: BASE }]);
     await page.goto(`${BASE}/o/${orgId}/documents`, { waitUntil: "load" });

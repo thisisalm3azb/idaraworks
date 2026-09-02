@@ -16,8 +16,11 @@ import {
   documentCapabilities,
   getDocument,
   getRunForDocument,
+  getSignatureRequest,
   listDocComments,
   listFolders,
+  signatureParties,
+  CONSENT_TEXT,
 } from "@/modules/docstudio/service";
 import { getDisplayName, listMembers } from "@/platform/auth/identity";
 import { MVP_GRANTABLE_ARCHETYPES } from "@/platform/registries";
@@ -49,12 +52,16 @@ export default async function DocumentPage({
     throw err;
   }
   const viewerName = await getDisplayName(resolved.ctx);
-  const [folders, run, members, comments] = await Promise.all([
+  const [folders, run, members, comments, signatureRequest] = await Promise.all([
     listFolders(resolved.ctx, resolved.archetype),
     getRunForDocument(resolved.ctx, resolved.archetype, documentId),
     listMembers(resolved.ctx, resolved.archetype).catch(() => []),
     listDocComments(resolved.ctx, resolved.archetype, documentId),
+    getSignatureRequest(resolved.ctx, resolved.archetype, documentId),
   ]);
+  const parties = signatureParties(
+    detail.snapshot?.snapshot.body ?? detail.working?.body ?? { blocks: [] },
+  );
   const caps = documentCapabilities(resolved.archetype, detail.document);
   // A running workflow owns the decision; issue opens only once the run completed.
   if (detail.document.status === "approval" && run?.status !== "completed") caps.issue = false;
@@ -83,6 +90,7 @@ export default async function DocumentPage({
       preview: k("tab_preview"),
       review: k("tab_review"),
       workflow: k("tab_workflow"),
+      signatures: k("tab_signatures"),
       revisions: k("tab_revisions"),
       activity: k("tab_activity"),
       details: k("tab_details"),
@@ -267,6 +275,63 @@ export default async function DocumentPage({
       showResolved: t("docstudio.rv.show_resolved"),
       onRevision: t("docstudio.rv.on_revision"),
     },
+    signatures: {
+      title: t("docstudio.sg.title"),
+      notIssued: t("docstudio.sg.not_issued"),
+      noRoom: t("docstudio.sg.no_room"),
+      parties: t("docstudio.sg.parties"),
+      signerKind: t("docstudio.sg.signer_kind"),
+      member: t("docstudio.sg.member"),
+      external: t("docstudio.sg.external"),
+      person: t("docstudio.sg.person"),
+      name: t("docstudio.sg.name"),
+      email: t("docstudio.sg.email"),
+      signerTitle: t("docstudio.sg.signer_title"),
+      mode: t("docstudio.sg.mode"),
+      parallel: t("docstudio.sg.parallel"),
+      sequential: t("docstudio.sg.sequential"),
+      expiresInDays: t("docstudio.sg.expires_in_days"),
+      message: t("docstudio.sg.message"),
+      open: t("docstudio.sg.open"),
+      linksTitle: t("docstudio.sg.links_title"),
+      linksHint: t("docstudio.sg.links_hint"),
+      copy: t("docstudio.sg.copy"),
+      status: Object.fromEntries(
+        ["pending", "invited", "viewed", "signed", "declined", "revoked", "expired"].map((x) => [
+          x,
+          t(`docstudio.sg.status.${x}`),
+        ]),
+      ),
+      requestStatus: Object.fromEntries(
+        ["pending", "in_progress", "completed", "declined", "cancelled", "expired"].map((x) => [
+          x,
+          t(`docstudio.sg.request.${x}`),
+        ]),
+      ),
+      delivery: {
+        email: t("docstudio.sg.delivery.email"),
+        link: t("docstudio.sg.delivery.link"),
+        in_app: t("docstudio.sg.delivery.in_app"),
+      },
+      invitedAt: t("docstudio.sg.invited_at"),
+      signedAt: t("docstudio.sg.signed_at"),
+      viewedAt: t("docstudio.sg.viewed_at"),
+      revoke: t("docstudio.sg.revoke"),
+      reinvite: t("docstudio.sg.reinvite"),
+      cancel: t("docstudio.sg.cancel"),
+      cancelReason: t("docstudio.sg.cancel_reason"),
+      signHere: t("docstudio.sg.sign_here"),
+      yourName: t("docstudio.sg.your_name"),
+      yourTitle: t("docstudio.sg.your_title"),
+      typed: t("docstudio.sg.typed"),
+      consent: t("docstudio.sg.consent"),
+      sign: t("docstudio.sg.sign"),
+      evidence: t("docstudio.sg.evidence"),
+      provider: t("docstudio.sg.provider"),
+      disclaimer: t("docstudio.evidence.disclaimer"),
+      expires: t("docstudio.sg.expires"),
+    },
+    consentText: CONSENT_TEXT[locale === "ar" ? "ar" : "en"],
     presence: t("docstudio.ws.presence"),
     saved: t("docstudio.saved"),
     failed: t("docstudio.failed"),
@@ -293,6 +358,8 @@ export default async function DocumentPage({
         canComment: can(resolved.archetype, "comments.create"),
       }}
       comments={comments}
+      signatureRequest={signatureRequest}
+      parties={parties}
       vocab={{
         blockTypes: BLOCK_TYPES,
         fieldKinds: FIELD_KINDS,

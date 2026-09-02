@@ -7,6 +7,7 @@ import { command } from "@/platform/audit";
 import { assertCan } from "@/platform/authz";
 import type { RoleArchetype } from "@/platform/registries";
 import { sql, withCtx, type Ctx, type TenantTx } from "@/platform/tenancy";
+import { PROVIDER_NAMES } from "./providers";
 import { DocError } from "./types";
 
 // ── settings ──────────────────────────────────────────────────────────────────
@@ -17,6 +18,8 @@ export const DocOrgSettings = z
     retentionYears: z.number().int().min(5).max(30).default(7),
     /** Default reminder offsets (days before due) for new obligations. */
     reminderDays: z.array(z.number().int().min(0).max(365)).max(5).default([30, 7, 1]),
+    /** Signature provider adapter (ADR-23); only `native` is provisioned. */
+    signatureProvider: z.enum(PROVIDER_NAMES).default("native"),
   })
   .strict();
 export type DocOrgSettings = z.infer<typeof DocOrgSettings>;

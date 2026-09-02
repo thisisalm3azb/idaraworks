@@ -9,6 +9,8 @@
 import { sql, type Ctx, type TenantTx } from "@/platform/tenancy";
 import { GENESIS_HASH, eventHash, verifyChain, type ChainRow } from "./snapshot";
 
+const SYNTHETIC_USER = "00000000-0000-0000-0000-000000000000";
+
 export type DocEventKind =
   | "created"
   | "revision_frozen"
@@ -88,7 +90,14 @@ export async function appendEventIn(
   const prevHash = last[0]?.event_hash ?? GENESIS_HASH;
   const seq = (last[0]?.seq ?? 0) + 1;
   const at = new Date().toISOString();
-  const actorUserId = input.actorUserId === undefined ? ctx.userId : input.actorUserId;
+  // The public signing path runs under a synthetic org context (no member);
+  // its events carry an actor label, never a user id that has no profile row.
+  const actorUserId =
+    input.actorUserId === undefined
+      ? ctx.userId === SYNTHETIC_USER
+        ? null
+        : ctx.userId
+      : input.actorUserId;
   const actorLabel = input.actorLabel ?? null;
   const payload = input.payload ?? {};
   const hash = eventHash(prevHash, {

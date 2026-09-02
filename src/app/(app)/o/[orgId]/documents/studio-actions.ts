@@ -3,7 +3,9 @@
 import { ZodError } from "zod";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
 import { resolveCtxForAction } from "@/platform/auth/resolve";
+import { clientIpFromHeaders } from "@/platform/http/clientIp";
 import {
   archiveDocument,
   createDocument,
@@ -36,6 +38,13 @@ import {
   resolveDocComment,
   removeDocComment,
   decideSuggestion,
+  createSignatureRequest,
+  inviteSigners,
+  revokeSigner,
+  reinviteSigner,
+  cancelSignatureRequest,
+  signAsMember,
+  type InvitationLink,
   type RevisionDiff,
 } from "@/modules/docstudio/service";
 
@@ -453,4 +462,56 @@ export async function decideSuggestionAction(
   input: Record<string, unknown>,
 ): Promise<ActionResult<{ id: string; applied: boolean }>> {
   return run(orgId, (r) => decideSuggestion(r.ctx, r.archetype, input));
+}
+
+// ── signatures (H26F) ────────────────────────────────────────────────────────
+async function signingInfo(): Promise<{ ip: string | null; userAgent: string | null }> {
+  const h = await headers();
+  return { ip: clientIpFromHeaders(h) || null, userAgent: h.get("user-agent") };
+}
+
+export async function createSignatureRequestAction(
+  orgId: string,
+  input: Record<string, unknown>,
+): Promise<ActionResult<{ id: string; invitations: InvitationLink[] }>> {
+  return run(orgId, async (r) => {
+    const res = await createSignatureRequest(r.ctx, r.archetype, input);
+    revalidatePath(docPath(orgId, String(input.documentId)));
+    return res;
+  });
+}
+
+export async function inviteSignersAction(
+  orgId: string,
+  input: Record<string, unknown>,
+): Promise<ActionResult<InvitationLink[]>> {
+  return run(orgId, (r) => inviteSigners(r.ctx, r.archetype, input));
+}
+
+export async function revokeSignerAction(
+  orgId: string,
+  input: Record<string, unknown>,
+): Promise<ActionResult<{ id: string }>> {
+  return run(orgId, (r) => revokeSigner(r.ctx, r.archetype, input));
+}
+
+export async function reinviteSignerAction(
+  orgId: string,
+  input: Record<string, unknown>,
+): Promise<ActionResult<InvitationLink[]>> {
+  return run(orgId, (r) => reinviteSigner(r.ctx, r.archetype, input));
+}
+
+export async function cancelSignatureRequestAction(
+  orgId: string,
+  input: Record<string, unknown>,
+): Promise<ActionResult<{ id: string }>> {
+  return run(orgId, (r) => cancelSignatureRequest(r.ctx, r.archetype, input));
+}
+
+export async function signAsMemberAction(
+  orgId: string,
+  input: Record<string, unknown>,
+): Promise<ActionResult<{ completed: boolean; evidenceHash: string }>> {
+  return run(orgId, async (r) => signAsMember(r.ctx, r.archetype, input, await signingInfo()));
 }

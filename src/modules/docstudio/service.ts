@@ -23,3 +23,4 @@ export * from "./signatures";
 export * from "./workflows";
 export * from "./workflow-runs";
 export * from "./comments";
+export * from "./providers";

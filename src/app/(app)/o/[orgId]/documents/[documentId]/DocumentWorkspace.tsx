@@ -29,6 +29,8 @@ import { DetailsPane, type DetailsDict } from "./DetailsPane";
 import { PreviewPane } from "./PreviewPane";
 import { WorkflowPane, type WorkflowDict } from "./WorkflowPane";
 import { ReviewPane, type ReviewDict } from "./ReviewPane";
+import { SignaturesPane, type SignaturesDict } from "./SignaturesPane";
+import type { SignatureRequestRow } from "@/modules/docstudio/service";
 import { PresenceStrip, usePlanPresence } from "../../studio/[planId]/PresenceLayer";
 import type { CommentRow } from "@/modules/docstudio/service";
 import type { RunRow } from "@/modules/docstudio/service";
@@ -41,7 +43,14 @@ export type WorkspaceDict = {
   counterparty: Record<string, string>;
   recordKinds: Record<string, string>;
   tabs: Record<
-    "edit" | "preview" | "review" | "workflow" | "revisions" | "activity" | "details",
+    | "edit"
+    | "preview"
+    | "review"
+    | "workflow"
+    | "signatures"
+    | "revisions"
+    | "activity"
+    | "details",
     string
   >;
   actions: {
@@ -79,6 +88,8 @@ export type WorkspaceDict = {
   details: DetailsDict;
   workflow: WorkflowDict;
   review: ReviewDict;
+  signatures: SignaturesDict;
+  consentText: string;
   presence: string;
   saved: string;
   failed: string;
@@ -114,6 +125,8 @@ export function DocumentWorkspace({
   members,
   viewer,
   comments,
+  signatureRequest,
+  parties,
 }: {
   orgId: string;
   locale: string;
@@ -127,11 +140,22 @@ export function DocumentWorkspace({
   members: Array<{ id: string; name: string }>;
   viewer: { id: string; name: string; archetype: string; canReview: boolean; canComment: boolean };
   comments: CommentRow[];
+  signatureRequest: SignatureRequestRow | null;
+  parties: string[];
 }) {
   const router = useRouter();
   const [, startTransition] = useTransition();
   const d = detail.document;
-  const tabs: Tab[] = ["edit", "preview", "review", "workflow", "revisions", "activity", "details"];
+  const tabs: Tab[] = [
+    "edit",
+    "preview",
+    "review",
+    "workflow",
+    "signatures",
+    "revisions",
+    "activity",
+    "details",
+  ];
   const [tab, setTab] = useState<Tab>(
     tabs.includes(initialTab as Tab) ? (initialTab as Tab) : "preview",
   );
@@ -379,6 +403,23 @@ export function DocumentWorkspace({
           canReview={viewer.canReview}
           locale={locale}
           dict={dict.workflow}
+          settle={settle}
+        />
+      ) : null}
+      {tab === "signatures" ? (
+        <SignaturesPane
+          orgId={orgId}
+          documentId={d.id}
+          status={d.effectiveStatus}
+          parties={parties}
+          request={signatureRequest}
+          members={members}
+          currentUserId={viewer.id}
+          canRequest={caps.requestSignature === true}
+          canSign={caps.sign === true}
+          consentText={dict.consentText}
+          locale={locale}
+          dict={dict.signatures}
           settle={settle}
         />
       ) : null}

@@ -23,6 +23,7 @@ import {
   submitForReview,
   createWorkflow,
   WORKFLOW_PRESETS,
+  createSignatureRequest,
 } from "@/modules/docstudio/service";
 
 const MARKER = "fixture.h26_ui";
@@ -282,6 +283,29 @@ async function seed(): Promise<void> {
   });
   await submitForReview(A, "owner", { documentId: gated.id });
 
+  // 6. A signature room on the issued service agreement: the owner signs for the
+  // company in-app; the customer gets a one-time link (printed below, no email here).
+  const room = await createSignatureRequest(A, "owner", {
+    documentId: sa.id,
+    mode: "parallel",
+    signers: [
+      {
+        party: "company",
+        kind: "member",
+        userId: ownerId,
+        name: "H26 Owner",
+        title: "Managing Director",
+      },
+      {
+        party: "counterparty",
+        kind: "external",
+        name: "Maha Saleh",
+        email: "maha@example.invalid",
+      },
+    ],
+  });
+  const signLink = room.invitations.find((i) => i.link)?.link ?? "";
+
   console.log("\nDOCUMENT STUDIO FIXTURE READY");
   console.log(`  org:        ${orgId}`);
   console.log(`  hub:        /o/${orgId}/documents`);
@@ -291,6 +315,7 @@ async function seed(): Promise<void> {
   console.log(`  in review:  /o/${orgId}/documents/${sup.id}`);
   console.log(`  workflow:   /o/${orgId}/documents/workflows/${wf.id}`);
   console.log(`  gated doc:  /o/${orgId}/documents/${gated.id}`);
+  console.log(`  sign link:  ${signLink}`);
   console.log(`  sign in:    ${email}  /  ${password}`);
 }
 
