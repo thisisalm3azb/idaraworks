@@ -449,3 +449,42 @@ changes with accept/reject). Presence uses the H25 private Realtime
 channel pattern with a document predicate. Concurrent edits are guarded
 by `row_version` on the working revision; conflicts are surfaced, never
 merged silently.
+
+
+## Part G — Progress and evidence log (branch `verify/h26` from `main` 3a81d40)
+
+Every slice was built on the TEST project (`zwnnqaryouevnzuwtyaj`), verified with
+the gates (`prettier`, `tsc`, `eslint`, unit, integration on TEST, headless
+Playwright walk against the dev server), and committed. Production was not
+touched until the deployment section of `docs/H26-REPORT.md`.
+
+| Slice | Commit | What shipped | Evidence |
+| --- | --- | --- | --- |
+| H26A foundation | d08d2c7 | 0114/0115; doc_document, revisions, immutable snapshot, hash chain, folders, tags, saved views, retention, audit | `h26a-foundation` 12 tests; unit `docstudio-core` |
+| H26B/C builder + templates | 0d8e389 | drag-and-drop block builder, inspector, autosave with row_version, 6 built-in templates, org templates with immutable published versions | walk shots `builder*`, `templates-list`; `h26a` template test |
+| H26D workflows | 55576df | 0116; visual designer, sequential/parallel steps, conditions, delegation, escalation, SoD; runs orchestrated above the approvals engine (`document_step`) | `h26d-workflows` 6 tests; walk `workflow-designer*`, `doc-workflow` |
+| H26E collaboration | fe377de | comments, mentions, suggestions accept/reject, revision compare, presence | `h26e-collab` 4 tests; walk `doc-review`, `doc-revisions` |
+| H26F signature room | 511996a | 0117; native electronic signature with evidence record, one-time hashed invitations, in-app member signing, public signing page, activation on last signature, evidence in PDF; external providers declared and fail closed | `h26f-signatures` 6 tests; walk `sign-page*`, `doc-signatures` |
+| H26G forms | ffde557 | 0118; hashed expiring use-capped links, party-filled fields with answer-driven conditional sections, definer-only quarantined insert, reviewer inbox, explicit mapped conversion | `h26g-forms` 5 tests; walk `form-page*`, `forms-inbox`, `doc-forms-tab` |
+| H26H obligations | ca9e5f0 | 0119; kinds, evidence-gated completion immutable once done, recurrence, waive/cancel/reopen with reasons, escalation, renewal seeded at issue, due states on read, daily reminder worker, attention feed; list/timeline/calendar/by-document | `h26h-obligations` 5 tests; walk `obligations-*`, `doc-obligations`, `obligation-complete-dialog` |
+| H26I/J assistant + command centre | 8d9bdd9 | provider-neutral seam through `getAgentProvider()` (fails closed, validated citations, no-evidence answer, proposals persist nothing); attention strip on the hub | `h26i-ai` 2 tests; walk `doc-assistant` (unavailable state), `hub-list` |
+| H26K/L PDF + invariants | a9f452b | vitest PDF byte tests; invariants suite; revision ownership pinned in `getRevision` and the route; export catalogue entry; English runs in bilingual documents in Noto Sans | `h26k-pdf` 2 tests (7-page bilingual PDF, both faces embedded); `h26l-invariants` 5 tests |
+| H26M UX | bba0560 | document command palette (Ctrl/Cmd+K), mobile walk for obligations and forms | walk `palette`, `mobile-*` |
+| H26N deployment tooling | b15c9fa | read-only pre-flight, production smoke, production UI walk | pre-flight CLEAR on production 2026-09-02 (6 pending, 113 applied, baseline orgs 39 / users 60 / jobs 93 / quotes 46 / invoices 78) |
+
+**Bleed harness:** re-run after every new tenant table; 2/2 green with the
+17 doc_* seeders. **Unit suite:** 94 files, 1455 tests green. **Build:**
+`next build` green (all documents routes dynamic). **Format:** prettier clean.
+
+**Fixes found by verification (not by review):** the issued snapshot dropped
+sections gated on party-filled answers (fixed in `visibleBlocks`); the public
+token pages nested `<html>` under the root layout (fixed with a full-height
+`div`); a foreign revision could be rendered under another document through
+`?rev=` (fixed in `getRevision` and the route); English runs in bilingual PDFs
+fell back to the Naskh Latin glyphs (fixed with a per-language rule).
+
+**Deliberately not built:** the optional lazy-loaded 3D relationship view (the
+2D React Flow graph is lazy-loaded and sufficient; a 3D view would add a
+799 KB chunk for no operational gain). External signature providers (UAE PASS)
+and the assistant's model provider are declared seams that fail closed with
+one owner action each.
