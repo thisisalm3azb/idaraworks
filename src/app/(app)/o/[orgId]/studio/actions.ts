@@ -17,6 +17,13 @@ import {
   listLinkableTasks,
   captureBaseline,
   setNodeStatus,
+  createScenario,
+  updateScenario,
+  submitScenario,
+  applyScenario,
+  discardScenario,
+  simulatePlan,
+  type SimulationResult,
 } from "@/modules/studio/service";
 
 /**
@@ -164,4 +171,64 @@ export async function captureBaselineAction(
   input: { planId: string; name: string },
 ): Promise<ActionResult<{ id: string; entries: number }>> {
   return run(orgId, (r) => captureBaseline(r.ctx, r.archetype, input));
+}
+
+// ── H25G — scenarios ─────────────────────────────────────────────────────────
+
+export async function createScenarioAction(
+  orgId: string,
+  input: Record<string, unknown>,
+): Promise<ActionResult<{ id: string }>> {
+  return run(orgId, (r) => createScenario(r.ctx, r.archetype, input));
+}
+
+export async function updateScenarioAction(
+  orgId: string,
+  input: Record<string, unknown>,
+): Promise<ActionResult<{ rowVersion: number }>> {
+  return run(orgId, (r) => updateScenario(r.ctx, r.archetype, input));
+}
+
+export async function submitScenarioAction(
+  orgId: string,
+  input: { scenarioId: string; expectedRowVersion?: number },
+): Promise<ActionResult<{ status: string; approvalId: string }>> {
+  return run(orgId, (r) => submitScenario(r.ctx, r.archetype, input));
+}
+
+export async function applyScenarioAction(
+  orgId: string,
+  input: { scenarioId: string; expectedRowVersion?: number },
+): Promise<ActionResult<{ applied: number }>> {
+  return run(orgId, (r) => applyScenario(r.ctx, r.archetype, input));
+}
+
+export async function discardScenarioAction(
+  orgId: string,
+  input: { scenarioId: string },
+): Promise<ActionResult<void>> {
+  return run(orgId, (r) => discardScenario(r.ctx, r.archetype, input));
+}
+
+/** Maps are not serialisable across the action boundary; hand back plain objects. */
+export type SimulationDto =
+  | Extract<SimulationResult, { ok: false }>
+  | (Omit<Extract<SimulationResult, { ok: true }>, "criticality" | "finishByNode"> & {
+      criticality: Record<string, number>;
+      finishByNode: Record<string, { p50: string; p80: string; p90: string }>;
+    });
+
+export async function simulateAction(
+  orgId: string,
+  input: { planId: string; scenarioId?: string; samples?: number; seed?: number },
+): Promise<ActionResult<SimulationDto>> {
+  return run(orgId, async (r) => {
+    const res = await simulatePlan(r.ctx, r.archetype, input);
+    if (!res.ok) return res;
+    return {
+      ...res,
+      criticality: Object.fromEntries(res.criticality),
+      finishByNode: Object.fromEntries(res.finishByNode),
+    };
+  });
 }

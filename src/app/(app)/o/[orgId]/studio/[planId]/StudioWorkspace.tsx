@@ -10,17 +10,23 @@
  * keeps its own copy of status, dates, assignments or progress.
  */
 import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
-import type { EffectiveEdge, EffectiveNode } from "@/modules/studio/service";
+import { usePathname, useRouter } from "next/navigation";
+import type {
+  EffectiveEdge,
+  EffectiveNode,
+  ScenarioComparison,
+  ScenarioRow,
+} from "@/modules/studio/service";
 import type { ScheduledTask, ScheduleHealth } from "@/modules/studio/service";
 import type { LinkableJob } from "@/modules/studio/service";
-import type { ActionResult } from "../actions";
+import type { ActionResult, SimulationDto } from "../actions";
 import { StudioCanvas } from "./StudioCanvas";
 import { Inspector } from "./Inspector";
 import { TableView } from "./TableView";
 import { GanttView } from "./GanttView";
 import { NetworkView } from "./NetworkView";
 import { BoardView } from "./BoardView";
+import { ScenarioPanel } from "./ScenarioPanel";
 
 export type WorkspacePayload = {
   orgId: string;
@@ -39,8 +45,13 @@ export type WorkspacePayload = {
   projectFinish: string | null;
   calendar: { workingWeekdays: number[]; holidays: Array<{ start: string; end: string }> };
   jobs: LinkableJob[];
+  /** H25G — the plan's scenarios and, when one is active, its comparison with live. */
+  scenarios: ScenarioRow[];
+  scenario: ScenarioComparison | null;
   canManage: boolean;
   canSchedule: boolean;
+  canManageScenario: boolean;
+  canApplyScenario: boolean;
   locale: string;
   initialView: string;
 };
@@ -83,9 +94,13 @@ export type StudioDict = {
   zoomIn: string;
   zoomOut: string;
   reason: string;
+  estimateOptimistic: string;
+  estimatePessimistic: string;
   nodeTypes: Record<string, string>;
   statuses: Record<string, string>;
   edgeTypes: Record<string, string>;
+  /** Flat scenario copy: title, live, new, name, branch_hint, status_<s>, … */
+  scenario: Record<string, string>;
 };
 
 export type StudioActions = {
@@ -112,6 +127,23 @@ export type StudioActions = {
     name: string;
   }) => Promise<ActionResult<{ id: string; entries: number }>>;
   setNodeStatus: (input: Record<string, unknown>) => Promise<ActionResult<{ routed: string }>>;
+  createScenario: (input: Record<string, unknown>) => Promise<ActionResult<{ id: string }>>;
+  updateScenario: (input: Record<string, unknown>) => Promise<ActionResult<{ rowVersion: number }>>;
+  submitScenario: (input: {
+    scenarioId: string;
+    expectedRowVersion?: number;
+  }) => Promise<ActionResult<{ status: string; approvalId: string }>>;
+  applyScenario: (input: {
+    scenarioId: string;
+    expectedRowVersion?: number;
+  }) => Promise<ActionResult<{ applied: number }>>;
+  discardScenario: (input: { scenarioId: string }) => Promise<ActionResult<void>>;
+  simulate: (input: {
+    planId: string;
+    scenarioId?: string;
+    samples?: number;
+    seed?: number;
+  }) => Promise<ActionResult<SimulationDto>>;
 };
 
 const VIEWS = ["canvas", "board", "gantt", "network", "table"] as const;
@@ -126,6 +158,18 @@ export function StudioWorkspace({
   actions: StudioActions;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
+  // The aside shows the inspector for a selection, otherwise the scenario
+  // laboratory; a person can flip between them.
+  const [asideTab, setAsideTab] = useState<"inspector" | "scenarios">(
+    payload.scenario ? "scenarios" : "inspector",
+  );
+  const openScenario = useCallback(
+    (id: string | null) => {
+      router.push(id ? `${pathname}?scenario=${id}` : pathname);
+    },
+    [router, pathname],
+  );
   const [view, setView] = useState<string>(
     (VIEWS as readonly string[]).includes(payload.initialView) ? payload.initialView : "canvas",
   );
@@ -137,6 +181,11 @@ export function StudioWorkspace({
     () => payload.nodes.find((n) => n.id === selectedId) ?? null,
     [payload.nodes, selectedId],
   );
+  const [lastSelected, setLastSelected] = useState<string | null>(selectedId);
+  if (selectedId !== lastSelected) {
+    setLastSelected(selectedId);
+    if (selectedId) setAsideTab("inspector");
+  }
   const criticalIds = useMemo(() => new Set(payload.criticalPaths.flat()), [payload.criticalPaths]);
 
   useEffect(() => {
@@ -177,8 +226,13 @@ export function StudioWorkspace({
             {payload.projectStart && payload.projectFinish
               ? ` · ${payload.projectStart} → ${payload.projectFinish}`
               : ""}
-            {payload.scenarioId ? " · scenario" : ""}
           </p>
+          {payload.scenario ? (
+            <p className="mt-0.5 w-fit rounded-full bg-warning-soft px-2 py-0.5 text-[11px] text-warning">
+              {dict.scenario.active}: {payload.scenario.scenario.name} ·{" "}
+              {dict.scenario[`status_${payload.scenario.scenario.status}`]}
+            </p>
+          ) : null}
         </div>
         <nav className="flex gap-1 rounded-full border border-line bg-card p-1" aria-label="views">
           {VIEWS.map((v) => (
@@ -259,16 +313,61 @@ export function StudioWorkspace({
           )}
         </div>
         <aside className="hidden w-80 shrink-0 overflow-y-auto rounded-lg border border-line bg-card p-3 lg:block">
-          <Inspector
-            node={selected}
-            payload={payload}
-            dict={dict}
-            actions={actions}
-            settle={settle}
-            onClose={() => setSelectedId(null)}
-          />
+          <div className="mb-3 flex gap-1 rounded-full border border-line bg-sunken p-0.5 text-xs">
+            {(["inspector", "scenarios"] as const).map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setAsideTab(t)}
+                aria-pressed={asideTab === t}
+                className={`min-h-8 flex-1 rounded-full ${
+                  asideTab === t ? "bg-card font-medium text-ink shadow-sm" : "text-ink-muted"
+                }`}
+              >
+                {t === "inspector" ? dict.inspector : dict.scenario.title}
+              </button>
+            ))}
+          </div>
+          {asideTab === "inspector" ? (
+            <Inspector
+              node={selected}
+              payload={payload}
+              dict={dict}
+              actions={actions}
+              settle={settle}
+              onClose={() => setSelectedId(null)}
+            />
+          ) : (
+            <ScenarioPanel
+              payload={payload}
+              dict={dict}
+              actions={actions}
+              settle={settle}
+              onOpen={openScenario}
+            />
+          )}
         </aside>
       </div>
+
+      {!selected ? (
+        <div className="lg:hidden">
+          <details className="rounded-lg border border-line bg-card p-3">
+            <summary className="min-h-8 cursor-pointer text-sm font-medium text-ink">
+              {dict.scenario.title}
+              {payload.scenario ? ` · ${payload.scenario.scenario.name}` : ""}
+            </summary>
+            <div className="mt-2 max-h-[50vh] overflow-y-auto">
+              <ScenarioPanel
+                payload={payload}
+                dict={dict}
+                actions={actions}
+                settle={settle}
+                onOpen={openScenario}
+              />
+            </div>
+          </details>
+        </div>
+      ) : null}
 
       {selected ? (
         <div className="lg:hidden">

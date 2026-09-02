@@ -28,6 +28,7 @@ import { createIssue } from "@/modules/issues/service";
 import {
   DEP_KINDS,
   EDGE_TYPES,
+  FIELD_TO_PROP,
   LINKABLE_RECORDS,
   NODE_TYPES,
   parseNodeData,
@@ -35,6 +36,7 @@ import {
   type LinkableRecordType,
   type NodeType,
 } from "./types";
+import { resolvePlanGraph, type EffectiveNode } from "./resolve";
 
 const DateString = z
   .string()
@@ -403,7 +405,7 @@ export async function updateNode(
   // placement is presentation and stays live (a scenario is not a layout).
   if (scenarioId && businessEntries.length > 0) {
     assertCan(archetype, "scenario.manage");
-    await recordScenarioChanges(ctx, scenarioId, nodeId, businessEntries);
+    await recordScenarioChanges(ctx, archetype, scenarioId, nodeId, businessEntries);
     if (canvasEntries.length === 0) return { routed: "scenario" };
   }
 
@@ -464,6 +466,25 @@ export async function updateNode(
             amount_minor = ${fields.amountMinor === undefined ? sql`amount_minor` : (fields.amountMinor ?? null)},
             currency = ${fields.currency === undefined ? sql`currency` : (fields.currency ?? null)},
             data = coalesce(${data === undefined ? null : JSON.stringify(data)}::jsonb, data),
+            constraint_kind = coalesce(${fields.constraintKind ?? null}, constraint_kind),
+            constraint_date = ${
+              fields.constraintKind === "none"
+                ? null
+                : fields.constraintDate === undefined
+                  ? sql`constraint_date`
+                  : (fields.constraintDate ?? null)
+            },
+            deadline_date = ${fields.deadlineDate === undefined ? sql`deadline_date` : (fields.deadlineDate ?? null)},
+            estimate_optimistic_days = ${
+              fields.estimateOptimisticDays === undefined
+                ? sql`estimate_optimistic_days`
+                : (fields.estimateOptimisticDays ?? null)
+            },
+            estimate_pessimistic_days = ${
+              fields.estimatePessimisticDays === undefined
+                ? sql`estimate_pessimistic_days`
+                : (fields.estimatePessimisticDays ?? null)
+            },
             row_version = row_version + 1,
             updated_by = ${ctx.userId}, updated_at = now()
           where org_id = ${ctx.orgId} and id = ${nodeId}
@@ -509,10 +530,20 @@ export async function updateNode(
 
 async function recordScenarioChanges(
   ctx: Ctx,
+  archetype: RoleArchetype,
   scenarioId: string,
   nodeId: string,
   entries: Array<[string, unknown]>,
 ): Promise<void> {
+  // The branch-time value is read from the ONE resolution (live, no overlay)
+  // so a later compare can show "from → to" and detect drift honestly.
+  const planId = (await withCtx(ctx, (tx) => nodeRowIn(tx, ctx, nodeId))).plan_id;
+  const live = await resolvePlanGraph(ctx, archetype, { planId });
+  const liveNode = live.nodes.find((n) => n.id === nodeId);
+  const liveValue = (field: string): unknown => {
+    const prop = (FIELD_TO_PROP as Record<string, keyof EffectiveNode>)[field];
+    return liveNode && prop ? liveNode[prop] : null;
+  };
   await command(
     ctx,
     {
@@ -536,12 +567,14 @@ async function recordScenarioChanges(
       const targetKind = node.record_type ? "record" : "node";
       const targetId = node.record_type ? node.record_id! : nodeId;
       for (const [field, value] of entries) {
+        // old_value is written once (the first edit in this scenario) and kept.
         await tx.execute(sql`
           insert into public.studio_scenario_change
             (org_id, scenario_id, target_kind, target_id, record_type, field,
-             new_value, created_by)
+             old_value, new_value, created_by)
           values (${ctx.orgId}, ${scenarioId}, ${targetKind}, ${targetId},
                   ${node.record_type ?? null}, ${field},
+                  ${JSON.stringify(liveValue(field) ?? null)}::jsonb,
                   ${JSON.stringify(value ?? null)}::jsonb, ${ctx.userId})
           on conflict (org_id, scenario_id, target_kind, target_id, field)
           do update set new_value = excluded.new_value, updated_at = now()

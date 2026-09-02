@@ -81,6 +81,7 @@ export const ATTACHABLE_TYPES = [
   "journal_entry", // H24 — supporting evidence attaches to journals
   "studio_plan", // H25 — reference documents attach to a plan
   "studio_node", // H25 — evidence and documents attach to canvas nodes
+  "studio_scenario", // H25G — decision evidence attaches to a scenario; its lifecycle shows in activity
 ] as const;
 export type AttachableType = (typeof ATTACHABLE_TYPES)[number];
 

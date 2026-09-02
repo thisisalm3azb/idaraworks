@@ -299,9 +299,38 @@ export class StudioError extends Error {
       | "forbidden"
       | "conflict"
       | "invalid_link"
+      | "drift"
       | "cycle" = "invalid_state",
   ) {
     super(message);
     this.name = "StudioError";
   }
 }
+
+/**
+ * H25G — which effective-node property each editable planning field reads
+ * from, so a scenario's recorded change can be compared with the live value
+ * (drift) and shown as "from → to" without a second source of truth.
+ */
+export const FIELD_TO_PROP = {
+  title: "title",
+  description: "description",
+  status: "rawStatus",
+  priority: "priority",
+  startDate: "startDate",
+  dueDate: "dueDate",
+  durationDays: "durationDays",
+  progressPct: "progressPct",
+  ownerUserId: "ownerUserId",
+  assigneeEmployeeId: "assigneeEmployeeId",
+  amountMinor: "amountMinor",
+  currency: "currency",
+  data: "data",
+  isMilestone: "isMilestone",
+  constraintKind: "constraintKind",
+  constraintDate: "constraintDate",
+  deadlineDate: "deadlineDate",
+  estimateOptimisticDays: "estimateOptimisticDays",
+  estimatePessimisticDays: "estimatePessimisticDays",
+} as const;
+export type PlanningField = keyof typeof FIELD_TO_PROP;

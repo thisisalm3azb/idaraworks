@@ -158,6 +158,19 @@ const SUBJECTS: Record<string, SubjectConfig> = {
     onReject: "review",
     onWithdraw: "review",
   },
+  /*
+   * H25G: applying a what-if scenario to the live plan is proposed by its
+   * author and decided by someone else. Approval only makes the scenario
+   * APPLICABLE; the apply itself is a separate, separately-permitted command
+   * (scenario.apply). Rejection returns it to draft so it can be revised.
+   */
+  scenario_apply: {
+    table: "studio_scenario",
+    live: "under_review",
+    onApprove: "approved",
+    onReject: "draft",
+    onWithdraw: "draft",
+  },
   // H21: a task marked requires_approval waits here. Rejection returns it to
   // in_progress — an explicit, workable state, never a dead end.
   task_completion: {
@@ -730,7 +743,9 @@ export async function decideApproval(
                       ? "overtime_request"
                       : r.subjectType === "pay_run"
                         ? "pay_run"
-                        : "material_request",
+                        : r.subjectType === "scenario_apply"
+                          ? "studio_scenario"
+                          : "material_request",
         entityId: r.subjectId,
         verb: r.outcome === "approved" ? "approved" : "rejected",
         summary: `${r.outcome} the ${r.subjectType.replace("_", " ")}${r.selfApproved ? " (self-approved)" : ""}`,

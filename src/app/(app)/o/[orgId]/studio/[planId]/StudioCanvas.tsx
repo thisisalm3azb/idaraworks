@@ -463,7 +463,7 @@ function CanvasInner({
         proOptions={{ hideAttribution: true }}
       >
         <Background variant={BackgroundVariant.Dots} gap={16} size={1} />
-        <MiniMap pannable zoomable nodeColor={minimapColor} className="!bg-card" />
+        <MiniMap pannable zoomable nodeColor={minimapColor} className="!bg-card max-sm:!hidden" />
       </ReactFlow>
 
       <div className="absolute start-2 top-2 flex flex-col gap-1" dir="auto">

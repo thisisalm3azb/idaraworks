@@ -22,6 +22,8 @@ type Form = {
   startDate: string;
   dueDate: string;
   duration: string;
+  optimistic: string;
+  pessimistic: string;
   status: string;
   priority: string;
 };
@@ -33,6 +35,8 @@ function seed(node: EffectiveNode): Form {
     startDate: node.startDate ?? "",
     dueDate: node.dueDate ?? "",
     duration: node.durationDays === null ? "" : String(node.durationDays),
+    optimistic: node.estimateOptimisticDays === null ? "" : String(node.estimateOptimisticDays),
+    pessimistic: node.estimatePessimisticDays === null ? "" : String(node.estimatePessimisticDays),
     status: node.rawStatus ?? "",
     priority: node.priority,
   };
@@ -106,6 +110,10 @@ export function Inspector({
     if (dirty.has("startDate")) changed.startDate = f.startDate || null;
     if (dirty.has("dueDate")) changed.dueDate = f.dueDate || null;
     if (dirty.has("duration")) changed.durationDays = f.duration === "" ? null : Number(f.duration);
+    if (dirty.has("optimistic"))
+      changed.estimateOptimisticDays = f.optimistic === "" ? null : Number(f.optimistic);
+    if (dirty.has("pessimistic"))
+      changed.estimatePessimisticDays = f.pessimistic === "" ? null : Number(f.pessimistic);
     if (dirty.has("priority")) changed.priority = f.priority;
     if (!isLinked && dirty.has("status") && f.status) changed.status = f.status;
     if (Object.keys(changed).length === 0) return;
@@ -236,6 +244,35 @@ export function Inspector({
             max={3650}
             value={f.duration}
             onChange={(e) => set({ duration: e.target.value })}
+            disabled={!canEdit}
+            className={input}
+            dir="ltr"
+          />
+        </label>
+        {/* Three-point estimates feed the Monte Carlo run; without them it refuses. */}
+        <label className="text-xs text-ink-muted">
+          {dict.estimateOptimistic}
+          <input
+            type="number"
+            min={0}
+            max={3650}
+            step={0.5}
+            value={f.optimistic}
+            onChange={(e) => set({ optimistic: e.target.value })}
+            disabled={!canEdit}
+            className={input}
+            dir="ltr"
+          />
+        </label>
+        <label className="text-xs text-ink-muted">
+          {dict.estimatePessimistic}
+          <input
+            type="number"
+            min={0}
+            max={3650}
+            step={0.5}
+            value={f.pessimistic}
+            onChange={(e) => set({ pessimistic: e.target.value })}
             disabled={!canEdit}
             className={input}
             dir="ltr"

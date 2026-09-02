@@ -19,6 +19,7 @@ import { assertCan } from "@/platform/authz";
 import { sql, withCtx, type Ctx } from "@/platform/tenancy";
 import type { RoleArchetype } from "@/platform/registries";
 import { loadCalendar, workingDaysBetween, type Calendar } from "@/platform/calendar/calendar";
+import type { EstimatedTask } from "./engine/monte-carlo";
 
 const WEEKDAY_INDEX = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
 import {
@@ -87,14 +88,18 @@ function toEngineTask(n: EffectiveNode): ScheduleTask {
   };
 }
 
-/** Pure: schedule a resolved graph. Exported so views and tests can drive it. */
-export function scheduleGraph(
-  cal: Calendar,
-  graph: ResolvedGraph,
-  opts: { projectStart?: string } = {},
-): Omit<PlanSchedule, "graph" | "calendar" | "baseline"> {
+/**
+ * Pure: the engine's inputs for a resolved graph. ONE mapping shared by the
+ * deterministic schedule and the Monte Carlo run, so both always see the same
+ * activities, dependencies and estimates.
+ */
+export function toScheduleInputs(graph: ResolvedGraph): {
+  tasks: EstimatedTask[];
+  deps: ScheduleDep[];
+  withheld: PlanSchedule["unscheduled"];
+} {
   const withheld: PlanSchedule["unscheduled"] = [];
-  const tasks: ScheduleTask[] = [];
+  const tasks: EstimatedTask[] = [];
   for (const n of graph.nodes) {
     if (!SCHEDULABLE_TYPES.includes(n.nodeType)) continue;
     if (n.statusCategory === "dropped") continue;
@@ -102,7 +107,11 @@ export function scheduleGraph(
       withheld.push({ nodeId: n.id, title: n.title, reason: "record details withheld" });
       continue;
     }
-    tasks.push(toEngineTask(n));
+    tasks.push({
+      ...toEngineTask(n),
+      optimisticDays: n.estimateOptimisticDays,
+      pessimisticDays: n.estimatePessimisticDays,
+    });
   }
   const ids = new Set(tasks.map((t) => t.id));
   const deps: ScheduleDep[] = graph.edges
@@ -119,6 +128,16 @@ export function scheduleGraph(
       kind: e.depKind!,
       lagDays: e.lagDays,
     }));
+  return { tasks, deps, withheld };
+}
+
+/** Pure: schedule a resolved graph. Exported so views and tests can drive it. */
+export function scheduleGraph(
+  cal: Calendar,
+  graph: ResolvedGraph,
+  opts: { projectStart?: string } = {},
+): Omit<PlanSchedule, "graph" | "calendar" | "baseline"> {
+  const { tasks, deps, withheld } = toScheduleInputs(graph);
   const result = computeSchedule(cal, tasks, deps, opts);
   const titles = new Map(graph.nodes.map((n) => [n.id, n.title]));
   const unscheduled = [

@@ -159,7 +159,10 @@ export async function resolvePlanGraph(
              amount_minor::text as amount_minor, currency, data,
              x::float8 as x, y::float8 as y, w::float8 as w, h::float8 as h, z,
              parent_node_id::text as parent_node_id, layer_key, locked, style,
-             row_version
+             row_version,
+             constraint_kind, constraint_date::text as constraint_date,
+             deadline_date::text as deadline_date,
+             estimate_optimistic_days, estimate_pessimistic_days
       from public.studio_node
       where org_id = ${ctx.orgId} and plan_id = ${input.planId} and archived_at is null
       order by z, created_at
@@ -266,11 +269,20 @@ export async function resolvePlanGraph(
               : Number(n.progress_pct),
         isMilestone:
           (rec?.isMilestone as boolean | undefined) ?? (n.node_type as string) === "milestone",
-        constraintKind: (rec?.constraintKind as string | null) ?? null,
-        constraintDate: (rec?.constraintDate as string | null) ?? null,
-        deadlineDate: (rec?.deadlineDate as string | null) ?? null,
-        estimateOptimisticDays: (rec?.estimateOptimisticDays as number | null) ?? null,
-        estimatePessimisticDays: (rec?.estimatePessimisticDays as number | null) ?? null,
+        // A linked task's scheduling semantics come from the task; a draft's
+        // from its own row (0109).
+        constraintKind:
+          (rec?.constraintKind as string | null) ?? (n.constraint_kind as string | null) ?? null,
+        constraintDate:
+          (rec?.constraintDate as string | null) ?? (n.constraint_date as string | null) ?? null,
+        deadlineDate:
+          (rec?.deadlineDate as string | null) ?? (n.deadline_date as string | null) ?? null,
+        estimateOptimisticDays:
+          (rec?.estimateOptimisticDays as number | null) ??
+          (n.estimate_optimistic_days == null ? null : Number(n.estimate_optimistic_days)),
+        estimatePessimisticDays:
+          (rec?.estimatePessimisticDays as number | null) ??
+          (n.estimate_pessimistic_days == null ? null : Number(n.estimate_pessimistic_days)),
         ownerUserId: (n.owner_user_id as string | null) ?? null,
         assigneeEmployeeId:
           (rec?.assigneeEmployeeId as string | null) ??

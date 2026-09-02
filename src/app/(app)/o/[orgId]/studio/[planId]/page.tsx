@@ -3,7 +3,13 @@ import { getT, getServerLocale } from "@/platform/i18n/server";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { can } from "@/platform/authz";
 import { managementStudioEnabled } from "@/platform/flags";
-import { scheduleForPlan, listLinkableJobs, StudioError } from "@/modules/studio/service";
+import {
+  scheduleForPlan,
+  listLinkableJobs,
+  listScenarios,
+  compareScenario,
+  StudioError,
+} from "@/modules/studio/service";
 import {
   addNodeAction,
   updateNodeAction,
@@ -15,6 +21,12 @@ import {
   listJobTasksAction,
   captureBaselineAction,
   setNodeStatusAction,
+  createScenarioAction,
+  updateScenarioAction,
+  submitScenarioAction,
+  applyScenarioAction,
+  discardScenarioAction,
+  simulateAction,
 } from "../actions";
 import { StudioWorkspace, type StudioDict, type WorkspacePayload } from "./StudioWorkspace";
 
@@ -52,6 +64,17 @@ export default async function PlanPage({
   const jobs = can(resolved.archetype, "jobs.view")
     ? await listLinkableJobs(resolved.ctx, resolved.archetype, { limit: 100 })
     : [];
+  // H25G — the scenario list, and the active scenario's comparison with live.
+  const scenarios = await listScenarios(resolved.ctx, resolved.archetype, planId);
+  let scenario = null;
+  if (sp.scenario) {
+    try {
+      scenario = await compareScenario(resolved.ctx, resolved.archetype, sp.scenario);
+    } catch (err) {
+      if (err instanceof StudioError && err.code === "not_found") notFound();
+      throw err;
+    }
+  }
 
   const payload: WorkspacePayload = {
     orgId,
@@ -70,8 +93,12 @@ export default async function PlanPage({
     projectFinish: plan.result.projectFinish,
     calendar: { workingWeekdays: plan.calendar.workingWeekdays, holidays: plan.calendar.holidays },
     jobs,
+    scenarios,
+    scenario,
     canManage: can(resolved.archetype, "studio.manage"),
     canSchedule: can(resolved.archetype, "studio.schedule"),
+    canManageScenario: can(resolved.archetype, "scenario.manage"),
+    canApplyScenario: can(resolved.archetype, "scenario.apply"),
     locale,
     initialView: sp.view ?? "canvas",
   };
@@ -120,6 +147,58 @@ export default async function PlanPage({
     zoomIn: t("studio.zoom_in"),
     zoomOut: t("studio.zoom_out"),
     reason: t("studio.reason"),
+    estimateOptimistic: t("studio.field.estimate_optimistic"),
+    estimatePessimistic: t("studio.field.estimate_pessimistic"),
+    scenario: Object.fromEntries(
+      [
+        "title",
+        "live",
+        "new",
+        "name",
+        "branch_hint",
+        "active",
+        "details",
+        "shared",
+        "status.draft",
+        "status.under_review",
+        "status.approved",
+        "status.applied",
+        "status.discarded",
+        "changes",
+        "no_changes",
+        "drifted",
+        "schedule",
+        "finish_live",
+        "finish_scenario",
+        "delta_days",
+        "no_delta",
+        "assumptions",
+        "assumption_add",
+        "confidence.low",
+        "confidence.medium",
+        "confidence.high",
+        "decision",
+        "decision.question",
+        "decision.recommendation",
+        "decision.decision",
+        "decision.rationale",
+        "submit",
+        "apply",
+        "apply_hint",
+        "discard",
+        "awaiting",
+        "simulation",
+        "simulate",
+        "samples",
+        "seed",
+        "confidence",
+        "forecast_note",
+        "insufficient",
+        "criticality",
+        "ran",
+        "plan_date",
+      ].map((k) => [k.replace(".", "_"), t(`studio.scenario.${k}`)]),
+    ),
     nodeTypes: Object.fromEntries(
       [
         "task",
@@ -190,6 +269,12 @@ export default async function PlanPage({
         listJobTasks: listJobTasksAction.bind(null, orgId),
         captureBaseline: captureBaselineAction.bind(null, orgId),
         setNodeStatus: setNodeStatusAction.bind(null, orgId),
+        createScenario: createScenarioAction.bind(null, orgId),
+        updateScenario: updateScenarioAction.bind(null, orgId),
+        submitScenario: submitScenarioAction.bind(null, orgId),
+        applyScenario: applyScenarioAction.bind(null, orgId),
+        discardScenario: discardScenarioAction.bind(null, orgId),
+        simulate: simulateAction.bind(null, orgId),
       }}
     />
   );
