@@ -105,7 +105,45 @@ export async function createCampaign(
   );
 }
 
-export const CampaignPatch = CampaignInput.partial().extend({ id: uuid });
+/** Explicit patch: a partial update never re-applies the input defaults (channel, status, cost). */
+export const CampaignPatch = z.object({
+  id: uuid,
+  name: z.string().trim().min(1).max(160).optional(),
+  objective: z.string().trim().max(1000).optional().nullable(),
+  channel: z
+    .enum([
+      "email",
+      "sms",
+      "whatsapp",
+      "social",
+      "event",
+      "referral",
+      "web",
+      "ads",
+      "phone",
+      "other",
+    ])
+    .optional(),
+  status: z.enum(["planned", "active", "paused", "completed", "cancelled"]).optional(),
+  audience: z
+    .object({
+      segments: z.array(z.string().max(40)).max(20).optional(),
+      tags: z.array(z.string().max(40)).max(20).optional(),
+      territories: z.array(uuid).max(20).optional(),
+      note: z.string().max(500).optional(),
+    })
+    .optional(),
+  budgetMinor: z.number().int().min(0).optional().nullable(),
+  costMinor: z.number().int().min(0).optional(),
+  currency: z
+    .string()
+    .regex(/^[A-Z]{3}$/)
+    .optional()
+    .nullable(),
+  startsOn: isoDate.optional().nullable(),
+  endsOn: isoDate.optional().nullable(),
+  ownerUserId: uuid.optional().nullable(),
+});
 
 export async function updateCampaign(
   ctx: Ctx,

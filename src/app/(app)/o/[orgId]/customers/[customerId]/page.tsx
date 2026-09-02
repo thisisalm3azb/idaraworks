@@ -5,6 +5,7 @@ import { getT, getServerLocale } from "@/platform/i18n/server";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { loadOrgTerminology, term } from "@/platform/terminology";
 import { can } from "@/platform/authz";
+import { revenueStudioEnabled } from "@/platform/flags";
 import { formatDate, formatMoney } from "@/platform/format";
 import type { CurrencyCode } from "@/platform/registries";
 import { gatherCustomer360 } from "@/modules/crm/service";
@@ -190,6 +191,13 @@ export default async function CustomerDetailPage({
                 }}
               />
             </>
+          ) : null}
+          {revenueStudioEnabled() ? (
+            <Link href={`/o/${orgId}/revenue/customers/${c.id}`}>
+              <Button type="button" variant="secondary">
+                {t("customers.next.revenue")}
+              </Button>
+            </Link>
           ) : null}
           {canQuote && c.active ? (
             <Link href={`/o/${orgId}/quotes/new?customer=${c.id}`}>

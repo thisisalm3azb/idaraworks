@@ -49,6 +49,8 @@ export * from "./forecast";
 export * from "./merge";
 export * from "./automation";
 export * from "./intelligence";
+export * from "./reports";
+export * from "./success";
 
 // ── The canonical customer presentation model (H19 Part B) ──────────────────
 // Honest to the real schema: the customer table has no organization vs

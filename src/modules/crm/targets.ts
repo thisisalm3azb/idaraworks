@@ -80,8 +80,28 @@ export async function updateTerritory(
   raw: unknown,
 ): Promise<void> {
   assertCan(archetype, "crm.targets.manage");
-  const input = TerritoryInput.partial()
-    .extend({ id: uuid, active: z.boolean().optional() })
+  // Explicit patch: never re-applies TerritoryInput defaults (rules would reset to {}).
+  const input = z
+    .object({
+      id: uuid,
+      key: z
+        .string()
+        .regex(/^[a-z][a-z0-9_]{0,39}$/)
+        .optional(),
+      name: LocaleText.optional(),
+      rules: z
+        .object({
+          countries: z
+            .array(z.string().regex(/^[A-Z]{2}$/))
+            .max(50)
+            .optional(),
+          tags: z.array(z.string().max(40)).max(20).optional(),
+          segments: z.array(z.string().max(40)).max(20).optional(),
+        })
+        .optional(),
+      ownerUserId: uuid.optional().nullable(),
+      active: z.boolean().optional(),
+    })
     .parse(raw);
   await command(
     ctx,

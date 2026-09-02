@@ -249,9 +249,26 @@ export async function addProductLine(
   );
 }
 
-export const ProductLinePatch = ProductLineInput.omit({ opportunityId: true })
-  .partial()
-  .extend({ id: uuid });
+/** Explicit patch: never re-applies ProductLineInput defaults (unit, discount, VAT, optional, sort). */
+export const ProductLinePatch = z.object({
+  id: uuid,
+  itemId: uuid.optional().nullable(),
+  description: z.string().trim().min(1).max(300).optional(),
+  qty: z.number().positive().max(1_000_000_000).optional(),
+  unit: z.string().trim().min(1).max(16).optional(),
+  unitPriceMinor: z.number().int().min(0).optional(),
+  discountPct: z.number().min(0).max(100).optional(),
+  vatRate: z.number().min(0).max(100).optional(),
+  unitCostMinor: z.number().int().min(0).optional().nullable(),
+  optional: z.boolean().optional(),
+  bundleKey: z
+    .string()
+    .regex(/^[a-z][a-z0-9_]{0,39}$/)
+    .optional()
+    .nullable(),
+  recurrenceMonths: z.number().int().min(1).max(120).optional().nullable(),
+  sort: z.number().int().min(0).optional(),
+});
 
 export async function updateProductLine(
   ctx: Ctx,
@@ -904,4 +921,103 @@ export async function gatherDealRoom(
       },
     };
   });
+}
+
+export type OpportunityCommercial = {
+  id: string;
+  name: string;
+  customerId: string | null;
+  customerName: string | null;
+  ownerUserId: string | null;
+  ownerName: string | null;
+  stageKey: string;
+  status: "open" | "won" | "lost";
+  pipelineId: string | null;
+  forecastCategory: "pipeline" | "best_case" | "commit" | "omitted";
+  kind: "new_business" | "expansion" | "renewal";
+  amountKind: "one_time" | "recurring" | "mixed";
+  estimatedValueMinor: number | null;
+  recurringMinor: number | null;
+  recurrenceMonths: number | null;
+  currency: string | null;
+  probability: number | null;
+  expectedCloseDate: string | null;
+  nextAction: string | null;
+  nextActionDue: string | null;
+  decisionCriteria: string | null;
+  needs: string | null;
+  buyingProcess: Array<{ step: string; done?: boolean; owner?: string; due?: string }>;
+  quoteId: string | null;
+  quoteReference: string | null;
+  contractDocumentId: string | null;
+  stageEnteredAt: string;
+  stageAgeDays: number;
+  lastActivityAt: string | null;
+  rowVersion: number;
+  archived: boolean;
+};
+
+/** The opportunity's H27 commercial context in one read (money redacted by privilege). */
+export async function getOpportunityCommercial(
+  ctx: Ctx,
+  archetype: RoleArchetype,
+  id: string,
+): Promise<OpportunityCommercial | null> {
+  assertCan(archetype, "opportunities.view");
+  const rows = (await withCtx(ctx, (tx) =>
+    tx.execute(sql`
+      select o.id::text as id, o.name, o.customer_id::text as customer_id, c.name as customer_name,
+             o.owner_user_id::text as owner_user_id, u.full_name as owner_name, o.stage_key, o.status,
+             o.pipeline_id::text as pipeline_id, o.forecast_category, o.kind, o.amount_kind,
+             o.estimated_value_minor, o.recurring_minor, o.recurrence_months, o.currency, o.probability,
+             o.expected_close_date::text as expected_close_date, o.next_action, o.next_action_due::text as next_action_due,
+             o.decision_criteria, o.needs, o.buying_process, o.quote_id::text as quote_id, q.reference as quote_reference,
+             o.contract_document_id::text as contract_document_id, o.stage_entered_at::text as stage_entered_at,
+             greatest(0, extract(day from now() - o.stage_entered_at))::int as stage_age_days,
+             o.last_activity_at::text as last_activity_at, o.row_version, o.archived
+      from public.opportunity o
+      left join public.customer c on c.id = o.customer_id
+      left join public.user_profile u on u.id = o.owner_user_id
+      left join public.quote q on q.id = o.quote_id
+      where o.id = ${id} and o.org_id = ${ctx.orgId}
+    `),
+  )) as unknown as Array<Record<string, unknown>>;
+  const r = rows[0];
+  if (!r) return null;
+  const money = (v: unknown) => (ctx.pricePrivileged && v !== null ? Number(v) : null);
+  return {
+    id: String(r.id),
+    name: String(r.name),
+    customerId: (r.customer_id as string | null) ?? null,
+    customerName: (r.customer_name as string | null) ?? null,
+    ownerUserId: (r.owner_user_id as string | null) ?? null,
+    ownerName: (r.owner_name as string | null) ?? null,
+    stageKey: String(r.stage_key),
+    status: r.status as OpportunityCommercial["status"],
+    pipelineId: (r.pipeline_id as string | null) ?? null,
+    forecastCategory: r.forecast_category as OpportunityCommercial["forecastCategory"],
+    kind: r.kind as OpportunityCommercial["kind"],
+    amountKind: r.amount_kind as OpportunityCommercial["amountKind"],
+    estimatedValueMinor: money(r.estimated_value_minor),
+    recurringMinor: money(r.recurring_minor),
+    recurrenceMonths: r.recurrence_months === null ? null : Number(r.recurrence_months),
+    currency: (r.currency as string | null) ?? null,
+    probability: r.probability === null ? null : Number(r.probability),
+    expectedCloseDate: (r.expected_close_date as string | null) ?? null,
+    nextAction: (r.next_action as string | null) ?? null,
+    nextActionDue: (r.next_action_due as string | null) ?? null,
+    decisionCriteria: (r.decision_criteria as string | null) ?? null,
+    needs: (r.needs as string | null) ?? null,
+    buyingProcess: Array.isArray(r.buying_process)
+      ? (r.buying_process as OpportunityCommercial["buyingProcess"])
+      : [],
+    quoteId: (r.quote_id as string | null) ?? null,
+    quoteReference: (r.quote_reference as string | null) ?? null,
+    contractDocumentId: (r.contract_document_id as string | null) ?? null,
+    stageEnteredAt: String(r.stage_entered_at),
+    stageAgeDays: Number(r.stage_age_days),
+    lastActivityAt: (r.last_activity_at as string | null) ?? null,
+    rowVersion: Number(r.row_version),
+    archived: Boolean(r.archived),
+  };
 }

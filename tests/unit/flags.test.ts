@@ -16,6 +16,7 @@ import {
   financeSurfacesEnabled,
   managementStudioEnabled,
   documentStudioEnabled,
+  revenueStudioEnabled,
 } from "@/platform/flags";
 
 /** H26 — the Document Studio gate obeys exactly the same law. */
@@ -41,6 +42,32 @@ describe("the document studio release gate", () => {
   it("is on for exactly one value", () => {
     process.env.FEATURE_DOCUMENT_STUDIO = "1";
     expect(documentStudioEnabled()).toBe(true);
+  });
+});
+
+/** H27 — the Revenue Growth Studio gate obeys exactly the same law. */
+describe("the revenue studio release gate", () => {
+  const orig = process.env.FEATURE_REVENUE_STUDIO;
+  afterEach(() => {
+    if (orig === undefined) delete process.env.FEATURE_REVENUE_STUDIO;
+    else process.env.FEATURE_REVENUE_STUDIO = orig;
+  });
+
+  it("is off when nothing is set", () => {
+    delete process.env.FEATURE_REVENUE_STUDIO;
+    expect(revenueStudioEnabled()).toBe(false);
+  });
+
+  it("is off for every near-miss spelling", () => {
+    for (const value of ["", "0", "false", "true", "yes", "on", "1 ", " 1", "TRUE"]) {
+      process.env.FEATURE_REVENUE_STUDIO = value;
+      expect(revenueStudioEnabled(), `"${value}" turned the surfaces on`).toBe(false);
+    }
+  });
+
+  it("is on for exactly one value", () => {
+    process.env.FEATURE_REVENUE_STUDIO = "1";
+    expect(revenueStudioEnabled()).toBe(true);
   });
 });
 

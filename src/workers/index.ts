@@ -9,6 +9,8 @@ export { demoHeartbeat } from "./functions/demo-heartbeat";
 export { approvalStuckEvaluator, sweepStuckApprovals } from "./functions/approval-stuck";
 // H26H: document obligation and expiry reminders (daily).
 export { docObligationReminders, sweepDocumentReminders } from "./functions/doc-reminders";
+// H27: daily CRM automation sweep (idempotent per subject and occurrence).
+export { crmAutomationSweep, sweepCrmAutomations } from "./functions/crm-automations";
 export { lpoPdfRenderer, buildLpoForPo } from "./functions/lpo-pdf";
 // U2 branding: the quote print template's render seam (mirrors lpo-pdf).
 export { quotePdfRenderer, buildQuoteForAccept } from "./functions/quote-pdf";
@@ -47,6 +49,7 @@ import { outboxRelay, outboxRetention } from "./functions/outbox-relay";
 import { demoHeartbeat } from "./functions/demo-heartbeat";
 import { approvalStuckEvaluator } from "./functions/approval-stuck";
 import { docObligationReminders } from "./functions/doc-reminders";
+import { crmAutomationSweep } from "./functions/crm-automations";
 import { lpoPdfRenderer } from "./functions/lpo-pdf";
 import { quotePdfRenderer } from "./functions/quote-pdf";
 import {
@@ -95,4 +98,5 @@ export const workerFunctions = [
   subscriptionLifecycleCron,
   retentionPruneCron,
   docObligationReminders,
+  crmAutomationSweep,
 ];
