@@ -120,7 +120,7 @@ export default async function RegistersPage({
                 {kind === "risk" ? (
                   <th className="px-3 py-2 text-end font-medium">{t("studio.registers.score")}</th>
                 ) : null}
-                <th className="px-3 py-2 text-start font-medium">{t("studio.field.due_date")}</th>
+                <th className="px-3 py-2 text-start font-medium">{t("studio.field.due")}</th>
               </tr>
             </thead>
             <tbody>

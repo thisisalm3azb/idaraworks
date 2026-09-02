@@ -58,3 +58,4 @@ sim-manifest*
 sim-screenshots/
 .sim-secrets/
 .build-*.log
+.h25-shots/

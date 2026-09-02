@@ -51,6 +51,8 @@ ADR-1..12 (`docs/H25-TRUTH-MAP.md`) plus ADR-13..18 added while building: Realti
 
 1. CI green on `verify/h25` at commit: PENDING
 2. Pre-flight on production: **CLEAR** (2026-09-02; baseline orgs 39, tasks 0, deps 0, employees 37, approvals 13)
+   - Production health before deploy: HEALTHY (106 migrations applied, 7 pending = 0107–0113, 197 public tables, 0 without RLS, no unexpected DELETE grants, 0 new orphan identities/sessions); `/api/health` reports commit `ea270e6` (H24 live).
+   - `migrate-prod.ts --dry-run` lists exactly 0107–0113 as pending; `main` (ea270e6) fast-forwards to `verify/h25` (15 commits), so the deployed hash will equal the tested hash.
 3. Migrations 0107–0113 applied to production via `migrate-prod.ts`: PENDING
 4. Merge to `main`, Vercel build, deployed hash == tested hash: PENDING
 5. `FEATURE_MANAGEMENT_STUDIO` absent → `/o/<org>/studio` not found (smoke `--surfaces` off): PENDING

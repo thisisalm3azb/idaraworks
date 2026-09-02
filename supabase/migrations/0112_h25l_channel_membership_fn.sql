@@ -26,19 +26,24 @@ $$;
 revoke all on function app.studio_channel_allowed(text) from public;
 grant execute on function app.studio_channel_allowed(text) to authenticated;
 
-drop policy if exists studio_channel_receive on realtime.messages;
-drop policy if exists studio_channel_send on realtime.messages;
-
-create policy studio_channel_receive on realtime.messages
+-- Policies only where realtime.messages exists (see 0111); the predicate above
+-- is always created so the application code can rely on it.
+do $$
+begin
+  if to_regclass('realtime.messages') is not null then
+    execute $p$drop policy if exists studio_channel_receive on realtime.messages$p$;
+    execute $p$drop policy if exists studio_channel_send on realtime.messages$p$;
+    execute $p$create policy studio_channel_receive on realtime.messages
   for select to authenticated
   using (
     realtime.messages.extension in ('broadcast', 'presence')
     and app.studio_channel_allowed(realtime.topic())
-  );
-
-create policy studio_channel_send on realtime.messages
+  )$p$;
+    execute $p$create policy studio_channel_send on realtime.messages
   for insert to authenticated
   with check (
     realtime.messages.extension in ('broadcast', 'presence')
     and app.studio_channel_allowed(realtime.topic())
-  );
+  )$p$;
+  end if;
+end $$;

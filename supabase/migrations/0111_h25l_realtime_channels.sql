@@ -13,7 +13,12 @@
 -- check, because the `authenticated` role has no grant on public.membership
 -- and this direct subquery fails at subscribe time. Kept as applied.
 
-create policy studio_channel_receive on realtime.messages
+-- The realtime schema is provisioned by Supabase; a bare local stack (CI) may not
+-- carry realtime.messages, so the policies are created only where it exists.
+do $$
+begin
+  if to_regclass('realtime.messages') is not null then
+    execute $p$create policy studio_channel_receive on realtime.messages
   for select to authenticated
   using (
     realtime.topic() like 'studio:%'
@@ -23,9 +28,8 @@ create policy studio_channel_receive on realtime.messages
       where m.user_id = auth.uid()
         and m.org_id::text = split_part(realtime.topic(), ':', 2)
     )
-  );
-
-create policy studio_channel_send on realtime.messages
+  )$p$;
+    execute $p$create policy studio_channel_send on realtime.messages
   for insert to authenticated
   with check (
     realtime.topic() like 'studio:%'
@@ -35,4 +39,6 @@ create policy studio_channel_send on realtime.messages
       where m.user_id = auth.uid()
         and m.org_id::text = split_part(realtime.topic(), ':', 2)
     )
-  );
+  )$p$;
+  end if;
+end $$;

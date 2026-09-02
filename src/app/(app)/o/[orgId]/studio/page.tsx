@@ -88,7 +88,7 @@ export default async function StudioPage({
               <input name="name" required maxLength={200} className={input} />
             </label>
             <label className="text-xs text-ink-muted">
-              {t("studio.field.start_date")}
+              {t("studio.field.start")}
               <input name="startDate" type="date" className={input} dir="ltr" />
             </label>
             <div className="sm:col-span-3">

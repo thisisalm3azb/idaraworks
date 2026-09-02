@@ -91,7 +91,13 @@ describe("private plan channels", () => {
     expect(await allowed(member, "")).toBe(false);
   });
 
-  it("both policies exist on realtime.messages and delegate to the predicate", async () => {
+  it("both policies exist on realtime.messages and delegate to the predicate", async ({ skip }) => {
+    const present =
+      (await owner`select to_regclass('realtime.messages') as t`) as unknown as Array<{
+        t: string | null;
+      }>;
+    if (present[0]?.t === null)
+      skip("realtime.messages is not provisioned on this stack (CI local)");
     const rows = (await owner`
       select policyname, cmd, roles::text as roles, qual, with_check
       from pg_policies where schemaname = 'realtime' and tablename = 'messages'
