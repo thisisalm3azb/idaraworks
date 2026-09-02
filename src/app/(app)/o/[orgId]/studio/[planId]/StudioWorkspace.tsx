@@ -9,13 +9,17 @@
  * page re-resolves (router.refresh) so every open projection agrees. No view
  * keeps its own copy of status, dates, assignments or progress.
  */
-import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import type {
   CapacityReport,
   EffectiveEdge,
   EffectiveNode,
+  Finding,
+  KpiValue,
   LevelingProposal,
+  Narrative,
+  SavedView,
   ScenarioComparison,
   ScenarioRow,
 } from "@/modules/studio/service";
@@ -36,6 +40,10 @@ import { WorkloadView } from "./WorkloadView";
 import { RiskMatrixView } from "./RiskMatrixView";
 import { PresenceStrip, usePlanPresence } from "./PresenceLayer";
 import { ThreeView } from "./ThreeView";
+import { KpiView } from "./KpiView";
+import { CommandPalette, type Command } from "./CommandPalette";
+import { SavedViewsBar } from "./SavedViewsBar";
+import { ReviewPanel } from "./ReviewPanel";
 
 export type WorkspacePayload = {
   orgId: string;
@@ -64,6 +72,12 @@ export type WorkspacePayload = {
   canAllocate: boolean;
   /** H25L — who is looking (presence key + display name; nothing else). */
   viewer: { id: string; name: string };
+  /** H25C/J — saved ways of looking, the KPI catalogue's live values, an element to centre on. */
+  views: SavedView[];
+  kpis: KpiValue[];
+  /** H25M — deterministic review findings and their basis. */
+  review: { findings: Finding[]; basis: string[] };
+  initialFocus: string | null;
   canManage: boolean;
   canSchedule: boolean;
   canManageScenario: boolean;
@@ -132,12 +146,49 @@ export type StudioDict = {
   worldHint: string;
   worldFallback: string;
   worldLoading: string;
+  search: string;
+  commands: string;
+  nothingFound: string;
+  savedViews: string;
+  saveView: string;
+  viewName: string;
+  shareView: string;
+  retireView: string;
+  focus: string;
+  exitFocus: string;
+  undo: string;
+  nothingToUndo: string;
+  filters: string;
+  clearFilters: string;
+  criticalOnly: string;
+  linkExisting: string;
+  duplicate: string;
+  kpiName: string;
+  kpiValue: string;
+  kpiBasis: string;
+  kpiInsufficient: string;
+  kpiNames: Record<string, string>;
+  paletteHint: string;
+  review: string;
+  reviewClean: string;
+  reviewLaw: string;
+  narrative: string;
+  narrativeUnavailable: string;
+  severities: Record<string, string>;
   nodeTypes: Record<string, string>;
   statuses: Record<string, string>;
   edgeTypes: Record<string, string>;
   /** Flat scenario copy: title, live, new, name, branch_hint, status_<s>, … */
   scenario: Record<string, string>;
 };
+
+export type WorkspaceFilters = {
+  search: string;
+  types: string[];
+  statuses: string[];
+  criticalOnly: boolean;
+};
+const NO_FILTERS: WorkspaceFilters = { search: "", types: [], statuses: [], criticalOnly: false };
 
 export type StudioActions = {
   addNode: (input: Record<string, unknown>) => Promise<ActionResult<{ id: string }>>;
@@ -193,6 +244,19 @@ export type StudioActions = {
   }) => Promise<
     ActionResult<{ scenarioId: string; proposals: LevelingProposal[]; unresolved: number }>
   >;
+  linkNode: (input: {
+    nodeId: string;
+    recordType: string;
+    recordId: string;
+  }) => Promise<ActionResult<void>>;
+  duplicateNode: (nodeId: string) => Promise<ActionResult<{ id: string }>>;
+  saveView: (input: Record<string, unknown>) => Promise<ActionResult<{ id: string }>>;
+  updateView: (input: Record<string, unknown>) => Promise<ActionResult<void>>;
+  reviewNarrative: (input: {
+    planId: string;
+    scenarioId?: string;
+    locale?: "en" | "ar";
+  }) => Promise<ActionResult<Narrative>>;
 };
 
 const VIEWS = [
@@ -205,6 +269,7 @@ const VIEWS = [
   "workload",
   "risk",
   "world",
+  "kpis",
   "table",
 ] as const;
 
@@ -221,7 +286,7 @@ export function StudioWorkspace({
   const pathname = usePathname();
   // The aside shows the inspector for a selection, otherwise the scenario
   // laboratory; a person can flip between them.
-  const [asideTab, setAsideTab] = useState<"inspector" | "scenarios">(
+  const [asideTab, setAsideTab] = useState<"inspector" | "scenarios" | "review">(
     payload.scenario ? "scenarios" : "inspector",
   );
   const openScenario = useCallback(
@@ -233,7 +298,13 @@ export function StudioWorkspace({
   const [view, setView] = useState<string>(
     (VIEWS as readonly string[]).includes(payload.initialView) ? payload.initialView : "canvas",
   );
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(payload.initialFocus);
+  // H25C — presentation state: filters, focus mode, the palette, where to centre.
+  const [filters, setFilters] = useState<WorkspaceFilters>(NO_FILTERS);
+  const [focus, setFocus] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [focusNodeId, setFocusNodeId] = useState<string | null>(payload.initialFocus);
+  const undoStack = useRef<Array<() => Promise<ActionResult<unknown>>>>([]);
   const [notice, setNotice] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
   const [, startTransition] = useTransition();
 
@@ -255,6 +326,91 @@ export function StudioWorkspace({
     view,
     selectedId,
   });
+  const filtersActive =
+    filters.search.trim() !== "" ||
+    filters.types.length > 0 ||
+    filters.statuses.length > 0 ||
+    filters.criticalOnly;
+  /** The same resolution, narrowed for the eye: no view ever gets a different truth. */
+  const visible = useMemo<WorkspacePayload>(() => {
+    if (!filtersActive) return payload;
+    const needle = filters.search.trim().toLowerCase();
+    const keep = new Set(
+      payload.nodes
+        .filter(
+          (n) =>
+            (needle === "" || n.title.toLowerCase().includes(needle)) &&
+            (filters.types.length === 0 || filters.types.includes(n.nodeType)) &&
+            (filters.statuses.length === 0 || filters.statuses.includes(n.statusCategory)) &&
+            (!filters.criticalOnly || criticalIds.has(n.id)),
+        )
+        .map((n) => n.id),
+    );
+    return {
+      ...payload,
+      nodes: payload.nodes.filter((n) => keep.has(n.id)),
+      edges: payload.edges.filter((e) => keep.has(e.sourceNodeId) && keep.has(e.targetNodeId)),
+    };
+  }, [payload, filters, filtersActive, criticalIds]);
+
+  /** Actions that remember how to undo themselves (server-authoritative: undo is another action). */
+  const tracked = useMemo<StudioActions>(() => {
+    const before = (id: string) => payload.nodes.find((n) => n.id === id);
+    return {
+      ...actions,
+      moveNodes: async (input) => {
+        const moves = (input.moves as Array<{ nodeId: string; x: number; y: number }>) ?? [];
+        const prev = moves
+          .map((m) => before(m.nodeId))
+          .filter((n): n is EffectiveNode => !!n)
+          .map((n) => ({ nodeId: n.id, x: n.x, y: n.y }));
+        const res = await actions.moveNodes(input);
+        if (res.ok && prev.length > 0) {
+          undoStack.current.push(() => actions.moveNodes({ planId: payload.planId, moves: prev }));
+        }
+        return res;
+      },
+      updateNode: async (input) => {
+        const id = input.nodeId as string;
+        const n = before(id);
+        const fields = Object.keys(input).filter(
+          (k) => !["nodeId", "expectedRowVersion", "scenarioId"].includes(k),
+        );
+        const res = await actions.updateNode(input);
+        if (res.ok && n && fields.length > 0) {
+          const prop: Record<string, keyof EffectiveNode> = {
+            title: "title",
+            description: "description",
+            startDate: "startDate",
+            dueDate: "dueDate",
+            durationDays: "durationDays",
+            priority: "priority",
+            estimateOptimisticDays: "estimateOptimisticDays",
+            estimatePessimisticDays: "estimatePessimisticDays",
+          };
+          const inverse: Record<string, unknown> = { nodeId: id };
+          for (const f of fields) if (prop[f]) inverse[f] = n[prop[f]];
+          if (input.scenarioId) inverse.scenarioId = input.scenarioId;
+          if (Object.keys(inverse).length > 1) {
+            undoStack.current.push(() => actions.updateNode(inverse));
+          }
+        }
+        return res;
+      },
+      setNodeStatus: async (input) => {
+        const id = input.nodeId as string;
+        const n = before(id);
+        const res = await actions.setNodeStatus(input);
+        if (res.ok && n && n.statusCategory !== "blocked") {
+          undoStack.current.push(() =>
+            actions.setNodeStatus({ nodeId: id, statusCategory: n.statusCategory }),
+          );
+        }
+        return res;
+      },
+    };
+  }, [actions, payload]);
+
   const remoteSelections = useMemo(() => {
     const m: Record<string, string[]> = {};
     for (const p of presence.peers) {
@@ -292,9 +448,103 @@ export function StudioWorkspace({
     [dict.saved, dict.failed, dict.conflict, router, presence],
   );
 
+  const undo = useCallback(() => {
+    const inverse = undoStack.current.pop();
+    if (!inverse) {
+      setNotice({ tone: "error", text: dict.nothingToUndo });
+      return;
+    }
+    startTransition(async () => {
+      settle(await inverse(), dict.undo);
+    });
+  }, [dict.nothingToUndo, dict.undo, settle]);
+
+  const applySavedView = useCallback(
+    (viewId: string) => {
+      const v = payload.views.find((x) => x.id === viewId);
+      if (!v) return;
+      const cfg = v.config;
+      if (cfg.view && (VIEWS as readonly string[]).includes(cfg.view)) setView(cfg.view);
+      setFilters({
+        search: cfg.filters?.search ?? "",
+        types: cfg.filters?.types ?? [],
+        statuses: cfg.filters?.statuses ?? [],
+        criticalOnly: cfg.filters?.criticalOnly ?? false,
+      });
+      const target = cfg.scenarioId ?? null;
+      if (target !== payload.scenarioId) openScenario(target);
+    },
+    [payload.views, payload.scenarioId, openScenario],
+  );
+
+  const commands = useMemo<Command[]>(
+    () => [
+      ...VIEWS.map((v) => ({
+        id: `view:${v}`,
+        label: dict.views[v] ?? v,
+        hint: dict.commands,
+        run: () => setView(v),
+      })),
+      { id: "focus", label: focus ? dict.exitFocus : dict.focus, run: () => setFocus((f) => !f) },
+      { id: "undo", label: dict.undo, run: undo },
+      { id: "clear", label: dict.clearFilters, run: () => setFilters(NO_FILTERS) },
+      {
+        id: "critical",
+        label: dict.criticalOnly,
+        run: () => setFilters((f) => ({ ...f, criticalOnly: !f.criticalOnly })),
+      },
+      { id: "scenarios", label: dict.scenario.title ?? "", run: () => setAsideTab("scenarios") },
+    ],
+    [dict, focus, undo],
+  );
+
+  // Keyboard: Ctrl/Cmd+K palette, Ctrl/Cmd+Z undo (outside inputs), Escape leaves palette/focus.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      const typing =
+        !!t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable);
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setPaletteOpen((o) => !o);
+      } else if (
+        (e.ctrlKey || e.metaKey) &&
+        !e.shiftKey &&
+        e.key.toLowerCase() === "z" &&
+        !typing
+      ) {
+        e.preventDefault();
+        undo();
+      } else if (e.key === "Escape") {
+        if (paletteOpen) setPaletteOpen(false);
+        else if (focus) setFocus(false);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [undo, paletteOpen, focus]);
+
+  const pickNode = useCallback((id: string) => {
+    setSelectedId(id);
+    setFocusNodeId(id);
+    setView("canvas");
+  }, []);
+
   return (
-    <div className="flex h-[calc(100vh-7rem)] min-h-[32rem] flex-col gap-2">
-      <header className="flex flex-wrap items-center justify-between gap-2">
+    <div
+      className={`flex flex-col gap-2 ${focus ? "fixed inset-0 z-40 bg-page p-2" : "h-[calc(100vh-7rem)] min-h-[32rem]"}`}
+    >
+      <CommandPalette
+        open={paletteOpen}
+        onClose={() => setPaletteOpen(false)}
+        payload={payload}
+        dict={dict}
+        commands={commands}
+        onPick={pickNode}
+      />
+      <header
+        className={`flex flex-wrap items-center justify-between gap-2 ${focus ? "hidden" : ""}`}
+      >
         <div className="min-w-0">
           <h1 className="truncate text-lg font-semibold text-ink">{payload.planName}</h1>
           <p className="text-xs text-ink-muted" dir="ltr">
@@ -311,6 +561,41 @@ export function StudioWorkspace({
           ) : null}
         </div>
         <PresenceStrip peers={presence.peers} label={dict.peers} />
+        <div className="flex flex-wrap items-center gap-1">
+          <button
+            type="button"
+            onClick={() => setPaletteOpen(true)}
+            className="min-h-9 rounded-md border border-line px-2 text-xs text-ink"
+            title={dict.paletteHint}
+          >
+            {dict.search}
+          </button>
+          <button
+            type="button"
+            onClick={() => setFocus(true)}
+            className="min-h-9 rounded-md border border-line px-2 text-xs text-ink"
+          >
+            {dict.focus}
+          </button>
+          {filtersActive ? (
+            <button
+              type="button"
+              onClick={() => setFilters(NO_FILTERS)}
+              className="min-h-9 rounded-md bg-warning-soft px-2 text-xs text-warning"
+            >
+              {dict.clearFilters} ({visible.nodes.length}/{payload.nodes.length})
+            </button>
+          ) : null}
+          <SavedViewsBar
+            payload={payload}
+            dict={dict}
+            actions={actions}
+            view={view}
+            filters={filters}
+            onApply={applySavedView}
+            settle={settle}
+          />
+        </div>
         <nav
           className="flex max-w-full gap-1 overflow-x-auto rounded-full border border-line bg-card p-1"
           aria-label="views"
@@ -331,6 +616,16 @@ export function StudioWorkspace({
         </nav>
       </header>
 
+      {focus ? (
+        <button
+          type="button"
+          onClick={() => setFocus(false)}
+          className="fixed end-3 top-3 z-50 min-h-9 rounded-md border border-line bg-card px-3 text-xs text-ink shadow"
+        >
+          {dict.exitFocus}
+        </button>
+      ) : null}
+
       {notice ? (
         <p
           role="status"
@@ -346,20 +641,21 @@ export function StudioWorkspace({
         <div className="min-w-0 flex-1 overflow-hidden rounded-lg border border-line bg-card">
           {view === "canvas" ? (
             <StudioCanvas
-              payload={payload}
+              payload={visible}
               dict={dict}
-              actions={actions}
+              actions={tracked}
               criticalIds={criticalIds}
               remoteSelections={remoteSelections}
+              focusNodeId={focusNodeId}
               selectedId={selectedId}
               onSelect={setSelectedId}
               settle={settle}
             />
           ) : view === "board" ? (
             <BoardView
-              payload={payload}
+              payload={visible}
               dict={dict}
-              actions={actions}
+              actions={tracked}
               criticalIds={criticalIds}
               selectedId={selectedId}
               onSelect={setSelectedId}
@@ -367,9 +663,9 @@ export function StudioWorkspace({
             />
           ) : view === "gantt" ? (
             <GanttView
-              payload={payload}
+              payload={visible}
               dict={dict}
-              actions={actions}
+              actions={tracked}
               criticalIds={criticalIds}
               selectedId={selectedId}
               onSelect={setSelectedId}
@@ -377,7 +673,7 @@ export function StudioWorkspace({
             />
           ) : view === "network" ? (
             <NetworkView
-              payload={payload}
+              payload={visible}
               dict={dict}
               criticalIds={criticalIds}
               selectedId={selectedId}
@@ -385,7 +681,7 @@ export function StudioWorkspace({
             />
           ) : view === "roadmap" ? (
             <RoadmapView
-              payload={payload}
+              payload={visible}
               dict={dict}
               criticalIds={criticalIds}
               selectedId={selectedId}
@@ -393,7 +689,7 @@ export function StudioWorkspace({
             />
           ) : view === "calendar" ? (
             <CalendarView
-              payload={payload}
+              payload={visible}
               dict={dict}
               criticalIds={criticalIds}
               selectedId={selectedId}
@@ -411,22 +707,24 @@ export function StudioWorkspace({
             />
           ) : view === "risk" ? (
             <RiskMatrixView
-              payload={payload}
+              payload={visible}
               dict={dict}
               selectedId={selectedId}
               onSelect={setSelectedId}
             />
           ) : view === "world" ? (
             <ThreeView
-              payload={payload}
+              payload={visible}
               dict={dict}
               criticalIds={criticalIds}
               selectedId={selectedId}
               onSelect={setSelectedId}
             />
+          ) : view === "kpis" ? (
+            <KpiView payload={payload} dict={dict} />
           ) : (
             <TableView
-              payload={payload}
+              payload={visible}
               dict={dict}
               criticalIds={criticalIds}
               selectedId={selectedId}
@@ -434,9 +732,11 @@ export function StudioWorkspace({
             />
           )}
         </div>
-        <aside className="hidden w-80 shrink-0 overflow-y-auto rounded-lg border border-line bg-card p-3 lg:block">
+        <aside
+          className={`w-80 shrink-0 overflow-y-auto rounded-lg border border-line bg-card p-3 ${focus ? "hidden" : "hidden lg:block"}`}
+        >
           <div className="mb-3 flex gap-1 rounded-full border border-line bg-sunken p-0.5 text-xs">
-            {(["inspector", "scenarios"] as const).map((t) => (
+            {(["inspector", "scenarios", "review"] as const).map((t) => (
               <button
                 key={t}
                 type="button"
@@ -446,7 +746,11 @@ export function StudioWorkspace({
                   asideTab === t ? "bg-card font-medium text-ink shadow-sm" : "text-ink-muted"
                 }`}
               >
-                {t === "inspector" ? dict.inspector : dict.scenario.title}
+                {t === "inspector"
+                  ? dict.inspector
+                  : t === "scenarios"
+                    ? dict.scenario.title
+                    : `${dict.review}${payload.review.findings.length ? ` (${payload.review.findings.length})` : ""}`}
               </button>
             ))}
           </div>
@@ -455,17 +759,46 @@ export function StudioWorkspace({
               node={selected}
               payload={payload}
               dict={dict}
-              actions={actions}
+              actions={tracked}
               settle={settle}
               onClose={() => setSelectedId(null)}
             />
-          ) : (
+          ) : asideTab === "scenarios" ? (
             <ScenarioPanel
               payload={payload}
               dict={dict}
               actions={actions}
               settle={settle}
               onOpen={openScenario}
+            />
+          ) : (
+            <ReviewPanel
+              findings={payload.review.findings}
+              basis={payload.review.basis}
+              dict={dict}
+              onOpenView={(v) => setView(v)}
+              onSelect={pickNode}
+              onOpenScenarios={() => setAsideTab("scenarios")}
+              onLevel={() => setView("workload")}
+              onSimulate={() => setAsideTab("scenarios")}
+              onCaptureBaseline={() =>
+                startTransition(async () => {
+                  settle(
+                    await actions.captureBaseline({
+                      planId: payload.planId,
+                      name: `${dict.baseline} ${new Date().toISOString().slice(0, 10)}`,
+                    }),
+                  );
+                })
+              }
+              onNarrative={async () => {
+                const res = await actions.reviewNarrative({
+                  planId: payload.planId,
+                  ...(payload.scenarioId ? { scenarioId: payload.scenarioId } : {}),
+                  locale: payload.locale === "ar" ? "ar" : "en",
+                });
+                return res.ok ? res.data : { available: false, reason: res.error };
+              }}
             />
           )}
         </aside>

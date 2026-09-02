@@ -1006,3 +1006,109 @@ export async function setNodeStatus(
   });
   return { routed: "draft" };
 }
+
+// ── H25C — link an existing record; duplicate a draft ────────────────────────
+
+/** Which shapes may carry which record kinds (a task shape cannot "be" a customer). */
+const LINK_COMPAT: Record<string, readonly string[]> = {
+  task: ["task", "milestone", "deliverable", "action"],
+  job: ["project", "phase", "initiative", "program"],
+  employee: ["person"],
+  team: ["team"],
+  customer: ["customer"],
+  supplier: ["supplier"],
+  item: ["document", "custom"],
+  warehouse: ["warehouse"],
+  quote: ["money", "document"],
+  invoice: ["money", "document"],
+  opportunity: ["opportunity"],
+  issue: ["issue"],
+  week_plan: ["phase"],
+  budget: ["budget_allocation", "money"],
+};
+
+export const LinkNodeInput = z.object({
+  nodeId: z.string().uuid(),
+  recordType: z.enum(
+    Object.keys(LINKABLE_RECORDS) as [LinkableRecordType, ...LinkableRecordType[]],
+  ),
+  recordId: z.string().uuid(),
+});
+
+/**
+ * Turn a draft element into a live projection of an existing record (one
+ * direction only, through the definer function: link once, never re-point).
+ * The record must be one the person can view; otherwise the studio would be a
+ * way around the record's own permissions.
+ */
+export async function linkNode(ctx: Ctx, archetype: RoleArchetype, raw: unknown): Promise<void> {
+  assertCan(archetype, "studio.manage");
+  const input = LinkNodeInput.parse(raw);
+  const spec = LINKABLE_RECORDS[input.recordType];
+  assertCan(archetype, spec.viewAction);
+  await command(
+    ctx,
+    {
+      audit: {
+        action: "studio.node.link",
+        entityType: "studio_node",
+        entityId: input.nodeId,
+        summary: `Linked element to ${input.recordType}`,
+      },
+    },
+    async (tx) => {
+      const node = await nodeRowIn(tx, ctx, input.nodeId);
+      if (node.archived_at) throw new StudioError("element is archived", "invalid_state");
+      if (node.record_type) throw new StudioError("element is already linked", "invalid_state");
+      const allowed = LINK_COMPAT[input.recordType] ?? [];
+      if (!allowed.includes(node.node_type)) {
+        throw new StudioError("this shape cannot carry that kind of record", "invalid_link");
+      }
+      await tx.execute(
+        sql`select app.link_studio_node(${input.nodeId}, ${input.recordType}, ${input.recordId})`,
+      );
+    },
+  );
+}
+
+/** A copy of a DRAFT element (never of a link: one record, one projection). */
+export async function duplicateNode(
+  ctx: Ctx,
+  archetype: RoleArchetype,
+  nodeId: string,
+): Promise<{ id: string }> {
+  assertCan(archetype, "studio.manage");
+  return command(
+    ctx,
+    {
+      audit: (r: { id: string }) => ({
+        action: "studio.node.duplicate",
+        entityType: "studio_node",
+        entityId: r.id,
+        summary: "Duplicated element",
+      }),
+    },
+    async (tx) => {
+      const rows = (await tx.execute(sql`
+        insert into public.studio_node
+          (org_id, plan_id, node_type, title, description, status, priority,
+           start_date, due_date, duration_days, progress_pct, owner_user_id,
+           assignee_employee_id, amount_minor, currency, data, x, y, w, h, z,
+           parent_node_id, layer_key, style, constraint_kind, constraint_date,
+           deadline_date, estimate_optimistic_days, estimate_pessimistic_days, created_by)
+        select org_id, plan_id, node_type, coalesce(title, '') || ' (copy)', description, 'proposed',
+               priority, start_date, due_date, duration_days, null, owner_user_id,
+               assignee_employee_id, amount_minor, currency, data, x + 40, y + 40, w, h, z,
+               parent_node_id, layer_key, style, constraint_kind, constraint_date,
+               deadline_date, estimate_optimistic_days, estimate_pessimistic_days, ${ctx.userId}
+        from public.studio_node
+        where org_id = ${ctx.orgId} and id = ${nodeId} and archived_at is null
+          and record_type is null
+        returning id::text as id
+      `)) as unknown as Array<{ id: string }>;
+      if (!rows[0])
+        throw new StudioError("only a draft element can be duplicated", "invalid_state");
+      return { id: rows[0].id };
+    },
+  );
+}

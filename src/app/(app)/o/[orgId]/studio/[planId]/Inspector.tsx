@@ -69,6 +69,9 @@ export function Inspector({
   const [jobId, setJobId] = useState("");
   const [taskCount, setTaskCount] = useState<number | null>(null);
   const [allocEmployee, setAllocEmployee] = useState("");
+  const [linkJob, setLinkJob] = useState("");
+  const [linkTasks, setLinkTasks] = useState<Array<{ id: string; title: string }>>([]);
+  const [linkTask, setLinkTask] = useState("");
   const [allocShare, setAllocShare] = useState("100");
   if (sig !== seededSig) {
     setSeededSig(sig);
@@ -420,6 +423,108 @@ export function Inspector({
               </button>
             </form>
           ) : null}
+        </div>
+      ) : null}
+
+      {canEdit &&
+      !isLinked &&
+      payload.jobs.length > 0 &&
+      [
+        "task",
+        "milestone",
+        "deliverable",
+        "action",
+        "project",
+        "phase",
+        "initiative",
+        "program",
+      ].includes(current.nodeType) ? (
+        <div className="rounded-md border border-line p-2">
+          <p className="text-xs font-semibold text-ink">{dict.linkExisting}</p>
+          <label className="mt-1 block text-xs text-ink-muted">
+            {dict.chooseJob}
+            <select
+              value={linkJob}
+              onChange={(e) => {
+                const id = e.target.value;
+                setLinkJob(id);
+                setLinkTask("");
+                setLinkTasks([]);
+                if (
+                  id &&
+                  ["task", "milestone", "deliverable", "action"].includes(current.nodeType)
+                ) {
+                  void actions.listJobTasks(id).then((res) => {
+                    if (res.ok) setLinkTasks(res.data.map((t) => ({ id: t.id, title: t.title })));
+                  });
+                }
+              }}
+              className={input}
+            >
+              <option value="">{dict.chooseJob}</option>
+              {payload.jobs.map((j) => (
+                <option key={j.id} value={j.id}>
+                  {j.reference} · {j.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          {["task", "milestone", "deliverable", "action"].includes(current.nodeType) ? (
+            <label className="mt-1 block text-xs text-ink-muted">
+              {dict.chooseTask}
+              <select
+                value={linkTask}
+                onChange={(e) => setLinkTask(e.target.value)}
+                disabled={linkTasks.length === 0}
+                className={input}
+              >
+                <option value="">{dict.chooseTask}</option>
+                {linkTasks.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.title}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
+          <div className="mt-2 flex gap-2">
+            <Button
+              type="button"
+              disabled={
+                pending ||
+                (["task", "milestone", "deliverable", "action"].includes(current.nodeType)
+                  ? !linkTask
+                  : !linkJob)
+              }
+              onClick={() =>
+                start(async () => {
+                  const isTask = ["task", "milestone", "deliverable", "action"].includes(
+                    current.nodeType,
+                  );
+                  const res = await actions.linkNode({
+                    nodeId: current.id,
+                    recordType: isTask ? "task" : "job",
+                    recordId: isTask ? linkTask : linkJob,
+                  });
+                  settle(res);
+                })
+              }
+            >
+              {dict.linkRecord}
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              disabled={pending}
+              onClick={() =>
+                start(async () => {
+                  settle(await actions.duplicateNode(current.id));
+                })
+              }
+            >
+              {dict.duplicate}
+            </Button>
+          </div>
         </div>
       ) : null}
 

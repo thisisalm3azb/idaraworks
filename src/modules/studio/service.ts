@@ -9,6 +9,11 @@ export * from "./schedule";
 export * from "./links";
 export * from "./scenarios";
 export * from "./capacity";
+export * from "./views";
+export * from "./registers";
+export * from "./kpis";
+export * from "./portfolio";
+export * from "./advisor";
 export type { SimulationResult, Percentiles } from "./engine/monte-carlo";
 export type {
   ScheduledTask,

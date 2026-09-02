@@ -9,6 +9,10 @@ import {
   listScenarios,
   compareScenario,
   capacityForPlan,
+  listViews,
+  computeKpis,
+  reviewPlan,
+  KPI_CATALOGUE,
   StudioError,
 } from "@/modules/studio/service";
 import { listTaskAllocations } from "@/modules/jobs/service";
@@ -34,6 +38,11 @@ import {
   allocateTaskAction,
   unallocateTaskAction,
   levelAction,
+  linkNodeAction,
+  duplicateNodeAction,
+  saveViewAction,
+  updateViewAction,
+  reviewNarrativeAction,
 } from "../actions";
 import { StudioWorkspace, type StudioDict, type WorkspacePayload } from "./StudioWorkspace";
 
@@ -47,7 +56,7 @@ export default async function PlanPage({
   searchParams,
 }: {
   params: Promise<{ orgId: string; planId: string }>;
-  searchParams: Promise<{ view?: string; scenario?: string }>;
+  searchParams: Promise<{ view?: string; scenario?: string; focus?: string }>;
 }) {
   if (!managementStudioEnabled()) notFound();
   const { orgId, planId } = await params;
@@ -103,6 +112,12 @@ export default async function PlanPage({
         .map((e) => ({ id: e.id, name: e.name, teamName: e.teamName }))
     : [];
 
+  const [views, kpis, review] = await Promise.all([
+    listViews(resolved.ctx, resolved.archetype, planId),
+    computeKpis(resolved.ctx, resolved.archetype, { planId, scenarioId: sp.scenario }),
+    reviewPlan(resolved.ctx, resolved.archetype, { planId, scenarioId: sp.scenario }),
+  ]);
+
   const payload: WorkspacePayload = {
     orgId,
     planId,
@@ -128,6 +143,10 @@ export default async function PlanPage({
     canAllocate:
       can(resolved.archetype, "tasks.manage") && can(resolved.archetype, "employees.view"),
     viewer: { id: resolved.ctx.userId, name: await getDisplayName(resolved.ctx) },
+    views,
+    kpis,
+    review,
+    initialFocus: sp.focus && /^[0-9a-f-]{36}$/.test(sp.focus) ? sp.focus : null,
     canManage: can(resolved.archetype, "studio.manage"),
     canSchedule: can(resolved.archetype, "studio.schedule"),
     canManageScenario: can(resolved.archetype, "scenario.manage"),
@@ -148,6 +167,7 @@ export default async function PlanPage({
       workload: t("studio.view.workload"),
       risk: t("studio.view.risk"),
       world: t("studio.view.world"),
+      kpis: t("studio.view.kpis"),
     },
     add: t("studio.add"),
     shapes: t("studio.shapes"),
@@ -211,6 +231,39 @@ export default async function PlanPage({
     worldHint: t("studio.world.hint"),
     worldFallback: t("studio.world.fallback"),
     worldLoading: t("studio.world.loading"),
+    search: t("studio.search"),
+    commands: t("studio.commands"),
+    nothingFound: t("studio.nothing_found"),
+    savedViews: t("studio.saved_views"),
+    saveView: t("studio.save_view"),
+    viewName: t("studio.view_name"),
+    shareView: t("studio.share_view"),
+    retireView: t("studio.retire_view"),
+    focus: t("studio.focus"),
+    exitFocus: t("studio.exit_focus"),
+    undo: t("studio.undo"),
+    nothingToUndo: t("studio.nothing_to_undo"),
+    filters: t("studio.filters"),
+    clearFilters: t("studio.clear_filters"),
+    criticalOnly: t("studio.critical_only"),
+    linkExisting: t("studio.link_existing"),
+    duplicate: t("studio.duplicate"),
+    kpiName: t("studio.kpi.name"),
+    kpiValue: t("studio.kpi.value"),
+    kpiBasis: t("studio.kpi.basis"),
+    kpiInsufficient: t("studio.kpi.insufficient"),
+    kpiNames: Object.fromEntries(KPI_CATALOGUE.map((k) => [k.key, t(`studio.kpi.${k.key}`)])),
+    paletteHint: t("studio.palette_hint"),
+    review: t("studio.review.title"),
+    reviewClean: t("studio.review.clean"),
+    reviewLaw: t("studio.review.law"),
+    narrative: t("studio.review.narrative"),
+    narrativeUnavailable: t("studio.review.unavailable"),
+    severities: {
+      high: t("studio.review.high"),
+      medium: t("studio.review.medium"),
+      low: t("studio.review.low"),
+    },
     scenario: Object.fromEntries(
       [
         "title",
@@ -340,6 +393,11 @@ export default async function PlanPage({
         allocateTask: allocateTaskAction.bind(null, orgId),
         unallocateTask: unallocateTaskAction.bind(null, orgId),
         level: levelAction.bind(null, orgId),
+        linkNode: linkNodeAction.bind(null, orgId),
+        duplicateNode: duplicateNodeAction.bind(null, orgId),
+        saveView: saveViewAction.bind(null, orgId),
+        updateView: updateViewAction.bind(null, orgId),
+        reviewNarrative: reviewNarrativeAction.bind(null, orgId),
       }}
     />
   );

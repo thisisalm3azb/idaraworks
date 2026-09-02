@@ -24,6 +24,12 @@ import {
   discardScenario,
   simulatePlan,
   levelIntoScenario,
+  linkNode,
+  duplicateNode,
+  saveView,
+  updateView,
+  draftReviewNarrative,
+  type Narrative,
   type SimulationResult,
   type LevelingProposal,
 } from "@/modules/studio/service";
@@ -259,4 +265,43 @@ export async function levelAction(
   ActionResult<{ scenarioId: string; proposals: LevelingProposal[]; unresolved: number }>
 > {
   return run(orgId, (r) => levelIntoScenario(r.ctx, r.archetype, input));
+}
+
+// ── H25C — links, duplicates, saved views ────────────────────────────────────
+
+export async function linkNodeAction(
+  orgId: string,
+  input: { nodeId: string; recordType: string; recordId: string },
+): Promise<ActionResult<void>> {
+  return run(orgId, (r) => linkNode(r.ctx, r.archetype, input));
+}
+
+export async function duplicateNodeAction(
+  orgId: string,
+  nodeId: string,
+): Promise<ActionResult<{ id: string }>> {
+  return run(orgId, (r) => duplicateNode(r.ctx, r.archetype, nodeId));
+}
+
+export async function saveViewAction(
+  orgId: string,
+  input: Record<string, unknown>,
+): Promise<ActionResult<{ id: string }>> {
+  return run(orgId, (r) => saveView(r.ctx, r.archetype, input));
+}
+
+export async function updateViewAction(
+  orgId: string,
+  input: Record<string, unknown>,
+): Promise<ActionResult<void>> {
+  return run(orgId, (r) => updateView(r.ctx, r.archetype, input));
+}
+
+// ── H25M — the assistant seam (fails closed; never acts) ─────────────────────
+
+export async function reviewNarrativeAction(
+  orgId: string,
+  input: { planId: string; scenarioId?: string; locale?: "en" | "ar" },
+): Promise<ActionResult<Narrative>> {
+  return run(orgId, (r) => draftReviewNarrative(r.ctx, r.archetype, input));
 }

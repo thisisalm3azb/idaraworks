@@ -1,0 +1,143 @@
+
+> idaraworks@0.1.0 build
+> next build
+
+▲ Next.js 16.2.11 (Turbopack)
+- Environments: .env.local
+- Experiments (use with caution):
+  · serverActions
+
+⚠ The "middleware" file convention is deprecated. Please use "proxy" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+  Creating an optimized production build ...
+✓ Compiled successfully in 19.0s
+  Running TypeScript ...
+  Finished TypeScript in 22.2s ...
+  Collecting page data using 15 workers ...
+  Generating static pages using 15 workers (0/17) ...
+  Generating static pages using 15 workers (4/17) 
+  Generating static pages using 15 workers (8/17) 
+  Generating static pages using 15 workers (12/17) 
+✓ Generating static pages using 15 workers (17/17) in 498ms
+  Finalizing page optimization ...
+
+Route (app)
+┌ ƒ /
+├ ƒ /_not-found
+├ ƒ /account
+├ ƒ /api/billing/webhook
+├ ƒ /api/health
+├ ƒ /api/inngest
+├ ƒ /api/o/[orgId]/documents/[kind]/[id]
+├ ƒ /api/o/[orgId]/export
+├ ƒ /api/ready
+├ ƒ /auth/callback
+├ ƒ /auth/confirm
+├ ƒ /auth/verify
+├ ƒ /d/[token]
+├ ƒ /forgot
+├ ƒ /invite/[token]
+├ ƒ /login
+├ ƒ /mfa
+├ ƒ /o/[orgId]
+├ ƒ /o/[orgId]/approvals
+├ ƒ /o/[orgId]/ar
+├ ƒ /o/[orgId]/assets
+├ ƒ /o/[orgId]/assets/[id]
+├ ƒ /o/[orgId]/attendance
+├ ƒ /o/[orgId]/claims
+├ ƒ /o/[orgId]/claims/[claimId]
+├ ƒ /o/[orgId]/claims/new
+├ ƒ /o/[orgId]/costing
+├ ƒ /o/[orgId]/costing/[jobId]
+├ ƒ /o/[orgId]/customer-updates
+├ ƒ /o/[orgId]/customer-updates/[updateId]
+├ ƒ /o/[orgId]/customer-updates/new
+├ ƒ /o/[orgId]/customers
+├ ƒ /o/[orgId]/customers/[customerId]
+├ ƒ /o/[orgId]/customers/[customerId]/edit
+├ ƒ /o/[orgId]/expenses
+├ ƒ /o/[orgId]/expenses/[expenseId]
+├ ƒ /o/[orgId]/expenses/new
+├ ƒ /o/[orgId]/finance
+├ ƒ /o/[orgId]/finance/accounts
+├ ƒ /o/[orgId]/finance/banking
+├ ƒ /o/[orgId]/finance/banking/[reconId]
+├ ƒ /o/[orgId]/finance/budgets
+├ ƒ /o/[orgId]/finance/journals
+├ ƒ /o/[orgId]/finance/journals/[entryId]
+├ ƒ /o/[orgId]/finance/journals/new
+├ ƒ /o/[orgId]/finance/payables
+├ ƒ /o/[orgId]/finance/receivables
+├ ƒ /o/[orgId]/finance/reports
+├ ƒ /o/[orgId]/finance/setup
+├ ƒ /o/[orgId]/finance/tally
+├ ƒ /o/[orgId]/finance/tax
+├ ƒ /o/[orgId]/imports
+├ ƒ /o/[orgId]/inbox
+├ ƒ /o/[orgId]/invoices
+├ ƒ /o/[orgId]/invoices/[invoiceId]
+├ ƒ /o/[orgId]/invoices/new
+├ ƒ /o/[orgId]/issues
+├ ƒ /o/[orgId]/items
+├ ƒ /o/[orgId]/jobs
+├ ƒ /o/[orgId]/jobs/[jobId]
+├ ƒ /o/[orgId]/leads
+├ ƒ /o/[orgId]/leads/[leadId]
+├ ƒ /o/[orgId]/leave
+├ ƒ /o/[orgId]/material-requests
+├ ƒ /o/[orgId]/material-requests/[id]
+├ ƒ /o/[orgId]/material-requests/new
+├ ƒ /o/[orgId]/my-pay
+├ ƒ /o/[orgId]/my-work
+├ ƒ /o/[orgId]/onboarding
+├ ƒ /o/[orgId]/onboarding/[sessionId]
+├ ƒ /o/[orgId]/opportunities
+├ ƒ /o/[orgId]/opportunities/[opportunityId]
+├ ƒ /o/[orgId]/payments
+├ ƒ /o/[orgId]/payments/new
+├ ƒ /o/[orgId]/payroll
+├ ƒ /o/[orgId]/payroll/[runId]
+├ ƒ /o/[orgId]/people
+├ ƒ /o/[orgId]/people/[employeeId]
+├ ƒ /o/[orgId]/purchase-orders
+├ ƒ /o/[orgId]/purchase-orders/[id]
+├ ƒ /o/[orgId]/purchase-orders/new
+├ ƒ /o/[orgId]/quotes
+├ ƒ /o/[orgId]/quotes/[quoteId]
+├ ƒ /o/[orgId]/quotes/new
+├ ƒ /o/[orgId]/reports/[reportId]
+├ ƒ /o/[orgId]/reports/new
+├ ƒ /o/[orgId]/reports/review
+├ ƒ /o/[orgId]/sales
+├ ƒ /o/[orgId]/settings/branding
+├ ƒ /o/[orgId]/settings/configuration
+├ ƒ /o/[orgId]/settings/export
+├ ƒ /o/[orgId]/settings/members
+├ ƒ /o/[orgId]/settings/notifications
+├ ƒ /o/[orgId]/settings/pipeline
+├ ƒ /o/[orgId]/settings/subscription
+├ ƒ /o/[orgId]/settings/workspace
+├ ƒ /o/[orgId]/stock
+├ ƒ /o/[orgId]/stock/[itemId]
+├ ƒ /o/[orgId]/studio
+├ ƒ /o/[orgId]/studio/[planId]
+├ ƒ /o/[orgId]/suppliers
+├ ƒ /o/[orgId]/week
+├ ƒ /o/[orgId]/week/plans
+├ ƒ /o/[orgId]/week/plans/[planId]
+├ ƒ /onboarding
+├ ƒ /privacy
+├ ƒ /reset-password
+├ ○ /robots.txt
+├ ƒ /s/[token]
+├ ƒ /signup
+├ ○ /sitemap.xml
+└ ƒ /terms
+
+
+ƒ Proxy (Middleware)
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+
+BUILD_EXIT=0

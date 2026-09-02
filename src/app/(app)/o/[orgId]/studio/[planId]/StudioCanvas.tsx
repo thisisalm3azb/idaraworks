@@ -13,7 +13,7 @@
  * is forced LTR like the trend chart; everything around it flips with the
  * document direction.
  */
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ReactFlow,
   ReactFlowProvider,
@@ -268,6 +268,7 @@ function CanvasInner({
   onSelect,
   settle,
   remoteSelections = NO_REMOTE,
+  focusNodeId = null,
 }: {
   payload: WorkspacePayload;
   dict: StudioDict;
@@ -277,8 +278,17 @@ function CanvasInner({
   onSelect: (id: string | null) => void;
   settle: (res: ActionResult<unknown>, okText?: string, quiet?: boolean) => boolean;
   remoteSelections?: Record<string, string[]>;
+  focusNodeId?: string | null;
 }) {
   const rf = useReactFlow();
+  // Centre on an element chosen elsewhere (palette, registers link, table row).
+  useEffect(() => {
+    if (!focusNodeId) return;
+    const id = window.setTimeout(() => {
+      void rf.fitView({ nodes: [{ id: focusNodeId }], padding: 0.6, duration: 300, maxZoom: 1.2 });
+    }, 50);
+    return () => window.clearTimeout(id);
+  }, [focusNodeId, rf]);
   // Local state is ONLY what the server cannot know yet: in-flight drag
   // positions and the multi-selection. Both reset on a fresh resolution
   // (the React "adjust state while rendering" pattern, no effects).
@@ -543,6 +553,7 @@ export function StudioCanvas(props: {
   onSelect: (id: string | null) => void;
   settle: (res: ActionResult<unknown>, okText?: string, quiet?: boolean) => boolean;
   remoteSelections?: Record<string, string[]>;
+  focusNodeId?: string | null;
 }) {
   return (
     <ReactFlowProvider>
