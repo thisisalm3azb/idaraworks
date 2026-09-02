@@ -4,7 +4,13 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { resolveCtxForAction } from "@/platform/auth/resolve";
 import { ForbiddenError } from "@/platform/authz";
-import { stageImport, applyImport, IMPORT_KINDS, type ImportKind } from "@/modules/imports/service";
+import {
+  stageImport,
+  applyImport,
+  skipImportRows,
+  IMPORT_KINDS,
+  type ImportKind,
+} from "@/modules/imports/service";
 
 /** Minimal RFC-4180-ish CSV parse (quoted fields, doubled quotes, CR/LF). Header row → keys. */
 function parseCsv(text: string): Record<string, string>[] {
@@ -84,5 +90,29 @@ export async function applyImportAction(
   } catch (err) {
     if ((err as { digest?: string }).digest?.startsWith("NEXT_REDIRECT")) throw err;
     redirect(`/o/${orgId}/imports?batch=${batchId}&error=apply`);
+  }
+}
+
+export async function skipImportRowsAction(
+  orgId: string,
+  batchId: string,
+  formData: FormData,
+): Promise<void> {
+  const resolved = await resolveCtxForAction(orgId);
+  if (resolved === "mfa_required") redirect("/mfa");
+  if (typeof resolved === "string") redirect("/");
+  const rows = formData
+    .getAll("row")
+    .map((v) => Number(v))
+    .filter((n) => Number.isInteger(n) && n > 0);
+  try {
+    await skipImportRows(resolved.ctx, resolved.archetype, batchId, rows);
+    revalidatePath(`/o/${orgId}/imports`);
+    redirect(`/o/${orgId}/imports?batch=${batchId}&preview=1&skipped=1`);
+  } catch (err) {
+    if ((err as { digest?: string }).digest?.startsWith("NEXT_REDIRECT")) throw err;
+    redirect(
+      `/o/${orgId}/imports?batch=${batchId}&error=${err instanceof ForbiddenError ? "forbidden" : "failed"}`,
+    );
   }
 }

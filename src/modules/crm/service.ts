@@ -41,6 +41,14 @@ export * from "./pipelines";
 export * from "./dealroom";
 export * from "./activities";
 export * from "./customers";
+export * from "./consent";
+export * from "./leads";
+export * from "./campaigns";
+export * from "./targets";
+export * from "./forecast";
+export * from "./merge";
+export * from "./automation";
+export * from "./intelligence";
 
 // ── The canonical customer presentation model (H19 Part B) ──────────────────
 // Honest to the real schema: the customer table has no organization vs

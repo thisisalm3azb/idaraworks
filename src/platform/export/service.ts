@@ -31,6 +31,8 @@ const PRICE_COLS: Partial<Record<string, readonly number[]>> = {
   jobs: [4], // selling_price_minor
   invoices: [4, 5], // total_minor, vat_amount_minor
   payments: [4], // amount_minor (money in)
+  leads: [8], // estimated_value_minor (H27)
+  opportunities: [8], // estimated_value_minor (H27)
 };
 const COST_COLS: Partial<Record<string, readonly number[]>> = {
   expenses: [3], // amount_minor (job/overhead cost)
@@ -360,6 +362,124 @@ export const EXPORT_ENTITIES = {
     },
   },
   // ── H24I: the books leave through the same paged door ──────────────────────
+  // H27 — CRM records. Value columns are price data (redacted below).
+  leads: {
+    headers: [
+      "name",
+      "contact_name",
+      "email",
+      "phone",
+      "status",
+      "source_kind",
+      "source",
+      "owner",
+      "estimated_value_minor",
+      "created_at",
+    ],
+    page: async (tx, ctx, limit, offset) => {
+      const rows = (await tx.execute(sql`
+        select l.name, l.contact_name, l.email, l.phone, l.status, l.source_kind, l.source,
+               u.full_name as owner, l.estimated_value_minor::text as estimated_value_minor,
+               l.created_at::text as created_at
+        from public.lead l left join public.user_profile u on u.id = l.owner_user_id
+        where l.org_id = ${ctx.orgId}
+        order by l.created_at, l.id limit ${limit} offset ${offset}`)) as unknown as Array<
+        Record<string, unknown>
+      >;
+      return rows.map((r) => [
+        r.name,
+        r.contact_name,
+        r.email,
+        r.phone,
+        r.status,
+        r.source_kind,
+        r.source,
+        r.owner,
+        r.estimated_value_minor,
+        r.created_at,
+      ]);
+    },
+  },
+  opportunities: {
+    headers: [
+      "name",
+      "customer",
+      "stage",
+      "status",
+      "forecast_category",
+      "probability",
+      "expected_close_date",
+      "owner",
+      "estimated_value_minor",
+      "created_at",
+    ],
+    page: async (tx, ctx, limit, offset) => {
+      const rows = (await tx.execute(sql`
+        select o.name, c.name as customer, o.stage_key as stage, o.status, o.forecast_category, o.probability,
+               o.expected_close_date::text as expected_close_date, u.full_name as owner,
+               o.estimated_value_minor::text as estimated_value_minor, o.created_at::text as created_at
+        from public.opportunity o
+        left join public.customer c on c.id = o.customer_id
+        left join public.user_profile u on u.id = o.owner_user_id
+        where o.org_id = ${ctx.orgId}
+        order by o.created_at, o.id limit ${limit} offset ${offset}`)) as unknown as Array<
+        Record<string, unknown>
+      >;
+      return rows.map((r) => [
+        r.name,
+        r.customer,
+        r.stage,
+        r.status,
+        r.forecast_category,
+        r.probability,
+        r.expected_close_date,
+        r.owner,
+        r.estimated_value_minor,
+        r.created_at,
+      ]);
+    },
+  },
+  sales_activities: {
+    headers: [
+      "kind",
+      "title",
+      "outcome",
+      "customer",
+      "opportunity",
+      "lead",
+      "owner",
+      "due_date",
+      "completed_at",
+      "created_at",
+    ],
+    page: async (tx, ctx, limit, offset) => {
+      const rows = (await tx.execute(sql`
+        select a.kind, a.title, a.outcome, c.name as customer, o.name as opportunity, l.name as lead,
+               u.full_name as owner, a.due_date::text as due_date, a.completed_at::text as completed_at,
+               a.created_at::text as created_at
+        from public.sales_activity a
+        left join public.customer c on c.id = a.customer_id
+        left join public.opportunity o on o.id = a.opportunity_id
+        left join public.lead l on l.id = a.lead_id
+        left join public.user_profile u on u.id = a.owner_user_id
+        where a.org_id = ${ctx.orgId}
+        order by a.created_at, a.id limit ${limit} offset ${offset}`)) as unknown as Array<
+        Record<string, unknown>
+      >;
+      return rows.map((r) => [
+        r.kind,
+        r.title,
+        r.outcome,
+        r.customer,
+        r.opportunity,
+        r.lead,
+        r.owner,
+        r.due_date,
+        r.completed_at,
+        r.created_at,
+      ]);
+    },
+  },
   gl_accounts: {
     headers: [
       "code",

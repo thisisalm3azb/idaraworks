@@ -22,7 +22,7 @@ describe("catalogue shape and coverage", () => {
     expect(DOCUMENT_EXPORTS.length).toBe(19);
     // H23H added leave requests, expense claims and payslips; H24I added the
     // chart of accounts and journal entries.
-    expect(DATA_EXPORTS.length).toBe(25);
+    expect(DATA_EXPORTS.length).toBe(28);
   });
 
   it("every entry carries bilingual names, a permission, redaction and entitlement notes", () => {

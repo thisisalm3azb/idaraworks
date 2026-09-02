@@ -12,15 +12,34 @@ import { assertCan, type Action } from "@/platform/authz";
 import { requireCapability } from "@/platform/entitlements";
 import type { RoleArchetype } from "@/platform/registries";
 import {
+  addCustomerContact,
+  ContactInput,
   createCustomer,
   createEmployee,
   createItem,
   CustomerInput,
   EmployeeInput,
+  findPossibleDuplicates,
   ItemInput,
 } from "@/modules/masters/service";
+import {
+  CaptureLeadInput,
+  captureLead,
+  createOpportunity,
+  findLeadDuplicates,
+  OpportunityInput,
+} from "@/modules/crm/service";
 
-export const IMPORT_KINDS = ["customers", "employees", "items"] as const;
+export const IMPORT_KINDS = [
+  "customers",
+  "employees",
+  "items",
+  // H27 — CRM records. Documented columns only (docs/H27-TRUTH-MAP.md Part G);
+  // no third-party format is claimed.
+  "contacts",
+  "leads",
+  "opportunities",
+] as const;
 export type ImportKind = (typeof IMPORT_KINDS)[number];
 
 export class ImportError extends Error {}
@@ -40,6 +59,57 @@ const HEADER_ALIASES: Record<ImportKind, Record<string, string>> = {
     notes: "notes",
   },
   employees: { name: "name", "employee name": "name", phone: "phone" },
+  contacts: {
+    customer: "customerName",
+    "customer name": "customerName",
+    company: "customerName",
+    name: "name",
+    "contact name": "name",
+    title: "roleTitle",
+    role: "roleTitle",
+    "role title": "roleTitle",
+    email: "email",
+    phone: "phone",
+    "preferred method": "preferredMethod",
+    primary: "isPrimary",
+    "is primary": "isPrimary",
+  },
+  leads: {
+    name: "name",
+    "lead name": "name",
+    company: "name",
+    "contact name": "contactName",
+    contact: "contactName",
+    email: "email",
+    phone: "phone",
+    country: "country",
+    source: "source",
+    notes: "notes",
+    value: "estimatedValueMinor",
+    "estimated value": "estimatedValueMinor",
+    "estimated value minor": "estimatedValueMinor",
+    currency: "currency",
+    timeframe: "timeframe",
+    interest: "interest",
+  },
+  opportunities: {
+    name: "name",
+    opportunity: "name",
+    "opportunity name": "name",
+    customer: "customerName",
+    "customer name": "customerName",
+    company: "customerName",
+    stage: "stageKey",
+    "stage key": "stageKey",
+    value: "estimatedValueMinor",
+    "estimated value": "estimatedValueMinor",
+    "estimated value minor": "estimatedValueMinor",
+    "close date": "expectedCloseDate",
+    "expected close date": "expectedCloseDate",
+    probability: "probability",
+    "next action": "nextAction",
+    "next action due": "nextActionDue",
+  },
   items: {
     sku: "sku",
     name: "name",
@@ -55,7 +125,16 @@ const HEADER_ALIASES: Record<ImportKind, Record<string, string>> = {
   },
 };
 
-const NUMERIC_FIELDS = new Set(["unitCostMinor", "sellingPriceMinor", "minQty"]);
+const NUMERIC_FIELDS = new Set([
+  "unitCostMinor",
+  "sellingPriceMinor",
+  "minQty",
+  "estimatedValueMinor",
+  "probability",
+]);
+const BOOLEAN_FIELDS = new Set(["isPrimary"]);
+const TRUE_WORDS = new Set(["true", "yes", "y", "1"]);
+const FALSE_WORDS = new Set(["false", "no", "n", "0"]);
 
 /** Map a raw CSV row (header→cell) to a typed masters payload (field→value). */
 function mapRow(kind: ImportKind, raw: Record<string, unknown>): Record<string, unknown> {
@@ -66,7 +145,10 @@ function mapRow(kind: ImportKind, raw: Record<string, unknown>): Record<string, 
     if (!field) continue;
     const s = typeof cell === "string" ? cell.trim() : cell;
     if (s === "" || s === null || s === undefined) continue;
-    if (NUMERIC_FIELDS.has(field)) {
+    if (BOOLEAN_FIELDS.has(field)) {
+      const w = String(s).trim().toLowerCase();
+      out[field] = TRUE_WORDS.has(w) ? true : FALSE_WORDS.has(w) ? false : s;
+    } else if (NUMERIC_FIELDS.has(field)) {
       const n = Number(s);
       if (Number.isFinite(n)) out[field] = n;
       else out[field] = s; // let the schema reject it with a clear message
@@ -77,8 +159,293 @@ function mapRow(kind: ImportKind, raw: Record<string, unknown>): Record<string, 
   return out;
 }
 
+const ContactImport = ContactInput.extend({ customerName: z.string().trim().min(1).max(160) });
+const LeadImport = CaptureLeadInput.omit({
+  sourceKind: true,
+  ownerUserId: true,
+  campaignId: true,
+  referrerCustomerId: true,
+  territoryId: true,
+  consent: true,
+});
+const OpportunityImport = OpportunityInput.omit({ customerId: true, ownerUserId: true }).extend({
+  customerName: z.string().trim().max(160).optional(),
+});
+
 function schemaFor(kind: ImportKind): z.ZodTypeAny {
-  return kind === "customers" ? CustomerInput : kind === "employees" ? EmployeeInput : ItemInput;
+  switch (kind) {
+    case "customers":
+      return CustomerInput;
+    case "employees":
+      return EmployeeInput;
+    case "items":
+      return ItemInput;
+    case "contacts":
+      return ContactImport;
+    case "leads":
+      return LeadImport;
+    case "opportunities":
+      return OpportunityImport;
+  }
+}
+
+/** Resolve a customer by exact (case-insensitive) name inside the org; merged records resolve to their survivor. */
+async function customerIdByName(ctx: Ctx, name: string): Promise<string | null> {
+  const rows = (await withCtx(ctx, (tx) =>
+    tx.execute(sql`
+      select coalesce(merged_into_customer_id, id)::text as id from public.customer
+      where org_id = ${ctx.orgId} and lower(name) = lower(${name.trim()})
+      order by (merged_into_customer_id is null) desc, created_at limit 1`),
+  )) as unknown as Array<{ id: string }>;
+  return rows[0]?.id ?? null;
+}
+
+async function orgBaseCurrency(ctx: Ctx): Promise<string> {
+  const rows = (await withCtx(ctx, (tx) =>
+    tx.execute(sql`select base_currency from public.org where id = ${ctx.orgId}`),
+  )) as unknown as Array<{ base_currency: string }>;
+  return rows[0]?.base_currency ?? "AED";
+}
+
+/** Create one record through the governed service that owns it. */
+async function createForKind(
+  ctx: Ctx,
+  archetype: RoleArchetype,
+  kind: ImportKind,
+  mapped: Record<string, unknown>,
+): Promise<{ id: string }> {
+  switch (kind) {
+    case "customers":
+      return createCustomer(ctx, archetype, mapped);
+    case "employees":
+      return createEmployee(ctx, archetype, mapped);
+    case "items":
+      return createItem(ctx, archetype, mapped);
+    case "contacts": {
+      const { customerName, ...rest } = ContactImport.parse(mapped);
+      const customerId = await customerIdByName(ctx, customerName);
+      if (!customerId) throw new ImportError(`customer not found: ${customerName}`);
+      return addCustomerContact(ctx, archetype, customerId, rest);
+    }
+    case "leads": {
+      const data = LeadImport.parse(mapped);
+      // A value without a currency takes the organisation's base currency (the
+      // same default the capture form applies); nothing is converted.
+      const currency =
+        data.currency ??
+        (data.estimatedValueMinor !== null && data.estimatedValueMinor !== undefined
+          ? await orgBaseCurrency(ctx)
+          : undefined);
+      const r = await captureLead(ctx, archetype, {
+        ...data,
+        ...(currency ? { currency } : {}),
+        sourceKind: "import",
+      });
+      return { id: r.lead.id };
+    }
+    case "opportunities": {
+      const { customerName, ...rest } = OpportunityImport.parse(mapped);
+      let customerId: string | undefined;
+      if (customerName) {
+        const found = await customerIdByName(ctx, customerName);
+        if (!found) throw new ImportError(`customer not found: ${customerName}`);
+        customerId = found;
+      }
+      return createOpportunity(ctx, archetype, { ...rest, ...(customerId ? { customerId } : {}) });
+    }
+  }
+}
+
+export type ImportDuplicate = {
+  rowNumber: number;
+  /** Where the possible duplicate lives: an existing record, or another row of the same batch. */
+  kind: "existing" | "in_batch";
+  matchedOn: "email" | "phone" | "name";
+  id: string | null;
+  name: string;
+  rowNumber2?: number;
+};
+
+export type ImportPreview = {
+  batchId: string;
+  kind: ImportKind;
+  total: number;
+  valid: number;
+  invalid: number;
+  /** Valid rows whose referenced customer does not exist (contacts / opportunities). */
+  unresolved: Array<{ rowNumber: number; reason: string }>;
+  duplicates: ImportDuplicate[];
+  /** What an apply would do right now. Nothing is written by a preview. */
+  wouldCreate: number;
+};
+
+/**
+ * Dry run: what applying the batch would create, which rows cannot resolve
+ * their customer, and which rows look like duplicates of existing records or
+ * of each other. Read-only — the person decides which rows to skip.
+ */
+export async function previewImport(
+  ctx: Ctx,
+  archetype: RoleArchetype,
+  batchId: string,
+): Promise<ImportPreview> {
+  assertCan(archetype, "imports.manage" as Action);
+  const kind = await withCtx(ctx, (tx) => batchKind(tx, ctx, batchId));
+  const rows = (await withCtx(ctx, (tx) =>
+    tx.execute(sql`
+      select row_number, status, mapped from public.import_row
+      where org_id = ${ctx.orgId} and batch_id = ${batchId}
+      order by row_number`),
+  )) as unknown as Array<{
+    row_number: number;
+    status: string;
+    mapped: Record<string, unknown> | null;
+  }>;
+  const valid = rows.filter((r) => r.status === "valid" && r.mapped);
+  const unresolved: ImportPreview["unresolved"] = [];
+  const duplicates: ImportDuplicate[] = [];
+  const seen = new Map<string, number>(); // in-batch key → first row number
+  const nameCache = new Map<string, string | null>();
+  const resolve = async (name: string) => {
+    const k = name.trim().toLowerCase();
+    if (!nameCache.has(k)) nameCache.set(k, await customerIdByName(ctx, name));
+    return nameCache.get(k) ?? null;
+  };
+  for (const r of valid) {
+    const m = r.mapped!;
+    const email = typeof m.email === "string" ? m.email.trim().toLowerCase() : "";
+    const phone = typeof m.phone === "string" ? m.phone.replace(/[^0-9+]/g, "") : "";
+    const nm = typeof m.name === "string" ? m.name.trim().toLowerCase() : "";
+    const customerName = typeof m.customerName === "string" ? m.customerName : "";
+    // In-batch duplicates (same email / phone / name within the upload).
+    const keys: Array<["email" | "phone" | "name", string]> = [];
+    if (email) keys.push(["email", `email:${email}`]);
+    if (phone) keys.push(["phone", `phone:${phone}`]);
+    if (nm) {
+      const scope =
+        kind === "contacts" || kind === "opportunities" ? customerName.toLowerCase() + "/" : "";
+      keys.push(["name", `name:${scope}${nm}`]);
+    }
+    for (const [matchedOn, key] of keys) {
+      const first = seen.get(key);
+      if (first !== undefined && first !== r.row_number) {
+        duplicates.push({
+          rowNumber: r.row_number,
+          kind: "in_batch",
+          matchedOn,
+          id: null,
+          name: String(m.name ?? ""),
+          rowNumber2: first,
+        });
+        break;
+      }
+      if (first === undefined) seen.set(key, r.row_number);
+    }
+    // Against existing records.
+    if (kind === "customers") {
+      const cands = await findPossibleDuplicates(ctx, archetype, {
+        name: nm || null,
+        email: email || null,
+        phone: phone || null,
+        country: typeof m.country === "string" ? m.country : null,
+      });
+      for (const c of cands.slice(0, 3))
+        duplicates.push({
+          rowNumber: r.row_number,
+          kind: "existing",
+          matchedOn: c.matchedOn,
+          id: c.id,
+          name: c.name,
+        });
+    } else if (kind === "leads") {
+      const cands = await findLeadDuplicates(ctx, archetype, {
+        name: nm || null,
+        email: email || null,
+        phone: phone || null,
+        country: typeof m.country === "string" ? m.country : null,
+      });
+      for (const c of cands.slice(0, 3))
+        duplicates.push({
+          rowNumber: r.row_number,
+          kind: "existing",
+          matchedOn: c.match,
+          id: c.id,
+          name: `${c.kind}: ${c.name}`,
+        });
+    } else if (kind === "contacts" || kind === "opportunities") {
+      const customerId = customerName ? await resolve(customerName) : null;
+      if (customerName && !customerId) {
+        unresolved.push({ rowNumber: r.row_number, reason: `customer not found: ${customerName}` });
+        continue;
+      }
+      if (kind === "contacts" && !customerName) {
+        unresolved.push({ rowNumber: r.row_number, reason: "customer is required" });
+        continue;
+      }
+      if (customerId) {
+        const ex = (await withCtx(ctx, (tx) =>
+          kind === "contacts"
+            ? tx.execute(sql`
+                select id::text as id, name, (lower(coalesce(email, '')) = ${email} and ${email} <> '') as by_email
+                from public.customer_contact where org_id = ${ctx.orgId} and customer_id = ${customerId}
+                  and (lower(name) = ${nm} or (${email} <> '' and lower(coalesce(email, '')) = ${email})) limit 3`)
+            : tx.execute(sql`
+                select id::text as id, name, false as by_email from public.opportunity
+                where org_id = ${ctx.orgId} and customer_id = ${customerId} and status = 'open' and lower(name) = ${nm} limit 3`),
+        )) as unknown as Array<{ id: string; name: string; by_email: boolean }>;
+        for (const c of ex)
+          duplicates.push({
+            rowNumber: r.row_number,
+            kind: "existing",
+            matchedOn: c.by_email ? "email" : "name",
+            id: c.id,
+            name: c.name,
+          });
+      }
+    }
+  }
+  const flagged = new Set([...unresolved.map((u) => u.rowNumber)]);
+  return {
+    batchId,
+    kind,
+    total: rows.length,
+    valid: valid.length,
+    invalid: rows.filter((r) => r.status === "invalid").length,
+    unresolved,
+    duplicates,
+    wouldCreate: valid.filter((r) => !flagged.has(r.row_number)).length,
+  };
+}
+
+/** Mark valid rows the person chose not to import (e.g. previewed duplicates). Re-runnable; applied rows are untouched. */
+export async function skipImportRows(
+  ctx: Ctx,
+  archetype: RoleArchetype,
+  batchId: string,
+  rowNumbers: number[],
+): Promise<{ skipped: number }> {
+  assertCan(archetype, "imports.manage" as Action);
+  const nums = z.array(z.number().int().min(1)).max(5000).parse(rowNumbers);
+  if (nums.length === 0) return { skipped: 0 };
+  return command(
+    ctx,
+    {
+      audit: {
+        action: "import.skip_rows",
+        entityType: "import_batch",
+        entityId: batchId,
+        summary: `Skipped ${nums.length} rows before apply`,
+      },
+    },
+    async (tx) => {
+      const r = (await tx.execute(sql`
+        update public.import_row set status = 'invalid', error = 'skipped by reviewer', updated_at = now()
+        where org_id = ${ctx.orgId} and batch_id = ${batchId} and status = 'valid'
+          and row_number = any(string_to_array(${nums.join(",")}, ',')::int[])
+        returning 1`)) as unknown as unknown[];
+      return { skipped: r.length };
+    },
+  );
 }
 
 const StageInput = z.object({
@@ -189,12 +556,7 @@ export async function applyImport(
     )) as unknown as Array<{ id: string }>;
     if (claimed.length === 0) continue; // another apply already took this row
     try {
-      const created =
-        kind === "customers"
-          ? await createCustomer(ctx, archetype, row.mapped)
-          : kind === "employees"
-            ? await createEmployee(ctx, archetype, row.mapped)
-            : await createItem(ctx, archetype, row.mapped);
+      const created = await createForKind(ctx, archetype, kind, row.mapped);
       await withCtx(ctx, (tx) =>
         tx.execute(sql`
           update public.import_row set created_entity_id = ${created.id}, updated_at = now()
