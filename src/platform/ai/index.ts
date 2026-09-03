@@ -5,6 +5,38 @@
  */
 export * from "./registry";
 export {
+  listPrivacyRegister,
+  recordPrivacyRegister,
+  revokePrivacyRegister,
+  setSelfServicePolicy,
+  PrivacyInput,
+  SelfServicePolicyInput,
+  type PrivacyRow,
+} from "./privacy";
+export {
+  isPlatformOperator,
+  operatorUsage,
+  operatorUsageRows,
+  operatorOrgs,
+  operatorSwitches,
+  operatorProviderHealth,
+  operatorEconomics,
+  operatorAudit,
+  setKillSwitch,
+  setProviderEnabled,
+  setModelEnabled,
+  addPriceBookRow,
+  setOrgAiPolicy,
+  grantCredits,
+  registrySnapshot,
+  NotOperatorError,
+  type Economics,
+  type OperatorUsageRow,
+  type OperatorOrgRow,
+} from "./operator";
+export { idaraGateFor, NO_PROVIDER_OWNER_ACTION, type IdaraGate } from "./gate";
+export { PLATFORM_CONTRACT, AGENT_PROMPTS, agentPrompt, PROMPT_VERSION } from "./prompts";
+export {
   invokeModel,
   aiAvailability,
   providerAvailabilityIn,

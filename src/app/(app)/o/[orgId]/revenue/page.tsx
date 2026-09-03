@@ -1,4 +1,4 @@
-import { revenueStudioEnabled } from "@/platform/flags";
+import { idaraEnabled, revenueStudioEnabled } from "@/platform/flags";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { Badge, Card, CardHeader, EmptyState } from "@/platform/ui";
@@ -123,6 +123,9 @@ export default async function RevenueHubPage({ params }: { params: Promise<{ org
     { id: "reports", label: t("revenue.tab.reports"), href: `/o/${orgId}/revenue/reports` },
     { id: "settings", label: t("revenue.tab.settings"), href: `/o/${orgId}/revenue/settings` },
     { id: "imports", label: t("imports.title"), href: `/o/${orgId}/imports` },
+    ...(idaraEnabled()
+      ? [{ id: "idara", label: t("idara.palette.ask"), href: `/o/${orgId}/idara` }]
+      : []),
   ];
 
   return (

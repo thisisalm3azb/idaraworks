@@ -1,26 +1,23 @@
 /**
- * The agent feature gate (H12 / A1) — server-authoritative and fail-closed.
+ * The agent feature gate (H12 / A1, redefined by H28 — ADR-64).
  *
- * The canonical key is feat.ai_agents. It is deliberately NOT yet registered
- * in the entitlement catalogue: the entitlement system's own laws (catalogue
- * to DB parity, one plan_entitlement row per plan per key, and the growth
- * trial enabling every registered feature) mean registration requires a
- * migration seeded together with a REAL runtime — and seeding into the
- * all-on trial would silently enable agents. Until that micro-step, this
- * gate resolves to FALSE for every organization by construction: nothing a
- * client sends can change it, and agent execution fails closed on it.
- *
- * When the key is registered and seeded (disabled) in the catalogue, this
- * same function automatically becomes the entitlement-resolved check with
- * no call-site changes.
+ * The canonical H12 key feat.ai_agents stays deliberately UNREGISTERED in the
+ * entitlement catalogue (registering it would sweep it into the all-on growth
+ * trial). Since H28 the gate is the Idara gate: release flag, organisation AI
+ * policy, platform switches and a provider that this organisation may use.
+ * Every H25–H27 seam that asks agentsEnabled() therefore follows the same
+ * fail-closed law as the dock, with no call-site change.
  */
-import { hasFeature, type FeatureKey } from "@/platform/entitlements";
-import { isFeatureKey } from "@/platform/entitlements/catalogue";
+import { idaraGateFor } from "@/platform/ai/gate";
 import type { Ctx } from "@/platform/tenancy";
 
 export const AI_AGENTS_FEATURE_KEY = "feat.ai_agents" as const;
 
 export async function agentsEnabled(ctx: Ctx): Promise<boolean> {
-  if (!isFeatureKey(AI_AGENTS_FEATURE_KEY)) return false; // unregistered → OFF everywhere
-  return hasFeature(ctx, AI_AGENTS_FEATURE_KEY as FeatureKey);
+  try {
+    const g = await idaraGateFor(ctx);
+    return g.modelAvailable;
+  } catch {
+    return false;
+  }
 }

@@ -4,7 +4,7 @@ import { Button } from "@/platform/ui";
 import { getT, getServerLocale } from "@/platform/i18n/server";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { can } from "@/platform/authz";
-import { documentStudioEnabled } from "@/platform/flags";
+import { documentStudioEnabled, idaraEnabled } from "@/platform/flags";
 import {
   DOC_CATEGORIES,
   DOC_STATUSES,
@@ -130,6 +130,9 @@ export default async function DocumentsPage({
         href: `/o/${orgId}/documents/obligations`,
       },
       { id: "forms", label: t("docstudio.fm.title"), href: `/o/${orgId}/documents/forms` },
+      ...(idaraEnabled()
+        ? [{ id: "idara", label: t("idara.palette.ask"), href: `/o/${orgId}/idara` }]
+        : []),
     ],
   };
 

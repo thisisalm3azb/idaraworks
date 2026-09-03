@@ -2,7 +2,9 @@ import { notFound, redirect } from "next/navigation";
 import { getT, getServerLocale } from "@/platform/i18n/server";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { can } from "@/platform/authz";
-import { documentStudioEnabled } from "@/platform/flags";
+import { documentStudioEnabled, idaraEnabled } from "@/platform/flags";
+import { AskIdara } from "../../idara/AskIdara";
+import { askDictFor } from "../../idara/dict";
 import { loadOrgTerminology, term } from "@/platform/terminology";
 import {
   BLOCK_TYPES,
@@ -424,6 +426,16 @@ export default async function DocumentPage({
 
   return (
     <DocumentWorkspace
+      headerExtra={
+        idaraEnabled() ? (
+          <AskIdara
+            record={{ type: "document", id: detail.document.id, label: detail.document.title }}
+            dict={askDictFor(t)}
+            agentId="document_contract"
+            compact
+          />
+        ) : null
+      }
       orgId={orgId}
       locale={locale}
       detail={detail}

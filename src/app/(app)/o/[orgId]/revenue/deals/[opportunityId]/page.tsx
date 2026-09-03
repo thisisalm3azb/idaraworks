@@ -1,4 +1,6 @@
-import { revenueStudioEnabled } from "@/platform/flags";
+import { idaraEnabled, revenueStudioEnabled } from "@/platform/flags";
+import { AskIdara } from "../../../idara/AskIdara";
+import { askDictFor } from "../../../idara/dict";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Badge, Button, Card, CardHeader, EmptyState } from "@/platform/ui";
@@ -121,7 +123,17 @@ export default async function DealRoomPage({
       <header className="flex flex-col gap-2">
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div className="min-w-0">
-            <h1 className="truncate text-lg font-semibold text-ink">{o.name}</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="truncate text-lg font-semibold text-ink">{o.name}</h1>
+              {idaraEnabled() ? (
+                <AskIdara
+                  record={{ type: "opportunity", id: o.id, label: o.name }}
+                  dict={askDictFor(t)}
+                  agentId="sales_crm"
+                  compact
+                />
+              ) : null}
+            </div>
             <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-ink-muted">
               {o.customerId ? (
                 <Link

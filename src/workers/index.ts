@@ -11,6 +11,12 @@ export { approvalStuckEvaluator, sweepStuckApprovals } from "./functions/approva
 export { docObligationReminders, sweepDocumentReminders } from "./functions/doc-reminders";
 // H27: daily CRM automation sweep (idempotent per subject and occurrence).
 export { crmAutomationSweep, sweepCrmAutomations } from "./functions/crm-automations";
+export {
+  idaraRunExecutor,
+  idaraScheduleSweep,
+  executeQueuedIdaraRuns,
+  sweepIdaraSchedules,
+} from "./functions/idara-runs";
 export { lpoPdfRenderer, buildLpoForPo } from "./functions/lpo-pdf";
 // U2 branding: the quote print template's render seam (mirrors lpo-pdf).
 export { quotePdfRenderer, buildQuoteForAccept } from "./functions/quote-pdf";
@@ -50,6 +56,7 @@ import { demoHeartbeat } from "./functions/demo-heartbeat";
 import { approvalStuckEvaluator } from "./functions/approval-stuck";
 import { docObligationReminders } from "./functions/doc-reminders";
 import { crmAutomationSweep } from "./functions/crm-automations";
+import { idaraRunExecutor, idaraScheduleSweep } from "./functions/idara-runs";
 import { lpoPdfRenderer } from "./functions/lpo-pdf";
 import { quotePdfRenderer } from "./functions/quote-pdf";
 import {
@@ -99,4 +106,6 @@ export const workerFunctions = [
   retentionPruneCron,
   docObligationReminders,
   crmAutomationSweep,
+  idaraRunExecutor,
+  idaraScheduleSweep,
 ];

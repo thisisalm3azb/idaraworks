@@ -5,7 +5,9 @@ import { getT, getServerLocale } from "@/platform/i18n/server";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { loadOrgTerminology, term } from "@/platform/terminology";
 import { can } from "@/platform/authz";
-import { revenueStudioEnabled } from "@/platform/flags";
+import { idaraEnabled, revenueStudioEnabled } from "@/platform/flags";
+import { AskIdara } from "../../idara/AskIdara";
+import { askDictFor } from "../../idara/dict";
 import { formatDate, formatMoney } from "@/platform/format";
 import type { CurrencyCode } from "@/platform/registries";
 import { gatherCustomer360 } from "@/modules/crm/service";
@@ -198,6 +200,13 @@ export default async function CustomerDetailPage({
                 {t("customers.next.revenue")}
               </Button>
             </Link>
+          ) : null}
+          {idaraEnabled() ? (
+            <AskIdara
+              record={{ type: "customer", id: c.id, label: c.displayName }}
+              dict={askDictFor(t)}
+              agentId="sales_crm"
+            />
           ) : null}
           {canQuote && c.active ? (
             <Link href={`/o/${orgId}/quotes/new?customer=${c.id}`}>

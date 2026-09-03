@@ -219,6 +219,19 @@ const SUBJECTS: Record<string, SubjectConfig> = {
       await onDiscountDecidedIn(tx, ctx, subjectId, outcome, note);
     },
   },
+  // H28 — a material action proposed by an agent; the requester still executes
+  // it explicitly after approval (separation of duties, re-checked at execution).
+  ai_action: {
+    table: "ai_action",
+    live: "awaiting_approval",
+    onApprove: "approved",
+    onReject: "rejected",
+    onWithdraw: "proposed",
+    afterDecide: async (tx, ctx, subjectId, outcome, note) => {
+      const { onAiActionDecidedIn } = await import("@/modules/idara/service");
+      await onAiActionDecidedIn(tx, ctx, subjectId, outcome, note);
+    },
+  },
 };
 
 // ── role escalation (F-4): one step up until a non-requester decider exists ───

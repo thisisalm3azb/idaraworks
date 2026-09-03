@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { IdaraDockMount } from "./idara/IdaraDockMount";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import type { CSSProperties } from "react";
@@ -293,6 +294,14 @@ export default async function OrgLayout({
         </header>
 
         <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 pb-24 md:pb-8">{children}</main>
+        {/* H28 — the Idara Dock: rendered only behind FEATURE_IDARA_INTELLIGENCE, the person's permission and the organisation's AI policy. */}
+        <IdaraDockMount
+          orgId={orgId}
+          ctx={resolved.ctx}
+          archetype={resolved.archetype}
+          locale={locale}
+          userId={resolved.ctx.userId}
+        />
       </div>
     </div>
   );

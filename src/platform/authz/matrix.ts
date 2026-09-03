@@ -174,7 +174,14 @@ export type Action =
   | "crm.consent.manage"
   | "crm.merge"
   | "crm.import"
-  | "crm.export";
+  | "crm.export"
+  // H28 Idara Intelligence: using the dock, confirming proposed actions, managing
+  // custom agents and schedules, viewing usage, managing organisation knowledge.
+  | "idara.use"
+  | "idara.actions.confirm"
+  | "idara.agents.manage"
+  | "idara.usage.view"
+  | "idara.memory.manage";
 
 type Grantable = Exclude<RoleArchetype, "worker_reserved_p3">;
 
@@ -427,4 +434,11 @@ export const MATRIX: Record<Action, readonly Grantable[]> = {
   "documents.workflows.manage": ["owner", "admin"],
   "documents.obligations.manage": ["owner", "admin", "manager", "accounts"],
   "documents.forms.manage": ["owner", "admin", "manager"],
+  // H28 — every member may ask; confirming a change needs a non-viewer (the tool's own
+  // action is re-checked too); agents, usage and organisation knowledge are administrative.
+  "idara.use": ["owner", "admin", "manager", "foreman", "procurement", "accounts", "viewer"],
+  "idara.actions.confirm": ["owner", "admin", "manager", "foreman", "procurement", "accounts"],
+  "idara.agents.manage": ["owner", "admin"],
+  "idara.usage.view": ["owner", "admin", "accounts"],
+  "idara.memory.manage": ["owner", "admin"],
 };

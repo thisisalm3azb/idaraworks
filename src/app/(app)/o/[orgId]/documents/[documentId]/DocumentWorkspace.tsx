@@ -1,5 +1,7 @@
 "use client";
 
+import type { ReactNode } from "react";
+
 /**
  * H26 — the document workspace: one document, its builder, preview,
  * revisions, activity and details. Every mutation goes through a typed
@@ -126,6 +128,7 @@ const STATUS_TONE: Record<string, "neutral" | "info" | "success" | "warning" | "
 };
 
 export function DocumentWorkspace({
+  headerExtra,
   orgId,
   locale,
   detail,
@@ -147,6 +150,7 @@ export function DocumentWorkspace({
   aiAvailable,
   aiOwnerAction,
 }: {
+  headerExtra?: ReactNode;
   orgId: string;
   locale: string;
   detail: DocumentDetail;
@@ -259,7 +263,10 @@ export function DocumentWorkspace({
                 {dict.category[d.category] ?? d.category}
               </span>
             </div>
-            <h1 className="truncate text-lg font-semibold text-ink">{d.title}</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="truncate text-lg font-semibold text-ink">{d.title}</h1>
+              {headerExtra}
+            </div>
             <PresenceStrip peers={presence.peers} label={dict.presence} />
           </div>
           <div className="flex flex-wrap items-center gap-2">

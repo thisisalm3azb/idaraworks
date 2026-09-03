@@ -14,6 +14,11 @@ type Grantable = Exclude<RoleArchetype, "worker_reserved_p3">;
 export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
   // Full member management, file lifecycle, ALL config + masters + skeleton (doc 06 row-by-row).
   owner: [
+    "idara.use",
+    "idara.actions.confirm",
+    "idara.agents.manage",
+    "idara.usage.view",
+    "idara.memory.manage",
     "documents.view",
     "documents.create",
     "documents.edit",
@@ -150,6 +155,11 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
     "crm.export",
   ],
   admin: [
+    "idara.use",
+    "idara.actions.confirm",
+    "idara.agents.manage",
+    "idara.usage.view",
+    "idara.memory.manage",
     "documents.view",
     "documents.create",
     "documents.edit",
@@ -286,6 +296,8 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
   // Manager (doc 08: the Workshop Manager variant): masters M, jobs/reports, NO
   // config, NO salary/HR side-tables, no invite/deactivate/legal-hold.
   manager: [
+    "idara.use",
+    "idara.actions.confirm",
     "documents.view",
     "documents.create",
     "documents.edit",
@@ -386,6 +398,8 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
   // employee/catalog/member/customer/config surfaces — S3's report form gets
   // its scoped lookups with its slice.
   foreman: [
+    "idara.use",
+    "idara.actions.confirm",
     "assets.view",
     "assets.assign",
     "assets.maintain",
@@ -413,6 +427,8 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
     "digest.view",
   ],
   procurement: [
+    "idara.use",
+    "idara.actions.confirm",
     "documents.view",
     "documents.create",
     "documents.edit",
@@ -449,6 +465,9 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
     "digest.view",
   ],
   accounts: [
+    "idara.use",
+    "idara.actions.confirm",
+    "idara.usage.view",
     "documents.view",
     "documents.create",
     "documents.edit",
@@ -517,6 +536,7 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
   // today.view added (adversarial review): read-only Today composed ONLY from
   // the viewer's own read grants above (no money, no queues).
   viewer: [
+    "idara.use",
     "documents.view",
     "studio.view",
     "payroll.view",
