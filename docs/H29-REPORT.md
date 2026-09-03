@@ -143,7 +143,64 @@ log records the transform and not that value.
 
 ## 3. Verification
 
-_Filled from the gate runs; see section 3.5 for production evidence._
+### 3.1 Local gates
+
+| Gate | Result |
+| --- | --- |
+| `npx tsc --noEmit` | clean |
+| `npm run lint` (with the boundary and tenancy rules) | clean |
+| `npm run build` | compiled; the four country routes and `/platform/languages` are in the route table |
+| `npx vitest run tests/unit` | 1,604 tests in 105 files, all passing |
+
+The boundary rule earned its keep twice. `src/platform/export/context.ts` was
+written importing the country module and was refused: the platform layer may not
+reach into a module, so the route resolves the establishment's configuration and
+hands the facts in. `src/platform/i18n/release.ts` was split for the same
+reason in reverse — the laws are pure so they can be unit-tested against the real
+catalogues, and the database and flag reads live in `release-store.ts`.
+
+### 3.2 What the new tests actually assert
+
+The i18n suite grew from 3 tests to 14 and now covers three catalogues:
+identical key sets; no translation inventing an ICU argument its caller does not
+supply (one documented exception, with its call site named); Spanish declaring
+exactly the English arguments; no English leakage in any translated locale; a
+`*.same.json` unable to hide a later English-only edit; and — a re-audit of
+H22–H28 in one assertion — every Arabic value that should carry Arabic script
+doing so. That last one passes at zero, across the whole catalogue.
+
+`tests/unit/locale-release-law.test.ts` fixes the governance laws: a language
+with no recorded review reads identically to one recorded as "not started"; a
+complete catalogue is not readiness; a review recorded before the last batch of
+keys stops counting the moment the catalogue changes.
+
+`tests/unit/import-date-format.test.ts` exercises the real date reader, not a
+copy: the same string read two ways, a two-digit year refused rather than given
+a century, 31 April refused in either reading, and the ambiguous case naming the
+value it could not read.
+
+`tests/unit/export-context.test.ts` covers what a downloaded file carries: a
+filesystem-safe timezone, no newline in any response header, and redaction
+stated as two facts rather than one, so a blank money column is never read as a
+zero.
+
+### 3.3 Integration and adversarial evidence
+
+_Filled from the run._
+
+### 3.4 The interface, in three languages, on desktop and phone
+
+_Filled from the walk._
+
+### 3.5 CI on the exact commit
+
+_Filled from the run._
+
+### 3.6 Production
+
+_Filled from the deployment._
+
+---
 
 ---
 
