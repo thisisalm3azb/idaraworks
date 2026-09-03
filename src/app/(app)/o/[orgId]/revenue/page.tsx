@@ -36,35 +36,35 @@ export default async function RevenueHubPage({ params }: { params: Promise<{ org
     seesPrice && n !== null && n !== undefined ? formatMoney(n, currency, { locale }) : null;
   const seesForecast = can(resolved.archetype, "crm.forecast.view");
 
-  const [board, stages, leads, queue, forecast, targets, campaigns, automations] =
-    await Promise.all([
-      section(() => boardPage(resolved.ctx, resolved.archetype, { limit: 1 })),
-      section(() => listStageSettings(resolved.ctx, resolved.archetype, null)),
-      section(() =>
-        can(resolved.archetype, "leads.view")
-          ? leadPage(resolved.ctx, resolved.archetype, { limit: 1 })
-          : Promise.resolve(null),
-      ),
-      section(() => myCommercialQueue(resolved.ctx, resolved.archetype, asOf)),
-      section(() =>
-        seesForecast
-          ? computeForecast(resolved.ctx, resolved.archetype, {})
-          : Promise.resolve(null),
-      ),
-      section(() =>
-        seesForecast ? targetProgress(resolved.ctx, resolved.archetype, asOf) : Promise.resolve([]),
-      ),
-      section(() =>
-        can(resolved.archetype, "crm.campaigns.manage")
-          ? listCampaigns(resolved.ctx, resolved.archetype)
-          : Promise.resolve([]),
-      ),
-      section(() =>
-        can(resolved.archetype, "crm.automations.manage")
-          ? listAutomations(resolved.ctx, resolved.archetype)
-          : Promise.resolve([]),
-      ),
-    ]);
+  // Two rounds of four so one hub render never holds eight pooled connections at once.
+  const [board, stages, leads, queue] = await Promise.all([
+    section(() => boardPage(resolved.ctx, resolved.archetype, { limit: 1 })),
+    section(() => listStageSettings(resolved.ctx, resolved.archetype, null)),
+    section(() =>
+      can(resolved.archetype, "leads.view")
+        ? leadPage(resolved.ctx, resolved.archetype, { limit: 1 })
+        : Promise.resolve(null),
+    ),
+    section(() => myCommercialQueue(resolved.ctx, resolved.archetype, asOf)),
+  ]);
+  const [forecast, targets, campaigns, automations] = await Promise.all([
+    section(() =>
+      seesForecast ? computeForecast(resolved.ctx, resolved.archetype, {}) : Promise.resolve(null),
+    ),
+    section(() =>
+      seesForecast ? targetProgress(resolved.ctx, resolved.archetype, asOf) : Promise.resolve([]),
+    ),
+    section(() =>
+      can(resolved.archetype, "crm.campaigns.manage")
+        ? listCampaigns(resolved.ctx, resolved.archetype)
+        : Promise.resolve([]),
+    ),
+    section(() =>
+      can(resolved.archetype, "crm.automations.manage")
+        ? listAutomations(resolved.ctx, resolved.archetype)
+        : Promise.resolve([]),
+    ),
+  ]);
 
   const leadsData = leads.ok ? leads.data : null;
   const stageLabel = (key: string) =>

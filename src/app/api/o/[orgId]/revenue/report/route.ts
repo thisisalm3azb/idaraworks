@@ -51,13 +51,12 @@ export async function GET(req: Request, ctx: { params: Promise<{ orgId: string }
     n === null || n === undefined ? t("common.restricted") : formatMoney(n, currency, { locale });
 
   try {
-    const [profile, funnel, winLoss, activity, stages] = await Promise.all([
-      getDocumentProfile(resolved.ctx),
-      funnelReport(resolved.ctx, resolved.archetype, { from, to }),
-      winLossReport(resolved.ctx, resolved.archetype, { from, to }),
-      activityReport(resolved.ctx, resolved.archetype, { from, to }),
-      listStageSettings(resolved.ctx, resolved.archetype, null),
-    ]);
+    // Sequential on purpose: one pooled connection at a time for a report route.
+    const profile = await getDocumentProfile(resolved.ctx);
+    const funnel = await funnelReport(resolved.ctx, resolved.archetype, { from, to });
+    const winLoss = await winLossReport(resolved.ctx, resolved.archetype, { from, to });
+    const activity = await activityReport(resolved.ctx, resolved.archetype, { from, to });
+    const stages = await listStageSettings(resolved.ctx, resolved.archetype, null);
     const stageLabel = (key: string) => {
       const s = stages.find((x) => x.key === key);
       return (rtl ? s?.label.ar || s?.label.en : s?.label.en || s?.label.ar) || key;
