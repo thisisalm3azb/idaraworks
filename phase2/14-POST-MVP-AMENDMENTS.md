@@ -200,6 +200,60 @@ inventory, the seams, the research consulted and the decisions (ADR-49 onward) b
 the completion report (`docs/H28-REPORT.md`) records the shipped commit, migrations, evidence, the
 exact live/disabled state and every owner action required before paid AI can be enabled.
 
+## 8. Owner product direction — **2026-09-03** (approved; implementation begins with H29)
+
+**H29 — International Expansion and Versioned Country Packs.** Approved by the owner, recorded
+verbatim in `docs/H29-TRUTH-MAP.md` Part B. IdaraWorks must be able to enter a new market without
+scattering country assumptions through the product. The approved initial scope:
+
+1. A reusable global country-pack engine.
+2. A complete UAE pack that reuses and strengthens the existing UAE functionality.
+3. A Saudi Arabia pack with safe ZATCA, tax, payroll and business-localisation foundations.
+4. Complete Spanish-language support for the universal product.
+5. Continued complete English and Arabic support.
+6. No claim that every Spanish-speaking country shares one legal or tax system.
+7. No unsupported compliance, certification, filing or legal-advice claims.
+
+**Binding rules carried into the build**
+
+1. **Packs, not conditionals.** Country behaviour resolves through the active pack and the effective
+   date. `country === "AE"` checks do not spread through unrelated application code. Shared regional
+   modules exist only where the rules are genuinely identical and sourced; GCC countries are not
+   assumed to share laws.
+2. **Effective-dated rules.** Non-overlapping validity, draft and approved versions, future
+   scheduled versions, supersession, historical reproducibility, impact preview before activation,
+   per-organisation adoption state, rollback where valid, full audit. A transaction dated in an
+   earlier period keeps the rule version applicable to that date; a pack update never rewrites an
+   issued invoice, payroll run, working paper or document.
+3. **Establishments.** An organisation may operate through more than one legal establishment, with
+   its own country, registrations, addresses, currency, timezone, working week, holiday calendar,
+   invoice identity, banking and pack version. Changing a country or establishment after business
+   records exist is a governed operation with an impact preview.
+4. **Readiness, honestly staged.** Technically configured, reviewed internally, provider connected,
+   legally reviewed, ready for controlled pilot and ready for general availability are distinct
+   states. Legal readiness is never reduced to a single percentage.
+5. **No invented facts.** No tax rate, threshold, exchange rate, filing status or legal conclusion is
+   invented. Every implemented rule records its source, retrieval date and effective date. Ambiguous
+   or organisation-specific rules become configuration or a review flag.
+6. **Fail closed on external authorities.** Electronic-invoicing adapters are contract-tested against
+   official schemas with deterministic fixtures; submission stays disabled without credentials. No
+   genuine production invoice is sent to any authority during H29.
+7. **Spanish is a language, not a jurisdiction.** A complete `es` locale for the universal product,
+   machine-assisted and marked for native review, creates no Spain, Mexico or Latin American legal
+   pack.
+8. **Untouched matters.** Historical accounting, the H24 transition ambiguities, PO-002, the deferred
+   H22 stock-posting issue, H28 external AI activation, real tax filings, authority submissions,
+   pricing and payments, and genuine production data; H30 is not begun.
+
+**Flags:** `FEATURE_COUNTRY_PACKS`, `FEATURE_LOCALE_ES`, plus per-country activation, per-
+establishment pack state and per-provider state. The only enabling value is the exact string `"1"`.
+
+**Implementation gate:** the H29 truth map (`docs/H29-TRUTH-MAP.md`) and evidence log
+(`docs/H29-EVIDENCE-LOG.md`) record the baseline, inventory, sources, decisions and limitations
+before code changes; the completion report (`docs/H29-REPORT.md`) records the shipped commit,
+migrations, evidence, the exact enabled/disabled state and every review or provider action still
+outstanding.
+
 ## 5. Amendment log (this document, append-only)
 
 | Date | Entry | Approved |
@@ -208,3 +262,4 @@ exact live/disabled state and every owner action required before paid AI can be 
 | 2026-08-27 | §4 added: universal document/export contract, core document identity, canonical issuer model, historical-integrity rule, interaction-audit decisions D1–D8 ruled. Interaction Completeness Audit accepted (its §12 carries the full amendment). Implementation begins with microstep 003B.1. | Owner |
 | 2026-09-02 | §6 added: H27 CRM and Revenue Growth Studio approved as the next phase (reuse-first over the H19/H20 customer, lead, opportunity, pipeline and activity models; governed stage moves; idempotent conversion; consent as law; explainable forecasts; governed automation and fail-closed AI; `FEATURE_REVENUE_STUDIO`). North star status column intentionally left as adopted. | Owner |
 | 2026-09-03 | §7 added: H28 Idara Intelligence approved (ambient Idara Dock in the shell; Idara orchestrator with governed specialists over the H12 substrate; provider-neutral gateway with metering, credits and kill switches; fail-closed without credentials; flag `FEATURE_IDARA_INTELLIGENCE`; untouched matters restated). Public showcase divergence recorded. | Owner |
+| 2026-09-03 | §8 added: H29 International Expansion and Versioned Country Packs approved (country-pack engine with effective-dated versions and adoption state; establishments; UAE pack reusing H23/H24 foundations; Saudi pack with a fail-closed ZATCA adapter; complete machine-assisted Spanish marked for native review; Arabic and English parity re-audited; flags `FEATURE_COUNTRY_PACKS` and `FEATURE_LOCALE_ES`; untouched matters restated). | Owner |
