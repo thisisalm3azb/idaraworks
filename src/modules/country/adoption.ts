@@ -78,20 +78,20 @@ function diff(before: CountryPack | null, after: CountryPack): ImpactLine[] {
     String(after.banking.ibanLength ?? "—"),
   );
 
-  for (const module of after.tax) {
-    const was = before?.tax.find((t) => t.key === module.key);
+  for (const taxModule of after.tax) {
+    const was = before?.tax.find((t) => t.key === taxModule.key);
     add(
       "tax",
       "country.impact.tax_rate",
       was ? String(was.standardRatePercent.value ?? "—") : null,
-      String(module.standardRatePercent.value ?? "—"),
+      String(taxModule.standardRatePercent.value ?? "—"),
       true,
     );
     add(
       "tax",
       "country.impact.tax_document_fields",
       was ? String(was.documentFields.value.length) : null,
-      String(module.documentFields.value.length),
+      String(taxModule.documentFields.value.length),
       true,
     );
   }

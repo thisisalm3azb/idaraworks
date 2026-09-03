@@ -103,20 +103,20 @@ function configurationArea(f: Facts): AreaReadiness {
 function taxArea(f: Facts): AreaReadiness {
   const checks: ReadinessCheck[] = [];
   if (!f.pack) return { area: "tax", checks, complete: false };
-  for (const module of f.pack.tax) {
+  for (const taxModule of f.pack.tax) {
     checks.push(
-      module.engineVersion
-        ? ok(`tax.${module.key}.engine`, module.labelKey)
+      taxModule.engineVersion
+        ? ok(`tax.${taxModule.key}.engine`, taxModule.labelKey)
         : {
-            key: `tax.${module.key}.engine`,
-            labelKey: module.labelKey,
+            key: `tax.${taxModule.key}.engine`,
+            labelKey: taxModule.labelKey,
             state: "missing",
             detailKey: "country.readiness.tax_engine_missing",
           },
     );
-    for (const item of module.requiresConfiguration)
+    for (const item of taxModule.requiresConfiguration)
       checks.push({
-        key: `tax.${module.key}.config.${item}`,
+        key: `tax.${taxModule.key}.config.${item}`,
         labelKey: "country.readiness.tax_configuration",
         state: "missing",
         detailKey: "country.readiness.needs_person",
