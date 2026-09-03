@@ -62,12 +62,28 @@ async function main(): Promise<void> {
     }
 
     const run = randomUUID().slice(0, 8);
-    const userId = randomUUID();
     const email = `h28-ui-${run}@example.invalid`;
+    // Through the auth admin API, not a raw insert: GoTrue fills columns of its
+    // own that a hand-written row leaves null, and a null one makes every later
+    // sign-in link fail with a 500.
+    const { createClient } = await import("@supabase/supabase-js");
+    const admin = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      { auth: { persistSession: false } },
+    );
+    const created = await admin.auth.admin.createUser({
+      email,
+      password: `Fixture-H28-${run}!`,
+      email_confirm: true,
+      user_metadata: { full_name: "Idara walk" },
+    });
+    if (created.error || !created.data.user)
+      throw new Error(`createUser: ${created.error?.message ?? "no user returned"}`);
+    const userId = created.data.user.id;
     await owner`
-      insert into auth.users (id, instance_id, aud, role, email, email_confirmed_at, raw_user_meta_data, created_at, updated_at)
-      values (${userId}, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', ${email}, now(),
-              ${JSON.stringify({ full_name: "Idara walk" })}::jsonb, now(), now())`;
+      insert into public.user_profile (id, full_name, locale) values (${userId}, 'Idara walk', 'en')
+      on conflict (id) do update set full_name = excluded.full_name`;
     const orgId = await createOrgForUser(userId, {
       name: `H28 Walk ${run}`,
       country: "AE",
@@ -105,9 +121,12 @@ async function main(): Promise<void> {
     // A real allowance and a deterministic tariff so the dock can answer.
     await owner`insert into public.ai_entitlement (org_id, version, mode, monthly_credits, reason, set_by)
       values (${orgId}, 1, 'trial', 5000, 'h28 ui fixture', ${userId})`;
+    // Its own effective date: the price book is global, and every suite and
+    // fixture deletes only its own rows, so sharing one date let a finishing
+    // suite unprice a running one.
     await owner`insert into public.ai_price_book (provider_key, model_key, effective_from, currency, input_per_mtok_micros, output_per_mtok_micros, note)
-      values ('deterministic', 'deterministic:fast', '2020-01-01T00:00:00Z', 'USD', 50000, 400000, 'h28 ui fixture tariff'),
-             ('deterministic', 'deterministic:strong', '2020-01-01T00:00:00Z', 'USD', 3000000, 15000000, 'h28 ui fixture tariff')
+      values ('deterministic', 'deterministic:fast', '2020-01-04T00:00:00Z', 'USD', 50000, 400000, 'h28 ui fixture tariff'),
+             ('deterministic', 'deterministic:strong', '2020-01-04T00:00:00Z', 'USD', 3000000, 15000000, 'h28 ui fixture tariff')
       on conflict (model_key, effective_from) do nothing`;
     await owner`insert into public.ai_schedule (org_id, kind, agent_id, cadence, hour_local, recipients, enabled, created_by)
       values (${orgId}, 'management_briefing', 'executive', 'daily', 8, '["owner","admin"]'::jsonb, false, ${userId})`;
@@ -132,4 +151,7 @@ async function main(): Promise<void> {
   }
 }
 
-await main();
+main().catch((err) => {
+  console.error(err);
+  process.exitCode = 1;
+});

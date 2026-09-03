@@ -76,9 +76,9 @@ async function main(): Promise<void> {
     notes.push(
       `H28 pending: ${pending.length === 0 ? "none (already applied)" : pending.join(", ")}`,
     );
-    const unexpected = applied.filter((f) => f > "0127" && !H28_MIGRATIONS.includes(f));
+    const unexpected = applied.filter((f) => f >= "0128" && !H28_MIGRATIONS.includes(f));
     if (unexpected.length)
-      problems.push(`unexpected migrations after 0127: ${unexpected.join(", ")}`);
+      problems.push(`unexpected migrations at or after 0128: ${unexpected.join(", ")}`);
 
     const tables = (
       await sql`
@@ -181,4 +181,7 @@ async function main(): Promise<void> {
   }
 }
 
-await main();
+main().catch((err) => {
+  console.error(err);
+  process.exitCode = 1;
+});

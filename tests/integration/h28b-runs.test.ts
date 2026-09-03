@@ -92,9 +92,12 @@ beforeAll(async () => {
   await owner`insert into public.user_profile (id, full_name, locale) values (${userM}, 'Manager', 'en') on conflict (id) do nothing`;
   await owner`insert into public.membership (user_id, org_id, role_key) values (${userM}, ${orgA}, 'admin')`;
   await installTemplate(A(), TEMPLATE_BOATBUILDING.key);
+  // Its own effective date: the price book is global, and every suite and
+  // fixture deletes only its own rows, so sharing one date let a finishing
+  // suite unprice a running one.
   await owner`insert into public.ai_price_book (provider_key, model_key, effective_from, currency, input_per_mtok_micros, output_per_mtok_micros, note)
-    values ('deterministic', 'deterministic:fast', '2020-01-01T00:00:00Z', 'USD', 50000, 400000, 'h28b synthetic'),
-           ('deterministic', 'deterministic:strong', '2020-01-01T00:00:00Z', 'USD', 3000000, 15000000, 'h28b synthetic')
+    values ('deterministic', 'deterministic:fast', '2020-01-02T00:00:00Z', 'USD', 50000, 400000, 'h28b synthetic'),
+           ('deterministic', 'deterministic:strong', '2020-01-02T00:00:00Z', 'USD', 3000000, 15000000, 'h28b synthetic')
     on conflict (model_key, effective_from) do nothing`;
   await setPolicy(orgA, 100000);
   const c = await createCustomer(A(), "owner", { name: `H28B Customer ${run}` });
@@ -134,19 +137,26 @@ describe("conversations and runs", () => {
     expect(answer.provenance.provider).toBe("deterministic");
     expect(answer.blocks.some((b) => b.kind === "facts")).toBe(true);
     expect(answer.evidence.some((e) => e.type === "customer" && e.id === customerId)).toBe(true);
-    const steps = await listSteps(A(), r.runId);
-    expect(steps.map((s) => s.kind)).toEqual(
+    // The work happens in the run graph: the parent plans and delegates, the
+    // specialist reads the records. Assert across every run of the graph.
+    const graph = await runGraph(A(), r.runId);
+    const allSteps = (await Promise.all(graph.map((g) => listSteps(A(), g.id)))).flat();
+    expect(allSteps.map((s) => s.kind)).toEqual(
       expect.arrayContaining(["plan", "route", "tool", "model"]),
     );
     expect(
-      steps.some(
+      allSteps.some(
         (s) => s.kind === "tool" && s.toolId === "customer.overview" && s.status === "completed",
       ),
     ).toBe(true);
     const row = await getRun(A(), r.runId);
     expect(row!.credits).toBeGreaterThan(0);
-    const usage =
-      await owner`select count(*)::int as n from public.ai_interaction where org_id = ${orgA} and run_id = ${r.runId}`;
+    // Metering is written under the run that made the call, so a delegated
+    // request meters on the child. Count across the whole graph.
+    const runIds = graph.map((g) => g.id).join(",");
+    const usage = await owner`
+      select count(*)::int as n from public.ai_interaction
+      where org_id = ${orgA} and run_id = any(string_to_array(${runIds}, ',')::uuid[])`;
     expect(Number(usage[0]!.n)).toBeGreaterThan(0);
   });
 
@@ -302,6 +312,20 @@ describe("actions", () => {
       offset: 0,
     });
     const action = proposed.rows.find((a) => a.toolId === "opportunity.move_stage");
+    if (!action) {
+      const graph = await runGraph(M(), (await listRuns(M(), { limit: 1, offset: 0 })).rows[0]!.id);
+      for (const g of graph) {
+        const st = await listSteps(M(), g.id);
+        console.log(
+          "DIAG run",
+          g.agentId,
+          g.status,
+          g.error,
+          JSON.stringify(st.map((x) => [x.kind, x.status, x.toolId, x.summary])).slice(0, 900),
+        );
+      }
+      console.log("DIAG actions", JSON.stringify(proposed.rows.map((x) => [x.toolId, x.status])));
+    }
     expect(action).toBeDefined();
     expect(action!.riskClass).toBe(4);
     expect(action!.recordVersions[0]).toMatchObject({ type: "opportunity", id: opportunityId });
@@ -310,7 +334,7 @@ describe("actions", () => {
     expect(waiting.approvalId).not.toBeNull();
     await expect(
       decideApproval(M(), "admin", { approvalId: waiting.approvalId!, decision: "approved" }),
-    ).rejects.toThrow(/self/i);
+    ).rejects.toThrow(/requester may not decide/i);
     await decideApproval(A(), "owner", { approvalId: waiting.approvalId!, decision: "approved" });
     const approved = await getAction(M(), action!.id);
     expect(approved!.status).toBe("approved");
@@ -393,5 +417,46 @@ describe("memory", () => {
     await forget(A(), "owner", k.id);
     expect((await listMemory(A(), "org")).some((x) => x.id === k.id)).toBe(false);
     expect((await listMemory(B())).length).toBe(0);
+  });
+});
+
+describe("past the thousand-row line", () => {
+  it("pages a person's conversations beyond one thousand with an accurate total and no row lost or repeated", async () => {
+    const before = await listConversations(A(), { limit: 1, offset: 0 });
+    // Older than everything already there, and each one distinct, so the order
+    // is stable and offset paging is meaningful.
+    await owner`
+      insert into public.ai_conversation (org_id, user_id, kind, title, status, last_activity_at)
+      select ${orgA}, ${userA}, 'session', 'bulk ' || g, 'active',
+             now() - interval '1 day' - (g || ' seconds')::interval
+      from generate_series(1, 1050) g`;
+    const total = before.total + 1050;
+
+    const first = await listConversations(A(), { limit: 100, offset: 0 });
+    expect(first.total).toBe(total);
+    expect(first.rows.length).toBe(100);
+
+    // The page that only exists if the read is not silently capped at 1,000.
+    const past = await listConversations(A(), { limit: 100, offset: 1000 });
+    expect(past.total).toBe(total);
+    expect(past.rows.length).toBe(Math.min(100, total - 1000));
+
+    // Walking every page returns each seeded conversation exactly once.
+    const seen = new Set<string>();
+    let bulk = 0;
+    for (let offset = 0; offset < total; offset += 100) {
+      const page = await listConversations(A(), { limit: 100, offset });
+      expect(page.total).toBe(total);
+      for (const row of page.rows) {
+        seen.add(row.id);
+        if (row.title.startsWith("bulk ")) bulk++;
+      }
+    }
+    expect(bulk).toBe(1050);
+    expect(seen.size).toBe(total);
+
+    // And the limit is bounded, so no caller can ask for the whole table.
+    const greedy = await listConversations(A(), { limit: 5000, offset: 0 });
+    expect(greedy.rows.length).toBe(100);
   });
 });

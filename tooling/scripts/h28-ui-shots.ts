@@ -86,6 +86,10 @@ async function main(): Promise<void> {
     page.on("console", (m) => {
       if (m.type() === "error") errors.push(`console: ${m.text().slice(0, 200)}`);
     });
+    const scripts: string[] = [];
+    page.on("request", (r) => {
+      if (r.resourceType() === "script") scripts.push(r.url());
+    });
     page.setDefaultTimeout(60_000);
     await signIn(page, email);
 
@@ -96,6 +100,29 @@ async function main(): Promise<void> {
     if ((await dock.count()) === 0) errors.push("dock: the launcher is not mounted");
     await shot(page, "dock-closed");
     notes.push(`dock present: ${await dock.count()}`);
+
+    // 1b) Lazy loading: the heavy surfaces are not in the ordinary page's
+    // scripts, and opening the window is what fetches them.
+    const heavy = /IdaraWindow|IdaraWorkspace|IdaraBlocks/;
+    const before = scripts.filter((u) => heavy.test(u));
+    notes.push(`scripts on the ordinary page: ${scripts.length}, heavy: ${before.length}`);
+    // The dev server prefetches dynamic chunks eagerly, so their presence here
+    // says nothing about the production bundle — the built client-reference
+    // manifests are the proof of that. What this run can still show is that the
+    // window is a separate chunk fetched around the moment it opens.
+    if (before.length > 0)
+      notes.push("lazy: dev prefetched the window chunk (production is proved from the build)");
+    const beforeCount = scripts.length;
+    await page.keyboard.press("Control+Period");
+    await page.waitForTimeout(2500);
+    const after = scripts.filter((u) => heavy.test(u));
+    notes.push(
+      `after opening: ${scripts.length} scripts (+${scripts.length - beforeCount}), heavy: ${after.length}`,
+    );
+    if (after.length === 0)
+      errors.push("lazy: opening the window fetched nothing, so the proof is inconclusive");
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(400);
 
     // 2) The position menu moves it without dragging, and resets.
     const menuButton = dock.getByRole("button").first();
@@ -146,10 +173,16 @@ async function main(): Promise<void> {
       const composer = page.locator("[data-idara-window] textarea");
       await composer.fill("Summarise this customer");
       await composer.press("Enter");
-      await page.waitForTimeout(6000);
-      await shot(page, "dock-answer");
       const evidence = page.locator("[data-idara-window]").getByText(/Evidence|الأدلة/);
-      if ((await evidence.count()) === 0) errors.push("answer: no evidence section");
+      const answered = await evidence
+        .first()
+        .waitFor({ state: "visible", timeout: 240_000 })
+        .then(() => true)
+        .catch(() => false);
+      await page.waitForTimeout(500);
+      await shot(page, "dock-answer");
+      notes.push(`answer arrived with evidence: ${answered}`);
+      if (!answered) errors.push("answer: no evidence section within four minutes");
     }
 
     // 5) The deep workspace.
@@ -228,4 +261,7 @@ async function main(): Promise<void> {
   }
 }
 
-await main();
+main().catch((err) => {
+  console.error(err);
+  process.exitCode = 1;
+});
