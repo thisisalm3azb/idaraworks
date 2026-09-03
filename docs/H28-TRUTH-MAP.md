@@ -291,6 +291,8 @@ The dock mount in the authenticated shell, the launcher island, the working wind
 | `h28c-security` | 11 passing, the adversarial set |
 | Local UI walk | clean: launcher, six positions, keyboard move and reset, shortcut, capsule, generated answer with evidence, workspace, settings, builder, Arabic RTL, 375 px, no console error, no horizontal overflow |
 | Test-project residue | zero: no fixture organisation, user, price row or conversation left |
+| CI on the shipped commit | run 33757723742 green on `a49ca12` (quality + integration on a fresh local Supabase with every migration applied); run 33762427679 green on `9481e45` |
+| Production | pre-flight clear, migrations 0128 and 0129 applied (127 → 129), 23/23 tables, smoke ALL 27 CHECKS PASSED with the flag off, residue 0, business counts unchanged |
 
 **Four test defects, corrected rather than weakened.**
 
@@ -327,3 +329,5 @@ and was not. Each suite and fixture now owns its own effective date.
 - Charging is not enabled: credits are internal units, the billing adapter records intent only, and no revenue or margin is claimed anywhere.
 - Semantic search and embeddings were deliberately not built: retrieval is structured through the module doors, which keeps tenant isolation and citation ground truth exact.
 - Inngest is not configured in production, so the background run executor and the schedule sweep only run through the authenticated cron route once its secret is set.
+- The live production build is `a49ca12`. The later `9481e45` is green in CI and on `main` but undeployed: the hosting plan allows 100 deployments a day and that limit was reached. Its only difference is the wording of an owner action inside the release gate, which nothing can render while the flag is off.
+- A policy row is effective from a microsecond-precise timestamp, while the gateway compares against a millisecond-truncated one, so a policy can take up to one millisecond to apply. Harmless in production, but it makes any test that writes a policy and immediately calls a model unreliable on a local database; write test policies as effective a second ago.

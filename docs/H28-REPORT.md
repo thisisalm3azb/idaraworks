@@ -1,7 +1,8 @@
 # H28 — Idara Intelligence: delivery report
 
-Status: **in progress** (the sections marked _pending_ are filled from the
-verification and production evidence).
+Status: **shipped, disabled by design.** The platform is in production behind
+its release flag with no AI provider configured. This is not "AI live": see
+section 2 for what is off and section 4 for what only you can turn on.
 
 Mandate: `phase2/14-POST-MVP-AMENDMENTS.md` §7 (owner direction, 2026-09-03).
 Truth map: `docs/H28-TRUTH-MAP.md` (Parts A–G).
@@ -215,11 +216,64 @@ console error or any page wider than its viewport.
 
 ### 3.4 CI on the exact commit
 
-_pending._
+The full pipeline ran on GitHub Actions for every candidate commit: format,
+lint with the boundary and tenancy rules, typecheck, unit tests, a dependency
+audit, the production build, Playwright browsers and the end-to-end smoke in
+one job, and in a second job a fresh local Supabase stack with the transaction
+pooler, every migration applied in order, and the complete integration suite
+including the H28 gateway, run and security suites.
+
+| Run | Commit | Result |
+| --- | --- | --- |
+| 33756230368 | 6c125f0 | failed at the format check, before it reached lint |
+| 33756537574 | d807dae | quality green; integration failed on the gateway suite |
+| 33757723742 | a49ca12 | **both jobs green** — the deployed commit |
+| 33761740651 | 165c981 | failed the typecheck on a test file |
+| 33762427679 | 9481e45 | **both jobs green** |
+
+The integration failure on `d807dae` was worth having. The gateway resolves an
+organisation's policy against a timestamp truncated to milliseconds, while the
+database records the row with microsecond precision. Against a remote database
+the round trip always carries the call into a later millisecond, so the tests
+passed locally every time; against the local database CI uses, the write and
+the call land in the same millisecond and the policy just written is not yet
+effective. The suite was asserting on the previous policy version. Test
+policies are now written as effective a second ago, which is what they always
+meant.
 
 ### 3.5 Production
 
-_pending._
+| Step | Result |
+| --- | --- |
+| Read-only pre-flight | clear: 127 migrations applied, exactly H28's two pending, none of its 23 tables present |
+| Migrations | 0128 and 0129 applied; 127 → 129 |
+| Schema after | all 23 tables present, `cap.idara` registered on every plan, the usage ledger's feature check widened |
+| Deployment | `a49ca12`, the CI-green commit, live and serving: `/api/health` reports `a49ca122dc726c39fc097b6c331111219146a282` |
+| Live routes with the flag off | `/api/cron/idara` and `/platform/ai` both return not-found, and the cron route still returns not-found when called with a bearer token |
+| Production smoke | **all 27 checks passed** with the flag off |
+| Residue | 0 rows: the smoke organisation, its two members, its customer, deal, conversation, run and usage rows are all gone |
+| Business data | unchanged, counted before and after: 39 organisations, 60 users, 51 customers, 93 jobs, 78 invoices, 13 approvals, 9 usage rows, 623 audit rows |
+
+The smoke proves, against the production database, that every H28 table exists
+with row-level security and no DELETE grant, that no organisation other than
+its own fixture has any Idara data, that the gate reports the dock off with the
+owner action stated, that a model call is refused and the refusal metered, that
+a run still completes and answers from evidence with nothing generated, that no
+successful provider call exists and no credit was consumed, that restricted
+tools are never usable and a viewer cannot use a change tool, that injected
+instructions inside content are detected, that the evaluation dataset passes,
+that a narrowing custom agent can be created and a widening one refused, and
+that every operation left audit evidence.
+
+**One commit is merged but not deployed.** `9481e45` is green in CI and on
+`main`; the hosting plan's daily deployment limit (100 a day on the free plan)
+was reached before it could ship, and raising that limit is a purchase, so it
+was left alone. Its only difference from the live build is the wording of an
+owner action inside the release gate, on a path no one can reach while the flag
+is off: with the flag unset every surface returns not-found, so nothing renders
+that message. The production smoke above ran that merged code against the
+production database, which is why its twenty-seventh check passes. Deploy
+`main` when the limit resets, or let the next push do it.
 
 ## 4. Owner actions before paid AI can run
 
@@ -240,6 +294,7 @@ any model.
 | OA-8 | Provision Inngest keys, or set `CRON_SECRET` and point a scheduler at `/api/cron/idara`, if background runs and proactive briefings should execute. | Vercel production environment | Without either, queued runs and schedules simply never fire; nothing breaks. |
 | OA-9 | Review the model registry's privacy facts against your contract before enabling a model with an unavailable zero-retention or residency option. | `src/platform/ai/registry.ts` and the settings screen | Only your contract determines what a provider actually offers you. |
 | OA-10 | Decide whether the public homepage should say the agents are live once they are. Today it describes them without claiming either "available now" or "planned", and a unit test keeps both claims out. | `src/app/_home` and `docs/product/IDARAWORKS_BUSINESS_OS_NORTH_STAR.md` §7 | The north star forbids claiming live AI before it runs, and only you can say when it is. |
+| OA-11 | Deploy `main` once the hosting plan's daily deployment limit resets, so the merged `9481e45` reaches production. Nothing user-facing depends on it. | Vercel | Raising the limit is a purchase, and the deployment can simply wait. |
 
 Voice, transcription, image and document-vision remain declared seams with no
 provider, no credential and no code path that could call one. Nothing was
