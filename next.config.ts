@@ -153,6 +153,12 @@ const nextConfig: NextConfig = {
        */
       "./node_modules/playwright-core/browsers.json",
     ],
+    // H27: the revenue report renders a branded PDF through the same renderer,
+    // as its own function, so it needs the same two explicit includes.
+    "/api/o/**/revenue/**": [
+      "./node_modules/@sparticuz/chromium/bin/*",
+      "./node_modules/playwright-core/browsers.json",
+    ],
     "/d/**": [
       // bin/ holds the payloads @sparticuz decompresses into /tmp at runtime;
       // chromium.br alone is 65 MB. Nothing imports them, so only an explicit

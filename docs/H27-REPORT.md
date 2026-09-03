@@ -111,12 +111,50 @@ scrolling inside its own container) and is re-proven by the production walk.
 
 ### 3.4 CI on the exact commit
 
-_pending_
+Green on every H27 commit that reached CI: 6d2d2d1 (run 33696192960),
+770a741 (33699969230), 9445a77 (33700761790), 58fa0f0 (33703723787) and the
+shipped commit (see §3.5): quality (format, lint, typecheck, unit, audit,
+build, e2e smoke) and integration (every suite including h27a–h27e and the
+bleed harness on CI's own Supabase stack).
 
-### 3.5 Production
+### 3.5 Production (2026-09-03, in order)
 
-_pending_ — pre-flight, baseline, migrations 0120–0127, health, smoke with
-the flag off, flag on, smoke with the flag on, UI walk, residue, health.
+- **Read-only baseline:** `prod-health.ts` HEALTHY (119 applied, 8 pending,
+  0 tables without RLS, no unexpected DELETE grants, 0 new orphan identities
+  or sessions); `h27-deploy-preflight.ts` CLEAR (pending = exactly
+  0120–0127; every live `approval.subject_type`, `approval_rule.subject_type`,
+  `sales_activity.kind` and `import_batch.kind` inside the widened lists; no
+  activity without a lead or opportunity; helpers and prerequisite tables
+  present; no `crm_*` tables; baseline orgs 39, users 60, customers 51,
+  leads 0, opportunities 0, activities 0, stages 0, jobs 93, quotes 46,
+  invoices 78, approvals 13).
+- **Migrations:** `migrate-prod.ts` dry run listed the eight files, then
+  applied exactly 0120_h27a_revenue_foundation … 0127_h27g_automation_sweep_discovery.
+  Afterwards: 127 applied, 0 pending, 244 public tables, 0 without RLS,
+  HEALTHY; 19 `crm_*` tables all under RLS and all empty; `cap.revenue_studio`
+  enabled on business, free, growth and starter; `app.orgs_with_crm_automations()`
+  present; `pipeline_stage` carries its three new columns; no DELETE grant on
+  any `crm_*` table; baseline counts unchanged.
+- **Flag off, backend smoke on the migrated database (deployed app still
+  b415672):** `h27-prod-smoke.ts` **38/38** — quarantine, duplicate-safe and
+  idempotent conversion, governed moves (requirements refuse, history kept,
+  stale version refused), product lines owning value, a discount approval
+  decided by a second member (a requester may not decide their own), consent
+  then suppression outranking it, marketing preview and fail-closed send,
+  forecast with named models, snapshot, scenario overlay leaving the live row
+  alone, target basis, attribution by model, automation dry run then live
+  idempotent run, merge preview/apply/evidence, success overview, funnel
+  report, import preview and idempotent apply, board totals over the full
+  result, assistant fails closed, viewer refused, another organisation sees
+  nothing, hub and PDF route 404; residue 0; historical counts intact.
+- **First deploy (58fa0f0) and a real finding:** with the flag unset the hub
+  route answered 200 and its streamed payload contained the hub's own title:
+  in the app router a layout and its page render concurrently, so the
+  layout's `notFound()` hid the subtree but did not stop the page from
+  rendering its data. Fixed in 79caf35: every revenue page checks the flag
+  itself before any read (unit law `revenue-gate-law.test.ts`), the layout
+  and the report route keep their gates.
+- **Shipped deploy, flag on, smoke on, UI walk, health:** _pending_
 
 ## 4. Untouched, as instructed
 
