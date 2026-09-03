@@ -83,7 +83,7 @@ export default async function ForecastPage({
       {rows.length === 0 ? (
         <p className="text-sm text-ink-muted">{t("common.none")}</p>
       ) : (
-        <div className="w-0 min-w-full overflow-x-auto">
+        <div className="w-0 min-w-full relative overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="text-xs text-ink-muted">
               <tr>
@@ -279,7 +279,7 @@ export default async function ForecastPage({
         )}
         <Card>
           <CardHeader title={t("revenue.forecast.by_stage")} />
-          <div className="w-0 min-w-full overflow-x-auto">
+          <div className="w-0 min-w-full relative overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="text-xs text-ink-muted">
                 <tr>
@@ -369,7 +369,7 @@ export default async function ForecastPage({
             </Button>
           </form>
           {accuracy.ok && accuracy.data.length > 0 ? (
-            <div className="w-0 min-w-full overflow-x-auto">
+            <div className="w-0 min-w-full relative overflow-x-auto">
               <table className="mt-3 w-full text-sm">
                 <thead className="text-xs text-ink-muted">
                   <tr>
@@ -464,7 +464,7 @@ export default async function ForecastPage({
               {scenario.assumptions ? (
                 <p className="mb-2 text-xs text-ink-muted">{scenario.assumptions}</p>
               ) : null}
-              <div className="w-0 min-w-full overflow-x-auto">
+              <div className="w-0 min-w-full relative overflow-x-auto">
                 <table className="w-full">
                   <thead className="text-xs text-ink-muted">
                     <tr>

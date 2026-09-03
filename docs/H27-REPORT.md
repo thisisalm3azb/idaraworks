@@ -112,7 +112,8 @@ scrolling inside its own container) and is re-proven by the production walk.
 ### 3.4 CI on the exact commit
 
 Green on every H27 commit that reached CI: 6d2d2d1 (run 33696192960),
-770a741 (33699969230), 9445a77 (33700761790), 58fa0f0 (33703723787) and the
+770a741 (33699969230), 9445a77 (33700761790), 58fa0f0 (33703723787),
+79caf35 (33706566440), 6e918dd (33709176289), ece5150 (33712221274) and the
 shipped commit (see §3.5): quality (format, lint, typecheck, unit, audit,
 build, e2e smoke) and integration (every suite including h27a–h27e and the
 bleed harness on CI's own Supabase stack).

@@ -222,7 +222,7 @@ export function PipelineBoard({
         </div>
       ) : null}
 
-      <div className="flex w-0 min-w-full snap-x gap-3 overflow-x-auto pb-2 [scrollbar-width:thin]">
+      <div className="flex w-0 min-w-full snap-x gap-3 relative overflow-x-auto pb-2 [scrollbar-width:thin]">
         {stages.map((s) => {
           const list = byStage.get(s.key) ?? [];
           const a = agg.get(s.key);

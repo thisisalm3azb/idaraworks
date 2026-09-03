@@ -193,7 +193,7 @@ export default async function DealRoomPage({
 
       <nav
         aria-label={t("revenue.deal.tabs")}
-        className="flex w-0 min-w-full gap-1 overflow-x-auto [scrollbar-width:thin]"
+        className="flex w-0 min-w-full gap-1 relative overflow-x-auto [scrollbar-width:thin]"
       >
         {TABS.map((k) => (
           <Link
@@ -462,7 +462,7 @@ export default async function DealRoomPage({
                 description={t("revenue.deal.products_hint")}
               />
             ) : (
-              <div className="w-0 min-w-full overflow-x-auto">
+              <div className="w-0 min-w-full relative overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead className="text-xs text-ink-muted">
                     <tr>

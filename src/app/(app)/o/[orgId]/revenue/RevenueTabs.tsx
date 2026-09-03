@@ -44,7 +44,7 @@ export function RevenueTabs({
   return (
     <nav
       aria-label={labels.hub}
-      className="flex w-0 min-w-full gap-1 overflow-x-auto pb-1 [scrollbar-width:thin]"
+      className="flex w-0 min-w-full gap-1 relative overflow-x-auto pb-1 [scrollbar-width:thin]"
     >
       {visible.map((tab) => {
         const current = tab.key === active;

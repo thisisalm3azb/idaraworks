@@ -178,7 +178,7 @@ export default async function AutomationsPage({
                       {t("revenue.automations.no_runs")}
                     </p>
                   ) : (
-                    <div className="w-0 min-w-full overflow-x-auto">
+                    <div className="w-0 min-w-full relative overflow-x-auto">
                       <table className="mt-2 w-full text-xs">
                         <thead className="text-ink-muted">
                           <tr>

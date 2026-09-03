@@ -162,7 +162,7 @@ export default async function ReportsPage({
               {t("revenue.forecast.won")} {money(funnel.data.opportunities.won.valueMinor)}
             </p>
             <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
-              <div className="w-0 min-w-full overflow-x-auto">
+              <div className="w-0 min-w-full relative overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead className="text-xs text-ink-muted">
                     <tr>
@@ -182,7 +182,7 @@ export default async function ReportsPage({
                   </tbody>
                 </table>
               </div>
-              <div className="w-0 min-w-full overflow-x-auto">
+              <div className="w-0 min-w-full relative overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead className="text-xs text-ink-muted">
                     <tr>
@@ -202,7 +202,7 @@ export default async function ReportsPage({
                   </tbody>
                 </table>
               </div>
-              <div className="w-0 min-w-full overflow-x-auto">
+              <div className="w-0 min-w-full relative overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead className="text-xs text-ink-muted">
                     <tr>
@@ -252,7 +252,7 @@ export default async function ReportsPage({
                     : `${Math.round(winLoss.data.won.avgCycleDays)} ${t("revenue.days")}`}
                 </strong>
               </p>
-              <div className="w-0 min-w-full overflow-x-auto">
+              <div className="w-0 min-w-full relative overflow-x-auto">
                 <table className="w-full">
                   <thead className="text-xs text-ink-muted">
                     <tr>
@@ -279,7 +279,7 @@ export default async function ReportsPage({
                   </tbody>
                 </table>
               </div>
-              <div className="w-0 min-w-full overflow-x-auto">
+              <div className="w-0 min-w-full relative overflow-x-auto">
                 <table className="w-full">
                   <thead className="text-xs text-ink-muted">
                     <tr>
@@ -316,7 +316,7 @@ export default async function ReportsPage({
           />
           {activity.ok ? (
             <div className="flex flex-col gap-2 text-sm">
-              <div className="w-0 min-w-full overflow-x-auto">
+              <div className="w-0 min-w-full relative overflow-x-auto">
                 <table className="w-full">
                   <thead className="text-xs text-ink-muted">
                     <tr>
@@ -340,7 +340,7 @@ export default async function ReportsPage({
                   </tbody>
                 </table>
               </div>
-              <div className="w-0 min-w-full overflow-x-auto">
+              <div className="w-0 min-w-full relative overflow-x-auto">
                 <table className="w-full">
                   <thead className="text-xs text-ink-muted">
                     <tr>

@@ -372,7 +372,127 @@ async function main(): Promise<void> {
         await m.waitForTimeout(2500);
         await m.screenshot({ path: path.join(OUT, `prod-${name}.png`), fullPage: true });
         const w = await m.evaluate(() => document.documentElement.scrollWidth);
-        if (w > 380) errors.push(`${name}: horizontal overflow ${w}px`);
+        if (w > 380) {
+          errors.push(`${name}: horizontal overflow ${w}px`);
+          // Name the culprits: the widest non-fixed elements and their scroll ancestors.
+          // Viewport metrics: under mobile emulation Chrome may widen the initial containing block itself.
+          const metrics = (await m.evaluate(String.raw`(() => ({
+            client: document.documentElement.clientWidth, inner: window.innerWidth,
+            scroll: document.documentElement.scrollWidth, body: document.body.scrollWidth,
+            vv: window.visualViewport ? Math.round(window.visualViewport.width) : -1,
+            meta: (document.querySelector("meta[name=viewport]") || {}).content || null
+          }))()`)) as Record<string, unknown>;
+          notes.push(`${name}-metrics: ${JSON.stringify(metrics)}`);
+          // Same page in a plain 375 px context (no mobile emulation): the containing block cannot grow, so the offender must protrude.
+          const TRACE_JS = String.raw`(() => {
+            const out = [];
+            const els = Array.from(document.querySelectorAll("body *"));
+            for (const el of els) {
+              const cs = getComputedStyle(el);
+              if (cs.position === "fixed" || cs.display === "none") continue;
+              const r = el.getBoundingClientRect();
+              if (r.right <= 376 || r.width < 8) continue;
+              let n = el.parentElement, clipped = false;
+              while (n && n !== document.body) {
+                const o = getComputedStyle(n).overflowX;
+                if ((o === "auto" || o === "hidden" || o === "scroll") && n.getBoundingClientRect().width <= 376) { clipped = true; break; }
+                n = n.parentElement;
+              }
+              if (clipped) continue;
+              const cls = typeof el.className === "string" ? el.className : "";
+              const parent = el.parentElement;
+              const pcls = parent && typeof parent.className === "string" ? parent.className : "";
+              out.push(el.tagName.toLowerCase() + " right=" + Math.round(r.right) + " w=" + Math.round(r.width) + " cls=" + cls.slice(0, 70) + " <- " + (parent ? parent.tagName.toLowerCase() : "") + " " + pcls.slice(0, 50));
+              if (out.length >= 15) break;
+            }
+            return out;
+          })()`;
+          const pctx = await browser.newContext({
+            viewport: { width: 375, height: 812 },
+            storageState: await ctx.storageState(),
+          });
+          const pp = await pctx.newPage();
+          pp.setDefaultTimeout(90_000);
+          await pp.goto(`${BASE}${url}`, { waitUntil: "load" });
+          await pp.waitForTimeout(2500);
+          const plainScroll = await pp.evaluate(() => document.documentElement.scrollWidth);
+          const plain = (await pp.evaluate(TRACE_JS)) as string[];
+          notes.push(`${name}-plain375: scroll=${plainScroll} ${plain.join(" || ")}`);
+          await pp.screenshot({
+            path: path.join(OUT, `prod-${name}-plain375.png`),
+            fullPage: true,
+          });
+          await pctx.close();
+          // Hide-and-measure in the mobile context: descend into whichever child carries the width.
+          const carriers = (await m.evaluate(String.raw`(() => {
+            const out = [];
+            const sw = () => document.documentElement.scrollWidth;
+            const base = sw();
+            let node = document.body;
+            for (let depth = 0; depth < 30; depth++) {
+              let found = null;
+              for (const child of Array.from(node.children)) {
+                const cs = getComputedStyle(child);
+                if (cs.display === "none" || cs.position === "fixed") continue;
+                const prev = child.style.display;
+                child.style.display = "none";
+                const w = sw();
+                child.style.display = prev;
+                if (w <= 380) { found = child; break; }
+              }
+              if (!found) {
+                out.push("stop@" + node.tagName.toLowerCase() + " cls=" + (typeof node.className === "string" ? node.className.slice(0, 60) : "") + " base=" + base + " now=" + sw() + " children=" + node.children.length);
+                break;
+              }
+              const cls = typeof found.className === "string" ? found.className : "";
+              out.push(found.tagName.toLowerCase() + " w=" + Math.round(found.getBoundingClientRect().width) + " cls=" + cls.slice(0, 70));
+              node = found;
+            }
+            return out;
+          })()`)) as string[];
+          notes.push(`${name}-carriers: ${carriers.join(" > ")}`);
+          // No-exclusion dump: every box whose right edge passes 590 px, sorted by right edge.
+          const dump = (await m.evaluate(String.raw`(() => {
+            const rows = [];
+            for (const el of Array.from(document.querySelectorAll("html *"))) {
+              const r = el.getBoundingClientRect();
+              if (r.right < 590) continue;
+              const cs = getComputedStyle(el);
+              let n = el.parentElement, cb = "";
+              while (n) { const ps = getComputedStyle(n).position; if (ps !== "static") { cb = n.tagName.toLowerCase() + "." + (typeof n.className === "string" ? n.className.slice(0, 30) : ""); break; } n = n.parentElement; }
+              const cls = typeof el.className === "string" ? el.className : "";
+              rows.push({ right: Math.round(r.right), s: el.tagName.toLowerCase() + "#" + (el.id || "") + " w=" + Math.round(r.width) + " x=" + Math.round(r.left) + " y=" + Math.round(r.top) + " pos=" + cs.position + " disp=" + cs.display + " vis=" + cs.visibility + " cb=" + cb + " cls=" + cls.slice(0, 80) });
+            }
+            rows.sort((a, b) => b.right - a.right);
+            return rows.slice(0, 24).map((x) => x.right + " " + x.s);
+          })()`)) as string[];
+          notes.push(`${name}-dump: ${dump.join(" || ")}`);
+          // Live toggles: which change removes the overflow.
+          const toggles = (await m.evaluate(String.raw`(() => {
+            const sw = () => document.documentElement.scrollWidth;
+            const out = [];
+            const test = (label, apply) => { const undo = apply(); out.push(label + "=" + sw()); undo(); };
+            const sc = document.querySelector(".snap-x");
+            const main = document.querySelector("main");
+            const setStyle = (els, prop, val) => { const prev = els.map((e) => e.style.getPropertyValue(prop)); els.forEach((e) => e.style.setProperty(prop, val, "important")); return () => els.forEach((e, k) => e.style.setProperty(prop, prev[k])); };
+            if (sc) test("scroller-relative", () => setStyle([sc], "position", "relative"));
+            if (sc) test("scroller-contain-paint", () => setStyle([sc], "contain", "paint"));
+            if (main) test("main-clip", () => setStyle([main], "overflow-x", "clip"));
+            if (main) test("main-relative", () => setStyle([main], "position", "relative"));
+            test("body-relative", () => setStyle([document.body], "position", "relative"));
+            const secs = Array.from(document.querySelectorAll(".snap-start"));
+            secs.forEach((sec, k) => test("hide-col" + k, () => setStyle([sec], "display", "none")));
+            test("hide-cards", () => setStyle(Array.from(document.querySelectorAll(".snap-start li")), "display", "none"));
+            test("hide-selects", () => setStyle(Array.from(document.querySelectorAll(".snap-start select")), "display", "none"));
+            test("hide-sronly", () => setStyle(Array.from(document.querySelectorAll(".sr-only")), "display", "none"));
+            test("hide-fixed", () => setStyle(Array.from(document.querySelectorAll("*")).filter((e) => getComputedStyle(e).position === "fixed"), "display", "none"));
+            test("hide-abs", () => setStyle(Array.from(document.querySelectorAll("*")).filter((e) => getComputedStyle(e).position === "absolute"), "display", "none"));
+            test("hide-dialogs", () => setStyle(Array.from(document.querySelectorAll("dialog, [role=dialog]")), "display", "none"));
+            test("hide-headers", () => setStyle(Array.from(document.querySelectorAll(".snap-start header")), "display", "none"));
+            return out;
+          })()`)) as string[];
+          notes.push(`${name}-toggles: ${toggles.join(" ")}`);
+        }
       }
       await mctx.close();
     } finally {
