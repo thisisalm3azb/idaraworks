@@ -161,4 +161,43 @@ ceilings; the GOSI 2024 transition; and the end-of-service wage base.
 
 ## Part I. Implementation record
 
-_Filled as the build proceeds._
+### I.1 Slices, in the order they were built
+
+| Slice | What it added | Migrations |
+| --- | --- | --- |
+| H29A | The country-pack substrate (`src/platform/country/`), the UAE and Saudi packs, the establishment and its registrations, pack adoption, the readiness computation | 0130 |
+| H29B | One electronic-invoicing framework with ZATCA and UAE PINT adapters, both fail-closed; privacy metadata per establishment | 0131 |
+| H29C | The Spanish catalogue in full; the offered-locale gate; translation governance | 0132 |
+| H29D | The operator language-release centre (`/platform/languages`) | — |
+| H29E | The Country Readiness Centre, the establishment editor, the version timeline and the rule impact simulator; the shipped pack rows | 0133 |
+
+### I.2 Decisions taken during the build, beyond Part E
+
+| # | Decision | Why |
+| --- | --- | --- |
+| I.2.1 | **The `country_pack` table carries only what the database must reason about** — which versions exist, their country, and their validity window — while the registry in code stays the source of truth for content. | 0130 created the table but no rows, so the first adoption failed on a foreign key. The fix could have been to drop the table and keep everything in code, but then the non-overlap rule would be an assertion in TypeScript rather than an exclusion constraint, and the reviews would have nowhere to live. Adding a pack version is now a two-part release, and an integration test fails if the two halves disagree. |
+| I.2.2 | **A language being offered is separate from a language having a catalogue.** `SUPPORTED_LOCALES` is the registry every catalogue and test is checked against; `offeredLocales()` is what the switcher shows. | The catalogue can be complete while the native review the mandate requires is still outstanding. Conflating the two would mean either shipping an unreviewed language or keeping the catalogue out of the registry and therefore out of the tests. |
+| I.2.3 | **Copy that lists the interface languages takes them as an ICU variable.** | Several marketing and onboarding strings said "Arabic and English" in prose. That was true only while there were exactly two; the day a third is released those sentences become false claims in three catalogues at once. `Intl.DisplayNames` plus `Intl.ListFormat` name and join them in the reader's own language. |
+| I.2.4 | **Spanish is a product language, not a document-issuance language.** `DOC_LANGUAGES` stays `en / ar / bilingual`. | No shipped country pack requires or permits Spanish documents, and the issuer identity has no Spanish address field. Adding Spanish to document issuance would be a claim about jurisdictions H29 has no pack for. The renderer does carry a `[lang="es"]` font rule, so customer-authored Spanish inside a document renders in a Latin face rather than falling through to the Arabic one. |
+| I.2.5 | **The language switcher became a list, and in the workspace header a menu.** | A two-way toggle cannot express three languages: a single button labelled "العربية" says nothing about where Spanish went. |
+| I.2.6 | **`ar.same.json` was created alongside `es.same.json`.** | Twenty-five Arabic strings are byte-identical to their English ones. Nineteen are explained by the shared-token rule (product names, standard acronyms, bare placeholders); six were reviewed by hand and recorded (a keyboard shortcut, a bilingual document's own English sample title, and strings that are only punctuation and placeholders). Without the record, the leakage test could only be run for the newest locale. |
+| I.2.7 | **The adoption history is paged; the establishment list is not.** | Adoptions are insert-only and accumulate for the life of an establishment. Establishments are bounded by design, the way teams and templates are, and readiness has to be computed across all of them at once. |
+
+### I.3 Defects found and fixed during the build
+
+| Defect | How it surfaced | Fix |
+| --- | --- | --- |
+| `country_pack` had no rows, so `adoptPack` failed on `establishment_pack_adoption_pack_key_fkey`. | The first integration run of the adoption path. | Migration 0133 seeds the shipped versions and their review records; an integration test asserts registry/table parity. |
+| `jobs.limit_reached` renders a literal `{jobs}` under Arabic if the call site ever stops passing it. | The new ICU-argument parity test. | Recorded as the one documented exception, naming its call site, so the test protects the invariant rather than being weakened. |
+| The Arabic catalogue restructures plurals, so it legitimately uses fewer arguments than English. | The same test, at first written as strict equality. | The law became "no translation may invent an argument", with strict equality kept for Spanish, which preserves English's plural shape. |
+| `home.gcc.n1`, `home.pricing.s2` and five other strings hard-coded the language pair. | Reading the catalogue for language claims while wiring the switcher. | Parameterised (I.2.3), with a test that fails if a marketing string ever names the pair literally again. |
+
+### I.4 What was not built, and why
+
+| Not built | Reason |
+| --- | --- |
+| Spanish as a document-issuance language | I.2.4. No pack requires it; adding it would imply a jurisdiction claim. |
+| A Spanish-speaking country pack | The mandate forbids it: Spanish-language support does not create a Spain, Mexico or Latin American legal pack. |
+| ZATCA submission, clearance or reporting | No credential exists. The adapter is contract-tested against the published standards with deterministic fixtures and stays `unavailable`. |
+| UAE electronic-invoicing activation | No Accredited Service Provider is appointed and no phase date could be read from an official text (D2). |
+| Conversion of historical accounting records, the H24 transition rulings, PO-002, the H22 stock-posting issue, H28 external AI activation | Explicitly out of scope in the mandate. Untouched. |

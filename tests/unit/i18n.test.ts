@@ -120,6 +120,26 @@ describe("catalog parity", () => {
     }
   });
 
+  it("every Arabic message that should carry Arabic script does (H29 audit of H22–H28)", () => {
+    // A key can pass the leakage test by differing from English while still not
+    // being Arabic — a paraphrase left in English, a half-edited string, a
+    // pasted transliteration. Script presence catches all three, and running it
+    // across the whole catalogue is the mechanised version of re-auditing every
+    // phase's Arabic by hand.
+    //
+    // Keys whose ENGLISH has no letters at all (pure placeholders, punctuation,
+    // numbers) are skipped: there is nothing there to be in any language.
+    const allowed = new Set(arSame as readonly string[]);
+    const ARABIC = /[؀-ۿ]/;
+    const missing: string[] = [];
+    for (const [key, source] of Object.entries(en as Record<string, string>)) {
+      if (allowed.has(key) || !/[A-Za-z]/.test(source)) continue;
+      const value = (ar as Record<string, string>)[key] ?? "";
+      if (!ARABIC.test(value)) missing.push(`${key} = "${value}"`);
+    }
+    expect(missing, `${missing.length} Arabic value(s) carry no Arabic script`).toEqual([]);
+  });
+
   it("no hardcoded domain noun in any message value (doc 07 #1 — nouns are variables)", () => {
     // Domain nouns must arrive via term() variables, never be baked into a
     // catalog string (else every template × language needs its own catalog).

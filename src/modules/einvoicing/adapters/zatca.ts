@@ -277,6 +277,20 @@ export const zatcaAdapter: EInvoiceAdapter = {
           "The cryptographic stamp and its QR tags are absent: no certificate has been issued through ZATCA onboarding.",
       });
 
+    // The FIRST document in a chain has no previous invoice hash, and the value
+    // ZATCA requires in that position could not be read from a primary source —
+    // evidence log B5 records the TRANSFORM (SHA-256), not the initial value.
+    // Inventing one would be exactly the fabrication the mandate forbids, so the
+    // element is left empty and the gap is reported on the document itself
+    // rather than discovered by an authority later.
+    if (!ctx.previousHash)
+      issues.push({
+        severity: "warning",
+        code: "pih-initial-unknown",
+        message:
+          "First document in its chain: the previous-invoice-hash value ZATCA requires in that position is not encoded. Confirm it from the Security Features Implementation Standards before any submission.",
+      });
+
     return {
       payload,
       payloadKind: "ubl_xml",

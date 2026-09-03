@@ -189,6 +189,23 @@ describe("the ZATCA adapter", () => {
     expect(second.documentHash).not.toBe(first.documentHash);
   });
 
+  it("reports the unknown initial previous-invoice-hash rather than inventing one", () => {
+    // Evidence log B5 records the TRANSFORM ZATCA uses for the previous invoice
+    // hash, not the value a chain's FIRST document must carry. A guess there is
+    // a fabricated value an authority would check, so the gap is reported on the
+    // document and the element is left empty.
+    const first = zatca.prepare(SAUDI_INVOICE, NO_CREDENTIAL);
+    expect(first.issues.map((i) => i.code)).toContain("pih-initial-unknown");
+    expect(first.issues.find((i) => i.code === "pih-initial-unknown")?.severity).toBe("warning");
+
+    // A document that HAS a predecessor carries no such warning.
+    const second = zatca.prepare(
+      { ...SAUDI_INVOICE, id: "33333333-2222-3333-4444-555555555555", reference: "INV-000125" },
+      { ...NO_CREDENTIAL, counter: 2, previousHash: first.documentHash },
+    );
+    expect(second.issues.map((i) => i.code)).not.toContain("pih-initial-unknown");
+  });
+
   it("is deterministic: the same document prepared twice is byte-identical", () => {
     const a = zatca.prepare(SAUDI_INVOICE, NO_CREDENTIAL);
     const b = zatca.prepare(SAUDI_INVOICE, NO_CREDENTIAL);

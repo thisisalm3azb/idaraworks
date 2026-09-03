@@ -429,6 +429,14 @@ h2.ds-h{font-size:15pt}h3.ds-h{font-size:12.5pt}h4.ds-h{font-size:11pt}
 .ds-evidence code{font-size:8.5pt;word-break:break-all}
 [lang="ar"]{font-family:"Noto Naskh Arabic","Noto Sans",sans-serif}
 [lang="en"]{font-family:"Noto Sans","Noto Naskh Arabic",sans-serif}
+/* H29: a Spanish run needs the same Latin face as English, and needs it named.
+   Without this rule an es-tagged block falls through to the document default,
+   which on a Saudi document is the Arabic face — Latin text set in a Naskh
+   fallback, with the wrong metrics and no guarantee the accented characters
+   exist in it. Spanish is a product language, not a document-issuance language
+   (DOC_LANGUAGES is still en / ar / bilingual), but a customer-authored block
+   can carry Spanish and must render properly when it does. */
+[lang="es"]{font-family:"Noto Sans","Noto Naskh Arabic",sans-serif}
 `;
 
 const WATERMARK: Record<DocSettings["watermark"], DocumentWatermark | null> = {

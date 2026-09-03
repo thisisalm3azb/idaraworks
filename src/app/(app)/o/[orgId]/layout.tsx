@@ -18,6 +18,7 @@ import {
   managementStudioEnabled,
   documentStudioEnabled,
   revenueStudioEnabled,
+  countryPacksEnabled,
 } from "@/platform/flags";
 import { resolveEntitlements } from "@/platform/entitlements";
 import {
@@ -99,6 +100,9 @@ export default async function OrgLayout({
     // H26 release gate — same law.
     documentSurfaces: documentStudioEnabled(),
     revenueSurfaces: revenueStudioEnabled(),
+    // H29 release gate — same law: the country screens are absent from every
+    // menu until the deployment turns them on.
+    countrySurfaces: countryPacksEnabled(),
   };
   const groups: NavGroupVM[] = filterGroupsByBlueprint(
     buildNavGroups(input).map((g) => ({

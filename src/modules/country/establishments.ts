@@ -108,6 +108,15 @@ function asJson<T>(value: unknown): T | null {
   return value as T;
 }
 
+/**
+ * Every establishment an organisation has, unpaged and on purpose.
+ *
+ * An establishment is a legal presence: one per branch, registration or country.
+ * Organisations have a handful of them, the way they have a handful of teams or
+ * templates, and readiness has to be computed across all of them at once for the
+ * centre to mean anything. The unbounded-growth tables H29 adds — pack
+ * adoptions, electronic-invoicing documents and their events — are paged.
+ */
 export async function listEstablishmentsIn(tx: TenantTx, ctx: Ctx): Promise<EstablishmentRow[]> {
   const rows = (await tx.execute(sql`
     select id::text as id, code, legal_name, trading_name, legal_name_local, country, pack_key,

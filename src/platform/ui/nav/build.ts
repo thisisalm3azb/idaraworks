@@ -75,6 +75,8 @@ type ItemSpec = {
   requiresDocumentSurfaces?: boolean;
   /** H27 release gate (platform/flags.ts revenueStudioEnabled). */
   requiresRevenueSurfaces?: boolean;
+  /** H29 release gate (platform/flags.ts countryPacksEnabled). */
+  requiresCountrySurfaces?: boolean;
 };
 
 type GroupSpec = { key: string; labelKey: string; icon: IconName; items: ItemSpec[] };
@@ -655,6 +657,14 @@ const GROUPS: GroupSpec[] = [
         action: "members.view",
       },
       {
+        key: "countries",
+        labelKey: "nav.countries",
+        path: "/settings/countries",
+        icon: "globe",
+        action: "country.view",
+        requiresCountrySurfaces: true,
+      },
+      {
         key: "subscription",
         labelKey: "nav.subscription",
         path: "/settings/subscription",
@@ -689,6 +699,8 @@ export type BuildNavInput = {
   documentSurfaces?: boolean;
   /** H27 release gate (platform/flags.ts revenueStudioEnabled). */
   revenueSurfaces?: boolean;
+  /** Whether the H29 country-pack screens are released. Same law. */
+  countrySurfaces?: boolean;
 };
 
 function resolveItem(spec: ItemSpec, input: BuildNavInput): NavItem | null {
@@ -699,6 +711,7 @@ function resolveItem(spec: ItemSpec, input: BuildNavInput): NavItem | null {
   if (spec.requiresStudioSurfaces === true && input.studioSurfaces !== true) return null;
   if (spec.requiresDocumentSurfaces === true && input.documentSurfaces !== true) return null;
   if (spec.requiresRevenueSurfaces === true && input.revenueSurfaces !== true) return null;
+  if (spec.requiresCountrySurfaces === true && input.countrySurfaces !== true) return null;
   if (!can(input.archetype, spec.action)) return null;
   const entitled = spec.feature === undefined || (input.features[spec.feature] ?? false);
   if (entitled) {

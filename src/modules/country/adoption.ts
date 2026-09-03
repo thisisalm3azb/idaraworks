@@ -277,7 +277,21 @@ export async function adoptPack(
   );
 }
 
-export async function listAdoptions(ctx: Ctx, establishmentId: string): Promise<AdoptionRow[]> {
+/**
+ * The adoption history, newest effective date first, PAGED.
+ *
+ * Adoptions are insert-only and accumulate for the life of an establishment, so
+ * this is an unbounded-growth table and an unpaged read of it is a defect
+ * waiting for a long-lived tenant. The page asks for one screenful and says so;
+ * nothing here silently truncates.
+ */
+export async function listAdoptions(
+  ctx: Ctx,
+  establishmentId: string,
+  page: { limit: number; offset: number } = { limit: 50, offset: 0 },
+): Promise<AdoptionRow[]> {
+  const limit = Math.min(Math.max(page.limit, 1), 200);
+  const offset = Math.max(page.offset, 0);
   return withCtx(ctx, async (tx) => {
     const rows = (await tx.execute(sql`
       select id::text as id, establishment_id::text as establishment_id, pack_key,
@@ -285,7 +299,8 @@ export async function listAdoptions(ctx: Ctx, establishmentId: string): Promise<
              note, superseded_by::text as superseded_by, created_at::text as created_at
       from public.establishment_pack_adoption
       where org_id = ${ctx.orgId} and establishment_id = ${establishmentId}
-      order by effective_from desc, created_at desc`)) as unknown as Array<Record<string, unknown>>;
+      order by effective_from desc, created_at desc
+      limit ${limit} offset ${offset}`)) as unknown as Array<Record<string, unknown>>;
     return rows.map((r) => ({
       id: String(r.id),
       establishmentId: String(r.establishment_id),
