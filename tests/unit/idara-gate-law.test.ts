@@ -97,6 +97,8 @@ describe("H28 — the gate explains itself", () => {
       const gate = await idaraGateFor({
         orgId: "00000000-0000-0000-0000-000000000000",
         userId: "00000000-0000-0000-0000-000000000000",
+        costPrivileged: false,
+        pricePrivileged: false,
         requestId: "gate-law",
       });
       expect(gate.flagOn).toBe(false);
