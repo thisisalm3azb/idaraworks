@@ -128,7 +128,9 @@ describe("H13 — canonical agents", () => {
   it("HomePage builds the showcase from the canonical registry, not a hand list", () => {
     expect(homeSrc).toContain('SHOWCASE_AGENT_IDS.filter((id) => id !== "manager")');
     expect(homeSrc).toContain('agentVM("manager", t)');
-    expect(homeSrc).toMatch(/Record<ShowcaseAgentId, \{ monogram: string; icon: IconName; bg: string \}>/);
+    expect(homeSrc).toMatch(
+      /Record<ShowcaseAgentId, \{ monogram: string; icon: IconName; bg: string \}>/,
+    );
   });
 });
 

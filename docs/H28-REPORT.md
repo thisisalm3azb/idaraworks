@@ -136,9 +136,10 @@ never ships them.
 | `0zao1vb2swbhs.js` (0.7 KB) | the workspace entry | absent | present |
 
 The ordinary page ships 23 client chunks; the workspace route ships 25, of
-which four (6.4 KB in total) are its own. The browser walk confirms the same
-thing at runtime: no script matching the window or workspace is requested while
-the page is merely open, and opening the dock is what fetches them.
+which four (6.4 KB in total) are its own. This is measured from the production
+build, which is the only place the claim means anything: the development server
+prefetches dynamic chunks eagerly, so the browser walk sees the window chunk
+early and records that rather than asserting it.
 
 ### 3.2 Integration and adversarial evidence
 
@@ -148,7 +149,7 @@ call is ever made.
 | Suite | Tests | What it proves |
 | --- | --- | --- |
 | `h28a-gateway` | 12 | routing, the ordered budget decision, denial metering, retries and idempotency, the breaker, price-book estimation, credits, bring-your-own-key encryption and its permission boundary |
-| `h28b-runs` | 8 | planning, reading through the module doors, recorded steps, evidence and provenance, bounded delegation, the no-provider path, proposal and confirmation of a material action, separation of duties, cancellation |
+| `h28b-runs` | 9 | planning, reading through the module doors, recorded steps, evidence and provenance, bounded delegation, the no-provider path, proposal and confirmation of a material action, separation of duties, cancellation, and conversations paged past 1,050 rows |
 | `h28c-security` | 11 | the adversarial set below |
 
 **Adversarial results.**
@@ -167,18 +168,55 @@ call is ever made.
 | A custom agent trying to widen its base, carry override instructions, or publish without a passing evaluation | All three refused |
 | Every attempt above | Left audit evidence |
 
-Two of these tests were wrong when first written and were corrected rather than
-weakened. One asserted that a viewer may not read payroll runs; the platform's
-own permission matrix grants `payroll.view` to viewers, so the test now uses
-leave balances, which an owner may read and a viewer may not, and proves the
-run refuses it. The other treated the requester's own echoed reference as a
-cross-tenant read; it now asserts on what the platform produced.
+Four tests were wrong when first written and were corrected rather than
+weakened, and one shared fixture was fixed.
 
-### 3.3 CI on the exact commit
+- **The work happens in the child run.** Three tests read the root run's steps
+  and so missed the flag, the tool step and the usage row the specialist wrote.
+  They now read across the run graph.
+- **A viewer may read payroll runs.** The platform's own permission matrix
+  grants that, so a test asserting the opposite was asserting a rule the
+  product does not have. It now uses leave balances, which an owner may read
+  and a viewer may not.
+- **An echoed reference is not a retrieval.** The cross-tenant test counted the
+  requester's own supplied identifier against the platform. It now asserts on
+  what the platform produced.
+- **The attack was planted where it could never land.** A customer's timeline
+  carries kinds, references and dates, not bodies, so an injected note never
+  reached model context. The attack now lives in a document body, which the
+  document tool does put into context, and the flag fires there.
+- **One price book, shared by every fixture.** Each suite inserted at the same
+  effective date and deleted only rows carrying its own note, so a finishing
+  suite could delete the row a concurrent one was pricing from. That, not any
+  product fault, is why one walk answer came back unrouted. Each suite and
+  fixture now owns its own effective date.
+
+### 3.3 The interface, English and Arabic, desktop and phone
+
+A scripted browser walk drove the real dock against the test project with a
+deterministic provider. It signs in, and then:
+
+| Checked | Result |
+| --- | --- |
+| The launcher is mounted on an ordinary page | present, and never in the sidebar |
+| The position menu | six logical positions; choosing one moves the dock; reset returns it to the default |
+| The keyboard shortcut | opens the working window; Escape minimises it |
+| The context capsule | carries the record of the page it was opened from and names it |
+| An answer | arrives with a generated reply, the answering agent, the contributing specialist, the model, the credits spent, the evidence and a link to the steps |
+| The deep workspace | renders as a full page |
+| Settings and the agent builder | render |
+| Arabic | the document direction is right-to-left, the dock mirrors to the opposite corner, and every label is translated |
+| A phone at 375 px | the launcher stays clear of the bottom navigation and opens a bottom sheet, not a shrunken desktop dialog |
+| Console errors and horizontal overflow | none, on any screen, in either language |
+
+Screenshots of all fourteen states are kept with the walk, which fails on any
+console error or any page wider than its viewport.
+
+### 3.4 CI on the exact commit
 
 _pending._
 
-### 3.4 Production
+### 3.5 Production
 
 _pending._
 

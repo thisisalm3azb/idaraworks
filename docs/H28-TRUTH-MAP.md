@@ -281,7 +281,42 @@ The dock mount in the authenticated shell, the launcher island, the working wind
 
 ### G.5 Tests and evidence
 
-_pending: filled from the run results._
+| Gate | Result |
+| --- | --- |
+| Format, lint, typecheck | clean; lint reports 0 errors |
+| Unit | 1,509 tests in 100 files, all passing |
+| Build | succeeds; the dock, the working window and the workspace are all runtime-loaded chunks absent from both routes' client-reference manifests |
+| `h28a-gateway` | 12 passing |
+| `h28b-runs` | 9 passing, including conversations paged past 1,050 rows |
+| `h28c-security` | 11 passing, the adversarial set |
+| Local UI walk | clean: launcher, six positions, keyboard move and reset, shortcut, capsule, generated answer with evidence, workspace, settings, builder, Arabic RTL, 375 px, no console error, no horizontal overflow |
+| Test-project residue | zero: no fixture organisation, user, price row or conversation left |
+
+**Four test defects, corrected rather than weakened.**
+
+1. Assertions read the root run's steps, but a delegated request does its work
+   in the child. The flag, the tool step and the usage row all live on the
+   specialist's run. Three tests now read across the run graph.
+2. One test assumed a viewer may not read payroll runs. The platform's own
+   matrix grants `payroll.view` to viewers, so the test was asserting a rule
+   the product does not have. It now uses leave balances, which an owner may
+   read and a viewer may not, and proves the run refuses the model's request
+   and records the refusal as a skipped step.
+3. The cross-tenant test treated the requester's own echoed reference as a
+   retrieval. It now asserts on what the platform produced: no consulted
+   record, no answer block and no citation carries the foreign identifier, and
+   the answer says the record was not found.
+4. The injection test planted its attack in a customer activity note, which
+   never reaches model context: the customer timeline carries kinds, references
+   and dates, not bodies. The attack is now planted in a document body, which
+   the document tool does put into context, and the flag fires there.
+
+**One fixture defect with a wider lesson.** The price book is global, keyed by
+model and effective date. Every suite and fixture inserted at the same date and
+deleted only rows carrying its own note, so the first insert won and a
+finishing suite deleted the row a concurrent one was pricing from. The symptom
+was a walk answer that came back unrouted, which looked like a product failure
+and was not. Each suite and fixture now owns its own effective date.
 
 ### G.6 Honest limits
 
