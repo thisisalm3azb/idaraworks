@@ -1,7 +1,7 @@
 # H27 — CRM and Revenue Growth Studio: delivery report
 
-Status: **built, tested on the isolated TEST project, deployment in progress**
-(the sections marked _pending_ are filled from the production evidence).
+Status: **SHIPPED. Live in production at commit 17ba434 (deployment 6DU63eU3HSV7pTMgF7Q6XYe6dSiC),
+`FEATURE_REVENUE_STUDIO=1`, verified on the deployed build (2026-09-03).**
 
 Mandate: `phase2/14-POST-MVP-AMENDMENTS.md` §6 (owner direction, 2026-09-02).
 Truth map: `docs/H27-TRUTH-MAP.md` (Parts A–G).
@@ -114,7 +114,7 @@ scrolling inside its own container) and is re-proven by the production walk.
 Green on every H27 commit that reached CI: 6d2d2d1 (run 33696192960),
 770a741 (33699969230), 9445a77 (33700761790), 58fa0f0 (33703723787),
 79caf35 (33706566440), 6e918dd (33709176289), ece5150 (33712221274) and the
-shipped commit (see §3.5): quality (format, lint, typecheck, unit, audit,
+shipped commit 17ba434 (33719403743): quality (format, lint, typecheck, unit, audit,
 build, e2e smoke) and integration (every suite including h27a–h27e and the
 bleed harness on CI's own Supabase stack).
 
@@ -155,7 +155,72 @@ bleed harness on CI's own Supabase stack).
   rendering its data. Fixed in 79caf35: every revenue page checks the flag
   itself before any read (unit law `revenue-gate-law.test.ts`), the layout
   and the report route keep their gates.
-- **Shipped deploy, flag on, smoke on, UI walk, health:** _pending_
+- **Flag on (`FEATURE_REVENUE_STUDIO=1` in Vercel production), deploys
+  6e918dd then ece5150:** the git hook did not build either push, so both
+  went out with `vercel deploy --prod --yes` from the clean tree at the
+  commit (the deployment carries the commit; `/api/health` reports it).
+  6e918dd added the tracing include the PDF route needed on Vercel (the
+  first flag-on smoke stopped at a 500 there; CI and local builds never
+  showed it because the binaries exist locally). Flag-on smoke
+  `h27-prod-smoke.ts --surfaces=on` **39/39** on 6e918dd and again on
+  ece5150: everything from the flag-off list plus the hub answering 200 for
+  a member and the report PDF (29,205 bytes) for the same organisation;
+  residue 0 both times.
+- **Production UI walk on ece5150** (`h27-prod-ui-walk.ts`: its own
+  organisation, member, customer, lead conversion and deal; sign-in through
+  the real form; every studio page at 1440 px; the report PDF through the
+  browser session; Arabic with `dir="rtl"` on the hub; 375 px hub,
+  pipeline, leads, deal and success): all pages rendered, PDF 28 KB, RTL
+  correct, residue 0, historical counts intact, one error: the mobile
+  pipeline page was 622 px wide. Three diagnostic reruns named it: the
+  screen-reader-only labels on the card move controls are absolutely
+  positioned, the board had no positioned ancestor, so they escaped the
+  scroller's clip and widened the document (html.scrollWidth 622,
+  body.scrollWidth 375, nothing visible) whenever a card sat in the third
+  column, which the TEST walk's data never produced. Fixed in 17ba434: every
+  H27 horizontal scroller is its own containing block (`relative`); the
+  walk now keeps the diagnostics (viewport metrics, a plain 375 px trace,
+  hide-and-measure, a no-exclusion dump, live style toggles) for any
+  future offender.
+- **Shipped deploy, 17ba434 (2026-09-03):** CI green on the exact commit (run
+  33719403743). Vercel's free plan then refused new deployments for a while
+  ("api-deployments-free-per-day", the rolling daily cap: the branch pushes had
+  been producing preview builds all night). The first accepted deploy
+  (CUK4Xe9VicB24yxQmLjZiJ2dFoD7, 09:57 local) was made from a clean detached
+  worktree at 17ba434 and went live healthy, but carried no git metadata, so
+  `/api/health` reported an empty commit; the production walk on that build
+  was already clean (below). The deploy of record, 6DU63eU3HSV7pTMgF7Q6XYe6dSiC (10:17 local),
+  was made from the clean main checkout at 17ba434 and `/api/health`
+  reports that commit.
+- **Production UI walk on the shipped code:** first on
+  CUK4Xe9VicB24yxQmLjZiJ2dFoD7, then on 6DU63eU3HSV7pTMgF7Q6XYe6dSiC: errors none, exit 0, PDF one page, RTL, residue 0, historical counts intact. Both runs:
+  sign-in through the real form, every studio page at 1440 px, the report
+  PDF through the browser session (about 28 KB, one page), Arabic hub,
+  pipeline and deal with `dir="rtl"`, and the five phone pages at 375 px
+  including the pipeline board at exactly 375 px; residue 0; historical
+  counts unchanged (orgs 39, users 60, customers 51, jobs 93).
+- **Flag-on smoke on the deploy of record:** `h27-prod-smoke.ts --surfaces=on`
+  **ALL 39 CHECKS PASSED**, residue 0. One honest wrinkle: that smoke and the
+  first walk on 6DU63eU3HSV7pTMgF7Q6XYe6dSiC ran at the same time, so each one's historical-count
+  comparison saw the other's self-destructing organisation (orgs 40, users 62
+  mid-run) and reported "intact: false" although every other check passed and
+  both cleaned up to zero. The mandate says not to overlap suites; the walk was
+  therefore rerun alone (the run reported above) and a read-only sweep after
+  both confirmed production back at baseline.
+- **Final health and zero residue:** `prod-health.ts` HEALTHY (127 applied,
+  0 pending, 244 public tables, 0 without RLS, no unexpected DELETE grants,
+  orphan identities 13 and sessions 103, all known historical, 0 new). A
+  read-only sweep of all 22 studio tables (19 `crm_*` plus `lead`,
+  `opportunity`, `sales_activity`) counted 0 rows in total; 0 marker
+  settings (`smoke.h27*`), 0 organisations or users left by the smoke or the
+  walk, 0 H27 import batches, 0 storage objects. The TEST project's UI
+  fixture organisation (1,250 leads / 1,150 deals) was wiped after the last
+  local check and the local preview server stopped.
+- **Not done, on purpose:** no historical accounting record converted, the
+  H24 transition ambiguities untouched, PO-002 untouched, the deferred H22
+  stock-posting problem untouched, no production business data changed
+  outside the self-destructing walk and smoke organisations, H28 not
+  started.
 
 ## 4. Untouched, as instructed
 

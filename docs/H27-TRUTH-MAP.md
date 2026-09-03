@@ -360,3 +360,16 @@ merge preview). Production: `h27-deploy-preflight.ts` (read-only),
 - Attribution reports correlation only.
 - No exchange rates: a deal keeps its own currency; org totals are shown in
   the deal's currency field or the base currency and never converted.
+
+### G.6 Shipped (2026-09-03)
+
+| Fact | Value | Source |
+| --- | --- | --- |
+| Shipped commit | `17ba434` on `main` (= `verify/h27`); CI run 33719403743 green | GitHub Actions |
+| Deploy of record | 6DU63eU3HSV7pTMgF7Q6XYe6dSiC (10:17 local), `/api/health` commit 17ba434, HEALTHY | Vercel, `prod-health.ts` |
+| Migrations | 0120–0127 applied; 127 applied, 0 pending, 244 public tables, 0 without RLS | `prod-health.ts` |
+| Flag | `FEATURE_REVENUE_STUDIO=1` in Vercel production; smoke 38/38 off, 39/39 on | `h27-prod-smoke.ts` |
+| UI walk | clean on the shipped code (EN 1440 px, AR RTL, 375 px, PDF about 28 KB) | `h27-prod-ui-walk.ts` |
+| Residue | 22 studio tables 0 rows; 0 markers, 0 fixture orgs/users/imports/objects | read-only sweep |
+| Last finding | mobile pipeline 622 px: absolutely positioned `sr-only` labels escaping the board's clip; every H27 scroller is now `relative` | 17ba434 |
+| Untouched | accounting history, H24 ambiguities, PO-002, H22 stock posting, H28 | mandate |
