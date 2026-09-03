@@ -26,31 +26,42 @@ export const TEMPLATE_CONSTRUCTION: TemplateManifest = {
     job: {
       en: { singular: "Project", plural: "Projects" },
       ar: { singular: "مشروع", plural: "مشاريع", gender: "m" },
+      es: { singular: "Obra", plural: "Obras", gender: "f" },
     },
     job_stage: {
       en: { singular: "Phase", plural: "Phases" },
       ar: { singular: "مرحلة", plural: "مراحل", gender: "f" },
+      es: { singular: "Fase", plural: "Fases", gender: "f" },
     },
     daily_report: {
       en: { singular: "Site Report", plural: "Site Reports" },
       ar: { singular: "تقرير موقع", plural: "تقارير موقع", gender: "m" },
+      es: { singular: "Parte de obra", plural: "Partes de obra", gender: "m" },
     },
     purchase_order: {
       // The GCC contracting house term.
       en: { singular: "LPO", plural: "LPOs" },
       ar: { singular: "أمر شراء", plural: "أوامر شراء", gender: "m" },
+      es: { singular: "Orden de compra local", plural: "Órdenes de compra locales", gender: "f" },
     },
     supplier: {
       en: { singular: "Supplier/Subcontractor", plural: "Suppliers/Subcontractors" },
       ar: { singular: "مورد / مقاول باطن", plural: "موردون ومقاولو باطن", gender: "m" },
+      es: {
+        singular: "Proveedor o subcontratista",
+        plural: "Proveedores y subcontratistas",
+        gender: "m",
+      },
     },
     employee: {
       en: { singular: "Worker", plural: "Workers" },
       ar: { singular: "عامل", plural: "عمال", gender: "m" },
+      es: { singular: "Operario", plural: "Operarios", gender: "m" },
     },
     quote: {
       en: { singular: "Quotation", plural: "Quotations" },
       ar: { singular: "عرض سعر", plural: "عروض أسعار", gender: "m" },
+      es: { singular: "Presupuesto", plural: "Presupuestos", gender: "m" },
     },
   },
 

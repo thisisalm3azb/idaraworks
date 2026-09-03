@@ -30,14 +30,14 @@ import {
   NAV_ITEM_KEYS,
   NAV_ITEM_INFO,
   DASHBOARD_CARD_MODULE,
-  COUNTRY_PACKS,
+  WORKSPACE_COUNTRY_DEFAULTS,
   WORKSPACE_MODULE_KEYS,
   BLUEPRINT_ARCHETYPES,
   type WorkspaceModuleKey,
   type NavItemKey,
   type DashboardCardKey,
   type BlueprintArchetype,
-  type CountryPack,
+  type WorkspaceCountryDefaults,
 } from "./registry";
 
 export const COMPILER_VERSION = "1.0.0";
@@ -95,7 +95,7 @@ export type CompiledWorkspace = {
     entitled: boolean;
   }>;
   localization: {
-    countryPack: CountryPack;
+    countryPack: WorkspaceCountryDefaults;
     defaultLocale: string;
     currency: string;
     timezone: string;
@@ -266,7 +266,7 @@ export function compileBlueprint(raw: unknown, platform: PlatformSnapshot): Comp
 
   // ── Localization ──────────────────────────────────────────────────────────
   const localization = {
-    countryPack: COUNTRY_PACKS[bp.international.countryPack],
+    countryPack: WORKSPACE_COUNTRY_DEFAULTS[bp.international.countryPack],
     defaultLocale: bp.international.defaultLocale,
     currency: bp.international.currency,
     timezone: bp.international.timezone,

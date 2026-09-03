@@ -17,6 +17,7 @@ import {
 
 import { formatDate, formatDateTime, formatMoney } from "@/platform/format";
 import type { CurrencyCode } from "@/platform/registries";
+import type { Locale } from "@/platform/registries";
 
 /**
  * One item's stock (H22F).
@@ -220,7 +221,7 @@ function MovementLine({
 }: {
   m: MovementRow;
   uom: string;
-  locale: "en" | "ar";
+  locale: Locale;
   t: Translator;
 }) {
   /*

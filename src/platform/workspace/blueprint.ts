@@ -49,6 +49,15 @@ export const BLUEPRINT_SCHEMA_VERSION = 1;
 const localeKey = z.string().regex(/^[a-z]{2}(-[A-Z]{2})?$/, "locale key");
 
 /**
+ * The languages a BLUEPRINT must be written in. Deliberately NOT the list of
+ * languages the interface supports: adding a product language must never
+ * invalidate a stored blueprint, and no organisation should be forced to author
+ * its own labels in a language it does not use. H29 made that distinction
+ * explicit; before it, the two lists were the same one by accident.
+ */
+export const BLUEPRINT_REQUIRED_LOCALES = ["en", "ar"] as const;
+
+/**
  * A localized text map: en and ar are REQUIRED first-class values; any other
  * locale key is accepted with the same sanitised shape, so future locales
  * need no schema change (laws 17/18).
@@ -56,7 +65,7 @@ const localeKey = z.string().regex(/^[a-z]{2}(-[A-Z]{2})?$/, "locale key");
 export const LocalizedTextSchema = z
   .record(localeKey, configString(MAX_TEXT_LENGTH))
   .superRefine((map, ctx) => {
-    for (const required of SUPPORTED_LOCALES) {
+    for (const required of BLUEPRINT_REQUIRED_LOCALES) {
       if (!map[required] || map[required].length === 0) {
         ctx.addIssue({ code: "custom", message: `missing required locale "${required}"` });
       }
@@ -135,7 +144,7 @@ export const TerminologySchema = z
       .partialRecord(
         z.enum(TERM_KEYS),
         z.record(localeKey, TermFormSchema).superRefine((map, ctx) => {
-          for (const required of SUPPORTED_LOCALES) {
+          for (const required of BLUEPRINT_REQUIRED_LOCALES) {
             if (!map[required]) {
               ctx.addIssue({ code: "custom", message: `missing required locale "${required}"` });
             }

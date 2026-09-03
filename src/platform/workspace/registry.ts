@@ -766,7 +766,14 @@ export function isWorkspaceCountry(x: string): x is WorkspaceCountry {
   return (WORKSPACE_COUNTRIES as readonly string[]).includes(x);
 }
 
-export type CountryPack = {
+/**
+ * The DEFAULTS a country suggests when an organisation is first set up. This is
+ * not the country pack: since H29 the canonical, versioned, effective-dated
+ * pack lives in `src/platform/country` and is what every rule resolves through.
+ * These are onboarding suggestions and nothing more, which is why they carry no
+ * effective date and no source citation.
+ */
+export type WorkspaceCountryDefaults = {
   country: WorkspaceCountry;
   /** Defaults only — the organization's own settings stay authoritative. */
   defaultTimezone: string;
@@ -799,7 +806,7 @@ const GCC_UNSUPPORTED = [
 
 const packDefaults = {
   locales: ["en", "ar"] as const,
-  direction: { en: "ltr", ar: "rtl" } as const,
+  direction: { en: "ltr", ar: "rtl", es: "ltr" } as const,
   numberFormat: "latin" as const,
   dateFormat: "dd/mm/yyyy" as const,
   taxIdentityFields: [
@@ -815,7 +822,7 @@ const packDefaults = {
   unsupportedAssumptions: GCC_UNSUPPORTED,
 };
 
-export const COUNTRY_PACKS: Record<WorkspaceCountry, CountryPack> = {
+export const WORKSPACE_COUNTRY_DEFAULTS: Record<WorkspaceCountry, WorkspaceCountryDefaults> = {
   AE: { country: "AE", defaultTimezone: "Asia/Dubai", defaultCurrency: "AED", ...packDefaults },
   SA: { country: "SA", defaultTimezone: "Asia/Riyadh", defaultCurrency: "SAR", ...packDefaults },
   KW: { country: "KW", defaultTimezone: "Asia/Kuwait", defaultCurrency: "KWD", ...packDefaults },

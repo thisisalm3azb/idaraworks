@@ -9,6 +9,7 @@
  * provider result.
  */
 import { DocError } from "./types";
+import type { Locale } from "@/platform/registries";
 
 export type SignatureLegalLevel = "electronic" | "advanced" | "qualified";
 
@@ -25,7 +26,7 @@ export type SignatureProvider = {
   name: string;
   capabilities: ProviderCapabilities;
   /** Lines the evidence record prints about how the signature was produced. */
-  evidenceLines: (locale: "en" | "ar") => string[];
+  evidenceLines: (locale: Locale) => string[];
 };
 
 export const NATIVE_PROVIDER: SignatureProvider = {

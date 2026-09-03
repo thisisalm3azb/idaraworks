@@ -27,22 +27,27 @@ export const TEMPLATE_SERVICE_BUSINESS: TemplateManifest = {
     job: {
       en: { singular: "Service Job", plural: "Service Jobs" },
       ar: { singular: "أمر خدمة", plural: "أوامر خدمة", gender: "m" },
+      es: { singular: "Servicio", plural: "Servicios", gender: "m" },
     },
     job_stage: {
       en: { singular: "Service Stage", plural: "Service Stages" },
       ar: { singular: "مرحلة الخدمة", plural: "مراحل الخدمة", gender: "f" },
+      es: { singular: "Etapa del servicio", plural: "Etapas del servicio", gender: "f" },
     },
     daily_report: {
       en: { singular: "Field Report", plural: "Field Reports" },
       ar: { singular: "تقرير ميداني", plural: "تقارير ميدانية", gender: "m" },
+      es: { singular: "Parte de campo", plural: "Partes de campo", gender: "m" },
     },
     employee: {
       en: { singular: "Technician", plural: "Technicians" },
       ar: { singular: "فني", plural: "فنيون", gender: "m" },
+      es: { singular: "Técnico", plural: "Técnicos", gender: "m" },
     },
     team: {
       en: { singular: "Crew", plural: "Crews" },
       ar: { singular: "طاقم", plural: "طواقم", gender: "m" },
+      es: { singular: "Cuadrilla", plural: "Cuadrillas", gender: "f" },
     },
   },
 

@@ -20,7 +20,7 @@ import {
   DASHBOARD_CARD_KEYS,
   DASHBOARD_CARD_MODULE,
   WORKSPACE_COUNTRIES,
-  COUNTRY_PACKS,
+  WORKSPACE_COUNTRY_DEFAULTS,
   ORG_SIZE_BANDS,
   BLUEPRINT_ARCHETYPES,
   validateBlueprint,
@@ -164,7 +164,7 @@ describe("H14 — the twenty Intelligent Clay laws are pinned", () => {
   });
 
   it("law 15: country packs carry no permission or security surface", () => {
-    for (const pack of Object.values(COUNTRY_PACKS)) {
+    for (const pack of Object.values(WORKSPACE_COUNTRY_DEFAULTS)) {
       const json = JSON.stringify(pack).toLowerCase();
       for (const banned of ["permission", "archetype", "role", "rls", "grant", "entitle"]) {
         expect(json, `${pack.country} pack must not mention ${banned}`).not.toContain(banned);
@@ -210,11 +210,13 @@ describe("H14 — the twenty Intelligent Clay laws are pinned", () => {
     expect(validateBlueprint(null).ok).toBe(false);
     expect(validateBlueprint({}).ok).toBe(false);
     expect(() => compileBlueprint({}, entitleAll())).toThrow();
-    // Unsupported locale and unknown country never parse.
+    // Unsupported locale and unknown country never parse. Spanish became a
+    // supported locale in H29, so the unsupported example is a language the
+    // product does not ship.
     expect(
       WorkspaceBlueprintSchema.safeParse(
         makeBlueprint({
-          international: { ...makeBlueprint().international, defaultLocale: "es" as never },
+          international: { ...makeBlueprint().international, defaultLocale: "fr" as never },
         }),
       ).success,
     ).toBe(false);
@@ -334,11 +336,12 @@ describe("H14 — registry parity with the platform sources of truth", () => {
     expect([...WORKSPACE_COUNTRIES].sort()).toEqual([...SUPPORTED_COUNTRIES].sort());
     expect([...ORG_SIZE_BANDS]).toEqual([...EMPLOYEE_BANDS]);
     for (const c of WORKSPACE_COUNTRIES) {
-      expect(COUNTRY_PACKS[c].defaultCurrency).toBe(COUNTRY_DEFAULTS[c].currency);
-      expect(COUNTRY_PACKS[c].defaultTimezone).toBe(COUNTRY_DEFAULTS[c].timezone);
-      expect([...COUNTRY_PACKS[c].locales]).toEqual([...SUPPORTED_LOCALES]);
-      expect(COUNTRY_PACKS[c].direction.ar).toBe("rtl");
-      expect(COUNTRY_PACKS[c].direction.en).toBe("ltr");
+      expect(WORKSPACE_COUNTRY_DEFAULTS[c].defaultCurrency).toBe(COUNTRY_DEFAULTS[c].currency);
+      expect(WORKSPACE_COUNTRY_DEFAULTS[c].defaultTimezone).toBe(COUNTRY_DEFAULTS[c].timezone);
+      for (const locale of WORKSPACE_COUNTRY_DEFAULTS[c].locales)
+        expect(SUPPORTED_LOCALES).toContain(locale);
+      expect(WORKSPACE_COUNTRY_DEFAULTS[c].direction.ar).toBe("rtl");
+      expect(WORKSPACE_COUNTRY_DEFAULTS[c].direction.en).toBe("ltr");
     }
     expect([...BLUEPRINT_ARCHETYPES]).toEqual([...MVP_GRANTABLE_ARCHETYPES]);
   });

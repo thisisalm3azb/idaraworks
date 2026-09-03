@@ -273,7 +273,7 @@ export function isTermKey(key: string): key is TermKey {
 }
 
 // ── Languages ────────────────────────────────────────────────────────────────
-export const SUPPORTED_LOCALES = ["en", "ar"] as const;
+export const SUPPORTED_LOCALES = ["en", "ar", "es"] as const;
 export type Locale = (typeof SUPPORTED_LOCALES)[number];
 
 // ── Notification kinds (doc 01 F-12; Phase F substrate) ─────────────────────

@@ -22,7 +22,7 @@ import {
   MODULE_INFO,
   NAV_ITEM_INFO,
   DASHBOARD_CARD_MODULE,
-  COUNTRY_PACKS,
+  WORKSPACE_COUNTRY_DEFAULTS,
   isWorkspaceCountry,
   type WorkspaceModuleKey,
 } from "./registry";
@@ -307,7 +307,7 @@ export function validateBlueprint(raw: unknown): BlueprintValidation & {
       message: `no country pack for "${bp.international.countryPack}"`,
     });
   } else {
-    const pack = COUNTRY_PACKS[bp.international.countryPack];
+    const pack = WORKSPACE_COUNTRY_DEFAULTS[bp.international.countryPack];
     for (const field of bp.international.taxIdentityFields) {
       if (!pack.taxIdentityFields.some((f) => f.key === field)) {
         errors.push({

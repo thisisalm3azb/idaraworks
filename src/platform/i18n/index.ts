@@ -7,4 +7,5 @@ export {
   normalizeLocale,
   type Direction,
 } from "./locale";
+export { pickAuthoredText, type AuthoredText } from "./authored";
 export type { Locale } from "@/platform/registries";

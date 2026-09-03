@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { EmptyState } from "@/platform/ui";
 import { getT, getServerLocale } from "@/platform/i18n/server";
+import { pickAuthoredText } from "@/platform/i18n";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { loadOrgTerminology, term } from "@/platform/terminology";
 import { can } from "@/platform/authz";
@@ -144,7 +145,10 @@ export default async function NewReportPage({
       today={today}
       crew={crew}
       items={items}
-      stages={stages.map((s) => ({ stageKey: s.stageKey, label: s.name[locale] || s.name.en }))}
+      stages={stages.map((s) => ({
+        stageKey: s.stageKey,
+        label: pickAuthoredText(s.name, locale),
+      }))}
       dict={dict}
       dir={locale === "ar" ? "rtl" : "ltr"}
       initial={initial}

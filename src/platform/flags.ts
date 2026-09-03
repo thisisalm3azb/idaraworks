@@ -99,3 +99,24 @@ export function revenueStudioEnabled(): boolean {
 export function idaraEnabled(): boolean {
   return process.env.FEATURE_IDARA_INTELLIGENCE === "1";
 }
+
+/**
+ * H29 — the country-pack surfaces: establishments, the readiness centre, the
+ * effective-date timeline, the rule impact simulator and the electronic-
+ * invoicing channels. The ONLY enabled value is the exact string "1".
+ */
+export function countryPacksEnabled(): boolean {
+  return process.env.FEATURE_COUNTRY_PACKS === "1";
+}
+
+/**
+ * H29 — whether Spanish is offered to people as a product language.
+ *
+ * The catalogue ships whatever state it is in; this flag decides whether the
+ * language switcher offers it. It stays off until the translation is complete
+ * AND its native review is recorded, because offering a half-translated
+ * language is worse than not offering it. The ONLY enabled value is "1".
+ */
+export function localeEsEnabled(): boolean {
+  return process.env.FEATURE_LOCALE_ES === "1";
+}

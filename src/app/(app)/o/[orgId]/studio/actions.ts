@@ -38,6 +38,7 @@ import {
   type LevelingProposal,
 } from "@/modules/studio/service";
 import { allocateTask, unallocateTask } from "@/modules/jobs/service";
+import type { Locale } from "@/platform/registries";
 
 /**
  * H25 server actions for the canvas. Unlike the form pages, the canvas is a
@@ -305,7 +306,7 @@ export async function updateViewAction(
 
 export async function reviewNarrativeAction(
   orgId: string,
-  input: { planId: string; scenarioId?: string; locale?: "en" | "ar" },
+  input: { planId: string; scenarioId?: string; locale?: Locale },
 ): Promise<ActionResult<Narrative>> {
   return run(orgId, (r) => draftReviewNarrative(r.ctx, r.archetype, input));
 }

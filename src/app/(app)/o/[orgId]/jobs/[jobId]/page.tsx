@@ -52,6 +52,7 @@ import {
 import { WORK_ERROR_KEYS } from "./errors";
 import { submitReportAction } from "../actions";
 import { JobPhotoUpload } from "./JobPhotoUpload";
+import type { Locale } from "@/platform/registries";
 
 const TABS = ["overview", "stages", "tasks", "activity", "files", "comments"] as const;
 type Tab = (typeof TABS)[number];
@@ -680,7 +681,7 @@ async function StagesTab(props: {
   jobId: string;
   resolved: Resolved;
   stages: StageRow[];
-  locale: "en" | "ar";
+  locale: Locale;
 }) {
   const t = await getT();
   const a = props.resolved.archetype;
@@ -758,7 +759,7 @@ async function TasksTab(props: {
   orgId: string;
   jobId: string;
   resolved: Resolved;
-  locale: "en" | "ar";
+  locale: Locale;
 }) {
   const t = await getT();
   const a = props.resolved.archetype;
@@ -997,7 +998,7 @@ async function TasksTab(props: {
   );
 }
 
-async function ActivityTab(props: { resolved: Resolved; jobId: string; locale: "en" | "ar" }) {
+async function ActivityTab(props: { resolved: Resolved; jobId: string; locale: Locale }) {
   const t = await getT();
   const rows = await listJobActivity(props.resolved.ctx, props.resolved.archetype, props.jobId);
   return (
@@ -1092,7 +1093,7 @@ async function CommentsTab(props: {
   orgId: string;
   jobId: string;
   resolved: Resolved;
-  locale: "en" | "ar";
+  locale: Locale;
 }) {
   const t = await getT();
   const comments = await listComments(props.resolved.ctx, "job", props.jobId);

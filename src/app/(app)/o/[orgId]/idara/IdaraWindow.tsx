@@ -28,6 +28,7 @@ import {
 } from "./actions";
 import { Blocks, RecordChip } from "./IdaraBlocks";
 import type { AgentOption, DockDict, DockPosition, DockStatus, OpenRequest } from "./IdaraDock";
+import type { Locale } from "@/platform/registries";
 
 type Size = "s" | "m" | "l";
 const SIZE_CLASS: Record<Size, string> = {
@@ -59,7 +60,7 @@ export function IdaraWindow({
 }: {
   orgId: string;
   userId: string;
-  locale: "en" | "ar";
+  locale: Locale;
   dir: "ltr" | "rtl";
   dict: DockDict;
   agents: AgentOption[];

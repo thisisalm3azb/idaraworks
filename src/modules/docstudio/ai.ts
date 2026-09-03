@@ -28,6 +28,7 @@ import type { Ctx } from "@/platform/tenancy";
 import { getDocument } from "./documents";
 import { OBLIGATION_KINDS } from "./obligations";
 import { DocError, flattenBlocks, type DocBody, type LocaleText } from "./types";
+import type { Locale } from "@/platform/registries";
 
 export const AI_OWNER_ACTION =
   "Configure a model provider behind getAgentProvider() (src/platform/agents/provider.ts) and enable the feat.ai_agents feature for the organisation. Until then the assistant stays off; nothing is simulated.";
@@ -42,12 +43,12 @@ export type AiAvailability = {
 
 export type Clause = { id: string; ref: string; text: string };
 
-function pick(t: LocaleText | undefined, lang: "en" | "ar"): string {
+function pick(t: LocaleText | undefined, lang: Locale): string {
   return ((lang === "ar" ? (t?.ar ?? t?.en) : (t?.en ?? t?.ar)) ?? "").trim();
 }
 
 /** Pure: the citable units of a body, in order, with a human reference. */
-export function documentClauses(body: DocBody, lang: "en" | "ar" = "en"): Clause[] {
+export function documentClauses(body: DocBody, lang: Locale = "en"): Clause[] {
   const out: Clause[] = [];
   let clause = 0;
   for (const b of flattenBlocks(body)) {

@@ -28,26 +28,32 @@ export const TEMPLATE_AGRICULTURE: TemplateManifest = {
     job: {
       en: { singular: "Season Program", plural: "Season Programs" },
       ar: { singular: "برنامج موسمي", plural: "برامج موسمية", gender: "m" },
+      es: { singular: "Programa de temporada", plural: "Programas de temporada", gender: "m" },
     },
     job_stage: {
       en: { singular: "Season Activity", plural: "Season Activities" },
       ar: { singular: "نشاط موسمي", plural: "أنشطة موسمية", gender: "m" },
+      es: { singular: "Actividad de temporada", plural: "Actividades de temporada", gender: "f" },
     },
     daily_report: {
       en: { singular: "Field Log", plural: "Field Logs" },
       ar: { singular: "سجل ميداني", plural: "سجلات ميدانية", gender: "m" },
+      es: { singular: "Registro de campo", plural: "Registros de campo", gender: "m" },
     },
     material_request: {
       en: { singular: "Input Request", plural: "Input Requests" },
       ar: { singular: "طلب مستلزمات", plural: "طلبات مستلزمات", gender: "m" },
+      es: { singular: "Solicitud de insumos", plural: "Solicitudes de insumos", gender: "f" },
     },
     issue: {
       en: { singular: "Incident", plural: "Incidents" },
       ar: { singular: "حادثة", plural: "حوادث", gender: "f" },
+      es: { singular: "Incidente", plural: "Incidentes", gender: "m" },
     },
     employee: {
       en: { singular: "Farm Worker", plural: "Farm Workers" },
       ar: { singular: "عامل مزرعة", plural: "عمال مزرعة", gender: "m" },
+      es: { singular: "Trabajador agrícola", plural: "Trabajadores agrícolas", gender: "m" },
     },
   },
 

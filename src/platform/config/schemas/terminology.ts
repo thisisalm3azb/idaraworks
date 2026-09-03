@@ -19,6 +19,9 @@ const termForm = z.object({
 const termEntry = z.object({
   en: termForm,
   ar: termForm.extend({ gender: z.enum(["m", "f"]) }), // gender required for ar
+  // H29: optional, so an override stored before Spanish existed still parses.
+  // A missing Spanish form falls through to the template or platform default.
+  es: termForm.extend({ gender: z.enum(["m", "f"]) }).optional(),
 });
 
 /** Partial: an override supplies only the keys it changes. */

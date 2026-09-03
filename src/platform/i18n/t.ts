@@ -13,10 +13,15 @@ import { SUPPORTED_LOCALES, type Locale } from "@/platform/registries";
 import { logger } from "@/platform/logger";
 import en from "./messages/en.json";
 import ar from "./messages/ar.json";
+import es from "./messages/es.json";
 
 type Messages = Record<string, string>;
 
-const catalogs: Record<Locale, Messages> = { en: en as Messages, ar: ar as Messages };
+const catalogs: Record<Locale, Messages> = {
+  en: en as Messages,
+  ar: ar as Messages,
+  es: es as Messages,
+};
 
 const formatCache = new Map<string, IntlMessageFormat>();
 

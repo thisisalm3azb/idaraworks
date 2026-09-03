@@ -244,9 +244,15 @@ describe("H1 truthfulness + international-first copy", () => {
     expect(marketingEn).toMatch(/right-to-left/i);
   });
 
-  it("names no unshipped language (H13) and adds no Spanish locale", () => {
-    expect(marketingEn).not.toMatch(/spanish/i);
-    expect(existsSync("src/platform/i18n/messages/es.json")).toBe(false);
+  it("names no language the product does not offer", () => {
+    // H29 added a Spanish catalogue, so its existence is no longer the test.
+    // The claim is: the public page may not advertise a language until the
+    // owner turns it on, and the switcher may not offer one either. The
+    // catalogue can exist and be worked on without either of those happening.
+    expect(marketingEn).not.toMatch(/spanish|español/i);
+    expect(existsSync("src/platform/i18n/messages/es.json")).toBe(true);
+    const flags = readFileSync("src/platform/flags.ts", "utf8");
+    expect(flags).toMatch(/FEATURE_LOCALE_ES === "1"/);
   });
 
   it("does not claim custom roles or trade-tailored permissions", () => {

@@ -26,18 +26,26 @@ export const TEMPLATE_ONLINE_STORE: TemplateManifest = {
     job: {
       en: { singular: "Order", plural: "Orders" },
       ar: { singular: "طلب", plural: "طلبات", gender: "m" },
+      es: { singular: "Pedido", plural: "Pedidos", gender: "m" },
     },
     job_stage: {
       en: { singular: "Fulfilment Stage", plural: "Fulfilment Stages" },
       ar: { singular: "مرحلة التجهيز", plural: "مراحل التجهيز", gender: "f" },
+      es: { singular: "Etapa de preparación", plural: "Etapas de preparación", gender: "f" },
     },
     material_request: {
       en: { singular: "Stock Request", plural: "Stock Requests" },
       ar: { singular: "طلب توفير مخزون", plural: "طلبات توفير مخزون", gender: "m" },
+      es: {
+        singular: "Solicitud de existencias",
+        plural: "Solicitudes de existencias",
+        gender: "f",
+      },
     },
     quote: {
       en: { singular: "Quotation", plural: "Quotations" },
       ar: { singular: "عرض سعر", plural: "عروض أسعار", gender: "m" },
+      es: { singular: "Presupuesto", plural: "Presupuestos", gender: "m" },
     },
   },
 

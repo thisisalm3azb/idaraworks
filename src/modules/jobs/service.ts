@@ -7,6 +7,7 @@
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { command } from "@/platform/audit";
+import { pickAuthoredText } from "@/platform/i18n";
 import { assertCan, ForbiddenError } from "@/platform/authz";
 import { JOB_CREATED } from "@/platform/events";
 import { getLimit } from "@/platform/entitlements";
@@ -22,6 +23,7 @@ import { WORK_PRIORITIES } from "./work";
 import { computeProgress, type StageForProgress } from "./progress";
 import { sql, withCtx, type Ctx, type TenantTx } from "@/platform/tenancy";
 import type { RoleArchetype } from "@/platform/registries";
+import type { Locale } from "@/platform/registries";
 
 export class JobLimitError extends Error {
   constructor(limit: number) {
@@ -569,7 +571,7 @@ export async function listAssignableMembers(
  * the UI showed raw snake_case keys instead of the configured bilingual labels). */
 export async function getJobStatusLabels(
   ctx: Ctx,
-  locale: "en" | "ar",
+  locale: Locale,
 ): Promise<Record<string, string>> {
   const rows = (await withCtx(ctx, (tx) =>
     tx.execute(sql`
@@ -580,7 +582,9 @@ export async function getJobStatusLabels(
     value: { statuses: Array<{ status_key: string; labels: { en: string; ar: string } }> } | null;
   }>;
   const statuses = rows[0]?.value?.statuses ?? [];
-  return Object.fromEntries(statuses.map((s) => [s.status_key, s.labels[locale]]));
+  return Object.fromEntries(
+    statuses.map((s) => [s.status_key, pickAuthoredText(s.labels, locale)]),
+  );
 }
 
 // ── S2 job commands ───────────────────────────────────────────────────────────

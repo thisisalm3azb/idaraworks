@@ -22,6 +22,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AgentId } from "@/platform/agents/registry";
 import type { RecordRef } from "@/modules/idara/service";
 import { contextFromPath } from "./links";
+import type { Locale } from "@/platform/registries";
 
 export type DockDict = {
   launcher: string;
@@ -158,7 +159,7 @@ export function IdaraDock({
 }: {
   orgId: string;
   userId: string;
-  locale: "en" | "ar";
+  locale: Locale;
   dir: "ltr" | "rtl";
   dict: DockDict;
   agents: AgentOption[];

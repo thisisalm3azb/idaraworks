@@ -26,22 +26,31 @@ export const TEMPLATE_FOOD_BEVERAGE: TemplateManifest = {
     job: {
       en: { singular: "Order", plural: "Orders" },
       ar: { singular: "طلبية", plural: "طلبيات", gender: "f" },
+      es: { singular: "Pedido", plural: "Pedidos", gender: "m" },
     },
     job_stage: {
       en: { singular: "Order Stage", plural: "Order Stages" },
       ar: { singular: "مرحلة الطلبية", plural: "مراحل الطلبية", gender: "f" },
+      es: { singular: "Etapa del pedido", plural: "Etapas del pedido", gender: "f" },
     },
     daily_report: {
       en: { singular: "Daily Ops Report", plural: "Daily Ops Reports" },
       ar: { singular: "تقرير التشغيل اليومي", plural: "تقارير التشغيل اليومية", gender: "m" },
+      es: {
+        singular: "Parte diario de operación",
+        plural: "Partes diarios de operación",
+        gender: "m",
+      },
     },
     material_request: {
       en: { singular: "Kitchen Requisition", plural: "Kitchen Requisitions" },
       ar: { singular: "طلب مستلزمات المطبخ", plural: "طلبات مستلزمات المطبخ", gender: "m" },
+      es: { singular: "Pedido de cocina", plural: "Pedidos de cocina", gender: "m" },
     },
     employee: {
       en: { singular: "Staff Member", plural: "Staff" },
       ar: { singular: "موظف", plural: "موظفون", gender: "m" },
+      es: { singular: "Miembro del personal", plural: "Personal", gender: "m" },
     },
   },
 

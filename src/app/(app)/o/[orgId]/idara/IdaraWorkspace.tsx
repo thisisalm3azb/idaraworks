@@ -6,6 +6,7 @@
  */
 import dynamic from "next/dynamic";
 import type { AgentOption, DockDict } from "./IdaraDock";
+import type { Locale } from "@/platform/registries";
 
 const IdaraWindow = dynamic(() => import("./IdaraWindow").then((m) => m.IdaraWindow), {
   ssr: false,
@@ -17,7 +18,7 @@ const IdaraWindow = dynamic(() => import("./IdaraWindow").then((m) => m.IdaraWin
 export function IdaraWorkspace(props: {
   orgId: string;
   userId: string;
-  locale: "en" | "ar";
+  locale: Locale;
   dir: "ltr" | "rtl";
   dict: DockDict;
   agents: AgentOption[];

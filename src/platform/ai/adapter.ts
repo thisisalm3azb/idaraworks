@@ -14,6 +14,7 @@
  */
 import { logger } from "@/platform/logger";
 import { isProd } from "@/platform/env";
+import type { Locale } from "@/platform/registries";
 
 export type NarrationItem = {
   /** A resolved, safe label (i18n string) — never raw tenant free-text. */
@@ -23,7 +24,7 @@ export type NarrationItem = {
 };
 
 export type NarrationRequest = {
-  lang: "en" | "ar";
+  lang: Locale;
   title: string;
   items: NarrationItem[];
 };

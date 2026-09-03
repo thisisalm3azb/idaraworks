@@ -6,6 +6,7 @@
  */
 import { useMemo, useState } from "react";
 import { evaluateConditions, type Condition } from "@/platform/rules/conditions";
+import type { Locale } from "@/platform/registries";
 
 type LocaleText = { en?: string; ar?: string };
 export type FormField = {
@@ -25,7 +26,7 @@ export type FormField = {
   sectionTitle?: LocaleText;
 };
 
-const pickText = (lang: "en" | "ar", t?: LocaleText) =>
+const pickText = (lang: Locale, t?: LocaleText) =>
   (lang === "ar" ? (t?.ar ?? t?.en) : (t?.en ?? t?.ar)) ?? "";
 
 export type FormDict = {
@@ -46,7 +47,7 @@ export function FormRenderer({
 }: {
   action: (formData: FormData) => Promise<void>;
   fields: FormField[];
-  lang: "en" | "ar";
+  lang: Locale;
   dict: FormDict;
   problems: Record<string, string>;
   initial: Record<string, string>;

@@ -25,6 +25,7 @@ import {
   type DocVariables,
   type LocaleText,
 } from "./types";
+import type { Locale } from "@/platform/registries";
 
 export type DocFacts = {
   id: string;
@@ -65,7 +66,7 @@ function money(
   }
 }
 
-function date(iso: string | null | undefined, locale: "en" | "ar"): string | null {
+function date(iso: string | null | undefined, locale: Locale): string | null {
   if (!iso) return null;
   try {
     return formatDate(iso, { locale });
@@ -83,7 +84,7 @@ export async function resolveValues(
   variables: DocVariables,
   profile?: DocumentProfile,
 ): Promise<ResolvedValues> {
-  const locale: "en" | "ar" = facts.language === "ar" ? "ar" : "en";
+  const locale: Locale = facts.language === "ar" ? "ar" : "en";
   const bindings: Record<string, string | null> = {};
   const prof = profile ?? (await getDocumentProfile(ctx));
   const id = prof.identity;

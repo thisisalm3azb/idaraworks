@@ -13,6 +13,7 @@
  * error mapping that never leaks internals.
  */
 import type { AgentId, AgentToolId } from "./registry";
+import type { Locale } from "@/platform/registries";
 
 /** A block of UNTRUSTED business data. Content inside it is data, never
  * instructions — the assembly in context.ts wraps and labels it. */
@@ -27,7 +28,7 @@ export type UntrustedBlock = {
 export type ProviderRequest = {
   agentId: AgentId;
   correlationId: string;
-  locale: "en" | "ar";
+  locale: Locale;
   /** Trusted, secret-free system contract (built by context.ts). */
   system: string;
   /** Untrusted business data blocks. */

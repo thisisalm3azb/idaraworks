@@ -41,15 +41,15 @@ export type AddonAvailability =
 
 export type AddonDef = {
   key: string; // stable ^addon\.[a-z0-9_]+$
-  names: { en: string; ar: string };
-  description: { en: string; ar: string };
+  names: { en: string; ar: string; es: string };
+  description: { en: string; ar: string; es: string };
   /** USD per month, tax-exclusive (recommended launch price; minor units). */
   usdMonthlyMinor: number;
   /** AED companion price (minor units), rounded to clean figures. */
   aedMonthlyMinor: number;
   availability: AddonAvailability;
   /** Honest availability note shown when not plainly available. */
-  availabilityNote?: { en: string; ar: string };
+  availabilityNote?: { en: string; ar: string; es: string };
   /** Feature keys this add-on enables (OR-merged). */
   features: FeatureKey[];
   /** Numeric limit deltas ADDED to the plan base, × purchased quantity. */
@@ -61,8 +61,8 @@ export type AddonDef = {
 
 export type BundleDef = {
   key: string; // stable ^bundle\.[a-z0-9_]+$
-  names: { en: string; ar: string };
-  description: { en: string; ar: string };
+  names: { en: string; ar: string; es: string };
+  description: { en: string; ar: string; es: string };
   /** The add-ons the bundle expands to (same underlying keys — never a second
    * entitlement system). */
   addonKeys: string[];
@@ -78,17 +78,21 @@ export type BundleDef = {
   tier?: "medium" | "high";
 };
 
-const L = (en: string, ar: string) => ({ en, ar });
+// Product copy that lives as data rather than in the message catalogue. The
+// Spanish is machine-assisted and awaits native review, like the catalogue
+// itself; the translation governance record is the single place that says so.
+const L = (en: string, ar: string, es: string) => ({ en, ar, es });
 
 // ── Individual add-ons (USD base; AED companion) ─────────────────────────────
 export const ADDONS: readonly AddonDef[] = [
   // — Seats & workspace —
   {
     key: "addon.members_10",
-    names: L("Additional 10 members", "10 أعضاء إضافيين"),
+    names: L("Additional 10 members", "10 أعضاء إضافيين", "10 miembros adicionales"),
     description: L(
       "Adds 10 office login seats (field/foreman seats are always free and unlimited).",
       "يضيف 10 مقاعد دخول مكتبية (مقاعد الميدان/المشرفين مجانية وغير محدودة دائماً).",
+      "Añade 10 puestos de acceso de oficina (los puestos de campo y de supervisión son siempre gratuitos e ilimitados).",
     ),
     usdMonthlyMinor: 500,
     aedMonthlyMinor: 1900,
@@ -100,10 +104,11 @@ export const ADDONS: readonly AddonDef[] = [
   },
   {
     key: "addon.extra_org",
-    names: L("Additional organization", "منشأة إضافية"),
+    names: L("Additional organization", "منشأة إضافية", "Organización adicional"),
     description: L(
       "A second isolated workspace under your account (provisioned with you by support).",
       "مساحة عمل ثانية معزولة ضمن حسابك (تُجهَّز بالتنسيق مع الدعم).",
+      "Un segundo espacio de trabajo aislado dentro de su cuenta (lo prepara el equipo de soporte junto con usted).",
     ),
     usdMonthlyMinor: 900,
     aedMonthlyMinor: 3300,
@@ -111,6 +116,7 @@ export const ADDONS: readonly AddonDef[] = [
     availabilityNote: L(
       "Provisioned manually with support during the pilot phase.",
       "تُفعَّل يدوياً بالتنسيق مع الدعم خلال المرحلة التجريبية.",
+      "Se prepara manualmente con el soporte durante la fase piloto.",
     ),
     features: [],
     limitDeltas: {},
@@ -119,10 +125,15 @@ export const ADDONS: readonly AddonDef[] = [
   },
   {
     key: "addon.storage_25gb",
-    names: L("Additional 25 GB storage", "سعة تخزين إضافية 25 جيجابايت"),
+    names: L(
+      "Additional 25 GB storage",
+      "سعة تخزين إضافية 25 جيجابايت",
+      "25 GB de almacenamiento adicional",
+    ),
     description: L(
       "Adds 25 GB of document and photo storage.",
       "يضيف 25 جيجابايت لتخزين المستندات والصور.",
+      "Añade 25 GB para almacenar documentos y fotografías.",
     ),
     usdMonthlyMinor: 400,
     aedMonthlyMinor: 1500,
@@ -136,10 +147,11 @@ export const ADDONS: readonly AddonDef[] = [
   // — Money modules —
   {
     key: "addon.quotes_invoices",
-    names: L("Quotes & invoices", "عروض الأسعار والفواتير"),
+    names: L("Quotes & invoices", "عروض الأسعار والفواتير", "Presupuestos y facturas"),
     description: L(
       "Create quotations, convert to jobs, issue invoices and credit notes. E-invoice submission is included here once regulatory activation (D1) opens — it is never sold separately.",
       "إنشاء عروض الأسعار وتحويلها إلى أعمال وإصدار الفواتير والإشعارات الدائنة. يشمل الفوترة الإلكترونية عند فتح التفعيل التنظيمي — ولا تُباع منفصلة أبداً.",
+      "Cree presupuestos, conviértalos en trabajos y emita facturas y notas de crédito. El envío de la factura electrónica se incluye aquí en cuanto se abra la activación regulatoria (D1); nunca se vende por separado.",
     ),
     usdMonthlyMinor: 500,
     aedMonthlyMinor: 1900,
@@ -151,10 +163,15 @@ export const ADDONS: readonly AddonDef[] = [
   },
   {
     key: "addon.payments_ar",
-    names: L("Customer payments & receivables", "دفعات العملاء والذمم المدينة"),
+    names: L(
+      "Customer payments & receivables",
+      "دفعات العملاء والذمم المدينة",
+      "Cobros y cuentas por cobrar",
+    ),
     description: L(
       "Record customer payments manually (cash/bank/cheque), receipts, and the accounts-receivable view. No online payment collection — that remains disabled until D1.",
       "تسجيل دفعات العملاء يدوياً (نقد/تحويل/شيك) مع الإيصالات وعرض الذمم المدينة. لا يشمل التحصيل الإلكتروني — يبقى معطلاً حتى قرار D1.",
+      "Registre los cobros de clientes manualmente (efectivo, banco o cheque), los recibos y la vista de cuentas por cobrar. No hay cobro en línea: sigue desactivado hasta D1.",
     ),
     usdMonthlyMinor: 500,
     aedMonthlyMinor: 1900,
@@ -166,10 +183,11 @@ export const ADDONS: readonly AddonDef[] = [
   },
   {
     key: "addon.expenses_cashbook",
-    names: L("Expenses & cashbook", "المصروفات ودفتر النقدية"),
+    names: L("Expenses & cashbook", "المصروفات ودفتر النقدية", "Gastos y libro de caja"),
     description: L(
       "Record and categorise expenses with void-with-reason and the expense book.",
       "تسجيل المصروفات وتصنيفها مع الإلغاء المسبب ودفتر المصروفات.",
+      "Registre y clasifique gastos, con anulación motivada y el libro de gastos.",
     ),
     usdMonthlyMinor: 400,
     aedMonthlyMinor: 1500,
@@ -183,10 +201,15 @@ export const ADDONS: readonly AddonDef[] = [
   // — Purchasing modules —
   {
     key: "addon.purchase_requests",
-    names: L("Purchase requests & approvals", "طلبات الشراء والموافقات"),
+    names: L(
+      "Purchase requests & approvals",
+      "طلبات الشراء والموافقات",
+      "Solicitudes de compra y aprobaciones",
+    ),
     description: L(
       "Field material requests routed through approval rules.",
       "طلبات المواد من الميدان عبر قواعد الموافقة.",
+      "Solicitudes de materiales desde el terreno, encaminadas por las reglas de aprobación.",
     ),
     usdMonthlyMinor: 400,
     aedMonthlyMinor: 1500,
@@ -198,10 +221,11 @@ export const ADDONS: readonly AddonDef[] = [
   },
   {
     key: "addon.purchase_orders",
-    names: L("Purchase orders (LPOs)", "أوامر الشراء"),
+    names: L("Purchase orders (LPOs)", "أوامر الشراء", "Órdenes de compra"),
     description: L(
       "Formal purchase orders with supplier records and printable documents. Automated PDF rendering activates with the automation pack.",
       "أوامر شراء رسمية مع سجلات الموردين ومستندات قابلة للطباعة. يتفعل إنتاج PDF التلقائي مع باقة الأتمتة.",
+      "Órdenes de compra formales con registros de proveedores y documentos imprimibles. La generación automática del PDF se activa con el paquete de automatización.",
     ),
     usdMonthlyMinor: 500,
     aedMonthlyMinor: 1900,
@@ -213,10 +237,11 @@ export const ADDONS: readonly AddonDef[] = [
   },
   {
     key: "addon.goods_receiving",
-    names: L("Goods receiving", "استلام البضائع"),
+    names: L("Goods receiving", "استلام البضائع", "Recepción de mercancía"),
     description: L(
       "Goods receipt notes with partial-receipt tracking against purchase orders.",
       "إشعارات استلام البضائع مع تتبع الاستلام الجزئي مقابل أوامر الشراء.",
+      "Notas de recepción con seguimiento de recepciones parciales frente a las órdenes de compra.",
     ),
     usdMonthlyMinor: 300,
     aedMonthlyMinor: 1100,
@@ -228,10 +253,15 @@ export const ADDONS: readonly AddonDef[] = [
   },
   {
     key: "addon.items_catalogue",
-    names: L("Items & materials catalogue", "دليل الأصناف والمواد"),
+    names: L(
+      "Items & materials catalogue",
+      "دليل الأصناف والمواد",
+      "Catálogo de artículos y materiales",
+    ),
     description: L(
       "A shared item catalogue with categories used across requests, orders and reports. This is category-level operational tracking — not warehouse stock control.",
       "دليل أصناف مشترك بفئات تُستخدم في الطلبات والأوامر والتقارير. تتبع تشغيلي على مستوى الفئات — وليس نظام مخازن.",
+      "Un catálogo compartido de artículos con categorías, usado en solicitudes, órdenes e informes. Es seguimiento operativo por categoría, no control de existencias de almacén.",
     ),
     usdMonthlyMinor: 300,
     aedMonthlyMinor: 1100,
@@ -243,10 +273,15 @@ export const ADDONS: readonly AddonDef[] = [
   },
   {
     key: "addon.approval_workflows",
-    names: L("Advanced approval workflows", "مسارات موافقات متقدمة"),
+    names: L(
+      "Advanced approval workflows",
+      "مسارات موافقات متقدمة",
+      "Flujos de aprobación avanzados",
+    ),
     description: L(
       "Configurable approval rules per subject: every / above-amount / auto-approve-below thresholds.",
       "قواعد موافقة قابلة للتهيئة لكل نوع: دائماً / فوق مبلغ / اعتماد تلقائي تحت مبلغ.",
+      "Reglas de aprobación configurables por asunto: siempre, por encima de un importe o aprobación automática por debajo del umbral.",
     ),
     usdMonthlyMinor: 400,
     aedMonthlyMinor: 1500,
@@ -260,10 +295,11 @@ export const ADDONS: readonly AddonDef[] = [
   // — Costing & intelligence —
   {
     key: "addon.job_costing",
-    names: L("Job costing", "تكاليف الأعمال"),
+    names: L("Job costing", "تكاليف الأعمال", "Costeo por trabajo"),
     description: L(
       "Per-job cost roll-up (materials, purchases, expenses; labour behind the cost wall) with margins for privileged roles.",
       "تجميع تكلفة كل عمل (مواد، مشتريات، مصروفات؛ والعمالة خلف جدار التكلفة) مع الهوامش للأدوار المخوّلة.",
+      "Acumulación de costes por trabajo (materiales, compras y gastos; la mano de obra tras el muro de costes) con márgenes para los perfiles autorizados.",
     ),
     usdMonthlyMinor: 700,
     aedMonthlyMinor: 2600,
@@ -275,10 +311,15 @@ export const ADDONS: readonly AddonDef[] = [
   },
   {
     key: "addon.labour_timesheets",
-    names: L("Labour & attendance costing", "تكلفة العمالة والحضور"),
+    names: L(
+      "Labour & attendance costing",
+      "تكلفة العمالة والحضور",
+      "Costeo de mano de obra y asistencia",
+    ),
     description: L(
       "Attendance grid and labour hours from daily reports feeding job costs.",
       "جدول الحضور وساعات العمل من التقارير اليومية لتغذية تكاليف الأعمال.",
+      "Cuadro de asistencia y horas de mano de obra procedentes de los informes diarios, que alimentan los costes.",
     ),
     usdMonthlyMinor: 500,
     aedMonthlyMinor: 1900,
@@ -290,10 +331,15 @@ export const ADDONS: readonly AddonDef[] = [
   },
   {
     key: "addon.quote_vs_actual",
-    names: L("Quote-versus-actual reporting", "تقارير المقارنة بين العرض والفعلي"),
+    names: L(
+      "Quote-versus-actual reporting",
+      "تقارير المقارنة بين العرض والفعلي",
+      "Informe de presupuesto frente a real",
+    ),
     description: L(
       "Compare accepted quote values against actual job costs with divergence flags.",
       "مقارنة قيم العروض المقبولة بالتكاليف الفعلية مع تنبيهات الانحراف.",
+      "Compare los valores del presupuesto aceptado con los costes reales, con avisos de desviación.",
     ),
     usdMonthlyMinor: 300,
     aedMonthlyMinor: 1100,
@@ -305,10 +351,15 @@ export const ADDONS: readonly AddonDef[] = [
   },
   {
     key: "addon.owner_digest",
-    names: L("Owner digest & exception intelligence", "ملخص المالك وذكاء الاستثناءات"),
+    names: L(
+      "Owner digest & exception intelligence",
+      "ملخص المالك وذكاء الاستثناءات",
+      "Resumen para la propiedad e inteligencia de excepciones",
+    ),
     description: L(
       "The owner digest and exception cards (deterministic, on-demand). Nightly automatic runs activate with the automation pack.",
       "ملخص المالك وبطاقات الاستثناءات (حتمي وعند الطلب). يتفعل التشغيل الليلي التلقائي مع باقة الأتمتة.",
+      "El resumen para la propiedad y las tarjetas de excepción, deterministas y bajo demanda. Las ejecuciones nocturnas automáticas se activan con el paquete de automatización.",
     ),
     usdMonthlyMinor: 500,
     aedMonthlyMinor: 1900,
@@ -320,10 +371,15 @@ export const ADDONS: readonly AddonDef[] = [
   },
   {
     key: "addon.customer_updates",
-    names: L("Customer update sharing", "مشاركة تحديثات العملاء"),
+    names: L(
+      "Customer update sharing",
+      "مشاركة تحديثات العملاء",
+      "Actualizaciones compartidas con el cliente",
+    ),
     description: L(
       "Curated progress updates shared with customers via secure links.",
       "تحديثات تقدم منسقة تُشارك مع العملاء عبر روابط آمنة.",
+      "Actualizaciones de avance seleccionadas y compartidas con los clientes mediante enlaces seguros.",
     ),
     usdMonthlyMinor: 300,
     aedMonthlyMinor: 1100,
@@ -337,10 +393,11 @@ export const ADDONS: readonly AddonDef[] = [
   // — Data & branding —
   {
     key: "addon.data_import",
-    names: L("Data import tools", "أدوات استيراد البيانات"),
+    names: L("Data import tools", "أدوات استيراد البيانات", "Herramientas de importación de datos"),
     description: L(
       "Guided CSV imports for customers, employees and items with validation preview.",
       "استيراد CSV موجّه للعملاء والموظفين والأصناف مع معاينة تحقق.",
+      "Importaciones guiadas desde CSV para clientes, empleados y artículos, con vista previa de validación.",
     ),
     usdMonthlyMinor: 300,
     aedMonthlyMinor: 1100,
@@ -355,10 +412,11 @@ export const ADDONS: readonly AddonDef[] = [
   // add-on had nothing real to sell. Deferred until extra entities actually ship.
   {
     key: "addon.exports_extended",
-    names: L("Extended data exports", "تصدير بيانات موسّع"),
+    names: L("Extended data exports", "تصدير بيانات موسّع", "Exportaciones de datos ampliadas"),
     description: L(
       "Additional full-entity CSV exports beyond the core set. Not built yet — core record exports remain free on every plan.",
       "تصدير CSV لكيانات إضافية فوق المجموعة الأساسية. غير متوفر بعد — يبقى تصدير السجلات الأساسية مجانياً في كل الخطط.",
+      "Exportaciones CSV adicionales por entidad completa, más allá del conjunto básico. Todavía no está construido: las exportaciones de registros básicos siguen siendo gratuitas en todos los planes.",
     ),
     usdMonthlyMinor: 0,
     aedMonthlyMinor: 0,
@@ -366,6 +424,7 @@ export const ADDONS: readonly AddonDef[] = [
     availabilityNote: L(
       "The extra export coverage does not exist yet — the current export set is included free.",
       "التغطية الإضافية للتصدير غير موجودة بعد — مجموعة التصدير الحالية مشمولة مجاناً.",
+      "La cobertura ampliada de exportación todavía no existe; el conjunto actual de exportaciones se incluye sin coste.",
     ),
     features: [],
     limitDeltas: {},
@@ -374,10 +433,15 @@ export const ADDONS: readonly AddonDef[] = [
   },
   {
     key: "addon.audit_history",
-    names: L("Audit & compliance history", "سجل التدقيق والامتثال"),
+    names: L(
+      "Audit & compliance history",
+      "سجل التدقيق والامتثال",
+      "Historial de auditoría y cumplimiento",
+    ),
     description: L(
       "Download your organisation's full audit trail as CSV.",
       "تنزيل سجل التدقيق الكامل لمنشأتك بصيغة CSV.",
+      "Descargue el registro de auditoría completo de su organización en CSV.",
     ),
     usdMonthlyMinor: 400,
     aedMonthlyMinor: 1500,
@@ -399,10 +463,11 @@ export const ADDONS: readonly AddonDef[] = [
   // getDocumentProfile (src/modules/branding/service.ts).
   {
     key: "addon.branding_docs",
-    names: L("Advanced document styling", "تنسيق متقدم للمستندات"),
+    names: L("Advanced document styling", "تنسيق متقدم للمستندات", "Estilo avanzado de documentos"),
     description: L(
       "Accent colour and letterhead styling on printed documents. Your logo, legal identity, TRN and address appear on every document as standard — no add-on needed.",
       "لون مميز وتنسيق ترويسة متقدم للمستندات المطبوعة. يظهر شعارك وهويتك القانونية والرقم الضريبي والعنوان على كل مستند بشكل أساسي دون أي إضافة.",
+      "Color de acento y membrete en los documentos impresos. Su logotipo, identidad legal, número de registro fiscal y dirección aparecen en todos los documentos de serie, sin complemento alguno.",
     ),
     usdMonthlyMinor: 200,
     aedMonthlyMinor: 800,
@@ -414,10 +479,15 @@ export const ADDONS: readonly AddonDef[] = [
   },
   {
     key: "addon.branding_app",
-    names: L("Full in-app branding", "علامتك داخل التطبيق"),
+    names: L(
+      "Full in-app branding",
+      "علامتك داخل التطبيق",
+      "Identidad visual completa en la aplicación",
+    ),
     description: L(
       "Your logo across the application header and dashboard, with your accent colour.",
       "شعارك في ترويسة التطبيق ولوحة المعلومات مع لونك المميز.",
+      "Su logotipo en la cabecera y el panel de la aplicación, con su color de acento.",
     ),
     usdMonthlyMinor: 100,
     aedMonthlyMinor: 400,
@@ -429,10 +499,11 @@ export const ADDONS: readonly AddonDef[] = [
   },
   {
     key: "addon.priority_support",
-    names: L("Priority support", "دعم ذو أولوية"),
+    names: L("Priority support", "دعم ذو أولوية", "Soporte prioritario"),
     description: L(
       "Priority human support with a faster response target during business hours.",
       "دعم بشري ذو أولوية بهدف استجابة أسرع خلال ساعات العمل.",
+      "Soporte humano prioritario, con un objetivo de respuesta más rápido en horario laboral.",
     ),
     usdMonthlyMinor: 900,
     aedMonthlyMinor: 3300,
@@ -440,6 +511,7 @@ export const ADDONS: readonly AddonDef[] = [
     availabilityNote: L(
       "Support is delivered by people — activation is confirmed with you directly.",
       "الدعم يقدمه أشخاص — يُؤكَّد التفعيل معك مباشرة.",
+      "El soporte lo prestan personas: la activación se confirma directamente con usted.",
     ),
     features: [],
     limitDeltas: {},
@@ -450,10 +522,15 @@ export const ADDONS: readonly AddonDef[] = [
   // — Credential-gated (visible, not purchasable until credentials exist) —
   {
     key: "addon.automation_workers",
-    names: L("Automation & scheduled workers", "الأتمتة والمهام المجدولة"),
+    names: L(
+      "Automation & scheduled workers",
+      "الأتمتة والمهام المجدولة",
+      "Automatización y tareas programadas",
+    ),
     description: L(
       "Nightly digests, automatic exception sweeps, document PDF rendering and scheduled maintenance.",
       "ملخصات ليلية، فحوصات استثناءات تلقائية، إنتاج مستندات PDF ومهام صيانة مجدولة.",
+      "Resúmenes nocturnos, barridos automáticos de excepciones, generación de PDF y mantenimiento programado.",
     ),
     usdMonthlyMinor: 500,
     aedMonthlyMinor: 1900,
@@ -461,6 +538,7 @@ export const ADDONS: readonly AddonDef[] = [
     availabilityNote: L(
       "Activates once the background-worker infrastructure is provisioned.",
       "يتفعل بعد تجهيز بنية المهام الخلفية.",
+      "Se activa cuando se aprovisione la infraestructura de tareas en segundo plano.",
     ),
     features: [],
     limitDeltas: {},
@@ -469,10 +547,15 @@ export const ADDONS: readonly AddonDef[] = [
   },
   {
     key: "addon.email_notifications",
-    names: L("Email notification pack", "باقة إشعارات البريد"),
+    names: L(
+      "Email notification pack",
+      "باقة إشعارات البريد",
+      "Paquete de notificaciones por correo",
+    ),
     description: L(
       "Email delivery for invites, approvals and daily summaries.",
       "إرسال بريد إلكتروني للدعوات والموافقات والملخصات اليومية.",
+      "Envío por correo de invitaciones, aprobaciones y resúmenes diarios.",
     ),
     usdMonthlyMinor: 300,
     aedMonthlyMinor: 1100,
@@ -480,6 +563,7 @@ export const ADDONS: readonly AddonDef[] = [
     availabilityNote: L(
       "Activates once the email provider is provisioned.",
       "يتفعل بعد تجهيز مزود البريد.",
+      "Se activa cuando se aprovisione el proveedor de correo.",
     ),
     features: [],
     limitDeltas: {},
@@ -488,10 +572,15 @@ export const ADDONS: readonly AddonDef[] = [
   },
   {
     key: "addon.ai_pack",
-    names: L("AI onboarding & narration pack", "باقة الذكاء الاصطناعي"),
+    names: L(
+      "AI onboarding & narration pack",
+      "باقة الذكاء الاصطناعي",
+      "Paquete de incorporación y narración con IA",
+    ),
     description: L(
       "AI-enriched onboarding conversation and digest narration on top of the deterministic engine.",
       "إثراء المحادثة التأهيلية وسرد الملخصات بالذكاء الاصطناعي فوق المحرك الحتمي.",
+      "Conversación de incorporación y narración del resumen enriquecidas con IA, sobre el motor determinista.",
     ),
     usdMonthlyMinor: 600,
     aedMonthlyMinor: 2200,
@@ -499,6 +588,7 @@ export const ADDONS: readonly AddonDef[] = [
     availabilityNote: L(
       "Activates once an AI provider is wired; the deterministic engine is always included free.",
       "يتفعل بعد ربط مزود ذكاء اصطناعي؛ المحرك الحتمي مشمول مجاناً دائماً.",
+      "Se activa cuando haya un proveedor de IA conectado; el motor determinista se incluye siempre sin coste.",
     ),
     features: ["feat.ai_narration", "feat.ai_drafts"],
     limitDeltas: { "limit.ai_credits_month": 200 },
@@ -507,10 +597,11 @@ export const ADDONS: readonly AddonDef[] = [
   },
   {
     key: "addon.oauth_login",
-    names: L("OAuth login pack", "باقة تسجيل الدخول الموحد"),
+    names: L("OAuth login pack", "باقة تسجيل الدخول الموحد", "Paquete de inicio de sesión OAuth"),
     description: L(
       "Google / Microsoft single sign-on for your team.",
       "تسجيل دخول موحد عبر Google / Microsoft لفريقك.",
+      "Inicio de sesión único con Google o Microsoft para su equipo.",
     ),
     usdMonthlyMinor: 300,
     aedMonthlyMinor: 1100,
@@ -518,6 +609,7 @@ export const ADDONS: readonly AddonDef[] = [
     availabilityNote: L(
       "Activates once OAuth providers are configured.",
       "يتفعل بعد تهيئة مزودي الدخول الموحد.",
+      "Se activa cuando se configuren los proveedores de OAuth.",
     ),
     features: [],
     limitDeltas: {},
@@ -528,10 +620,11 @@ export const ADDONS: readonly AddonDef[] = [
   // — Deferred (capability does not exist — NEVER purchasable; honesty-tested) —
   {
     key: "addon.inventory_stock",
-    names: L("Inventory & stock control", "إدارة المخزون"),
+    names: L("Inventory & stock control", "إدارة المخزون", "Inventario y control de existencias"),
     description: L(
       "Warehouse-grade stock levels and movements. Not built yet — shown for roadmap honesty only.",
       "مستويات مخزون وحركات بمستوى المستودعات. غير متوفر بعد — يُعرض للشفافية فقط.",
+      "Niveles y movimientos de existencias con calidad de almacén. Todavía no está construido: se muestra únicamente por honestidad sobre el plan de trabajo.",
     ),
     usdMonthlyMinor: 0,
     aedMonthlyMinor: 0,
@@ -543,10 +636,11 @@ export const ADDONS: readonly AddonDef[] = [
   },
   {
     key: "addon.multi_location",
-    names: L("Multi-location operations", "عمليات متعددة المواقع"),
+    names: L("Multi-location operations", "عمليات متعددة المواقع", "Operación multisede"),
     description: L(
       "First-class branches/locations. Not built yet — shown for roadmap honesty only.",
       "فروع ومواقع كوحدات أساسية. غير متوفر بعد — يُعرض للشفافية فقط.",
+      "Sucursales y sedes de primer nivel. Todavía no está construido: se muestra únicamente por honestidad sobre el plan de trabajo.",
     ),
     usdMonthlyMinor: 0,
     aedMonthlyMinor: 0,
@@ -558,10 +652,11 @@ export const ADDONS: readonly AddonDef[] = [
   },
   {
     key: "addon.multi_currency",
-    names: L("Multi-currency documents", "مستندات متعددة العملات"),
+    names: L("Multi-currency documents", "مستندات متعددة العملات", "Documentos en varias monedas"),
     description: L(
       "Per-document currencies beyond the org base currency. Not built yet.",
       "عملات لكل مستند غير عملة المنشأة الأساسية. غير متوفر بعد.",
+      "Monedas por documento distintas de la moneda base de la organización. Todavía no está construido.",
     ),
     usdMonthlyMinor: 0,
     aedMonthlyMinor: 0,
@@ -573,10 +668,15 @@ export const ADDONS: readonly AddonDef[] = [
   },
   {
     key: "addon.whatsapp_pack",
-    names: L("WhatsApp / messaging pack", "باقة واتساب والمراسلة"),
+    names: L(
+      "WhatsApp / messaging pack",
+      "باقة واتساب والمراسلة",
+      "Paquete de WhatsApp y mensajería",
+    ),
     description: L(
       "WhatsApp notifications and customer messaging. Not built yet.",
       "إشعارات واتساب ومراسلة العملاء. غير متوفر بعد.",
+      "Notificaciones por WhatsApp y mensajería con el cliente. Todavía no está construido.",
     ),
     usdMonthlyMinor: 0,
     aedMonthlyMinor: 0,
@@ -588,10 +688,11 @@ export const ADDONS: readonly AddonDef[] = [
   },
   {
     key: "addon.api_webhooks",
-    names: L("API & webhook access", "الوصول البرمجي وWebhooks"),
+    names: L("API & webhook access", "الوصول البرمجي وWebhooks", "Acceso por API y webhooks"),
     description: L(
       "A public API and outbound webhooks. Not built yet.",
       "واجهة برمجية عامة وWebhooks صادرة. غير متوفرة بعد.",
+      "Una API pública y webhooks salientes. Todavía no está construido.",
     ),
     usdMonthlyMinor: 0,
     aedMonthlyMinor: 0,
@@ -607,10 +708,11 @@ export const ADDONS: readonly AddonDef[] = [
 export const BUNDLES: readonly BundleDef[] = [
   {
     key: "bundle.starter_ops",
-    names: L("Starter Operations", "العمليات الأساسية"),
+    names: L("Starter Operations", "العمليات الأساسية", "Operaciones iniciales"),
     description: L(
       "Quote, invoice and share progress with your customers.",
       "أصدر العروض والفواتير وشارك التقدم مع عملائك.",
+      "Presupueste, facture y comparta el avance con sus clientes.",
     ),
     // 0070: addon.branding_docs removed (deferred — capability does not exist);
     // price cut 900 → 700 to keep the discount genuine (pending owner ratification).
@@ -621,10 +723,11 @@ export const BUNDLES: readonly BundleDef[] = [
   },
   {
     key: "bundle.finance",
-    names: L("Finance", "المالية"),
+    names: L("Finance", "المالية", "Finanzas"),
     description: L(
       "Payments, receivables, expenses and quote-versus-actual — the money picture.",
       "الدفعات والذمم والمصروفات ومقارنة العرض بالفعلي — الصورة المالية الكاملة.",
+      "Cobros, cuentas por cobrar, gastos y comparación entre presupuesto y real: la imagen del dinero.",
     ),
     addonKeys: ["addon.payments_ar", "addon.expenses_cashbook", "addon.quote_vs_actual"],
     usdMonthlyMinor: 900, // vs 1200 individually (−25%); the owner's $9 accounting anchor
@@ -633,10 +736,11 @@ export const BUNDLES: readonly BundleDef[] = [
   },
   {
     key: "bundle.procurement",
-    names: L("Procurement", "المشتريات"),
+    names: L("Procurement", "المشتريات", "Compras"),
     description: L(
       "Requests, approvals, purchase orders, receiving and the item catalogue.",
       "الطلبات والموافقات وأوامر الشراء والاستلام ودليل الأصناف.",
+      "Solicitudes, aprobaciones, órdenes de compra, recepción y catálogo de artículos.",
     ),
     addonKeys: [
       "addon.purchase_requests",
@@ -651,10 +755,11 @@ export const BUNDLES: readonly BundleDef[] = [
   },
   {
     key: "bundle.project_control",
-    names: L("Project Control", "ضبط المشاريع"),
+    names: L("Project Control", "ضبط المشاريع", "Control de la obra"),
     description: L(
       "Job costing, labour costing, quote-versus-actual and the owner digest.",
       "تكاليف الأعمال والعمالة ومقارنة العرض بالفعلي وملخص المالك.",
+      "Costeo por trabajo, costeo de mano de obra, presupuesto frente a real y el resumen para la propiedad.",
     ),
     addonKeys: [
       "addon.job_costing",
@@ -668,10 +773,11 @@ export const BUNDLES: readonly BundleDef[] = [
   },
   {
     key: "bundle.growth",
-    names: L("Growth", "النمو"),
+    names: L("Growth", "النمو", "Crecimiento"),
     description: L(
       "The most-chosen path: billing, money management, costing and customer sharing.",
       "المسار الأكثر اختياراً: الفوترة وإدارة المال والتكاليف ومشاركة العملاء.",
+      "El camino más elegido: facturación, gestión del dinero, costeo y comunicación con el cliente.",
     ),
     addonKeys: [
       "addon.quotes_invoices",
@@ -686,10 +792,11 @@ export const BUNDLES: readonly BundleDef[] = [
   },
   {
     key: "bundle.full_ops",
-    names: L("Full Operations", "العمليات الكاملة"),
+    names: L("Full Operations", "العمليات الكاملة", "Operaciones completas"),
     description: L(
       "Every available module: billing, finance, procurement, costing, intelligence, imports and audit.",
       "كل الوحدات المتاحة: الفوترة والمالية والمشتريات والتكاليف والذكاء والاستيراد والتدقيق.",
+      "Todos los módulos disponibles: facturación, finanzas, compras, costeo, inteligencia, importaciones y auditoría.",
     ),
     // 0070: exports_extended + branding_docs + branding_app removed (deferred —
     // capabilities do not exist). Members sum 6900 → 6300; price unchanged.
@@ -722,10 +829,11 @@ export const BUNDLES: readonly BundleDef[] = [
   // bundle member at quantity 1; extra packs are then bought individually).
   {
     key: "bundle.tier_medium",
-    names: L("Medium", "المتوسطة"),
+    names: L("Medium", "المتوسطة", "Medio"),
     description: L(
       "The balanced small-business set: billing, money management, purchasing and 10 extra office seats.",
       "الباقة المتوازنة للأعمال الصغيرة: الفوترة وإدارة المال والمشتريات و10 مقاعد مكتبية إضافية.",
+      "El conjunto equilibrado para la pequeña empresa: facturación, gestión del dinero, compras y 10 puestos de oficina adicionales.",
     ),
     // Members sum $28 / AED 106 (members_10 5 + quotes_invoices 5 +
     // payments_ar 5 + expenses_cashbook 4 + purchase_requests 4 +
@@ -749,10 +857,11 @@ export const BUNDLES: readonly BundleDef[] = [
   },
   {
     key: "bundle.tier_high",
-    names: L("High", "العليا"),
+    names: L("High", "العليا", "Alto"),
     description: L(
       "Everything that is operational today: every available module plus 10 extra office seats and 25 GB extra storage.",
       "كل ما هو متاح تشغيلياً اليوم: جميع الوحدات المتوفرة مع 10 مقاعد مكتبية إضافية و25 جيجابايت تخزين إضافي.",
+      "Todo lo que está operativo hoy: todos los módulos disponibles más 10 puestos de oficina adicionales y 25 GB de almacenamiento extra.",
     ),
     // ALL currently production-operational purchasable modules: the full_ops
     // fifteen ($63 / AED 236) + members_10 ($5/19) + storage_25gb ($4/15) +

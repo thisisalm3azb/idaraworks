@@ -26,14 +26,17 @@ export const TEMPLATE_MANUFACTURING: TemplateManifest = {
     job: {
       en: { singular: "Work Order", plural: "Work Orders" },
       ar: { singular: "أمر تشغيل", plural: "أوامر تشغيل", gender: "m" },
+      es: { singular: "Orden de fabricación", plural: "Órdenes de fabricación", gender: "f" },
     },
     job_stage: {
       en: { singular: "Production Stage", plural: "Production Stages" },
       ar: { singular: "مرحلة إنتاج", plural: "مراحل الإنتاج", gender: "f" },
+      es: { singular: "Etapa de producción", plural: "Etapas de producción", gender: "f" },
     },
     daily_report: {
       en: { singular: "Production Report", plural: "Production Reports" },
       ar: { singular: "تقرير الإنتاج", plural: "تقارير الإنتاج", gender: "m" },
+      es: { singular: "Parte de producción", plural: "Partes de producción", gender: "m" },
     },
   },
 

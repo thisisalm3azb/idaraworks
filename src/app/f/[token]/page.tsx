@@ -12,6 +12,7 @@ import { documentStudioEnabled } from "@/platform/flags";
 import { loadFormSnapshot, resolveFormToken } from "@/modules/docstudio/service";
 import { FormRenderer, type FormField } from "./FormRenderer";
 import { submitFormAction } from "./actions";
+import type { Locale } from "@/platform/registries";
 
 export const dynamic = "force-dynamic";
 
@@ -70,7 +71,7 @@ export default async function FormPage({
   if (!documentStudioEnabled()) notFound();
   const { token } = await params;
   const sp = await searchParams;
-  const lang: "en" | "ar" = sp.lang === "ar" ? "ar" : "en";
+  const lang: Locale = sp.lang === "ar" ? "ar" : "en";
   const c = COPY[lang];
   const dir = lang === "ar" ? "rtl" : "ltr";
   const h = await headers();

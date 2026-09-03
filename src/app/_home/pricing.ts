@@ -33,7 +33,7 @@ export type PlanPrice = {
 export type PricingTier = {
   key: "free" | "medium" | "high";
   /** PUBLIC plan labels (H9.1): Free / Operations / Complete. */
-  names: { en: string; ar: string };
+  names: { en: string; ar: string; es: string };
   price: PlanPrice;
   /** i18n key for the one-line intended-customer positioning. */
   tagKey: string;
@@ -63,7 +63,7 @@ export function pricingTiers(): PricingTier[] {
   return [
     {
       key: "free",
-      names: { en: "Free", ar: "مجاني" },
+      names: { en: "Free", ar: "مجاني", es: "Gratuito" },
       price: { monthlyUsd: 0, annualPerMonthUsd: 0, annualBilledUsd: 0 },
       tagKey: "home.pricing.free.tag",
       usersKey: "home.pricing.free.users",
@@ -74,7 +74,7 @@ export function pricingTiers(): PricingTier[] {
     },
     {
       key: "medium",
-      names: { en: "Operations", ar: "العمليات" },
+      names: { en: "Operations", ar: "العمليات", es: "Operaciones" },
       price: { monthlyUsd: 39, annualPerMonthUsd: 31, annualBilledUsd: 372 },
       tagKey: "home.pricing.medium.tag",
       usersKey: "home.pricing.paid.users",
@@ -85,7 +85,7 @@ export function pricingTiers(): PricingTier[] {
     },
     {
       key: "high",
-      names: { en: "Complete", ar: "المتكاملة" },
+      names: { en: "Complete", ar: "المتكاملة", es: "Completa" },
       price: { monthlyUsd: 89, annualPerMonthUsd: 71, annualBilledUsd: 852 },
       tagKey: "home.pricing.high.tag",
       usersKey: "home.pricing.paid.users",

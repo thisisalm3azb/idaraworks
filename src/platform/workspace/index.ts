@@ -26,7 +26,7 @@ export {
   TIME_HORIZONS,
   PROVENANCE_SOURCES,
   WORKSPACE_COUNTRIES,
-  COUNTRY_PACKS,
+  WORKSPACE_COUNTRY_DEFAULTS,
   BLUEPRINT_ARCHETYPES,
   isWorkspaceModuleKey,
   isNavItemKey,
@@ -41,7 +41,7 @@ export {
   type TimeHorizon,
   type ProvenanceSource,
   type WorkspaceCountry,
-  type CountryPack,
+  type WorkspaceCountryDefaults,
   type BlueprintArchetype,
 } from "./registry";
 export {

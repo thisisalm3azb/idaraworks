@@ -24,6 +24,7 @@ import { CONSENT_VERSION, getSignatureProvider, NATIVE_PROVIDER } from "./provid
 import type { SignatureRender } from "./render";
 import { contentHash } from "./snapshot";
 import { DocError, signatureParties } from "./types";
+import type { Locale } from "@/platform/registries";
 
 export const INVITATION_DAYS_DEFAULT = 14;
 const SYNTHETIC_USER = "00000000-0000-0000-0000-000000000000";
@@ -866,7 +867,7 @@ export async function listSignaturesForRender(
   ctx: Ctx,
   archetype: RoleArchetype,
   documentId: string,
-  locale: "en" | "ar" = "en",
+  locale: Locale = "en",
 ): Promise<SignaturesForRender> {
   assertCan(archetype, "documents.view");
   return withCtx(ctx, (tx) => signaturesForRenderIn(tx, ctx, documentId, locale));
@@ -876,7 +877,7 @@ export async function signaturesForRenderIn(
   tx: TenantTx,
   ctx: Ctx,
   documentId: string,
-  locale: "en" | "ar",
+  locale: Locale,
 ): Promise<SignaturesForRender> {
   const req = await latestRequestIn(tx, ctx, documentId);
   if (!req) return { rows: [], evidenceLines: [] };

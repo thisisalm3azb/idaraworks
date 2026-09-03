@@ -22,35 +22,43 @@ export const TEMPLATE_BOATBUILDING: TemplateManifest = {
     job: {
       en: { singular: "Boat", plural: "Boats" },
       ar: { singular: "قارب", plural: "قوارب", gender: "m" },
+      es: { singular: "Embarcación", plural: "Embarcaciones", gender: "f" },
     },
     job_stage: {
       en: { singular: "Production Stage", plural: "Production Stages" },
       ar: { singular: "مرحلة الإنتاج", plural: "مراحل الإنتاج", gender: "f" },
+      es: { singular: "Etapa de producción", plural: "Etapas de producción", gender: "f" },
     },
     daily_report: {
       en: { singular: "Daily Report", plural: "Daily Reports" },
       ar: { singular: "التقرير اليومي", plural: "التقارير اليومية", gender: "m" },
+      es: { singular: "Parte diario", plural: "Partes diarios", gender: "m" },
     },
     material_request: {
       en: { singular: "Material Request", plural: "Material Requests" },
       ar: { singular: "طلب مواد", plural: "طلبات مواد", gender: "m" },
+      es: { singular: "Solicitud de material", plural: "Solicitudes de material", gender: "f" },
     },
     purchase_order: {
       // The house term, carried deliberately (doc 07/08).
       en: { singular: "LPO", plural: "LPOs" },
       ar: { singular: "أمر شراء", plural: "أوامر شراء", gender: "m" },
+      es: { singular: "Orden de compra local", plural: "Órdenes de compra locales", gender: "f" },
     },
     quote: {
       en: { singular: "Quotation", plural: "Quotations" },
       ar: { singular: "عرض سعر", plural: "عروض أسعار", gender: "m" },
+      es: { singular: "Presupuesto", plural: "Presupuestos", gender: "m" },
     },
     employee: {
       en: { singular: "Worker", plural: "Workers" },
       ar: { singular: "عامل", plural: "عمال", gender: "m" },
+      es: { singular: "Operario", plural: "Operarios", gender: "m" },
     },
     team: {
       en: { singular: "Team", plural: "Teams" },
       ar: { singular: "فريق", plural: "فرق", gender: "m" },
+      es: { singular: "Equipo", plural: "Equipos", gender: "m" },
     },
   },
 

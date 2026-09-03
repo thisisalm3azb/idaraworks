@@ -25,6 +25,7 @@ import {
 import { ShadowHtml } from "./ShadowHtml";
 import { SignForm } from "./SignForm";
 import { declineAction, signAction } from "./actions";
+import type { Locale } from "@/platform/registries";
 
 export const dynamic = "force-dynamic";
 
@@ -95,7 +96,7 @@ export default async function SignPage({
   if (!documentStudioEnabled()) notFound();
   const { token } = await params;
   const sp = await searchParams;
-  const lang: "en" | "ar" = sp.lang === "ar" ? "ar" : "en";
+  const lang: Locale = sp.lang === "ar" ? "ar" : "en";
   const c = COPY[lang];
   const dir = lang === "ar" ? "rtl" : "ltr";
   const h = await headers();

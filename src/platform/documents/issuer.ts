@@ -25,6 +25,7 @@
  * Pure + platform-level: no database access, no module imports.
  */
 import { z } from "zod";
+import type { Locale } from "@/platform/registries";
 
 export const ISSUER_SNAPSHOT_VERSION = 1 as const;
 
@@ -148,7 +149,7 @@ export function formatIssuerAddress(
     IssuerIdentity,
     "addressEn" | "addressAr" | "city" | "region" | "postalCode" | "country"
   >,
-  lang: "en" | "ar",
+  lang: Locale,
 ): string | null {
   const street =
     lang === "ar"

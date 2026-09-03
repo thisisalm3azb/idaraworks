@@ -15,6 +15,7 @@ import { assertCan, type Action } from "@/platform/authz";
 import { requireCapability } from "@/platform/entitlements";
 import type { RoleArchetype } from "@/platform/registries";
 import { CUSTOMER_UPDATE_SENT, SHARE_TOKEN_CREATED, SHARE_TOKEN_REVOKED } from "@/platform/events";
+import type { Locale } from "@/platform/registries";
 
 const SHARE_TTL_DAYS = 90; // default; org/template-tunable later
 
@@ -123,7 +124,7 @@ export async function suggestBody(
   ctx: Ctx,
   archetype: RoleArchetype,
   jobId: string,
-  lang: "en" | "ar",
+  lang: Locale,
 ): Promise<{ title: string; body: string }> {
   assertCan(archetype, "customer_updates.draft" as Action);
   return withCtx(ctx, async (tx) => {

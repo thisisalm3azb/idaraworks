@@ -1,4 +1,5 @@
 import { Icon } from "@/platform/ui";
+import type { Locale } from "@/platform/registries";
 
 /**
  * H7: the Business Passport (the "#international" section body). Replaces the
@@ -70,7 +71,7 @@ function VPort() {
 /** One mirrored output: the same document structure in a given language and
  * direction. The labels are fixed in the surface's own language (they are the
  * proof), and the layout mirrors purely through dir + logical properties. */
-function MiniDoc({ lang }: { lang: "en" | "ar" }) {
+function MiniDoc({ lang }: { lang: Locale }) {
   const L =
     lang === "en"
       ? { tag: "English", dir: "Left to right", doc: "Quote", status: "Accepted", total: "Total" }

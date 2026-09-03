@@ -18,6 +18,7 @@ import { hasFeature, checkLimit } from "@/platform/entitlements/resolve";
 import { getNarrationProvider, type NarrationRequest } from "@/platform/ai/adapter";
 import { validateNumbersSubset } from "@/platform/ai/numbers-subset";
 import { logger } from "@/platform/logger";
+import type { Locale } from "@/platform/registries";
 
 // Each section maps to one or more of the thirteen owner questions (doc 03 §5). The label
 // is an i18n KEY resolved at render; money is null unless the section carries a figure.
@@ -58,7 +59,7 @@ function collectNumbers(sections: DigestSection[]): number[] {
  */
 export function buildNarrationInputs(
   payload: DigestPayload,
-  lang: "en" | "ar",
+  lang: Locale,
   t: (key: string) => string,
 ): { req: NarrationRequest; allowed: number[] } {
   const items = payload.sections
@@ -324,7 +325,7 @@ export async function generateOwnerNarration(
   ctx: Ctx,
   archetype: RoleArchetype,
   digestId: string,
-  lang: "en" | "ar",
+  lang: Locale,
   t: (key: string) => string,
 ): Promise<{ narration: string | null; status: string }> {
   assertCan(archetype, "digest.view" as Action);

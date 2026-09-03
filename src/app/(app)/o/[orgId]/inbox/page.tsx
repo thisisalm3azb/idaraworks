@@ -10,6 +10,7 @@ import { attentionFeed, type AttentionItem } from "@/modules/inventory/service";
 import { formatDate } from "@/platform/format";
 import { stockSurfacesEnabled, hrSurfacesEnabled } from "@/platform/flags";
 import { markReadAction } from "./actions";
+import type { Locale } from "@/platform/registries";
 
 /**
  * The inbox (H22F).
@@ -183,7 +184,7 @@ function AttentionRow({
 }: {
   orgId: string;
   item: AttentionItem;
-  locale: "en" | "ar";
+  locale: Locale;
   t: Translator;
 }) {
   /*
@@ -232,7 +233,7 @@ function HrAttentionRow({
 }: {
   orgId: string;
   item: HrAttentionItem;
-  locale: "en" | "ar";
+  locale: Locale;
   t: Translator;
 }) {
   const name = item.name ? (locale === "ar" ? (item.name.ar ?? item.name.en) : item.name.en) : "";

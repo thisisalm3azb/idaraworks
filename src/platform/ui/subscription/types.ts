@@ -12,8 +12,8 @@ export type SelectionCurrency = "USD" | "AED";
 export type SelectionTier = {
   bundleKey: string;
   tier: "medium" | "high";
-  names: { en: string; ar: string };
-  description: { en: string; ar: string };
+  names: { en: string; ar: string; es: string };
+  description: { en: string; ar: string; es: string };
   members: AddonDef[];
   priceMonthlyMinor: Record<SelectionCurrency, number>;
   memberTotalMinor: Record<SelectionCurrency, number>;

@@ -47,6 +47,7 @@ import { SavedViewsBar } from "./SavedViewsBar";
 import { ReviewPanel } from "./ReviewPanel";
 import { StrategyView } from "./StrategyView";
 import { EdgeInspector } from "./EdgeInspector";
+import type { Locale } from "@/platform/registries";
 
 export type WorkspacePayload = {
   orgId: string;
@@ -285,7 +286,7 @@ export type StudioActions = {
   reviewNarrative: (input: {
     planId: string;
     scenarioId?: string;
-    locale?: "en" | "ar";
+    locale?: Locale;
   }) => Promise<ActionResult<Narrative>>;
 };
 

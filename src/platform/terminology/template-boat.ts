@@ -12,11 +12,13 @@ export const TEMPLATE_BOAT_TERMS: TerminologyMap = {
   job: {
     en: { singular: "Boat", plural: "Boats" },
     ar: { singular: "قارب", plural: "قوارب", gender: "m" },
+    es: { singular: "Embarcación", plural: "Embarcaciones", gender: "f" },
   },
   // Najolatech says "LPO", not "PO" (doc 07 example).
   purchase_order: {
     en: { singular: "LPO", plural: "LPOs" },
     ar: { singular: "أمر شراء محلي", plural: "أوامر شراء محلية", gender: "m" },
+    es: { singular: "Orden de compra local", plural: "Órdenes de compra locales", gender: "f" },
   },
 };
 

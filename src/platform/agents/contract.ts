@@ -8,6 +8,7 @@
  */
 import { z } from "zod";
 import { ACTION_CLASSES, type ActionClass, type AgentId, type AgentToolId } from "./registry";
+import type { Locale } from "@/platform/registries";
 
 /** What the browser may send. Everything else about identity is resolved
  * server-side: org membership, user, role, permissions, locale and allowed
@@ -80,7 +81,7 @@ export type AgentResult =
       status: "ok";
       correlationId: string;
       agentId: AgentId;
-      locale: "en" | "ar";
+      locale: Locale;
       output: AgentOutput & {
         /** Server-computed: every proposed non-read action requires human
          * approval; the model cannot waive this. */

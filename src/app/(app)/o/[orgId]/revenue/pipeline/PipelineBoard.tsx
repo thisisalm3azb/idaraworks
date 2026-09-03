@@ -18,6 +18,7 @@ import { formatDate, formatMoney } from "@/platform/format";
 import type { CurrencyCode } from "@/platform/registries";
 import type { BoardCard, StageAggregate, StageRequirement } from "@/modules/crm/service";
 import { moveStageAction, type MoveResult } from "./actions";
+import type { Locale } from "@/platform/registries";
 
 export type BoardDict = {
   move: string;
@@ -79,7 +80,7 @@ export function PipelineBoard({
   canManage: boolean;
   seesPrice: boolean;
   currency: CurrencyCode;
-  locale: "en" | "ar";
+  locale: Locale;
   dict: BoardDict;
 }) {
   const router = useRouter();

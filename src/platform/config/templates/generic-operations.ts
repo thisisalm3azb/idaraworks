@@ -28,6 +28,7 @@ export const TEMPLATE_GENERIC_OPERATIONS: TemplateManifest = {
     job: {
       en: { singular: "Project", plural: "Projects" },
       ar: { singular: "مشروع", plural: "مشاريع", gender: "m" },
+      es: { singular: "Obra", plural: "Obras", gender: "f" },
     },
   },
 
