@@ -10,7 +10,8 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getSessionUser } from "@/platform/auth/resolve";
-import { LOCALE_COOKIE, normalizeLocale } from "@/platform/i18n";
+import { LOCALE_COOKIE } from "@/platform/i18n";
+import { resolveOfferedLocale } from "@/platform/i18n/offered";
 import { currentRequestId } from "@/platform/observability";
 import { requestLogger } from "@/platform/logger";
 import { sql, withUserCtx } from "@/platform/tenancy";
@@ -113,7 +114,7 @@ export async function saveStepAction(step: string, formData: FormData): Promise<
   // Preferred-language answer flips the ACTIVE flow locale immediately (the
   // existing locale-cookie mechanism) and persists to the user profile.
   if (step === "region" && data.answers.preferred_language) {
-    const locale = normalizeLocale(data.answers.preferred_language);
+    const locale = resolveOfferedLocale(data.answers.preferred_language);
     (await cookies()).set(LOCALE_COOKIE, locale, LOCALE_COOKIE_OPTS);
     await withUserCtx(userId, (tx) =>
       tx.execute(sql`update public.user_profile set locale = ${locale} where id = ${userId}`),

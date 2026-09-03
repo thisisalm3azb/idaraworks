@@ -30,7 +30,7 @@ import { Icon, type IconName } from "@/platform/ui";
  * logical properties; the one directional arrow glyph flips explicitly.
  */
 
-type TFn = (k: string) => string;
+type TFn = (k: string, vars?: Record<string, string | number>) => string;
 
 /** Small forward arrow between the foundation term and the chosen words. */
 function ForwardGlyph() {
@@ -110,7 +110,13 @@ function Pill({
   );
 }
 
-export function FoundationShapes({ t }: { t: TFn }) {
+/**
+ * `languages` is the interface-language list already formatted for the reader
+ * (H29). Copy that names the shipped languages takes it as a variable rather
+ * than spelling them out, so releasing a language cannot leave a sentence here
+ * quietly claiming the old set.
+ */
+export function FoundationShapes({ t, languages }: { t: TFn; languages: string }) {
   return (
     <div className="grid gap-10 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)] lg:items-center">
       {/* ── Copy, then the safety guarantee as a calm trust line ─────────── */}
@@ -139,7 +145,10 @@ export function FoundationShapes({ t }: { t: TFn }) {
       {/* ── The demonstration: shaping layers over one stable foundation ── */}
       <div className="flex flex-col gap-2.5">
         {/* Words: rename what the business calls its work. */}
-        <Layer title={t("home.built.words_title")} caption={t("home.built.words_note")}>
+        <Layer
+          title={t("home.built.words_title")}
+          caption={t("home.built.words_note", { languages })}
+        >
           <div className="flex flex-wrap items-center gap-2">
             <Pill label={t("home.built.words_base")} tone="base" />
             <ForwardGlyph />
@@ -197,7 +206,7 @@ export function FoundationShapes({ t }: { t: TFn }) {
                 >
                   {i + 1}
                 </span>
-                {t(`home.built.${k}`)}
+                {t(`home.built.${k}`, { languages })}
               </li>
             ))}
           </ol>
@@ -247,7 +256,7 @@ export function FoundationShapes({ t }: { t: TFn }) {
           {(["now_i1", "now_i2", "now_i3", "now_i4", "now_i5"] as const).map((k) => (
             <li key={k} className="flex items-center gap-1.5 text-sm text-ink">
               <Icon name="check" size={13} aria-hidden className="shrink-0 text-brand" />
-              {t(`home.built.${k}`)}
+              {t(`home.built.${k}`, { languages })}
             </li>
           ))}
         </ul>

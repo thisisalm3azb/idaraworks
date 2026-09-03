@@ -12,6 +12,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import en from "@/platform/i18n/messages/en.json";
 import ar from "@/platform/i18n/messages/ar.json";
+import { t } from "@/platform/i18n";
 import { pricingTiers } from "@/app/_home/pricing";
 import { homeNav, SIGNUP_HREF, LOGIN_HREF } from "@/app/_home/nav";
 import { getTierBundle } from "@/platform/entitlements";
@@ -189,8 +190,15 @@ describe("MobileMenu accessibility + RTL safety", async () => {
 // H1 (006B): homepage truthfulness + international-first copy. These assertions
 // encode the deliberate copy corrections and must not be weakened to pass.
 describe("H1 truthfulness + international-first copy", () => {
-  const marketingEn = MARKETING.map((k) => String(en[k as keyof typeof en])).join("  ");
-  const marketingAr = MARKETING.map((k) => String(ar[k as keyof typeof ar])).join("  ");
+  // H29: copy that lists the interface languages takes them as a variable, so
+  // the rendered sentence — not the raw template — is what these claims are
+  // read from. The lists here are what Intl produces for the shipped pair.
+  const marketingEn = MARKETING.map((k) => t(k, { languages: "English and Arabic" }, "en")).join(
+    "  ",
+  );
+  const marketingAr = MARKETING.map((k) => t(k, { languages: "الإنجليزية والعربية" }, "ar")).join(
+    "  ",
+  );
   const builtEn = Object.keys(en)
     .filter((k) => k.startsWith("home.built."))
     .map((k) => String(en[k as keyof typeof en]))
@@ -238,10 +246,27 @@ describe("H1 truthfulness + international-first copy", () => {
     expect(marketingEn).toMatch(/uae and gcc/i);
   });
 
-  it("describes English and Arabic as available now", () => {
-    expect(marketingEn).toMatch(/arabic and english/i);
-    expect(marketingEn).toMatch(/arabic and english[^.]*\b(today|now|work)\b/i);
+  it("describes the shipped languages as available now", () => {
+    // H29 made the list a variable, so the claim is tested on the RENDERED
+    // sentence. Order comes from Intl, not from us, so either order passes —
+    // what must hold is that the languages are described as working today.
+    expect(marketingEn).toMatch(/(arabic and english|english and arabic)/i);
+    expect(marketingEn).toMatch(
+      /(arabic and english|english and arabic)[^.]*\b(today|now|work)\b/i,
+    );
     expect(marketingEn).toMatch(/right-to-left/i);
+  });
+
+  it("hard-codes no language list in the marketing catalogue", () => {
+    // The sentences above must come from {languages}; a hand-written pair in the
+    // catalogue is exactly the drift H29 removed, and it would silently become a
+    // false claim the day a third language is released.
+    for (const key of MARKETING) {
+      const value = String(en[key as keyof typeof en]);
+      expect(value, `${key} names languages literally`).not.toMatch(
+        /(arabic and english|english and arabic|arabic or english|english or arabic)/i,
+      );
+    }
   });
 
   it("names no language the product does not offer", () => {
@@ -379,12 +404,17 @@ describe("H2 header + navigation", () => {
     expect(menuSrc).toMatch(/document\.body\.style\.overflow = "";/);
   });
 
-  it("language control is text-labelled, 44px, accessible, and offers no Spanish", () => {
-    expect(langSrc).toMatch(/العربية/);
-    expect(langSrc).toMatch(/English/);
+  it("language control is text-labelled, 44px, accessible, and lists only released languages", () => {
+    // H29 replaced the EN/AR toggle with a list built from offeredLocales(), so
+    // the languages are no longer literals here at all. The law the original
+    // test protected still holds and is now stronger: the public site cannot
+    // name a language the deployment has not released, because it names no
+    // language itself — it asks the same gate the workspace switcher asks.
+    expect(langSrc).toMatch(/offeredLocales\(\)/);
+    expect(langSrc).toMatch(/LOCALE_NATIVE_NAME\[candidate\]/);
     expect(langSrc).toMatch(/min-h-11/);
     expect(langSrc).toMatch(/aria-label=\{ariaLabel\}/);
-    expect(langSrc).not.toMatch(/"es"|Español/);
+    expect(langSrc).not.toMatch(/"es"|Español|"ar"|العربية/);
   });
 
   it("new header copy exists in both catalogs with no em dash and natural Arabic", () => {

@@ -6,6 +6,8 @@ import type { CSSProperties } from "react";
 import { Icon, Menu, buildBottomNav, buildNavGroups, buildQuickCreate } from "@/platform/ui";
 import type { MenuSection } from "@/platform/ui";
 import { getT, getServerLocale } from "@/platform/i18n/server";
+import { offeredLocales } from "@/platform/i18n/offered";
+import { LOCALE_NATIVE_NAME } from "@/platform/i18n/locale";
 import { getSessionUser, listMyOrgs, resolveCtx } from "@/platform/auth/resolve";
 import { loadOrgTerminology, term } from "@/platform/terminology";
 import { can } from "@/platform/authz";
@@ -148,7 +150,20 @@ export default async function OrgLayout({
       <OrgLogo ctx={resolved.ctx} archetype={a} orgName={resolved.orgName} />
     </Link>
   );
-  const otherLocale = locale === "ar" ? "en" : "ar";
+  // H29: a two-way toggle cannot express three languages — a single button that
+  // says "العربية" tells you nothing about where Spanish went. The header keeps
+  // one compact control and opens a menu naming each language in itself.
+  const languageSections = [
+    {
+      key: "language",
+      heading: t("nav.switch_language"),
+      items: offeredLocales().map((candidate) => ({
+        key: candidate,
+        label: LOCALE_NATIVE_NAME[candidate],
+        formAction: setActiveLocaleAction.bind(null, candidate),
+      })),
+    },
+  ];
 
   // DEFECT 4: header menu data is computed server-side and handed to the client
   // <Menu> as plain view-models (labels already resolved). One section for the
@@ -269,18 +284,20 @@ export default async function OrgLayout({
                 <Icon name="bell" size={20} />
               </Link>
 
-              <form action={setActiveLocaleAction.bind(null, otherLocale)}>
-                <button
-                  type="submit"
-                  className="flex h-11 items-center gap-1.5 rounded-md px-2 text-sm text-ink-secondary hover:bg-sunken hover:text-ink"
-                  aria-label={t("nav.switch_language")}
-                >
-                  <Icon name="globe" size={18} aria-hidden />
-                  <span className="hidden sm:inline">
-                    {otherLocale === "ar" ? "العربية" : "English"}
-                  </span>
-                </button>
-              </form>
+              <Menu
+                triggerLabel={t("nav.switch_language")}
+                triggerClassName="flex h-11 items-center gap-1.5 rounded-md px-2 text-sm text-ink-secondary hover:bg-sunken hover:text-ink"
+                trigger={
+                  <>
+                    <Icon name="globe" size={18} aria-hidden />
+                    <span className="hidden sm:inline" lang={locale}>
+                      {LOCALE_NATIVE_NAME[locale]}
+                    </span>
+                  </>
+                }
+                sections={languageSections}
+                panelClassName="w-44"
+              />
 
               <Menu
                 triggerLabel={t("auth.account.title")}

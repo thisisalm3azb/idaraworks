@@ -16,6 +16,8 @@
  */
 import { z } from "zod";
 import { getCatalogueEntry, TEMPLATES } from "@/platform/config";
+import { SUPPORTED_LOCALES, type Locale } from "@/platform/registries";
+import { BLUEPRINT_REQUIRED_LOCALES } from "@/platform/workspace/blueprint";
 import type { SelectionView, SelectionCurrency } from "@/platform/ui/subscription/types";
 import { classifyBusiness, type TemplateMatch } from "./classify";
 import { selectTemplate } from "./provider";
@@ -226,7 +228,7 @@ export const DraftAnswersSchema = z
     country: z.enum(SUPPORTED_COUNTRIES).optional(),
     timezone: z.enum(FLOW_TIMEZONES).optional(),
     base_currency: z.enum(FLOW_CURRENCIES).optional(),
-    preferred_language: z.enum(["en", "ar"]).optional(),
+    preferred_language: z.enum(SUPPORTED_LOCALES).optional(),
     employees_band: z.enum(EMPLOYEE_BANDS).optional(),
     users_band: z.enum(USER_BANDS).optional(),
     locations_band: z.enum(LOCATION_BANDS).optional(),
@@ -889,7 +891,15 @@ export function draftToIntake(data: DraftData): OnboardingIntake {
     template_key: templateKey!,
     country: a.country!,
     base_currency: a.base_currency!,
-    languages: a.preferred_language === "ar" ? ["ar", "en"] : ["en", "ar"],
+    // The chosen language leads; the blueprint-required pair always follows, so
+    // an organisation founded in Spanish can still author its own labels in the
+    // two languages every stored blueprint must carry (workspace law 17).
+    languages: [
+      ...new Set([
+        ...(a.preferred_language ? [a.preferred_language] : []),
+        ...BLUEPRINT_REQUIRED_LOCALES,
+      ]),
+    ],
     six_day_week: false,
     // H15: asked on the money step; "not sure" resolves to the safe default.
     vat_registered: a.vat_registered_q === "yes",
@@ -944,7 +954,7 @@ export type ReviewSummary = {
     country: string;
     timezone: string;
     currency: string;
-    language: "en" | "ar";
+    language: Locale;
   };
   template: {
     key: string;

@@ -21,10 +21,17 @@ import en from "@/platform/i18n/messages/en.json";
 import ar from "@/platform/i18n/messages/ar.json";
 import { FoundationShapes } from "@/app/_home/FoundationShapes";
 
-const tEn = (k: string) => t(k, undefined, "en");
-const tAr = (k: string) => t(k, undefined, "ar");
-const htmlEn = renderToStaticMarkup(h(FoundationShapes, { t: tEn }));
-const htmlAr = renderToStaticMarkup(h(FoundationShapes, { t: tAr }));
+// H29: copy that lists the interface languages takes them as variables, so the
+// test translator binds the same values the page binds. Without this, a t()
+// call here would render the raw {languages} template and never match the HTML.
+const EN_LANGS = { languages: "English and Arabic", languages_or: "English or Arabic" };
+const AR_LANGS = { languages: "الإنجليزية والعربية", languages_or: "الإنجليزية أو العربية" };
+const tEn = (k: string, vars?: Record<string, string | number>) =>
+  t(k, { ...EN_LANGS, ...vars }, "en");
+const tAr = (k: string, vars?: Record<string, string | number>) =>
+  t(k, { ...AR_LANGS, ...vars }, "ar");
+const htmlEn = renderToStaticMarkup(h(FoundationShapes, { t: tEn, languages: EN_LANGS.languages }));
+const htmlAr = renderToStaticMarkup(h(FoundationShapes, { t: tAr, languages: AR_LANGS.languages }));
 const homeSrc = readFileSync(
   fileURLToPath(new URL("../../src/app/_home/HomePage.tsx", import.meta.url)),
   "utf8",
@@ -54,7 +61,7 @@ describe("H5 — structure", () => {
       expect(k in en, `${k} must be retired`).toBe(false);
       expect(k in ar, `${k} must be retired`).toBe(false);
     }
-    expect(homeSrc).toContain("<FoundationShapes t={t} />");
+    expect(homeSrc).toContain("<FoundationShapes t={t} languages={languages} />");
     expect(homeSrc).not.toMatch(/home\.built\.p1|now_body|planned_body/);
   });
 

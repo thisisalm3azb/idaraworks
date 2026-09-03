@@ -22,10 +22,17 @@ import ar from "@/platform/i18n/messages/ar.json";
 import { BusinessPassport } from "@/app/_home/BusinessPassport";
 import { DOC_LANGUAGES } from "@/platform/documents";
 
-const tEn = (k: string) => t(k, undefined, "en");
-const tAr = (k: string) => t(k, undefined, "ar");
-const htmlEn = renderToStaticMarkup(h(BusinessPassport, { t: tEn }));
-const htmlAr = renderToStaticMarkup(h(BusinessPassport, { t: tAr }));
+// H29: copy that lists the interface languages takes them as variables, so the
+// test translator binds the same values the page binds. Without this, a t()
+// call here would render the raw {languages} template and never match the HTML.
+const EN_LANGS = { languages: "English and Arabic", languages_or: "English or Arabic" };
+const AR_LANGS = { languages: "الإنجليزية والعربية", languages_or: "الإنجليزية أو العربية" };
+const tEn = (k: string, vars?: Record<string, string | number>) =>
+  t(k, { ...EN_LANGS, ...vars }, "en");
+const tAr = (k: string, vars?: Record<string, string | number>) =>
+  t(k, { ...AR_LANGS, ...vars }, "ar");
+const htmlEn = renderToStaticMarkup(h(BusinessPassport, { t: tEn, languages: EN_LANGS.languages }));
+const htmlAr = renderToStaticMarkup(h(BusinessPassport, { t: tAr, languages: AR_LANGS.languages }));
 const homeSrc = readFileSync(
   fileURLToPath(new URL("../../src/app/_home/HomePage.tsx", import.meta.url)),
   "utf8",
@@ -53,7 +60,7 @@ describe("H7 — structure", () => {
       expect(`home.gcc.${g}.title` in en, `home.gcc.${g}.title must be retired`).toBe(false);
       expect(`home.gcc.${g}.desc` in ar).toBe(false);
     }
-    expect(homeSrc).toContain("<BusinessPassport t={t} />");
+    expect(homeSrc).toContain("<BusinessPassport t={t} languages={languages} />");
     expect(homeSrc).not.toMatch(/home\.gcc\.\$\{k\}/);
   });
 
@@ -119,8 +126,11 @@ describe("H7 — structure", () => {
     }
     expect(gccEn).not.toMatch(/spanish/i);
     expect(htmlEn + htmlAr).not.toMatch(/spanish|الإسبانية/i);
-    // English and Arabic availability is explicit text.
-    expect(tEn("home.gcc.n1")).toMatch(/arabic and english[^.]*today/i);
+    // The shipped languages are named as available today. H29 made the list a
+    // variable, so this reads the RENDERED sentence and accepts either order —
+    // the order is Intl's, not ours.
+    expect(tEn("home.gcc.n1")).toMatch(/(arabic and english|english and arabic)/i);
+    expect(tEn("home.gcc.n1")).toMatch(/today/i);
     expect(tEn("home.gcc.n2")).toMatch(/right-to-left/i);
   });
 });
@@ -192,7 +202,7 @@ describe("H7 — accessibility, RTL, motion, scope", () => {
     expect(src).not.toMatch(/home\.viz\.|home\.flow\.|home\.built\.|home\.caps\.|home\.pricing\./);
     expect(homeSrc).toContain("<ProductVisual t={t} dir={dir} />");
     expect(homeSrc).toContain("<FlowJourney t={t} />");
-    expect(homeSrc).toContain("<FoundationShapes t={t} />");
+    expect(homeSrc).toContain("<FoundationShapes t={t} languages={languages} />");
     expect(homeSrc).toContain("<BusinessOS t={t} />"); // H11 successor of the capability map
     expect(homeSrc).toMatch(/<section id="pricing"/);
   });

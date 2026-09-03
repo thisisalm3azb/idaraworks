@@ -25,3 +25,15 @@ export function normalizeLocale(value: string | undefined | null): Locale {
 export function directionFor(locale: Locale): Direction {
   return RTL_LOCALES.has(locale) ? "rtl" : "ltr";
 }
+
+/**
+ * Each language named in itself — the one label that never needs translating,
+ * and the only one a person who cannot yet read the interface can recognise.
+ * Deliberately not run through t(): a switcher rendered in a language you do not
+ * speak is useless if the languages are named in that same language.
+ */
+export const LOCALE_NATIVE_NAME: Record<Locale, string> = {
+  en: "English",
+  ar: "العربية",
+  es: "Español",
+};

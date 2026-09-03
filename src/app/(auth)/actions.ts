@@ -11,7 +11,8 @@ import { getSessionUser, listMyOrgs } from "@/platform/auth/resolve";
 import { acceptInvite, logAuthEvent } from "@/platform/auth/identity";
 import { getDraft } from "@/modules/onboarding/service";
 import { rateLimit } from "@/platform/http/rateLimit";
-import { LOCALE_COOKIE, normalizeLocale } from "@/platform/i18n";
+import { LOCALE_COOKIE } from "@/platform/i18n";
+import { resolveOfferedLocale } from "@/platform/i18n/offered";
 
 const LOCALE_COOKIE_OPTS = {
   path: "/",
@@ -25,7 +26,9 @@ async function applyLocaleFromProfile(userId: string): Promise<void> {
     const rows = (await withUserCtx(userId, (tx) =>
       tx.execute(sql`select locale from public.user_profile where id = ${userId}`),
     )) as unknown as Array<{ locale: string }>;
-    const locale = normalizeLocale(rows[0]?.locale);
+    // H29: a profile can hold a language this deployment has since withdrawn.
+    // Signing in must not resurrect it.
+    const locale = resolveOfferedLocale(rows[0]?.locale);
     (await cookies()).set(LOCALE_COOKIE, locale, LOCALE_COOKIE_OPTS);
   } catch {
     // A locale-cookie failure must never block sign-in.
@@ -34,7 +37,7 @@ async function applyLocaleFromProfile(userId: string): Promise<void> {
 
 /** Language switcher (browser cookie only). */
 export async function setActiveLocaleAction(locale: string): Promise<void> {
-  (await cookies()).set(LOCALE_COOKIE, normalizeLocale(locale), LOCALE_COOKIE_OPTS);
+  (await cookies()).set(LOCALE_COOKIE, resolveOfferedLocale(locale), LOCALE_COOKIE_OPTS);
 }
 
 /** Language switcher form action (S10): set the active-locale cookie AND persist the choice to
@@ -42,7 +45,9 @@ export async function setActiveLocaleAction(locale: string): Promise<void> {
  * account page — before S10 the switcher seam existed but was never mounted, so Arabic/RTL was
  * unreachable (the cookie only ever came from the profile default 'en', which nothing updated). */
 export async function changeLanguageAction(formData: FormData): Promise<void> {
-  const locale = normalizeLocale(String(formData.get("locale") ?? ""));
+  // H29: the form field is untrusted. A locale this deployment does not offer
+  // is not merely hidden from the switcher — it cannot be posted into either.
+  const locale = resolveOfferedLocale(String(formData.get("locale") ?? ""));
   (await cookies()).set(LOCALE_COOKIE, locale, LOCALE_COOKIE_OPTS);
   const user = await getSessionUser();
   if (user) {

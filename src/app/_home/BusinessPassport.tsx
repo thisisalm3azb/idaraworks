@@ -27,7 +27,7 @@ import type { Locale } from "@/platform/registries";
  * never invented business data. Static server markup, no fake controls.
  */
 
-type TFn = (k: string) => string;
+type TFn = (k: string, vars?: Record<string, string | number>) => string;
 
 /** An abstract value bar: shows where real data lives without inventing any. */
 function Bar({ w }: { w: string }) {
@@ -143,7 +143,8 @@ const FIELDS: { key: string; bar: string }[] = [
   { key: "f_terms", bar: "w-20" },
 ];
 
-export function BusinessPassport({ t }: { t: TFn }) {
+/** `languages` — see FoundationShapes: the shipped-language list as a variable. */
+export function BusinessPassport({ t, languages }: { t: TFn; languages: string }) {
   return (
     <div className="mx-auto mt-10 max-w-5xl">
       <div className="flex flex-col gap-2.5 lg:grid lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:items-center lg:gap-x-14 lg:gap-y-5">
@@ -211,7 +212,7 @@ export function BusinessPassport({ t }: { t: TFn }) {
           {(["n1", "n2", "n3", "n4", "n5"] as const).map((k) => (
             <li key={k} className="flex items-start gap-1.5 text-sm text-ink">
               <Icon name="check" size={13} aria-hidden className="mt-1 shrink-0 text-brand" />
-              {t(`home.gcc.${k}`)}
+              {t(`home.gcc.${k}`, { languages })}
             </li>
           ))}
         </ul>

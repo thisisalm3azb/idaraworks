@@ -13,6 +13,8 @@ import type { SelectionCurrency, SelectionView } from "@/platform/ui/subscriptio
 import { formatMoney } from "@/platform/format";
 import type { Locale } from "@/platform/registries";
 import type { Translator } from "@/platform/i18n/server";
+import { offeredLocales } from "@/platform/i18n/offered";
+import { LOCALE_NATIVE_NAME, normalizeLocale } from "@/platform/i18n/locale";
 import { getCatalogueEntry, TEMPLATES, type TemplateCatalogueEntry } from "@/platform/config";
 import {
   buildBlueprintFromDraft,
@@ -319,6 +321,7 @@ export function RegionStep({ t, locale, data, draftRev }: StepProps) {
   const a = data.answers;
   const country = a.country ?? "AE";
   const d = COUNTRY_DEFAULTS[country];
+  const offered = offeredLocales();
   return (
     <Card>
       <CardHeader title={t("onboarding.flow.region.title")} />
@@ -347,21 +350,20 @@ export function RegionStep({ t, locale, data, draftRev }: StepProps) {
           <legend className="mb-1.5 text-sm font-medium text-ink">
             {t("onboarding.flow.region.language")}
           </legend>
+          {/* H29: driven by the offered-locale list, not hard-coded chips, so a
+              language this deployment has not released can never be chosen here
+              and then rejected by the action that stores it. */}
           <div className="flex flex-wrap gap-2">
-            <RadioChip
-              name="preferred_language"
-              value="en"
-              label={t("onboarding.flow.region.lang_en")}
-              checked={(a.preferred_language ?? locale) === "en"}
-              required
-            />
-            <RadioChip
-              name="preferred_language"
-              value="ar"
-              label={t("onboarding.flow.region.lang_ar")}
-              checked={(a.preferred_language ?? locale) === "ar"}
-              required
-            />
+            {offered.map((candidate) => (
+              <RadioChip
+                key={candidate}
+                name="preferred_language"
+                value={candidate}
+                label={LOCALE_NATIVE_NAME[candidate]}
+                checked={(a.preferred_language ?? locale) === candidate}
+                required
+              />
+            ))}
           </div>
           <span className={help}>{t("onboarding.flow.region.language_help")}</span>
         </fieldset>
@@ -1592,11 +1594,7 @@ export function ReviewStep({
           />
           <ReviewRow
             label={t("onboarding.flow.region.language")}
-            value={
-              summary.business.language === "ar"
-                ? t("onboarding.flow.region.lang_ar")
-                : t("onboarding.flow.region.lang_en")
-            }
+            value={LOCALE_NATIVE_NAME[normalizeLocale(summary.business.language)]}
           />
         </div>
       </Card>

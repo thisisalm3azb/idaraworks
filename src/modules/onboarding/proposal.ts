@@ -12,6 +12,7 @@
  */
 import { z } from "zod";
 import { CONFIG_ARTIFACT_KEYS } from "@/platform/config";
+import { SUPPORTED_LOCALES } from "@/platform/registries";
 
 // ── Structured intake ────────────────────────────────────────────────────────
 export const SUPPORTED_COUNTRIES = ["AE", "SA", "KW", "BH", "OM", "QA"] as const;
@@ -34,7 +35,9 @@ export const OnboardingIntakeSchema = z
       .optional(),
     country: z.enum(SUPPORTED_COUNTRIES),
     base_currency: z.string().regex(/^[A-Z]{3}$/),
-    languages: z.array(z.enum(["en", "ar"])).min(1),
+    // H29: the shipped-locale registry, not a hand-written pair. A language the
+    // product ships must be storable on the organisation that chose it.
+    languages: z.array(z.enum(SUPPORTED_LOCALES)).min(1),
     six_day_week: z.boolean(),
     vat_registered: z.boolean(),
     // The single most-visible terminology choice: what the org calls a `job` (EN + AR label).

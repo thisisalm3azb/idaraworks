@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Icon, type IconName } from "@/platform/ui";
 import { getT, getServerLocale } from "@/platform/i18n/server";
+import { languageVars } from "@/platform/i18n/offered";
 import { directionFor } from "@/platform/i18n";
 import { SHOWCASE_AGENT_IDS, type ShowcaseAgentId } from "@/platform/agents/registry";
 import { AgentShowcase, type AgentVM } from "./AgentShowcase";
@@ -65,6 +66,9 @@ function agentVM(id: ShowcaseAgentId, t: (k: string) => string): AgentVM {
 export async function HomePage({ workspaceHref }: { workspaceHref: string | null }) {
   const t = await getT();
   const locale = await getServerLocale();
+  // H29: the shipped interface languages, named in the reader's own language.
+  // Every sentence on this page that lists them takes this as a variable.
+  const { languages, languages_or: languagesOr } = languageVars(locale);
   const dir = directionFor(locale);
   const { authed, primary, secondary, sections } = homeNav(t, workspaceHref);
 
@@ -182,7 +186,9 @@ export async function HomePage({ workspaceHref }: { workspaceHref: string | null
                 <Icon name="chart" size={16} aria-hidden />
               </a>
             </div>
-            <p className="mt-4 text-sm text-ink-muted">{t("home.hero.reassure")}</p>
+            <p className="mt-4 text-sm text-ink-muted">
+              {t("home.hero.reassure", { languages_or: languagesOr })}
+            </p>
           </div>
           <div className="lg:ps-2">
             <ProductVisual t={t} dir={dir} />
@@ -224,7 +230,7 @@ export async function HomePage({ workspaceHref }: { workspaceHref: string | null
 
         {/* ── 3. One foundation, different shapes (H5) ─────────────────────── */}
         <section className="mx-auto w-full max-w-6xl px-4 py-16">
-          <FoundationShapes t={t} />
+          <FoundationShapes t={t} languages={languages} />
         </section>
 
         {/* ── 4. The Business OS (H11) ─────────────────────────────────────── */}
@@ -244,9 +250,9 @@ export async function HomePage({ workspaceHref }: { workspaceHref: string | null
           <SectionHead
             eyebrow={t("home.gcc.eyebrow")}
             title={t("home.gcc.title")}
-            body={t("home.gcc.subtitle")}
+            body={t("home.gcc.subtitle", { languages })}
           />
-          <BusinessPassport t={t} />
+          <BusinessPassport t={t} languages={languages} />
         </section>
 
         {/* ── 6. Trust and privacy (H8) ────────────────────────────────────── */}
@@ -273,7 +279,7 @@ export async function HomePage({ workspaceHref }: { workspaceHref: string | null
                 {(["s1", "s2", "s3", "s4"] as const).map((k) => (
                   <li key={k} className="flex items-center gap-1.5 text-xs text-ink">
                     <Icon name="check" size={12} aria-hidden className="shrink-0 text-brand" />
-                    {t(`home.pricing.${k}`)}
+                    {t(`home.pricing.${k}`, { languages })}
                   </li>
                 ))}
               </ul>
@@ -293,7 +299,9 @@ export async function HomePage({ workspaceHref }: { workspaceHref: string | null
                 name: locale === "ar" ? tier.names.ar : tier.names.en,
                 tag: t(tier.tagKey),
                 users: t(tier.usersKey),
-                outcomes: tier.outcomeKeys.map((o) => t(o)),
+                outcomes: tier.outcomeKeys.map((o) =>
+                  t(o, { languages, languages_or: languagesOr }),
+                ),
                 micro: t(tier.microKey),
                 badge: tier.badgeKey ? t(tier.badgeKey) : null,
                 featured: tier.featured,

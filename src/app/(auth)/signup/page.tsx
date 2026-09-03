@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Icon } from "@/platform/ui";
 import { getT, getServerLocale } from "@/platform/i18n/server";
+import { languageListFor } from "@/platform/i18n/offered";
 import { directionFor } from "@/platform/i18n";
 import { sanitizeNext } from "@/platform/auth/callback";
 import { oauthEnabled } from "@/platform/auth/oauth";
@@ -60,7 +61,7 @@ export default async function SignupPage({
               {t("auth.gateway.title")}
             </h1>
             <p className="mt-2 text-sm leading-relaxed text-ink-secondary">
-              {t("auth.gateway.subtitle")}
+              {t("auth.gateway.subtitle", { languages_or: languageListFor(locale, "disjunction") })}
             </p>
             <div className="mt-6">
               <AuthGateway

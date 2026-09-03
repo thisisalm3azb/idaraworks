@@ -163,9 +163,9 @@ describe("H8 — accessibility, RTL, motion, scope", () => {
     for (const marker of [
       "<ProductVisual t={t} dir={dir} />",
       "<FlowJourney t={t} />",
-      "<FoundationShapes t={t} />",
+      "<FoundationShapes t={t} languages={languages} />",
       "<BusinessOS t={t} />", // H11 successor of the capability map
-      "<BusinessPassport t={t} />",
+      "<BusinessPassport t={t} languages={languages} />",
     ]) {
       expect(homeSrc).toContain(marker);
     }

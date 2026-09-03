@@ -4,6 +4,8 @@ import { AppShell, Button, Card, CardHeader } from "@/platform/ui";
 import { getT } from "@/platform/i18n/server";
 import { getSessionUser } from "@/platform/auth/resolve";
 import { getServerLocale } from "@/platform/i18n/server";
+import { offeredLocales } from "@/platform/i18n/offered";
+import { LOCALE_NATIVE_NAME } from "@/platform/i18n/locale";
 import { logoutAction, signOutOtherDevicesAction, changeLanguageAction } from "../actions";
 
 export default async function AccountPage({
@@ -53,29 +55,24 @@ export default async function AccountPage({
 
         <Card>
           <CardHeader title={t("auth.account.language")} />
-          <div className="flex gap-2">
-            <form action={changeLanguageAction} className="flex-1">
-              <input type="hidden" name="locale" value="en" />
-              <Button
-                type="submit"
-                variant={locale === "en" ? "primary" : "secondary"}
-                className="w-full"
-                aria-pressed={locale === "en"}
-              >
-                English
-              </Button>
-            </form>
-            <form action={changeLanguageAction} className="flex-1">
-              <input type="hidden" name="locale" value="ar" />
-              <Button
-                type="submit"
-                variant={locale === "ar" ? "primary" : "secondary"}
-                className="w-full"
-                aria-pressed={locale === "ar"}
-              >
-                العربية
-              </Button>
-            </form>
+          {/* H29: one button per language this deployment offers, each named in
+              itself. Wrapping instead of a fixed row so a third language does
+              not squeeze the buttons below a comfortable tap target at 375px. */}
+          <div className="flex flex-wrap gap-2">
+            {offeredLocales().map((candidate) => (
+              <form key={candidate} action={changeLanguageAction} className="min-w-32 flex-1">
+                <input type="hidden" name="locale" value={candidate} />
+                <Button
+                  type="submit"
+                  lang={candidate}
+                  variant={locale === candidate ? "primary" : "secondary"}
+                  className="w-full"
+                  aria-pressed={locale === candidate}
+                >
+                  {LOCALE_NATIVE_NAME[candidate]}
+                </Button>
+              </form>
+            ))}
           </div>
         </Card>
       </div>

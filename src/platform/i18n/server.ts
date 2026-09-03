@@ -8,10 +8,17 @@ import "server-only";
 import { cookies } from "next/headers";
 import type { Locale } from "@/platform/registries";
 import { t as baseT, type TVars } from "./t";
-import { LOCALE_COOKIE, normalizeLocale } from "./locale";
+import { LOCALE_COOKIE } from "./locale";
+import { resolveOfferedLocale } from "./offered";
 
+/**
+ * H29: resolves against the languages this deployment OFFERS, not merely the
+ * ones it has a catalogue for. A stale cookie naming a withdrawn language falls
+ * back to the default instead of rendering a language the deployment has
+ * deliberately taken off the switcher.
+ */
 export async function getServerLocale(): Promise<Locale> {
-  return normalizeLocale((await cookies()).get(LOCALE_COOKIE)?.value);
+  return resolveOfferedLocale((await cookies()).get(LOCALE_COOKIE)?.value);
 }
 
 export type Translator = (key: string, vars?: TVars) => string;

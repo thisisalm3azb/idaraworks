@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { getSessionUser } from "@/platform/auth/resolve";
 import { getServerLocale } from "@/platform/i18n/server";
+import { languageListFor } from "@/platform/i18n/offered";
 import { t } from "@/platform/i18n";
 import { resolveLanding } from "./(auth)/actions";
 import { HomePage } from "./_home/HomePage";
@@ -16,7 +17,7 @@ const CANONICAL = "https://www.idaraworks.com";
 export async function generateMetadata(): Promise<Metadata> {
   const locale = await getServerLocale();
   const title = t("home.meta.title", undefined, locale);
-  const description = t("home.meta.description", undefined, locale);
+  const description = t("home.meta.description", { languages: languageListFor(locale) }, locale);
   // No social-preview image asset exists in the repository; Open Graph is
   // declared without one rather than fabricating a misleading image (005A gap).
   return {

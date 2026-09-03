@@ -1,7 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import { cookies } from "next/headers";
 import { Geist, Geist_Mono } from "next/font/google";
-import { LOCALE_COOKIE, directionFor, normalizeLocale } from "@/platform/i18n";
+import { LOCALE_COOKIE, directionFor } from "@/platform/i18n";
+import { resolveOfferedLocale } from "@/platform/i18n/offered";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -35,7 +36,7 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const locale = normalizeLocale((await cookies()).get(LOCALE_COOKIE)?.value);
+  const locale = resolveOfferedLocale((await cookies()).get(LOCALE_COOKIE)?.value);
   return (
     <html
       lang={locale}
