@@ -28,7 +28,10 @@ import {
   getEstablishment,
   listAdoptions,
   listEstablishments,
+  listPrivacyEntries,
   previewAdoption,
+  reviewPrivacyEntry,
+  setPrivacyEntry,
   setRegistration,
   updateEstablishment,
 } from "@/modules/country/service";
@@ -451,6 +454,84 @@ describe("readiness is six facts, not one number", () => {
         }),
       ),
     ).toMatch(/no identifier called trn/);
+  });
+});
+
+describe("the privacy register describes, and never asserts", () => {
+  it("records a data category and leaves it unread until a person reads it", async () => {
+    const entry = await setPrivacyEntry(A(), "owner", {
+      establishmentId: riyadh,
+      dataCategory: "employee records",
+      purpose: "Payroll and attendance",
+      provider: "IdaraWorks",
+      processingRegion: "Saudi Arabia",
+      retention: "Seven years after the end of employment",
+    });
+    expect(entry.dataCategory).toBe("employee records");
+    // Recording something is not the same as anyone having read it.
+    expect(entry.reviewedAt).toBeNull();
+    expect(entry.reviewedBy).toBeNull();
+  });
+
+  it("refuses a transfer out of the country with no stated basis", async () => {
+    // Otherwise the register would assert a lawful transfer nobody described.
+    expect(
+      await refusal(() =>
+        setPrivacyEntry(A(), "owner", {
+          establishmentId: riyadh,
+          dataCategory: "customer contacts",
+          purpose: "Sending invoices",
+          crossBorder: true,
+        }),
+      ),
+    ).toMatch(/cross-border transfer needs a stated basis/i);
+  });
+
+  it("accepts the same transfer once its basis is stated", async () => {
+    const entry = await setPrivacyEntry(A(), "owner", {
+      establishmentId: riyadh,
+      dataCategory: "customer contacts",
+      purpose: "Sending invoices",
+      crossBorder: true,
+      transferBasis: "Written agreement with the processor, dated 2026-03-01",
+    });
+    expect(entry.crossBorder).toBe(true);
+    expect(entry.transferBasis).toMatch(/Written agreement/);
+  });
+
+  it("a review records who read it and when", async () => {
+    const [first] = await listPrivacyEntries(A(), riyadh);
+    const reviewed = await reviewPrivacyEntry(A(), "owner", first!.id);
+    expect(reviewed.reviewedBy).toBe(userA);
+    expect(reviewed.reviewedAt).not.toBeNull();
+  });
+
+  it("editing an entry clears its review, because what was read has changed", async () => {
+    const [first] = await listPrivacyEntries(A(), riyadh);
+    expect(first!.reviewedAt).not.toBeNull();
+    const edited = await setPrivacyEntry(A(), "owner", {
+      establishmentId: riyadh,
+      dataCategory: first!.dataCategory,
+      purpose: "Payroll, attendance and end-of-service calculation",
+    });
+    expect(edited.reviewedAt).toBeNull();
+    expect(edited.reviewedBy).toBeNull();
+  });
+
+  it("moves the readiness check it belongs to, rather than only listing rows", async () => {
+    const privacy = (await establishmentReadiness(A(), riyadh, "2026-10-01"))!.areas.find(
+      (a) => a.area === "privacy",
+    )!;
+    const register = privacy.checks.find((c) => c.key === "privacy.register")!;
+    expect(register.state).toBe("ok");
+    // Reviewing is a separate fact and stays outstanding until every entry is
+    // read: one reviewed entry out of several is not a reviewed register.
+    const reviewed = privacy.checks.find((c) => c.key === "privacy.reviewed")!;
+    expect(reviewed.state).toBe("missing");
+  });
+
+  it("another tenant sees none of it", async () => {
+    expect(await listPrivacyEntries(B(), riyadh)).toEqual([]);
   });
 });
 

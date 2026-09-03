@@ -173,13 +173,27 @@ async function main(): Promise<void> {
     if (esDir !== "ltr") errors.push(`spanish: dir is ${esDir}`);
     await shot(page, "es-centre");
     const es = await page.evaluate(() => document.body.innerText);
-    // A handful of English words that would only appear if a string had not
-    // been translated on this screen.
-    for (const leak of ["Readiness", "Countries and establishments", "Add an establishment"])
-      if (es.includes(leak)) errors.push(`spanish: English left on the page ("${leak}")`);
+    // English strings that are definitely ON THIS SCREEN in English, so their
+    // presence here means a string was not translated rather than that the
+    // check was looking at the wrong page.
+    for (const leak of [
+      "Countries and establishments",
+      "Add an establishment",
+      "Technically configured",
+      "Reviewed by a professional",
+    ])
+      if (es.includes(leak)) errors.push(`spanish: English left on the centre ("${leak}")`);
+    // Spanish should also be visibly Spanish, not merely not-English.
+    if (!/Países y establecimientos/.test(es))
+      errors.push("spanish: the centre title did not render in Spanish");
+
     await page.goto(`${BASE}${establishment}`, { waitUntil: "load" });
     await page.waitForTimeout(1000);
     await shot(page, "es-establishment");
+    const esEst = await page.evaluate(() => document.body.innerText);
+    for (const leak of ["Readiness", "Rule versions", "Registrations", "Personal data register"])
+      if (esEst.includes(leak))
+        errors.push(`spanish: English left on the establishment ("${leak}")`);
     const esMarkers = await missingStrings(page);
     if (esMarkers.length) errors.push(`es-establishment: missing strings ${esMarkers.join(", ")}`);
     await ctx.addCookies([{ name: "locale", value: "en", url: BASE }]);

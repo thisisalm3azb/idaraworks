@@ -339,12 +339,15 @@ export default async function EstablishmentPage({
       <Card>
         <CardHeader title={t("country.privacy")} />
         <p className="text-sm text-ink-secondary">{t("country.privacy_hint")}</p>
+        {/* Two sentences rather than one with parentheses: a pack may name a law
+            without naming an authority, and the reader should see neither a
+            dangling "()" nor an authority that was never recorded. */}
         {packToday?.privacy.regime.value ? (
           <p className="mt-2 text-sm text-ink-secondary">
-            {t("country.privacy_regime", {
-              regime: packToday.privacy.regime.value,
-              authority: packToday.privacy.authority ?? "",
-            })}
+            {t("country.privacy_regime", { regime: packToday.privacy.regime.value })}{" "}
+            {packToday.privacy.authority
+              ? t("country.privacy_authority", { authority: packToday.privacy.authority })
+              : null}
           </p>
         ) : null}
         {packToday && packToday.privacy.organisationActions.length > 0 ? (
