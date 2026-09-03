@@ -29,6 +29,11 @@ import {
   findLeadDuplicates,
   OpportunityInput,
 } from "@/modules/crm/service";
+import { readSourceDate, SOURCE_DATE_FORMATS, type SourceDateFormat } from "./dates";
+
+// Re-exported so callers keep one door (BUILD_BIBLE §3.3): the date rule is a
+// separate file only so it can be tested without a database.
+export { SOURCE_DATE_FORMATS, type SourceDateFormat };
 
 export const IMPORT_KINDS = [
   "customers",
@@ -136,10 +141,23 @@ const BOOLEAN_FIELDS = new Set(["isPrimary"]);
 const TRUE_WORDS = new Set(["true", "yes", "y", "1"]);
 const FALSE_WORDS = new Set(["false", "no", "n", "0"]);
 
-/** Map a raw CSV row (header→cell) to a typed masters payload (field→value). */
-function mapRow(kind: ImportKind, raw: Record<string, unknown>): Record<string, unknown> {
+const DATE_FIELDS = new Set(["expectedCloseDate", "nextActionDue"]);
+
+/**
+ * Map a raw CSV row (header→cell) to a typed masters payload (field→value).
+ *
+ * Returns the problems it could not express as a value, so a row with an
+ * ambiguous date is rejected for THAT reason rather than with whatever the
+ * schema happens to say about a string it could not parse.
+ */
+function mapRow(
+  kind: ImportKind,
+  raw: Record<string, unknown>,
+  dateFormat: SourceDateFormat | undefined,
+): { mapped: Record<string, unknown>; problems: string[] } {
   const aliases = HEADER_ALIASES[kind];
   const out: Record<string, unknown> = {};
+  const problems: string[] = [];
   for (const [header, cell] of Object.entries(raw)) {
     const field = aliases[header.trim().toLowerCase()];
     if (!field) continue;
@@ -152,11 +170,15 @@ function mapRow(kind: ImportKind, raw: Record<string, unknown>): Record<string, 
       const n = Number(s);
       if (Number.isFinite(n)) out[field] = n;
       else out[field] = s; // let the schema reject it with a clear message
+    } else if (DATE_FIELDS.has(field)) {
+      const result = readSourceDate(String(s), dateFormat);
+      if ("date" in result) out[field] = result.date;
+      else problems.push(`${field}: ${result.problem}`);
     } else {
       out[field] = s;
     }
   }
-  return out;
+  return { mapped: out, problems };
 }
 
 const ContactImport = ContactInput.extend({ customerName: z.string().trim().min(1).max(160) });
@@ -451,6 +473,12 @@ export async function skipImportRows(
 const StageInput = z.object({
   kind: z.enum(IMPORT_KINDS),
   filename: z.string().max(260).optional(),
+  /**
+   * How the FILE writes its dates. Optional because a file may carry no dates
+   * at all, or write them in ISO; a slashed date with no declaration is
+   * rejected row by row rather than guessed at (H29).
+   */
+  dateFormat: z.enum(SOURCE_DATE_FORMATS).optional(),
   rows: z.array(z.record(z.string(), z.unknown())).min(1).max(5000),
 });
 
@@ -466,7 +494,7 @@ export async function stageImport(
   // Add-on gate (FR-9): STAGING only — applying an already-staged batch and
   // reading batch rows never gate (in-flight imports stay finishable).
   await requireCapability(ctx, "feat.data_import");
-  const { kind, filename, rows } = StageInput.parse(raw);
+  const { kind, filename, dateFormat, rows } = StageInput.parse(raw);
   const schema = schemaFor(kind);
 
   return command<StageResult>(
@@ -476,7 +504,11 @@ export async function stageImport(
         action: "import.stage",
         entityType: "import_batch",
         entityId: r.batchId,
-        summary: `Staged ${r.total}-row ${kind} import (${r.valid} valid, ${r.invalid} invalid)`,
+        // The declared date format is part of the record: reading a batch back
+        // later must not need a guess about how its dates were interpreted.
+        summary:
+          `Staged ${r.total}-row ${kind} import (${r.valid} valid, ${r.invalid} invalid), ` +
+          `dates read as ${dateFormat ?? "ISO only"}`,
       }),
     },
     async (tx) => {
@@ -489,17 +521,19 @@ export async function stageImport(
       let valid = 0;
       let invalid = 0;
       for (let i = 0; i < rows.length; i++) {
-        const mapped = mapRow(kind, rows[i]!);
-        const parsed = schema.safeParse(mapped);
-        const status = parsed.success ? "valid" : "invalid";
-        const error = parsed.success
-          ? null
-          : parsed.error.issues
-              .slice(0, 4)
-              .map((e) => `${e.path.join(".")}: ${e.message}`)
-              .join("; ")
-              .slice(0, 500);
-        if (parsed.success) valid++;
+        const { mapped, problems } = mapRow(kind, rows[i]!, dateFormat);
+        const parsed = problems.length === 0 ? schema.safeParse(mapped) : null;
+        const status = parsed?.success ? "valid" : "invalid";
+        const error = problems.length
+          ? problems.join("; ").slice(0, 500)
+          : parsed!.success
+            ? null
+            : parsed!.error.issues
+                .slice(0, 4)
+                .map((e) => `${e.path.join(".")}: ${e.message}`)
+                .join("; ")
+                .slice(0, 500);
+        if (status === "valid") valid++;
         else invalid++;
         await tx.execute(sql`
           insert into public.import_row (org_id, batch_id, row_number, raw, mapped, status, error)

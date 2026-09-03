@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { resolveCtxForAction } from "@/platform/auth/resolve";
 import { ForbiddenError } from "@/platform/authz";
 import {
+  SOURCE_DATE_FORMATS,
   stageImport,
   applyImport,
   skipImportRows,
@@ -64,6 +65,14 @@ export async function stageImportAction(orgId: string, formData: FormData): Prom
     const { batchId } = await stageImport(resolved.ctx, resolved.archetype, {
       kind,
       filename: String(formData.get("filename") ?? "") || undefined,
+      // H29: how the FILE writes its dates, declared by the person importing.
+      // Absent means ISO only, and a slashed date is then rejected row by row
+      // rather than read one of two ways.
+      dateFormat: (SOURCE_DATE_FORMATS as readonly string[]).includes(
+        String(formData.get("dateFormat") ?? ""),
+      )
+        ? (String(formData.get("dateFormat")) as (typeof SOURCE_DATE_FORMATS)[number])
+        : undefined,
       rows,
     });
     revalidatePath(`/o/${orgId}/imports`);

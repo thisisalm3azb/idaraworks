@@ -44,6 +44,18 @@ export default async function ExportPage({ params }: { params: Promise<{ orgId: 
           ))}
         </ul>
       </Card>
+
+      {/* H29: the manifest is what makes an archived export readable a year
+          later. The data files themselves stay plain CSV so any tool can open
+          them, so the currency, timezone, country-pack version and whether
+          money columns were redacted travel in their own small file. */}
+      <Card>
+        <CardHeader title={t("export.manifest.title")} />
+        <p className="mb-3 text-sm text-ink-muted">{t("export.manifest.help")}</p>
+        <a href={`/api/o/${orgId}/export?entity=export_manifest`} download>
+          <Button variant="secondary">{t("export.download")}</Button>
+        </a>
+      </Card>
     </div>
   );
 }

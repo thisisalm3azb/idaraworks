@@ -68,6 +68,21 @@ export default async function ImportsPage({
               ))}
             </select>
           </label>
+          {/* H29: 01/02/2026 is 2 January in most of the world and 1 February in
+              the United States, and the file cannot tell you which. The format
+              is stated here; a slashed date with none stated is rejected with
+              that reason rather than read one of two ways. */}
+          <label className={field}>
+            {t("imports.date_format")}
+            <select name="dateFormat" className={input} defaultValue="iso">
+              {(["iso", "dmy", "mdy"] as const).map((f) => (
+                <option key={f} value={f}>
+                  {t(`imports.date_format.${f}`)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <p className="text-xs text-ink-muted">{t("imports.date_format_note")}</p>
           <label className={field}>
             {t("imports.csv")}
             <textarea
