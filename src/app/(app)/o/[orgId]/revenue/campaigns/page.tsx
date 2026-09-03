@@ -99,6 +99,7 @@ export default async function CampaignsPage({
             subject: one("subject") ?? "-",
             body: one("body") ?? "-",
             recipients: previewRecipients.map((customerId) => ({ customerId })),
+            confirmed: true,
           }),
         )
       : null;

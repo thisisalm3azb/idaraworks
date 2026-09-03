@@ -112,6 +112,8 @@ let ownerUserId = "";
 let orgId = "";
 const ownerPassword = `Smoke-${randomUUID()}`;
 const ownerEmail = `h27smoke-${RUN}@example.invalid`;
+let approverUserId = "";
+const approverEmail = `h27smoke-approver-${RUN}@example.invalid`;
 const A = (): Ctx => ({
   orgId,
   userId: ownerUserId,
@@ -152,6 +154,12 @@ async function cleanup(): Promise<void> {
       await tx.unsafe(`delete from auth.identities where user_id = $1`, [ownerUserId]);
       await tx.unsafe(`delete from auth.users where id = $1`, [ownerUserId]);
     }
+    if (approverUserId) {
+      await tx.unsafe(`delete from public.sign_in_log where user_id = $1`, [approverUserId]);
+      await tx.unsafe(`delete from public.user_profile where id = $1`, [approverUserId]);
+      await tx.unsafe(`delete from auth.identities where user_id = $1`, [approverUserId]);
+      await tx.unsafe(`delete from auth.users where id = $1`, [approverUserId]);
+    }
   });
   const residue = (await owner`
     select
@@ -179,6 +187,7 @@ async function cleanup(): Promise<void> {
       (select count(*) from public.audit_log where org_id = ${orgId}) +
       (select count(*) from storage.objects where name like ${orgId + "/%"}) +
       (select count(*) from auth.users where id = ${ownerUserId || randomUUID()}) +
+      (select count(*) from auth.users where id = ${approverUserId || randomUUID()}) +
       (select count(*) from auth.identities where user_id = ${ownerUserId || randomUUID()}) +
       (select count(*) from auth.sessions where user_id = ${ownerUserId || randomUUID()})
       as n`) as unknown as Array<{ n: string }>;
@@ -271,13 +280,34 @@ async function main(): Promise<void> {
       values (${orgId}, ${MARKER}, ${JSON.stringify({ run: RUN })}::jsonb)
       on conflict do nothing`;
     await installTemplate(A(), TEMPLATE_BOATBUILDING.key);
+    // A second member decides approvals: a requester may never decide their own.
+    const approver = await admin.auth.admin.createUser({
+      email: approverEmail,
+      password: `Smoke-${randomUUID()}`,
+      email_confirm: true,
+      user_metadata: { full_name: "H27 Smoke Approver" },
+    });
+    if (approver.error || !approver.data.user)
+      throw new Error(`createUser(approver): ${approver.error?.message}`);
+    approverUserId = approver.data.user.id;
+    await owner`
+      insert into public.user_profile (id, full_name, locale)
+      values (${approverUserId}, 'H27 Smoke Approver', 'en')
+      on conflict (id) do nothing`;
+    await owner`
+      insert into public.membership (user_id, org_id, role_key)
+      values (${approverUserId}, ${orgId}, 'admin')`;
     check("fixture organisation created", Boolean(orgId));
 
     // ── 1. stage governance ────────────────────────────────────────────────
     const stages = await listStageSettings(A(), "owner", null);
-    const qualifiedKey =
-      stages.find((s) => s.key === "qualified")?.key ??
-      stages.find((s) => s.category === "open" && s.sort > 0)?.key;
+    // A converted lead already sits in "qualified", so the governed target is the
+    // NEXT open stage: requirements there refuse a value-less deal and admit a priced one.
+    const openStages = stages
+      .filter((x) => x.category === "open" && x.active)
+      .sort((a, b) => a.sort - b.sort);
+    const qi = openStages.findIndex((x) => x.key === "qualified");
+    const qualifiedKey = openStages[qi + 1]?.key ?? openStages[openStages.length - 1]?.key;
     check(
       "pipeline stages exist",
       stages.length > 0 && Boolean(qualifiedKey),
@@ -382,7 +412,10 @@ async function main(): Promise<void> {
       "a governed move succeeds with who and why recorded",
       moved.moved && moved.to === qualifiedKey,
     );
-    const history = await listActivities(A(), "owner", { opportunityId: dealId, kinds: ["stage"] });
+    const history = await listActivities(A(), "owner", {
+      opportunityId: dealId,
+      kinds: ["stage_change"],
+    });
     check("the move is preserved in history", history.total >= 1);
     let stale = false;
     try {
@@ -441,7 +474,7 @@ async function main(): Promise<void> {
       "a discount request opens a real approval",
       discount.status === "pending" && Boolean(discount.approvalId),
     );
-    await decideApproval(A(), "owner", {
+    await decideApproval({ ...A(), userId: approverUserId }, "admin", {
       approvalId: discount.approvalId!,
       decision: "rejected",
       note: "Smoke: hold the price",
@@ -486,6 +519,7 @@ async function main(): Promise<void> {
       subject: "Smoke",
       body: "Smoke body",
       recipients: [{ contactId: contact.id }, { customerId: customer.id }],
+      confirmed: true,
     });
     check(
       "marketing preview reports blocked recipients and the provider state",
@@ -499,6 +533,7 @@ async function main(): Promise<void> {
         subject: "Smoke",
         body: "Smoke body",
         recipients: [{ customerId: customer.id }],
+        confirmed: true,
       });
     } catch (e) {
       sendClosed = e instanceof ConsentError;

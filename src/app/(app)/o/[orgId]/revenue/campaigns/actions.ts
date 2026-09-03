@@ -119,6 +119,7 @@ export async function sendMarketingAction(orgId: string, formData: FormData): Pr
       subject: String(formData.get("subject") ?? ""),
       body: String(formData.get("body") ?? ""),
       recipients,
+      confirmed: true, // the person pressed the explicit send
     });
     revalidatePath(back);
     redirect(`${back}?ok=sent&sent=${r.sent}&skipped=${r.skipped.length}`);
