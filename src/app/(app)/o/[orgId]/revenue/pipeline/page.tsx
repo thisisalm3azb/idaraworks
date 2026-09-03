@@ -50,9 +50,9 @@ export default async function PipelinePage({
   const { page, offset } = pageOffset(sp.page, LIMIT);
   const stalledDays = sp.stalled ? Number(sp.stalled) : undefined;
   const [settings, board, members] = await Promise.all([
-    listStageSettings(resolved.ctx, resolved.archetype, pipeline?.id ?? null),
+    listStageSettings(resolved.ctx, resolved.archetype, pipeline?.id || null),
     boardPage(resolved.ctx, resolved.archetype, {
-      pipelineId: pipeline?.id ?? null,
+      pipelineId: pipeline?.id || null,
       status,
       search: sp.q || undefined,
       ownerUserId: sp.owner || null,

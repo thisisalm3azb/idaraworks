@@ -33,7 +33,7 @@ export default async function RevenueSettingsPage({
     pipelines.find((p) => p.isDefault) ??
     pipelines[0];
   const stages = selected
-    ? await listStageSettings(resolved.ctx, resolved.archetype, selected.id)
+    ? await listStageSettings(resolved.ctx, resolved.archetype, selected.id || null)
     : [];
 
   return (

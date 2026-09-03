@@ -17,7 +17,11 @@ import { installTemplate, TEMPLATE_BOATBUILDING } from "@/platform/config";
 import { createCustomer } from "@/modules/masters/service";
 import {
   activityReport,
+  boardPage,
   captureLead,
+  computeForecast,
+  listPipelines,
+  listStageSettings,
   convertLeadSafely,
   createAutomation,
   funnelReport,
@@ -153,6 +157,20 @@ describe("reports and success", () => {
         onlyBand.counts.atRisk +
         onlyBand.counts.unknown,
     ).toBe(2); // counts stay full-set when filtered
+  });
+});
+
+describe("the virtual default pipeline", () => {
+  it("reads work before any write has materialised a pipeline row (empty id means all)", async () => {
+    const pipelines = await listPipelines(A(), "owner");
+    expect(pipelines.length).toBeGreaterThanOrEqual(1);
+    const id = pipelines.find((p) => p.isDefault)?.id ?? "";
+    const stages = await listStageSettings(A(), "owner", id);
+    expect(stages.length).toBeGreaterThan(0);
+    const board = await boardPage(A(), "owner", { pipelineId: id, status: "all", limit: 5 });
+    expect(board.total).toBeGreaterThanOrEqual(0);
+    const forecast = await computeForecast(A(), "owner", { pipelineId: id });
+    expect(forecast.rows.length).toBeGreaterThanOrEqual(0);
   });
 });
 

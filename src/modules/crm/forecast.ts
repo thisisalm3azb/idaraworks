@@ -83,7 +83,7 @@ export type Forecast = {
 };
 
 export const ForecastQuery = z.object({
-  pipelineId: uuid.optional().nullable(),
+  pipelineId: z.preprocess((v) => (v === "" ? null : v), uuid.optional().nullable()),
   ownerUserId: uuid.optional().nullable(),
   territoryId: uuid.optional().nullable(),
   campaignId: uuid.optional().nullable(),

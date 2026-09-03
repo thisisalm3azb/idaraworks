@@ -226,9 +226,11 @@ export async function updatePipeline(
 export async function listStageSettings(
   ctx: Ctx,
   archetype: RoleArchetype,
-  pipelineId?: string | null,
+  pipelineIdRaw?: string | null,
 ): Promise<StageSettingsRow[]> {
   assertCan(archetype, "opportunities.view");
+  // The virtual default pipeline (no row yet) carries an empty id: read as "all".
+  const pipelineId = pipelineIdRaw || null;
   const rows = (await withCtx(ctx, (tx) =>
     tx.execute(sql`
       select s.id::text as id, s.key, s.label, s.sort, s.category, s.active, s.pipeline_id::text as pipeline_id,
@@ -488,8 +490,12 @@ export async function moveStage(
 }
 
 // ── the paged board and list: database-side filtering, full-result aggregates ─
+const optionalUuid = z.preprocess(
+  (v) => (v === "" ? null : v),
+  z.string().uuid().optional().nullable(),
+);
 export const BoardQuery = z.object({
-  pipelineId: z.string().uuid().optional().nullable(),
+  pipelineId: optionalUuid,
   status: z.enum(["open", "won", "lost", "all"]).default("open"),
   search: z.string().trim().max(200).optional(),
   ownerUserId: z.string().uuid().optional().nullable(),
