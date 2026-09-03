@@ -59,9 +59,12 @@ async function setPolicy(orgId: string, policy: Record<string, unknown>): Promis
   const v = (
     await owner`select coalesce(max(version), 0) + 1 as v from public.ai_entitlement where org_id = ${orgId}`
   )[0]!.v as number;
-  await owner`insert into public.ai_entitlement (org_id, version, mode, monthly_credits, daily_credit_limit, per_user_daily_credits,
+  // A second in the past, deliberately: the gateway compares effective_from
+  // against a millisecond-truncated timestamp, so a policy written in the same
+  // millisecond as the call it is meant to govern would not yet be effective.
+  await owner`insert into public.ai_entitlement (org_id, version, effective_from, mode, monthly_credits, daily_credit_limit, per_user_daily_credits,
       per_agent_limits, model_allow, max_cost_per_request_credits, soft_warn_pct, hard_stop, overage_allowed, restricted_domains, reason)
-    values (${orgId}, ${v}, ${String(policy.mode ?? "trial")}, ${(policy.monthly_credits as number | null) ?? null},
+    values (${orgId}, ${v}, now() - interval '1 second', ${String(policy.mode ?? "trial")}, ${(policy.monthly_credits as number | null) ?? null},
       ${(policy.daily_credit_limit as number | null) ?? null}, ${(policy.per_user_daily_credits as number | null) ?? null},
       ${JSON.stringify(policy.per_agent_limits ?? {})}::jsonb, ${JSON.stringify(policy.model_allow ?? [])}::jsonb,
       ${(policy.max_cost_per_request_credits as number | null) ?? null}, ${(policy.soft_warn_pct as number) ?? 80},

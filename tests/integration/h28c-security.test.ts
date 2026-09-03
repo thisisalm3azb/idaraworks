@@ -73,8 +73,9 @@ async function setPolicy(
   const v = (
     await owner`select coalesce(max(version), 0) + 1 as v from public.ai_entitlement where org_id = ${orgId}`
   )[0]!.v as number;
-  await owner`insert into public.ai_entitlement (org_id, version, mode, monthly_credits, ai_enabled_by_org, restricted_domains, reason)
-    values (${orgId}, ${v}, ${String(extra.mode ?? "trial")}, ${credits}, ${(extra.aiEnabled as boolean) ?? true},
+  // Effective a second ago: see the note in h28a.
+  await owner`insert into public.ai_entitlement (org_id, version, effective_from, mode, monthly_credits, ai_enabled_by_org, restricted_domains, reason)
+    values (${orgId}, ${v}, now() - interval '1 second', ${String(extra.mode ?? "trial")}, ${credits}, ${(extra.aiEnabled as boolean) ?? true},
             ${JSON.stringify(extra.restricted ?? [])}::jsonb, 'h28c test')`;
 }
 

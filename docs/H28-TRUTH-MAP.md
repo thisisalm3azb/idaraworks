@@ -273,7 +273,7 @@ Every new table carries `org_id` and RLS except the global registries and the op
 
 ### G.3 The Idara module (`src/modules/idara`)
 
-`service.ts` is the door. Inside: conversations and messages, the run engine (plan, context tools, model turns with a strict tool channel, validation, delegation, merge, provenance), the tool registry (37 tools: 24 read, 3 change, 9 restricted with no handler and one draft-class placeholder), actions (preview, confirm, approve, execute, drift, replay), memory, custom agents with versions and the narrowing law, proactive schedules, the queue executor and the evaluation runner.
+`service.ts` is the door. Inside: conversations and messages, the run engine (plan, context tools, model turns with a strict tool channel, validation, delegation, merge, provenance), the tool registry (48 tools: 36 read, 2 reversible change, 1 material action, 9 restricted with no handler), actions (preview, confirm, approve, execute, drift, replay), memory, custom agents with versions and the narrowing law, proactive schedules, the queue executor and the evaluation runner.
 
 ### G.4 Surfaces
 

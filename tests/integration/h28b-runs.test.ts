@@ -70,7 +70,10 @@ async function setPolicy(orgId: string, credits: number): Promise<void> {
   const v = (
     await owner`select coalesce(max(version), 0) + 1 as v from public.ai_entitlement where org_id = ${orgId}`
   )[0]!.v as number;
-  await owner`insert into public.ai_entitlement (org_id, version, mode, monthly_credits, reason) values (${orgId}, ${v}, 'trial', ${credits}, 'h28b test')`;
+  // Effective a second ago: see the note in h28a — a policy written in the same
+  // millisecond as the call it governs would not yet apply.
+  await owner`insert into public.ai_entitlement (org_id, version, effective_from, mode, monthly_credits, reason)
+    values (${orgId}, ${v}, now() - interval '1 second', 'trial', ${credits}, 'h28b test')`;
 }
 
 beforeAll(async () => {
