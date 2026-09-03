@@ -14,6 +14,10 @@ type Grantable = Exclude<RoleArchetype, "worker_reserved_p3">;
 export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
   // Full member management, file lifecycle, ALL config + masters + skeleton (doc 06 row-by-row).
   owner: [
+    "country.view",
+    "country.manage",
+    "country.adopt",
+    "country.simulate",
     "idara.use",
     "idara.actions.confirm",
     "idara.agents.manage",
@@ -155,6 +159,10 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
     "crm.export",
   ],
   admin: [
+    "country.view",
+    "country.manage",
+    "country.adopt",
+    "country.simulate",
     "idara.use",
     "idara.actions.confirm",
     "idara.agents.manage",
@@ -296,6 +304,7 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
   // Manager (doc 08: the Workshop Manager variant): masters M, jobs/reports, NO
   // config, NO salary/HR side-tables, no invite/deactivate/legal-hold.
   manager: [
+    "country.view",
     "idara.use",
     "idara.actions.confirm",
     "documents.view",
@@ -465,6 +474,8 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
     "digest.view",
   ],
   accounts: [
+    "country.view",
+    "country.simulate",
     "idara.use",
     "idara.actions.confirm",
     "idara.usage.view",
@@ -536,6 +547,7 @@ export const EXPECTED_MATRIX: Record<Grantable, readonly Action[]> = {
   // today.view added (adversarial review): read-only Today composed ONLY from
   // the viewer's own read grants above (no money, no queues).
   viewer: [
+    "country.view",
     "idara.use",
     "documents.view",
     "studio.view",

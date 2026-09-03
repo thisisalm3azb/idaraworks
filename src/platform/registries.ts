@@ -87,6 +87,7 @@ export const ATTACHABLE_TYPES = [
   "studio_scenario", // H25G — decision evidence attaches to a scenario; its lifecycle shows in activity
   "document", // H26 — supporting papers and signed scans attach to an authored document
   "ai_conversation", // H28 — files a person chose to share with the Idara Dock (existing file rows only)
+  "establishment", // H29 — the jurisdictional unit; registrations and licences attach to it
 ] as const;
 export type AttachableType = (typeof ATTACHABLE_TYPES)[number];
 

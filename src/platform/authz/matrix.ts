@@ -181,6 +181,11 @@ export type Action =
   | "idara.actions.confirm"
   | "idara.agents.manage"
   | "idara.usage.view"
+  // ── H29 country packs, establishments and their governed adoption ───────
+  | "country.view"
+  | "country.manage"
+  | "country.adopt"
+  | "country.simulate"
   | "idara.memory.manage";
 
 type Grantable = Exclude<RoleArchetype, "worker_reserved_p3">;
@@ -440,5 +445,12 @@ export const MATRIX: Record<Action, readonly Grantable[]> = {
   "idara.actions.confirm": ["owner", "admin", "manager", "foreman", "procurement", "accounts"],
   "idara.agents.manage": ["owner", "admin"],
   "idara.usage.view": ["owner", "admin", "accounts"],
+  // H29: reading the readiness centre is wide; changing an establishment or
+  // adopting a rule version is not. Adoption reinterprets future records, so it
+  // sits with the owner and the administrator alone.
+  "country.view": ["owner", "admin", "manager", "accounts", "viewer"],
+  "country.manage": ["owner", "admin"],
+  "country.adopt": ["owner", "admin"],
+  "country.simulate": ["owner", "admin", "accounts"],
   "idara.memory.manage": ["owner", "admin"],
 };
