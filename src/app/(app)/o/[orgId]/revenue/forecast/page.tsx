@@ -80,32 +80,34 @@ export default async function ForecastPage({
       {rows.length === 0 ? (
         <p className="text-sm text-ink-muted">{t("common.none")}</p>
       ) : (
-        <table className="w-full text-sm">
-          <thead className="text-xs text-ink-muted">
-            <tr>
-              <th className="py-1 text-start">{title}</th>
-              <th className="py-1 text-end">{t("revenue.board.cards")}</th>
-              <th className="py-1 text-end">{t("revenue.value")}</th>
-              <th className="py-1 text-end">{t("revenue.weighted")}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((b) => (
-              <tr key={b.key} className="border-t border-line">
-                <td className="py-1 text-ink">{labelOf(b.key)}</td>
-                <td className="py-1 text-end" dir="ltr">
-                  {b.count}
-                </td>
-                <td className="py-1 text-end font-mono" dir="ltr">
-                  {money(b.valueMinor)}
-                </td>
-                <td className="py-1 text-end font-mono" dir="ltr">
-                  {money(b.weightedMinor)}
-                </td>
+        <div className="w-0 min-w-full overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="text-xs text-ink-muted">
+              <tr>
+                <th className="py-1 text-start">{title}</th>
+                <th className="py-1 text-end">{t("revenue.board.cards")}</th>
+                <th className="py-1 text-end">{t("revenue.value")}</th>
+                <th className="py-1 text-end">{t("revenue.weighted")}</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {rows.map((b) => (
+                <tr key={b.key} className="border-t border-line">
+                  <td className="py-1 text-ink">{labelOf(b.key)}</td>
+                  <td className="py-1 text-end" dir="ltr">
+                    {b.count}
+                  </td>
+                  <td className="py-1 text-end font-mono" dir="ltr">
+                    {money(b.valueMinor)}
+                  </td>
+                  <td className="py-1 text-end font-mono" dir="ltr">
+                    {money(b.weightedMinor)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </Card>
   );
@@ -213,10 +215,13 @@ export default async function ForecastPage({
         ].map(([k, v, model]) => (
           <div
             key={String(k)}
-            className="flex flex-col gap-0.5 rounded-lg border border-line bg-card p-3"
+            className="flex min-w-0 flex-col gap-0.5 rounded-lg border border-line bg-card p-3"
           >
             <span className="text-xs text-ink-muted">{t(`revenue.forecast.total.${k}`)}</span>
-            <span className="text-lg font-semibold text-ink" dir="ltr">
+            <span
+              className="text-base font-semibold text-ink [overflow-wrap:anywhere] sm:text-lg"
+              dir="ltr"
+            >
               {money(Number(v))}
             </span>
             <span className="text-[11px] text-ink-muted" dir="ltr">
@@ -271,32 +276,34 @@ export default async function ForecastPage({
         )}
         <Card>
           <CardHeader title={t("revenue.forecast.by_stage")} />
-          <table className="w-full text-sm">
-            <thead className="text-xs text-ink-muted">
-              <tr>
-                <th className="py-1 text-start">{t("revenue.board.move_to")}</th>
-                <th className="py-1 text-end">{t("revenue.board.cards")}</th>
-                <th className="py-1 text-end">{t("revenue.weighted")}</th>
-                <th className="py-1 text-end">{t("revenue.forecast.avg_age")}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {forecast.byStage.map((b) => (
-                <tr key={b.key} className="border-t border-line">
-                  <td className="py-1 text-ink">{stageLabel(b.key)}</td>
-                  <td className="py-1 text-end" dir="ltr">
-                    {b.count}
-                  </td>
-                  <td className="py-1 text-end font-mono" dir="ltr">
-                    {money(b.weightedMinor)}
-                  </td>
-                  <td className="py-1 text-end" dir="ltr">
-                    {Math.round(b.avgAgeDays)}
-                  </td>
+          <div className="w-0 min-w-full overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="text-xs text-ink-muted">
+                <tr>
+                  <th className="py-1 text-start">{t("revenue.board.move_to")}</th>
+                  <th className="py-1 text-end">{t("revenue.board.cards")}</th>
+                  <th className="py-1 text-end">{t("revenue.weighted")}</th>
+                  <th className="py-1 text-end">{t("revenue.forecast.avg_age")}</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {forecast.byStage.map((b) => (
+                  <tr key={b.key} className="border-t border-line">
+                    <td className="py-1 text-ink">{stageLabel(b.key)}</td>
+                    <td className="py-1 text-end" dir="ltr">
+                      {b.count}
+                    </td>
+                    <td className="py-1 text-end font-mono" dir="ltr">
+                      {money(b.weightedMinor)}
+                    </td>
+                    <td className="py-1 text-end" dir="ltr">
+                      {Math.round(b.avgAgeDays)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </Card>
       </div>
 
@@ -359,41 +366,43 @@ export default async function ForecastPage({
             </Button>
           </form>
           {accuracy.ok && accuracy.data.length > 0 ? (
-            <table className="mt-3 w-full text-sm">
-              <thead className="text-xs text-ink-muted">
-                <tr>
-                  <th className="py-1 text-start">{t("revenue.forecast.period")}</th>
-                  <th className="py-1 text-end">{t("revenue.weighted")}</th>
-                  <th className="py-1 text-end">{t("revenue.forecast.won")}</th>
-                  <th className="py-1 text-end">{t("revenue.forecast.error")}</th>
-                  <th className="py-1 text-end">{t("revenue.forecast.commit_hit")}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {accuracy.data.map((s) => (
-                  <tr key={s.id} className="border-t border-line">
-                    <td className="py-1 text-ink" dir="ltr">
-                      {s.periodKey}{" "}
-                      <span className="text-xs text-ink-muted">
-                        {formatDate(s.capturedAt.slice(0, 10), { locale })}
-                      </span>
-                    </td>
-                    <td className="py-1 text-end font-mono" dir="ltr">
-                      {money(s.predicted.weightedMinor)}
-                    </td>
-                    <td className="py-1 text-end font-mono" dir="ltr">
-                      {money(s.actual.wonMinor)}
-                    </td>
-                    <td className="py-1 text-end" dir="ltr">
-                      {pct(s.weightedErrorPct)}
-                    </td>
-                    <td className="py-1 text-end" dir="ltr">
-                      {pct(s.commitHitPct)}
-                    </td>
+            <div className="w-0 min-w-full overflow-x-auto">
+              <table className="mt-3 w-full text-sm">
+                <thead className="text-xs text-ink-muted">
+                  <tr>
+                    <th className="py-1 text-start">{t("revenue.forecast.period")}</th>
+                    <th className="py-1 text-end">{t("revenue.weighted")}</th>
+                    <th className="py-1 text-end">{t("revenue.forecast.won")}</th>
+                    <th className="py-1 text-end">{t("revenue.forecast.error")}</th>
+                    <th className="py-1 text-end">{t("revenue.forecast.commit_hit")}</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {accuracy.data.map((s) => (
+                    <tr key={s.id} className="border-t border-line">
+                      <td className="py-1 text-ink" dir="ltr">
+                        {s.periodKey}{" "}
+                        <span className="text-xs text-ink-muted">
+                          {formatDate(s.capturedAt.slice(0, 10), { locale })}
+                        </span>
+                      </td>
+                      <td className="py-1 text-end font-mono" dir="ltr">
+                        {money(s.predicted.weightedMinor)}
+                      </td>
+                      <td className="py-1 text-end font-mono" dir="ltr">
+                        {money(s.actual.wonMinor)}
+                      </td>
+                      <td className="py-1 text-end" dir="ltr">
+                        {pct(s.weightedErrorPct)}
+                      </td>
+                      <td className="py-1 text-end" dir="ltr">
+                        {pct(s.commitHitPct)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           ) : (
             <p className="mt-2 text-xs text-ink-muted">{t("revenue.forecast.no_snapshots")}</p>
           )}
@@ -452,45 +461,47 @@ export default async function ForecastPage({
               {scenario.assumptions ? (
                 <p className="mb-2 text-xs text-ink-muted">{scenario.assumptions}</p>
               ) : null}
-              <table className="w-full">
-                <thead className="text-xs text-ink-muted">
-                  <tr>
-                    <th className="py-1 text-start"></th>
-                    <th className="py-1 text-end">{t("revenue.forecast.live")}</th>
-                    <th className="py-1 text-end">{t("revenue.forecast.scenario")}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {[
-                    [t("revenue.board.cards"), liveSummary.count, scenarioSummary.count],
-                    [
-                      t("revenue.forecast.total.pipeline"),
-                      money(liveSummary.pipelineMinor),
-                      money(scenarioSummary.pipelineMinor),
-                    ],
-                    [
-                      t("revenue.weighted"),
-                      money(liveSummary.weightedMinor),
-                      money(scenarioSummary.weightedMinor),
-                    ],
-                    [
-                      t("revenue.forecast.total.commit"),
-                      money(liveSummary.commitMinor),
-                      money(scenarioSummary.commitMinor),
-                    ],
-                  ].map(([k, a, b]) => (
-                    <tr key={String(k)} className="border-t border-line">
-                      <td className="py-1 text-ink">{String(k)}</td>
-                      <td className="py-1 text-end font-mono" dir="ltr">
-                        {String(a)}
-                      </td>
-                      <td className="py-1 text-end font-mono" dir="ltr">
-                        {String(b)}
-                      </td>
+              <div className="w-0 min-w-full overflow-x-auto">
+                <table className="w-full">
+                  <thead className="text-xs text-ink-muted">
+                    <tr>
+                      <th className="py-1 text-start"></th>
+                      <th className="py-1 text-end">{t("revenue.forecast.live")}</th>
+                      <th className="py-1 text-end">{t("revenue.forecast.scenario")}</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {[
+                      [t("revenue.board.cards"), liveSummary.count, scenarioSummary.count],
+                      [
+                        t("revenue.forecast.total.pipeline"),
+                        money(liveSummary.pipelineMinor),
+                        money(scenarioSummary.pipelineMinor),
+                      ],
+                      [
+                        t("revenue.weighted"),
+                        money(liveSummary.weightedMinor),
+                        money(scenarioSummary.weightedMinor),
+                      ],
+                      [
+                        t("revenue.forecast.total.commit"),
+                        money(liveSummary.commitMinor),
+                        money(scenarioSummary.commitMinor),
+                      ],
+                    ].map(([k, a, b]) => (
+                      <tr key={String(k)} className="border-t border-line">
+                        <td className="py-1 text-ink">{String(k)}</td>
+                        <td className="py-1 text-end font-mono" dir="ltr">
+                          {String(a)}
+                        </td>
+                        <td className="py-1 text-end font-mono" dir="ltr">
+                          {String(b)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           ) : null}
           <ScenarioBuilder

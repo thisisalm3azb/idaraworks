@@ -175,51 +175,57 @@ export default async function AutomationsPage({
                       {t("revenue.automations.no_runs")}
                     </p>
                   ) : (
-                    <table className="mt-2 w-full text-xs">
-                      <thead className="text-ink-muted">
-                        <tr>
-                          <th className="py-1 text-start">{t("revenue.automations.subject")}</th>
-                          <th className="py-1 text-start">{t("revenue.automations.occurrence")}</th>
-                          <th className="py-1 text-start">{t("revenue.automations.mode_label")}</th>
-                          <th className="py-1 text-start">{t("revenue.filter.status")}</th>
-                          <th className="py-1 text-start">{t("common.date")}</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {runs.data.slice(0, 50).map((r) => (
-                          <tr key={r.id} className="border-t border-line">
-                            <td className="py-1 text-ink" dir="ltr">
-                              {r.subjectType} {r.subjectId.slice(0, 8)}
-                            </td>
-                            <td className="py-1 text-ink" dir="ltr">
-                              {r.occurrenceKey}
-                            </td>
-                            <td className="py-1">{t(`revenue.automations.mode.${r.mode}`)}</td>
-                            <td className="py-1">
-                              <Badge
-                                tone={
-                                  r.status === "failed"
-                                    ? "danger"
-                                    : r.status === "applied"
-                                      ? "success"
-                                      : "neutral"
-                                }
-                              >
-                                {r.status}
-                              </Badge>
-                              {r.error ? (
-                                <span className="ms-1 text-danger" dir="ltr">
-                                  {r.error.slice(0, 80)}
-                                </span>
-                              ) : null}
-                            </td>
-                            <td className="py-1 text-ink-muted" dir="ltr">
-                              {formatDate(r.ranAt.slice(0, 10), { locale })}
-                            </td>
+                    <div className="w-0 min-w-full overflow-x-auto">
+                      <table className="mt-2 w-full text-xs">
+                        <thead className="text-ink-muted">
+                          <tr>
+                            <th className="py-1 text-start">{t("revenue.automations.subject")}</th>
+                            <th className="py-1 text-start">
+                              {t("revenue.automations.occurrence")}
+                            </th>
+                            <th className="py-1 text-start">
+                              {t("revenue.automations.mode_label")}
+                            </th>
+                            <th className="py-1 text-start">{t("revenue.filter.status")}</th>
+                            <th className="py-1 text-start">{t("common.date")}</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                        </thead>
+                        <tbody>
+                          {runs.data.slice(0, 50).map((r) => (
+                            <tr key={r.id} className="border-t border-line">
+                              <td className="py-1 text-ink" dir="ltr">
+                                {r.subjectType} {r.subjectId.slice(0, 8)}
+                              </td>
+                              <td className="py-1 text-ink" dir="ltr">
+                                {r.occurrenceKey}
+                              </td>
+                              <td className="py-1">{t(`revenue.automations.mode.${r.mode}`)}</td>
+                              <td className="py-1">
+                                <Badge
+                                  tone={
+                                    r.status === "failed"
+                                      ? "danger"
+                                      : r.status === "applied"
+                                        ? "success"
+                                        : "neutral"
+                                  }
+                                >
+                                  {r.status}
+                                </Badge>
+                                {r.error ? (
+                                  <span className="ms-1 text-danger" dir="ltr">
+                                    {r.error.slice(0, 80)}
+                                  </span>
+                                ) : null}
+                              </td>
+                              <td className="py-1 text-ink-muted" dir="ltr">
+                                {formatDate(r.ranAt.slice(0, 10), { locale })}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   )
                 ) : (
                   <p className="mt-2 text-xs text-danger">{t("common.error")}</p>

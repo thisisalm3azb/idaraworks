@@ -559,42 +559,59 @@ export async function runAutomation(
         failed: 0,
         mode,
       };
-      for (const s of subjects) {
-        const ok = evaluateConditions(a.conditions, { bindings: {}, variables: s.facts });
-        if (!ok) continue;
-        summary.matched++;
-        const claimed = (await tx.execute(sql`
+      const matched = subjects.filter((s) =>
+        evaluateConditions(a.conditions, { bindings: {}, variables: s.facts }),
+      );
+      summary.matched = matched.length;
+      if (mode === "dry_run") {
+        // A dry run only records what WOULD happen: one statement claims every
+        // matched occurrence (idempotent), nothing else is touched.
+        if (matched.length > 0) {
+          const wouldDo = JSON.stringify(a.actions.map((x) => ({ wouldDo: x.kind })));
+          const claimed = (await tx.execute(sql`
+            insert into public.crm_automation_run (org_id, automation_id, subject_type, subject_id, occurrence_key, mode, status, ran_by, result)
+            select ${ctx.orgId}, ${a.id}, t.subject_type, t.subject_id::uuid, t.occurrence_key, 'dry_run', 'matched', ${ctx.userId}, ${wouldDo}::jsonb
+            from json_to_recordset(${JSON.stringify(matched.map((s) => ({ subject_type: s.type, subject_id: s.id, occurrence_key: s.occurrence })))}::json)
+                 as t(subject_type text, subject_id text, occurrence_key text)
+            on conflict (automation_id, subject_type, subject_id, occurrence_key, mode) do nothing
+            returning id::text as id
+          `)) as unknown as Array<{ id: string }>;
+          summary.skipped = matched.length - claimed.length;
+        }
+      } else
+        for (const s of matched) {
+          const claimed = (await tx.execute(sql`
           insert into public.crm_automation_run (org_id, automation_id, subject_type, subject_id, occurrence_key, mode, status, ran_by)
           values (${ctx.orgId}, ${a.id}, ${s.type}, ${s.id}, ${s.occurrence}, ${mode}, 'matched', ${ctx.userId})
           on conflict (automation_id, subject_type, subject_id, occurrence_key, mode) do nothing
           returning id::text as id
         `)) as unknown as Array<{ id: string }>;
-        if (!claimed[0]) {
-          summary.skipped++;
-          continue;
+          if (!claimed[0]) {
+            summary.skipped++;
+            continue;
+          }
+          const results: Record<string, unknown>[] = [];
+          // Each subject runs inside a savepoint so one failing action is recorded
+          // on its run row instead of aborting the whole sweep's transaction.
+          await tx.execute(sql`savepoint crm_auto_subject`);
+          try {
+            if (mode === "live")
+              for (const action of a.actions)
+                results.push(await performActionIn(tx, ctx, a, s, action));
+            else results.push(...a.actions.map((x) => ({ wouldDo: x.kind, subject: s.id })));
+            await tx.execute(
+              sql`update public.crm_automation_run set status = ${mode === "live" ? "applied" : "matched"}, result = ${JSON.stringify(results)}::jsonb where id = ${claimed[0].id}`,
+            );
+            if (mode === "live") summary.applied++;
+            await tx.execute(sql`release savepoint crm_auto_subject`);
+          } catch (err) {
+            summary.failed++;
+            await tx.execute(sql`rollback to savepoint crm_auto_subject`);
+            await tx.execute(
+              sql`update public.crm_automation_run set status = 'failed', error = ${String((err as Error).message).slice(0, 1000)} where id = ${claimed[0].id}`,
+            );
+          }
         }
-        const results: Record<string, unknown>[] = [];
-        // Each subject runs inside a savepoint so one failing action is recorded
-        // on its run row instead of aborting the whole sweep's transaction.
-        await tx.execute(sql`savepoint crm_auto_subject`);
-        try {
-          if (mode === "live")
-            for (const action of a.actions)
-              results.push(await performActionIn(tx, ctx, a, s, action));
-          else results.push(...a.actions.map((x) => ({ wouldDo: x.kind, subject: s.id })));
-          await tx.execute(
-            sql`update public.crm_automation_run set status = ${mode === "live" ? "applied" : "matched"}, result = ${JSON.stringify(results)}::jsonb where id = ${claimed[0].id}`,
-          );
-          if (mode === "live") summary.applied++;
-          await tx.execute(sql`release savepoint crm_auto_subject`);
-        } catch (err) {
-          summary.failed++;
-          await tx.execute(sql`rollback to savepoint crm_auto_subject`);
-          await tx.execute(
-            sql`update public.crm_automation_run set status = 'failed', error = ${String((err as Error).message).slice(0, 1000)} where id = ${claimed[0].id}`,
-          );
-        }
-      }
       await tx.execute(
         sql`update public.crm_automation set last_run_at = now() where id = ${a.id} and org_id = ${ctx.orgId}`,
       );

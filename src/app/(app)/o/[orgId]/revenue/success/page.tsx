@@ -78,7 +78,7 @@ export default async function SuccessPage({
           <Link
             key={band}
             href={`/o/${orgId}/revenue/success?band=${band}`}
-            className="flex flex-col gap-0.5 rounded-lg border border-line bg-card p-3 hover:bg-sunken"
+            className="flex min-w-0 flex-col gap-0.5 rounded-lg border border-line bg-card p-3 hover:bg-sunken"
           >
             <span className="text-xs text-ink-muted">{t(`revenue.health.band.${band}`)}</span>
             <span className="text-lg font-semibold text-ink" dir="ltr">

@@ -159,64 +159,70 @@ export default async function ReportsPage({
               {t("revenue.forecast.won")} {money(funnel.data.opportunities.won.valueMinor)}
             </p>
             <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
-              <table className="w-full text-sm">
-                <thead className="text-xs text-ink-muted">
-                  <tr>
-                    <th className="py-1 text-start">{t("revenue.lead_status.title")}</th>
-                    <th className="py-1 text-end">#</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {Object.entries(funnel.data.leads.byStatus).map(([k, n]) => (
-                    <tr key={k} className="border-t border-line">
-                      <td className="py-1 text-ink">{t(`revenue.lead_status.${k}`)}</td>
-                      <td className="py-1 text-end" dir="ltr">
-                        {n}
-                      </td>
+              <div className="w-0 min-w-full overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="text-xs text-ink-muted">
+                    <tr>
+                      <th className="py-1 text-start">{t("revenue.lead_status.title")}</th>
+                      <th className="py-1 text-end">#</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-              <table className="w-full text-sm">
-                <thead className="text-xs text-ink-muted">
-                  <tr>
-                    <th className="py-1 text-start">{t("revenue.leads.source_kind")}</th>
-                    <th className="py-1 text-end">#</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {Object.entries(funnel.data.leads.bySource).map(([k, n]) => (
-                    <tr key={k} className="border-t border-line">
-                      <td className="py-1 text-ink">{t(`revenue.source.${k}`)}</td>
-                      <td className="py-1 text-end" dir="ltr">
-                        {n}
-                      </td>
+                  </thead>
+                  <tbody>
+                    {Object.entries(funnel.data.leads.byStatus).map(([k, n]) => (
+                      <tr key={k} className="border-t border-line">
+                        <td className="py-1 text-ink">{t(`revenue.lead_status.${k}`)}</td>
+                        <td className="py-1 text-end" dir="ltr">
+                          {n}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="w-0 min-w-full overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="text-xs text-ink-muted">
+                    <tr>
+                      <th className="py-1 text-start">{t("revenue.leads.source_kind")}</th>
+                      <th className="py-1 text-end">#</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-              <table className="w-full text-sm">
-                <thead className="text-xs text-ink-muted">
-                  <tr>
-                    <th className="py-1 text-start">{t("revenue.board.move_to")}</th>
-                    <th className="py-1 text-end">#</th>
-                    <th className="py-1 text-end">{t("revenue.value")}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {funnel.data.opportunities.byStage.map((s) => (
-                    <tr key={s.stageKey} className="border-t border-line">
-                      <td className="py-1 text-ink">{stageLabel(s.stageKey)}</td>
-                      <td className="py-1 text-end" dir="ltr">
-                        {s.count}
-                      </td>
-                      <td className="py-1 text-end font-mono" dir="ltr">
-                        {money(s.valueMinor)}
-                      </td>
+                  </thead>
+                  <tbody>
+                    {Object.entries(funnel.data.leads.bySource).map(([k, n]) => (
+                      <tr key={k} className="border-t border-line">
+                        <td className="py-1 text-ink">{t(`revenue.source.${k}`)}</td>
+                        <td className="py-1 text-end" dir="ltr">
+                          {n}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="w-0 min-w-full overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="text-xs text-ink-muted">
+                    <tr>
+                      <th className="py-1 text-start">{t("revenue.board.move_to")}</th>
+                      <th className="py-1 text-end">#</th>
+                      <th className="py-1 text-end">{t("revenue.value")}</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {funnel.data.opportunities.byStage.map((s) => (
+                      <tr key={s.stageKey} className="border-t border-line">
+                        <td className="py-1 text-ink">{stageLabel(s.stageKey)}</td>
+                        <td className="py-1 text-end" dir="ltr">
+                          {s.count}
+                        </td>
+                        <td className="py-1 text-end font-mono" dir="ltr">
+                          {money(s.valueMinor)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
             <p className="text-xs text-ink-muted">{funnel.data.basis}</p>
           </div>
@@ -243,53 +249,57 @@ export default async function ReportsPage({
                     : `${Math.round(winLoss.data.won.avgCycleDays)} ${t("revenue.days")}`}
                 </strong>
               </p>
-              <table className="w-full">
-                <thead className="text-xs text-ink-muted">
-                  <tr>
-                    <th className="py-1 text-start">{t("revenue.reports.loss_reason")}</th>
-                    <th className="py-1 text-end">#</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {winLoss.data.lossReasons.map((r) => (
-                    <tr key={r.reason} className="border-t border-line">
-                      <td className="py-1 text-ink">{r.reason}</td>
-                      <td className="py-1 text-end" dir="ltr">
-                        {r.count}
-                      </td>
-                    </tr>
-                  ))}
-                  {winLoss.data.lossReasons.length === 0 ? (
+              <div className="w-0 min-w-full overflow-x-auto">
+                <table className="w-full">
+                  <thead className="text-xs text-ink-muted">
                     <tr>
-                      <td className="py-1 text-ink-muted" colSpan={2}>
-                        {t("common.none")}
-                      </td>
+                      <th className="py-1 text-start">{t("revenue.reports.loss_reason")}</th>
+                      <th className="py-1 text-end">#</th>
                     </tr>
-                  ) : null}
-                </tbody>
-              </table>
-              <table className="w-full">
-                <thead className="text-xs text-ink-muted">
-                  <tr>
-                    <th className="py-1 text-start">{t("revenue.filter.owner")}</th>
-                    <th className="py-1 text-end">{t("revenue.forecast.won")}</th>
-                    <th className="py-1 text-end">{t("revenue.forecast.lost")}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {winLoss.data.byOwner.map((o) => (
-                    <tr key={o.ownerUserId ?? "none"} className="border-t border-line">
-                      <td className="py-1 text-ink">{o.ownerName ?? t("revenue.unassigned")}</td>
-                      <td className="py-1 text-end" dir="ltr">
-                        {o.won}
-                      </td>
-                      <td className="py-1 text-end" dir="ltr">
-                        {o.lost}
-                      </td>
+                  </thead>
+                  <tbody>
+                    {winLoss.data.lossReasons.map((r) => (
+                      <tr key={r.reason} className="border-t border-line">
+                        <td className="py-1 text-ink">{r.reason}</td>
+                        <td className="py-1 text-end" dir="ltr">
+                          {r.count}
+                        </td>
+                      </tr>
+                    ))}
+                    {winLoss.data.lossReasons.length === 0 ? (
+                      <tr>
+                        <td className="py-1 text-ink-muted" colSpan={2}>
+                          {t("common.none")}
+                        </td>
+                      </tr>
+                    ) : null}
+                  </tbody>
+                </table>
+              </div>
+              <div className="w-0 min-w-full overflow-x-auto">
+                <table className="w-full">
+                  <thead className="text-xs text-ink-muted">
+                    <tr>
+                      <th className="py-1 text-start">{t("revenue.filter.owner")}</th>
+                      <th className="py-1 text-end">{t("revenue.forecast.won")}</th>
+                      <th className="py-1 text-end">{t("revenue.forecast.lost")}</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {winLoss.data.byOwner.map((o) => (
+                      <tr key={o.ownerUserId ?? "none"} className="border-t border-line">
+                        <td className="py-1 text-ink">{o.ownerName ?? t("revenue.unassigned")}</td>
+                        <td className="py-1 text-end" dir="ltr">
+                          {o.won}
+                        </td>
+                        <td className="py-1 text-end" dir="ltr">
+                          {o.lost}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
               <p className="text-xs text-ink-muted">{winLoss.data.basis}</p>
             </div>
           ) : (
@@ -303,50 +313,54 @@ export default async function ReportsPage({
           />
           {activity.ok ? (
             <div className="flex flex-col gap-2 text-sm">
-              <table className="w-full">
-                <thead className="text-xs text-ink-muted">
-                  <tr>
-                    <th className="py-1 text-start">{t("revenue.activity.kind")}</th>
-                    <th className="py-1 text-end">#</th>
-                    <th className="py-1 text-end">{t("revenue.reports.completed")}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {activity.data.byKind.map((k) => (
-                    <tr key={k.kind} className="border-t border-line">
-                      <td className="py-1 text-ink">{t(`revenue.activity.${k.kind}`)}</td>
-                      <td className="py-1 text-end" dir="ltr">
-                        {k.count}
-                      </td>
-                      <td className="py-1 text-end" dir="ltr">
-                        {k.completed}
-                      </td>
+              <div className="w-0 min-w-full overflow-x-auto">
+                <table className="w-full">
+                  <thead className="text-xs text-ink-muted">
+                    <tr>
+                      <th className="py-1 text-start">{t("revenue.activity.kind")}</th>
+                      <th className="py-1 text-end">#</th>
+                      <th className="py-1 text-end">{t("revenue.reports.completed")}</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-              <table className="w-full">
-                <thead className="text-xs text-ink-muted">
-                  <tr>
-                    <th className="py-1 text-start">{t("revenue.filter.owner")}</th>
-                    <th className="py-1 text-end">#</th>
-                    <th className="py-1 text-end">{t("revenue.reports.completed")}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {activity.data.byOwner.map((o) => (
-                    <tr key={o.ownerUserId ?? "none"} className="border-t border-line">
-                      <td className="py-1 text-ink">{o.ownerName ?? t("revenue.unassigned")}</td>
-                      <td className="py-1 text-end" dir="ltr">
-                        {o.count}
-                      </td>
-                      <td className="py-1 text-end" dir="ltr">
-                        {o.completed}
-                      </td>
+                  </thead>
+                  <tbody>
+                    {activity.data.byKind.map((k) => (
+                      <tr key={k.kind} className="border-t border-line">
+                        <td className="py-1 text-ink">{t(`revenue.activity.${k.kind}`)}</td>
+                        <td className="py-1 text-end" dir="ltr">
+                          {k.count}
+                        </td>
+                        <td className="py-1 text-end" dir="ltr">
+                          {k.completed}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="w-0 min-w-full overflow-x-auto">
+                <table className="w-full">
+                  <thead className="text-xs text-ink-muted">
+                    <tr>
+                      <th className="py-1 text-start">{t("revenue.filter.owner")}</th>
+                      <th className="py-1 text-end">#</th>
+                      <th className="py-1 text-end">{t("revenue.reports.completed")}</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {activity.data.byOwner.map((o) => (
+                      <tr key={o.ownerUserId ?? "none"} className="border-t border-line">
+                        <td className="py-1 text-ink">{o.ownerName ?? t("revenue.unassigned")}</td>
+                        <td className="py-1 text-end" dir="ltr">
+                          {o.count}
+                        </td>
+                        <td className="py-1 text-end" dir="ltr">
+                          {o.completed}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
               {activity.data.byOutcome.length > 0 ? (
                 <p className="text-xs text-ink-muted">
                   {t("revenue.activity.outcome")}:{" "}

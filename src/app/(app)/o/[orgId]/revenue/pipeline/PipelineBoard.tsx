@@ -184,7 +184,7 @@ export function PipelineBoard({
   const target = review ? stageOf(review.stageKey) : null;
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex w-full min-w-0 max-w-full flex-col gap-3">
       {canManage && selected.size > 0 ? (
         <div
           role="region"
@@ -222,7 +222,7 @@ export function PipelineBoard({
         </div>
       ) : null}
 
-      <div className="-mx-1 flex snap-x gap-3 overflow-x-auto px-1 pb-2 [scrollbar-width:thin]">
+      <div className="flex w-0 min-w-full snap-x gap-3 overflow-x-auto pb-2 [scrollbar-width:thin]">
         {stages.map((s) => {
           const list = byStage.get(s.key) ?? [];
           const a = agg.get(s.key);

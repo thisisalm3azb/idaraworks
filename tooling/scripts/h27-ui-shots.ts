@@ -125,7 +125,7 @@ async function main(): Promise<void> {
           .last()
           .click();
         await page
-          .locator("[role=dialog]")
+          .getByRole("dialog")
           .getByText(/Moved|Missing|Changed by someone|Not possible|تم النقل|مفقود/)
           .first()
           .waitFor({ timeout: 90_000 })
@@ -134,7 +134,7 @@ async function main(): Promise<void> {
         notes.push(
           `move-dialog: ${(
             await page
-              .locator("[role=dialog]")
+              .getByRole("dialog")
               .innerText()
               .catch(() => "")
           )

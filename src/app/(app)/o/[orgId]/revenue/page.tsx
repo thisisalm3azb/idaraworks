@@ -94,9 +94,12 @@ export default async function RevenueHubPage({ params }: { params: Promise<{ org
     <p className="text-sm text-danger">{t("revenue.section_failed", { section: label })}</p>
   );
   const kpi = (label: string, value: string | number | null, hint?: string) => (
-    <div className="flex flex-col gap-0.5 rounded-lg border border-line bg-card p-3">
+    <div className="flex min-w-0 flex-col gap-0.5 rounded-lg border border-line bg-card p-3">
       <span className="text-xs text-ink-muted">{label}</span>
-      <span className="text-lg font-semibold text-ink" dir="ltr">
+      <span
+        className="text-base font-semibold text-ink [overflow-wrap:anywhere] sm:text-lg"
+        dir="ltr"
+      >
         {value ?? t("common.restricted")}
       </span>
       {hint ? <span className="text-xs text-ink-muted">{hint}</span> : null}

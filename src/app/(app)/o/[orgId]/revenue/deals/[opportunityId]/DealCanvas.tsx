@@ -193,7 +193,6 @@ export function DealCanvas({
           nodesConnectable={canManage}
           elementsSelectable
           fitView
-          proOptions={{ hideAttribution: true }}
         >
           <Background gap={16} />
           <Controls showInteractive={false} />
