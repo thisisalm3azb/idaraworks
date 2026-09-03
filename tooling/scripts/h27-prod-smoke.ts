@@ -725,6 +725,7 @@ async function main(): Promise<void> {
       redirect: "manual",
     });
     const hubBody = await hub.text();
+    const hubText = hubBody.replace(/<[^>]+>/g, " ").replace(/[ \t\r\n]+/g, " ");
     const notFound = /not found|404|غير موجود/i.test(hubBody);
     const showsStudio =
       hubBody.includes("Revenue Growth Studio") || hubBody.includes("استوديو نمو الإيرادات");
@@ -732,6 +733,9 @@ async function main(): Promise<void> {
       headers: { cookie },
       redirect: "manual",
     });
+    console.log(
+      `  http: hub ${hub.status} studio=${showsStudio} notFound=${notFound} ctx=${hubText.slice(Math.max(0, hubText.indexOf("Revenue Growth Studio") - 160), hubText.indexOf("Revenue Growth Studio") + 60)}`,
+    );
     if (surfaces === "off") {
       check(
         "hub hidden while the flag is unset",

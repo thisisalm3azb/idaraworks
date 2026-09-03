@@ -1,3 +1,5 @@
+import { revenueStudioEnabled } from "@/platform/flags";
+import { notFound } from "next/navigation";
 import Link from "next/link";
 import { Badge, Button, Card, EmptyState, Pager } from "@/platform/ui";
 import { can } from "@/platform/authz";
@@ -40,6 +42,7 @@ export default async function LeadsPage({
   params: Promise<{ orgId: string }>;
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
+  if (!revenueStudioEnabled()) notFound(); // page-level gate: layouts and pages render concurrently
   const { orgId } = await params;
   const sp = await searchParams;
   const { resolved, t, locale } = await resolveRevenue(orgId, "leads.view");

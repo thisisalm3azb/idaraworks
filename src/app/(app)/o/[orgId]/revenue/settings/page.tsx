@@ -1,3 +1,5 @@
+import { revenueStudioEnabled } from "@/platform/flags";
+import { notFound } from "next/navigation";
 import Link from "next/link";
 import { Badge, Button, Card, CardHeader } from "@/platform/ui";
 import { listPipelines, listStageSettings, STAGE_REQUIREMENTS } from "@/modules/crm/service";
@@ -21,6 +23,7 @@ export default async function RevenueSettingsPage({
   params: Promise<{ orgId: string }>;
   searchParams: Promise<{ pipeline?: string; ok?: string; error?: string }>;
 }) {
+  if (!revenueStudioEnabled()) notFound(); // page-level gate: layouts and pages render concurrently
   const { orgId } = await params;
   const sp = await searchParams;
   const { resolved, t, locale } = await resolveRevenue(orgId, "pipeline.configure");

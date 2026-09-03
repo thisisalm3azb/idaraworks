@@ -1,3 +1,5 @@
+import { revenueStudioEnabled } from "@/platform/flags";
+import { notFound } from "next/navigation";
 import Link from "next/link";
 import { Badge, Card, CardHeader, EmptyState } from "@/platform/ui";
 import { can } from "@/platform/authz";
@@ -27,6 +29,7 @@ import { RevenueCommandPalette } from "./RevenueCommandPalette";
  * when it cannot load.
  */
 export default async function RevenueHubPage({ params }: { params: Promise<{ orgId: string }> }) {
+  if (!revenueStudioEnabled()) notFound(); // page-level gate: layouts and pages render concurrently
   const { orgId } = await params;
   const { resolved, t, locale } = await resolveRevenue(orgId, "opportunities.view");
   const seesPrice = resolved.ctx.pricePrivileged;

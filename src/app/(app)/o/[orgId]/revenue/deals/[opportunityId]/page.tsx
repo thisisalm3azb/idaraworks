@@ -1,3 +1,4 @@
+import { revenueStudioEnabled } from "@/platform/flags";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Badge, Button, Card, CardHeader, EmptyState } from "@/platform/ui";
@@ -72,6 +73,7 @@ export default async function DealRoomPage({
   params: Promise<{ orgId: string; opportunityId: string }>;
   searchParams: Promise<{ tab?: string; ok?: string; error?: string; unmet?: string }>;
 }) {
+  if (!revenueStudioEnabled()) notFound(); // page-level gate: layouts and pages render concurrently
   const { orgId, opportunityId } = await params;
   const sp = await searchParams;
   const { resolved, t, locale } = await resolveRevenue(orgId, "opportunities.view");

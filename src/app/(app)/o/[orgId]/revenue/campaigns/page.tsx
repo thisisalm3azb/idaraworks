@@ -1,3 +1,5 @@
+import { revenueStudioEnabled } from "@/platform/flags";
+import { notFound } from "next/navigation";
 import Link from "next/link";
 import { Badge, Button, Card, CardHeader, EmptyState } from "@/platform/ui";
 import { formatDate, formatMoney } from "@/platform/format";
@@ -51,6 +53,7 @@ export default async function CampaignsPage({
   params: Promise<{ orgId: string }>;
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  if (!revenueStudioEnabled()) notFound(); // page-level gate: layouts and pages render concurrently
   const { orgId } = await params;
   const sp = await searchParams;
   const one = (k: string) =>

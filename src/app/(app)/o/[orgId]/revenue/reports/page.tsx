@@ -1,3 +1,5 @@
+import { revenueStudioEnabled } from "@/platform/flags";
+import { notFound } from "next/navigation";
 import Link from "next/link";
 import { Badge, Button, Card, CardHeader } from "@/platform/ui";
 import { can } from "@/platform/authz";
@@ -29,6 +31,7 @@ export default async function ReportsPage({
   params: Promise<{ orgId: string }>;
   searchParams: Promise<{ from?: string; to?: string }>;
 }) {
+  if (!revenueStudioEnabled()) notFound(); // page-level gate: layouts and pages render concurrently
   const { orgId } = await params;
   const sp = await searchParams;
   const { resolved, t, locale } = await resolveRevenue(orgId, "crm.forecast.view");

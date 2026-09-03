@@ -1,3 +1,5 @@
+import { revenueStudioEnabled } from "@/platform/flags";
+import { notFound } from "next/navigation";
 import { Badge, Button, Card, CardHeader, EmptyState } from "@/platform/ui";
 import { can } from "@/platform/authz";
 import { formatDate } from "@/platform/format";
@@ -69,6 +71,7 @@ export default async function AutomationsPage({
   params: Promise<{ orgId: string }>;
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
+  if (!revenueStudioEnabled()) notFound(); // page-level gate: layouts and pages render concurrently
   const { orgId } = await params;
   const sp = await searchParams;
   const { resolved, t, locale } = await resolveRevenue(orgId, "crm.automations.manage");

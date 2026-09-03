@@ -1,3 +1,4 @@
+import { revenueStudioEnabled } from "@/platform/flags";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Badge, Button, Card, CardHeader, EmptyState } from "@/platform/ui";
@@ -54,6 +55,7 @@ export default async function RevenueCustomerPage({
   params: Promise<{ orgId: string; customerId: string }>;
   searchParams: Promise<{ ok?: string; error?: string }>;
 }) {
+  if (!revenueStudioEnabled()) notFound(); // page-level gate: layouts and pages render concurrently
   const { orgId, customerId } = await params;
   const sp = await searchParams;
   const { resolved, t, locale } = await resolveRevenue(orgId, "customers.view");

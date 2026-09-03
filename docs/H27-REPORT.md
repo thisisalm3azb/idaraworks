@@ -69,10 +69,12 @@ Everything is EN/AR with RTL, works at 375 px, and pages from the database.
 
 ## 3. Evidence
 
-### 3.1 Local gates (commit _pending_)
+### 3.1 Local gates (commit `58fa0f0` on `verify/h27`)
 
-Formatting, types, lint, unit (95 files / 1,466 tests incl. `crm-pure`,
-flags, registries, workspace laws), production build.
+Prettier, TypeScript (strict), ESLint (module boundaries), unit suite 95
+files / 1,466 tests (incl. `crm-pure`, flags, registries, export catalogue,
+i18n parity and the domain-noun law), production build with every
+`/revenue` route and the report API registered.
 
 ### 3.2 Integration on the TEST project (`zwnnqaryouevnzuwtyaj`)
 
@@ -88,9 +90,24 @@ Every suite creates marked organisations and wipes them (zero residue).
 
 ### 3.3 Headless UI walk (TEST fixture: 1,250 leads, 1,150 deals)
 
-_pending_ — desktop, Arabic (dir=rtl), 375 px, PDF bytes, pagination past
-1,000 rows with database-side totals, governed move, capture, quarantine
-review, dry run, merge preview, lazy canvas, fail-closed assistant.
+`h27-ui-shots.ts` against `dev-revenue-preview.mjs`, 46 captures in
+`.h27-shots/` (not committed): token-hash sign-in; command centre search
+opens a deal; pipeline total 1,062 open deals with column aggregates across
+the full result and page 2 served from the database; a governed move through
+the card's own select ("Move to Contacted … Moved") with the reason captured;
+leads total past 1,000 (1,255 after the walk's own capture), page 3, the
+quarantine queue, a quarantined lead trusted, a capture redirecting with
+"Lead captured"; every deal room tab incl. the lazy React Flow canvas mounted
+and the assistant reporting itself off; Customer 360 and a merge preview
+listing the records that would move; forecast with the model statement and
+disclaimer; campaigns, targets, success (band filter), automations dry run
+redirecting with the run summary, reports; the branded PDF (200,
+application/pdf, 65,658 bytes, 2 pages) in English and Arabic; Arabic pages
+`dir=rtl lang=ar`; 375 px captures of hub, pipeline, leads, deal, products,
+customer, success and forecast. The only residual note is a dev-server
+stale-chunk message during hot reloads; the mobile board's containment was
+confirmed directly in the browser at 375 px (document width 375, the board
+scrolling inside its own container) and is re-proven by the production walk.
 
 ### 3.4 CI on the exact commit
 
