@@ -127,7 +127,7 @@ export async function prepareDocument(
   ctx: Ctx,
   archetype: RoleArchetype,
   raw: unknown,
-  env: NodeJS.ProcessEnv = process.env,
+  env: Record<string, string | undefined> = process.env,
 ): Promise<PrepareResult> {
   assertCan(archetype, "country.manage");
   const input = PrepareInput.parse(raw);
@@ -235,7 +235,7 @@ export async function submitDocument(
   ctx: Ctx,
   archetype: RoleArchetype,
   documentId: string,
-  env: NodeJS.ProcessEnv = process.env,
+  env: Record<string, string | undefined> = process.env,
 ): Promise<SubmitResult> {
   assertCan(archetype, "country.manage");
 

@@ -16,7 +16,6 @@
  * (evidence log E7, truth map D2).
  */
 import type {
-  AdapterContext,
   EInvoiceAdapter,
   PreparedDocument,
   SourceDocument,
@@ -72,7 +71,7 @@ export const uaePeppolAdapter: EInvoiceAdapter = {
   model: "peppol_network",
   supports: ["tax_invoice", "tax_credit_note", "tax_debit_note"],
 
-  prepare(document, _ctx): PreparedDocument {
+  prepare(document): PreparedDocument {
     const issues = validate(document);
     const lines = document.lines
       .map(
@@ -117,7 +116,7 @@ export const uaePeppolAdapter: EInvoiceAdapter = {
     };
   },
 
-  async submit(_prepared, _ctx): Promise<SubmitOutcome> {
+  async submit(): Promise<SubmitOutcome> {
     return { state: "unavailable", ownerAction: UAE_OWNER_ACTION };
   },
 };

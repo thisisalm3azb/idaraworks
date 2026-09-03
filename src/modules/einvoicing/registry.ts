@@ -29,7 +29,7 @@ export function adaptersForCountry(country: string): EInvoiceAdapter[] {
  */
 export function credentialPresent(
   credentialRef: string | null | undefined,
-  env: NodeJS.ProcessEnv = process.env,
+  env: Record<string, string | undefined> = process.env,
 ): boolean {
   if (!credentialRef) return false;
   const value = env[credentialRef];

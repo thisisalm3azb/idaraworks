@@ -72,7 +72,7 @@ export const ConfigureChannelInput = z.object({
   stopReason: z.string().trim().max(500).nullable().optional(),
 });
 
-function rowOf(r: Record<string, unknown>, env: NodeJS.ProcessEnv): ChannelRow {
+function rowOf(r: Record<string, unknown>, env: Record<string, string | undefined>): ChannelRow {
   const ref = (r.credential_ref as string | null) ?? null;
   return {
     id: String(r.id),
@@ -100,7 +100,7 @@ const SELECT = sql`
 export async function listChannels(
   ctx: Ctx,
   establishmentId?: string,
-  env: NodeJS.ProcessEnv = process.env,
+  env: Record<string, string | undefined> = process.env,
 ): Promise<ChannelRow[]> {
   return withCtx(ctx, async (tx) => {
     const rows = (await tx.execute(sql`
@@ -115,7 +115,7 @@ export async function createChannel(
   ctx: Ctx,
   archetype: RoleArchetype,
   raw: unknown,
-  env: NodeJS.ProcessEnv = process.env,
+  env: Record<string, string | undefined> = process.env,
 ): Promise<ChannelRow> {
   assertCan(archetype, "country.manage");
   const input = CreateChannelInput.parse(raw);
@@ -171,7 +171,7 @@ export async function configureChannel(
   ctx: Ctx,
   archetype: RoleArchetype,
   raw: unknown,
-  env: NodeJS.ProcessEnv = process.env,
+  env: Record<string, string | undefined> = process.env,
 ): Promise<ChannelRow> {
   assertCan(archetype, "country.manage");
   const input = ConfigureChannelInput.parse(raw);
