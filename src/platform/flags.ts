@@ -102,8 +102,14 @@ export function idaraEnabled(): boolean {
 
 /**
  * H29 — the country-pack surfaces: establishments, the readiness centre, the
- * effective-date timeline, the rule impact simulator and the electronic-
- * invoicing channels. The ONLY enabled value is the exact string "1".
+ * effective-date timeline, the rule impact simulator, the electronic-invoicing
+ * channels and the operator language-release centre. The ONLY enabled value is
+ * the exact string "1".
+ *
+ * The language centre sits behind THIS flag and not behind FEATURE_LOCALE_ES on
+ * purpose: its job is to tell the owner whether a language is ready to offer, so
+ * gating it on the flag that offers the language would hide it exactly when it
+ * is needed.
  */
 export function countryPacksEnabled(): boolean {
   return process.env.FEATURE_COUNTRY_PACKS === "1";

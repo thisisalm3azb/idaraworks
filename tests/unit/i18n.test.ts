@@ -8,9 +8,15 @@ import { SUPPORTED_LOCALES } from "@/platform/registries";
 import en from "@/platform/i18n/messages/en.json";
 import ar from "@/platform/i18n/messages/ar.json";
 import es from "@/platform/i18n/messages/es.json";
+import arSame from "@/platform/i18n/messages/ar.same.json";
 import esSame from "@/platform/i18n/messages/es.same.json";
 
 const CATALOGS = { en, ar, es } as const;
+/** Every locale that is a TRANSLATION of English, with its recorded-identical list. */
+const TRANSLATED = [
+  ["ar", ar, arSame],
+  ["es", es, esSame],
+] as const;
 
 /**
  * The SET of ICU arguments a message declares. An ARGUMENT is a lowercase name
@@ -79,32 +85,38 @@ describe("catalog parity", () => {
     }
   });
 
-  it("es carries no English leakage (H29 — every key is translated or listed as identical)", () => {
-    // A Spanish value byte-identical to its English one is untranslated UNLESS a
-    // translator deliberately recorded it: product names, codes, punctuation and
-    // the handful of words Spanish shares with English ("Total", "Normal").
-    const allowed = new Set(esSame as string[]);
+  it("no translated locale carries English leakage (H29)", () => {
+    // A value byte-identical to its English one is untranslated UNLESS a
+    // translator deliberately recorded it: product names, standard acronyms,
+    // keyboard shortcuts, bare placeholders, and the handful of words the
+    // language shares with English ("Total", "Normal").
     const trivial = (value: string) =>
       value.trim().length === 0 || /^[\s\p{P}\p{S}\d]+$/u.test(value.trim());
-    const leaked: string[] = [];
-    for (const [key, source] of Object.entries(en as Record<string, string>)) {
-      const value = (es as Record<string, string>)[key];
-      if (value !== source) continue;
-      if (allowed.has(key) || trivial(value)) continue;
-      leaked.push(`${key} = "${value}"`);
+    for (const [locale, catalog, same] of TRANSLATED) {
+      const allowed = new Set(same as readonly string[]);
+      const leaked: string[] = [];
+      for (const [key, source] of Object.entries(en as Record<string, string>)) {
+        const value = (catalog as Record<string, string>)[key];
+        if (value !== source) continue;
+        if (allowed.has(key) || trivial(value)) continue;
+        leaked.push(`${key} = "${value}"`);
+      }
+      expect(leaked, `${locale} still English for ${leaked.length} key(s)`).toEqual([]);
     }
-    expect(leaked, `Spanish still English for ${leaked.length} key(s)`).toEqual([]);
   });
 
-  it("es.same.json only lists keys that really are identical", () => {
+  it("a *.same.json only lists keys that really are identical", () => {
     // Otherwise the allowlist could hide a later English regression: a key that
-    // was once legitimately identical, then edited in English only.
-    for (const key of esSame as string[]) {
-      expect(key in en, `es.same.json lists unknown key ${key}`).toBe(true);
-      expect(
-        (es as Record<string, string>)[key],
-        `es.same.json lists ${key}, but the Spanish now differs`,
-      ).toBe((en as Record<string, string>)[key]);
+    // was once legitimately identical, then edited in English only. The list
+    // then keeps excusing a value nobody has looked at since.
+    for (const [locale, catalog, same] of TRANSLATED) {
+      for (const key of same as readonly string[]) {
+        expect(key in en, `${locale}.same.json lists unknown key ${key}`).toBe(true);
+        expect(
+          (catalog as Record<string, string>)[key],
+          `${locale}.same.json lists ${key}, but the translation now differs`,
+        ).toBe((en as Record<string, string>)[key]);
+      }
     }
   });
 
