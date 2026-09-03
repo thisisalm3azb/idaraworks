@@ -265,15 +265,16 @@ instructions inside content are detected, that the evaluation dataset passes,
 that a narrowing custom agent can be created and a widening one refused, and
 that every operation left audit evidence.
 
-**One commit is merged but not deployed.** `9481e45` is green in CI and on
-`main`; the hosting plan's daily deployment limit (100 a day on the free plan)
-was reached before it could ship, and raising that limit is a purchase, so it
-was left alone. Its only difference from the live build is the wording of an
-owner action inside the release gate, on a path no one can reach while the flag
-is off: with the flag unset every surface returns not-found, so nothing renders
-that message. The production smoke above ran that merged code against the
-production database, which is why its twenty-seventh check passes. Deploy
-`main` when the limit resets, or let the next push do it.
+**The commits after it on `main` are merged and green in CI but not
+deployed.** They are a change to the wording of an owner action inside the
+release gate, and this documentation. The hosting plan allows a hundred
+deployments a day and that limit was reached before they could ship; raising it
+is a purchase, so it was left alone. The only code difference from the live
+build is that owner-action wording, and it sits on a path no one can reach
+while the flag is off: with the flag unset every surface returns not-found, so
+nothing renders the message. The production smoke above ran the merged code
+against the production database, which is why its twenty-seventh check passes.
+Deploy `main` when the limit resets, or let the next push do it.
 
 ## 4. Owner actions before paid AI can run
 
@@ -294,7 +295,7 @@ any model.
 | OA-8 | Provision Inngest keys, or set `CRON_SECRET` and point a scheduler at `/api/cron/idara`, if background runs and proactive briefings should execute. | Vercel production environment | Without either, queued runs and schedules simply never fire; nothing breaks. |
 | OA-9 | Review the model registry's privacy facts against your contract before enabling a model with an unavailable zero-retention or residency option. | `src/platform/ai/registry.ts` and the settings screen | Only your contract determines what a provider actually offers you. |
 | OA-10 | Decide whether the public homepage should say the agents are live once they are. Today it describes them without claiming either "available now" or "planned", and a unit test keeps both claims out. | `src/app/_home` and `docs/product/IDARAWORKS_BUSINESS_OS_NORTH_STAR.md` §7 | The north star forbids claiming live AI before it runs, and only you can say when it is. |
-| OA-11 | Deploy `main` once the hosting plan's daily deployment limit resets, so the merged `9481e45` reaches production. Nothing user-facing depends on it. | Vercel | Raising the limit is a purchase, and the deployment can simply wait. |
+| OA-11 | Deploy `main` once the hosting plan's daily deployment limit resets, so the merged commits after `a49ca12` reach production. Nothing user-facing depends on them. | Vercel | Raising the limit is a purchase, and the deployment can simply wait. |
 
 Voice, transcription, image and document-vision remain declared seams with no
 provider, no credential and no code path that could call one. Nothing was
