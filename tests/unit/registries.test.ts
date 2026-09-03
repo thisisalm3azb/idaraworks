@@ -67,6 +67,8 @@ describe("registries (phase2 closed vocabularies)", () => {
         "scenario_apply",
         // H26: each step of a document workflow run is its own subject.
         "document_step",
+        // H28: a material action proposed by an agent needs a second person.
+        "ai_action",
       ].sort(),
     );
     // invoice_issue is explicitly OUT of the MVP enum (audit C-1)

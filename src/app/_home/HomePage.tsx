@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Icon, type IconName } from "@/platform/ui";
 import { getT, getServerLocale } from "@/platform/i18n/server";
 import { directionFor } from "@/platform/i18n";
-import { AGENT_IDS, type AgentId } from "@/platform/agents/registry";
+import { SHOWCASE_AGENT_IDS, type ShowcaseAgentId } from "@/platform/agents/registry";
 import { AgentShowcase, type AgentVM } from "./AgentShowcase";
 import { BusinessOS } from "./BusinessOS";
 import { BusinessPassport } from "./BusinessPassport";
@@ -35,7 +35,7 @@ const LOGIN = LOGIN_HREF;
  * are produced (see PORTRAIT_ASSETS in AgentShowcase.tsx for the swap point).
  */
 const AGENT_INK = "#EFECE2";
-const AGENT_VISUALS: Record<AgentId, { monogram: string; icon: IconName; bg: string }> = {
+const AGENT_VISUALS: Record<ShowcaseAgentId, { monogram: string; icon: IconName; bg: string }> = {
   manager: { monogram: "M", icon: "grid", bg: "#0B5348" },
   executive: { monogram: "EX", icon: "building", bg: "#2E3B36" },
   operations: { monogram: "OP", icon: "briefcase", bg: "#145C50" },
@@ -48,7 +48,7 @@ const AGENT_VISUALS: Record<AgentId, { monogram: string; icon: IconName; bg: str
   planning_analytics: { monogram: "PL", icon: "trendUp", bg: "#1F4D5A" },
 };
 
-function agentVM(id: AgentId, t: (k: string) => string): AgentVM {
+function agentVM(id: ShowcaseAgentId, t: (k: string) => string): AgentVM {
   const v = AGENT_VISUALS[id];
   return {
     id,
@@ -198,7 +198,9 @@ export async function HomePage({ workspaceHref }: { workspaceHref: string | null
           />
           <AgentShowcase
             manager={agentVM("manager", t)}
-            specialists={AGENT_IDS.filter((id) => id !== "manager").map((id) => agentVM(id, t))}
+            specialists={SHOWCASE_AGENT_IDS.filter((id) => id !== "manager").map((id) =>
+              agentVM(id, t),
+            )}
             labels={{
               evidence: t("home.agents.evidence"),
               approval: t("home.agents.approval"),

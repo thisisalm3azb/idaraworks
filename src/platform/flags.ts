@@ -89,3 +89,13 @@ export function documentStudioEnabled(): boolean {
 export function revenueStudioEnabled(): boolean {
   return process.env.FEATURE_REVENUE_STUDIO === "1";
 }
+
+/**
+ * H28 — Idara Intelligence: the dock, the deep workspace, settings, the
+ * operator centre, the run stream and cron routes. The ONLY enabled value is
+ * the exact string "1". Provider availability, the organisation policy, agent
+ * state and the global stop are separate controls behind this gate.
+ */
+export function idaraEnabled(): boolean {
+  return process.env.FEATURE_IDARA_INTELLIGENCE === "1";
+}

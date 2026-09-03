@@ -15,6 +15,8 @@ import en from "@/platform/i18n/messages/en.json";
 import ar from "@/platform/i18n/messages/ar.json";
 import {
   AGENT_IDS,
+  ACTIVE_AGENT_IDS,
+  resolveAgentId,
   AGENT_TOOLS,
   AGENT_TOOL_ALLOW,
   ACTION_CLASSES,
@@ -411,8 +413,10 @@ describe("A1 — output integrity", () => {
 });
 
 describe("A1 — registry coherence and public truth", () => {
-  it("all ten H11 agents and six classes exist; allow-lists reference real tools", () => {
-    expect(AGENT_IDS).toHaveLength(10);
+  it("the ten H11 agents, the five H28 agents and six classes exist; allow-lists reference real tools", () => {
+    expect(AGENT_IDS).toHaveLength(15);
+    expect(ACTIVE_AGENT_IDS).toHaveLength(14);
+    expect(resolveAgentId("manager")).toBe("idara");
     expect(ACTION_CLASSES).toHaveLength(6);
     for (const [agent, tools] of Object.entries(AGENT_TOOL_ALLOW)) {
       expect(AGENT_IDS as readonly string[]).toContain(agent);

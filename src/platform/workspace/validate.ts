@@ -10,7 +10,13 @@
  */
 import { MATRIX, type Action } from "@/platform/authz";
 import { can } from "@/platform/authz";
-import { AGENT_TOOL_ALLOW, isAgentToolId, A1_SUPPORTED_CLASSES } from "@/platform/agents/registry";
+import {
+  AGENT_DEFS,
+  AGENT_TOOL_ALLOW,
+  A1_SUPPORTED_CLASSES,
+  isAgentToolId,
+  resolveAgentId,
+} from "@/platform/agents/registry";
 import { WorkspaceBlueprintSchema, type WorkspaceBlueprint } from "./blueprint";
 import {
   MODULE_INFO,
@@ -331,6 +337,13 @@ export function validateBlueprint(raw: unknown): BlueprintValidation & {
       });
     }
     seenAgents.add(agent.agentId);
+    if (AGENT_DEFS[agent.agentId].status === "retired") {
+      warnings.push({
+        code: "agent_retired",
+        path: `agents.${ai}.agentId`,
+        message: `agent ${agent.agentId} is retired and resolves to ${resolveAgentId(agent.agentId)}`,
+      });
+    }
     const allow = AGENT_TOOL_ALLOW[agent.agentId];
     for (const domain of agent.readDomains) {
       if (!isAgentToolId(domain) || !(allow as readonly string[]).includes(domain)) {

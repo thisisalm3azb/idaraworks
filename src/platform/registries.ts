@@ -54,6 +54,7 @@ export const APPROVABLE_TYPES = [
   "scenario_apply", // H25 — applying a scenario to live records (studio checks the state itself)
   "document_step",
   "crm_discount", // H27 — a commercial exception (discount) needs a second person // H26 — one step of a document workflow run; the run advances in afterDecide
+  "ai_action", // H28 — a material action proposed by an agent needs a second person before it may execute
   // P3 (with QC): "stage_signoff", "qc_delivery_override"
 ] as const;
 export type ApprovableType = (typeof APPROVABLE_TYPES)[number];
@@ -85,6 +86,7 @@ export const ATTACHABLE_TYPES = [
   "studio_node", // H25 — evidence and documents attach to canvas nodes
   "studio_scenario", // H25G — decision evidence attaches to a scenario; its lifecycle shows in activity
   "document", // H26 — supporting papers and signed scans attach to an authored document
+  "ai_conversation", // H28 — files a person chose to share with the Idara Dock (existing file rows only)
 ] as const;
 export type AttachableType = (typeof ATTACHABLE_TYPES)[number];
 
@@ -171,6 +173,17 @@ export const AUDIT_ENTITY_TYPES = [
   "crm_deal_canvas",
   "customer_contact",
   "document_obligation",
+  // H28 — Idara Intelligence
+  "ai_conversation",
+  "ai_run",
+  "ai_action",
+  "ai_agent",
+  "ai_memory",
+  "ai_schedule",
+  "ai_entitlement",
+  "ai_privacy_register",
+  "ai_byok_key",
+  "ai_saved_output",
 ] as const;
 export type AuditEntityType = (typeof AUDIT_ENTITY_TYPES)[number];
 
@@ -283,5 +296,9 @@ export const NOTIFICATION_KINDS = [
   "crm_discount_requested",
   "crm_customer_at_risk",
   "crm_renewal_due",
+  // H28 — Idara pushes (titles and references only; never amounts or model text).
+  "idara_alert",
+  "idara_action_waiting",
+  "idara_run_finished",
 ] as const;
 export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];

@@ -27,7 +27,7 @@ import { describe, expect, it } from "vitest";
 import { t } from "@/platform/i18n";
 import en from "@/platform/i18n/messages/en.json";
 import ar from "@/platform/i18n/messages/ar.json";
-import { AGENT_IDS } from "@/platform/agents/registry";
+import { SHOWCASE_AGENT_IDS } from "@/platform/agents/registry";
 import {
   AgentShowcase,
   PORTRAIT_ASSETS,
@@ -63,7 +63,7 @@ function renderShowcase(tt: (k: string) => string) {
   return renderToStaticMarkup(
     h(AgentShowcase, {
       manager: vm("manager", tt),
-      specialists: AGENT_IDS.filter((id) => id !== "manager").map((id) => vm(id, tt)),
+      specialists: SHOWCASE_AGENT_IDS.filter((id) => id !== "manager").map((id) => vm(id, tt)),
       labels: {
         evidence: tt("home.agents.evidence"),
         approval: tt("home.agents.approval"),
@@ -79,7 +79,7 @@ const htmlAr = renderShowcase(tAr);
 
 describe("H13 — canonical agents", () => {
   it("the registry set is the ten canonical agents", () => {
-    expect([...AGENT_IDS].sort()).toEqual(
+    expect([...SHOWCASE_AGENT_IDS].sort()).toEqual(
       [
         "executive",
         "operations",
@@ -96,7 +96,7 @@ describe("H13 — canonical agents", () => {
   });
 
   it("every canonical agent has name, role, outcome and question in both catalogs", () => {
-    for (const id of AGENT_IDS) {
+    for (const id of SHOWCASE_AGENT_IDS) {
       for (const part of ["name", "role", "outcome", "q"] as const) {
         const key = `home.agents.${id}.${part}`;
         expect(key in en, `en missing ${key}`).toBe(true);
@@ -114,7 +114,7 @@ describe("H13 — canonical agents", () => {
       [htmlEn, tEn],
       [htmlAr, tAr],
     ] as const) {
-      for (const id of AGENT_IDS) {
+      for (const id of SHOWCASE_AGENT_IDS) {
         // React escapes apostrophes in text (&#x27;) — match the markup form.
         const esc = (s: string) => s.replace(/'/g, "&#x27;");
         const name = esc(tt(`home.agents.${id}.name`));
@@ -126,9 +126,9 @@ describe("H13 — canonical agents", () => {
   });
 
   it("HomePage builds the showcase from the canonical registry, not a hand list", () => {
-    expect(homeSrc).toContain('AGENT_IDS.filter((id) => id !== "manager")');
+    expect(homeSrc).toContain('SHOWCASE_AGENT_IDS.filter((id) => id !== "manager")');
     expect(homeSrc).toContain('agentVM("manager", t)');
-    expect(homeSrc).toMatch(/Record<AgentId, \{ monogram: string; icon: IconName; bg: string \}>/);
+    expect(homeSrc).toMatch(/Record<ShowcaseAgentId, \{ monogram: string; icon: IconName; bg: string \}>/);
   });
 });
 
@@ -138,7 +138,7 @@ describe("H13 — the Manager Agent is the center", () => {
     const iRecord = htmlEn.indexOf(tEn("home.agents.record"));
     expect(iManager).toBeGreaterThan(-1);
     expect(iRecord).toBeGreaterThan(iManager);
-    for (const id of AGENT_IDS.filter((x) => x !== "manager")) {
+    for (const id of SHOWCASE_AGENT_IDS.filter((x) => x !== "manager")) {
       expect(htmlEn.indexOf(tEn(`home.agents.${id}.name`))).toBeGreaterThan(iRecord);
     }
   });
@@ -271,18 +271,18 @@ function webpDimensions(buf: Buffer): { width: number; height: number } {
 
 describe("H13.1 — the installed portrait system", () => {
   it("every canonical agent has a manifest entry, no nulls, no duplicate paths", () => {
-    expect(Object.keys(PORTRAIT_ASSETS).sort()).toEqual([...AGENT_IDS].sort());
-    const paths = AGENT_IDS.map((id) => PORTRAIT_ASSETS[id]);
+    expect(Object.keys(PORTRAIT_ASSETS).sort()).toEqual([...SHOWCASE_AGENT_IDS].sort());
+    const paths = SHOWCASE_AGENT_IDS.map((id) => PORTRAIT_ASSETS[id]);
     for (const [i, p] of paths.entries()) {
-      expect(p, `${AGENT_IDS[i]} portrait missing from manifest`).toBe(
-        `/agents/${AGENT_IDS[i]}.webp`,
+      expect(p, `${SHOWCASE_AGENT_IDS[i]} portrait missing from manifest`).toBe(
+        `/agents/${SHOWCASE_AGENT_IDS[i]}.webp`,
       );
     }
-    expect(new Set(paths).size).toBe(AGENT_IDS.length);
+    expect(new Set(paths).size).toBe(SHOWCASE_AGENT_IDS.length);
   });
 
   it("every referenced production file exists, 640x800 4:5, under the 120KB budget", () => {
-    for (const id of AGENT_IDS) {
+    for (const id of SHOWCASE_AGENT_IDS) {
       const file = fileURLToPath(new URL(`../../public/agents/${id}.webp`, import.meta.url));
       expect(existsSync(file), `public/agents/${id}.webp missing`).toBe(true);
       const buf = readFileSync(file);
@@ -333,7 +333,7 @@ describe("H13.1 — the installed portrait system", () => {
     expect(portraitDoc).toMatch(/stock photography/i);
     expect(portraitDoc).toMatch(/public\/agents\/\{agentId\}\.webp/);
     expect(portraitDoc).toMatch(/PORTRAIT_ASSETS/);
-    for (const id of AGENT_IDS) {
+    for (const id of SHOWCASE_AGENT_IDS) {
       expect(portraitDoc).toContain(`\`${id}\``);
     }
   });

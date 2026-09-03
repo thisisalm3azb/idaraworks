@@ -17,6 +17,7 @@ import {
   managementStudioEnabled,
   documentStudioEnabled,
   revenueStudioEnabled,
+  idaraEnabled,
 } from "@/platform/flags";
 
 /** H26 — the Document Studio gate obeys exactly the same law. */
@@ -178,5 +179,31 @@ describe("the Management Studio release gate", () => {
   it("is on for exactly one value", () => {
     process.env.FEATURE_MANAGEMENT_STUDIO = "1";
     expect(managementStudioEnabled()).toBe(true);
+  });
+});
+
+/** H28 — the Idara Intelligence gate obeys exactly the same law. */
+describe("the idara intelligence release gate", () => {
+  const orig = process.env.FEATURE_IDARA_INTELLIGENCE;
+  afterEach(() => {
+    if (orig === undefined) delete process.env.FEATURE_IDARA_INTELLIGENCE;
+    else process.env.FEATURE_IDARA_INTELLIGENCE = orig;
+  });
+
+  it("is off when nothing is set", () => {
+    delete process.env.FEATURE_IDARA_INTELLIGENCE;
+    expect(idaraEnabled()).toBe(false);
+  });
+
+  it("is off for every near-miss spelling", () => {
+    for (const value of ["", "0", "false", "true", "yes", "on", "1 ", " 1", "TRUE"]) {
+      process.env.FEATURE_IDARA_INTELLIGENCE = value;
+      expect(idaraEnabled(), `"${value}" turned the dock on`).toBe(false);
+    }
+  });
+
+  it("is on for exactly one value", () => {
+    process.env.FEATURE_IDARA_INTELLIGENCE = "1";
+    expect(idaraEnabled()).toBe(true);
   });
 });

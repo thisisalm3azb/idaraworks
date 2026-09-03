@@ -155,6 +155,51 @@ inventory of existing models, the transition seams, the research consulted and t
 (ADR-32 onward) before code changes; the completion report (`docs/H27-REPORT.md`) records the
 shipped commit, migrations, evidence and the exact owner actions for provider-backed capabilities.
 
+## 7. Owner product direction — **2026-09-03** (approved; implementation begins with H28)
+
+Recorded verbatim in intent; the full mandate text is held in `docs/H28-TRUTH-MAP.md` Part B.
+The north star keeps its stage list and status column as adopted; this entry records what the
+Owner approved on 2026-09-03.
+
+**H28 — Idara Intelligence: Multi-Agent Platform and Governed Automation.** Build a
+state-of-the-art AI agent platform across IdaraWorks: an ambient, trusted intelligence layer (the
+**Idara Dock**, mounted in the authenticated shell, never in the navigation sidebar) that follows
+people through their work, understands the page and record they are viewing, calls governed
+specialists when required, explains its evidence and turns intentions into reviewed outcomes.
+
+Binding rules carried from the mandate:
+
+1. **Reuse, never compete.** The H12 agent substrate (`src/platform/agents`), the approval engine,
+   the H27 automation engine and workers, notifications, the command palette, the permission
+   service, entitlements and the audit command path are extended additively; no parallel approval,
+   automation, audit or notification engine.
+2. **The H11 agent contract is amended, not replaced.** Idara becomes the orchestrator (the
+   `manager` id is retired and resolved to `idara`); the ten canonical specialists remain and four
+   domains are added (customer success, tax, document and contract, organisation administration);
+   every agent carries the governance fields the mandate lists; delegation is bounded, traced and
+   cost-limited. The public homepage showcase keeps the H13 canonical set and its "planned"
+   wording until the Owner refreshes public copy (recorded divergence).
+3. **One server-side provider-neutral gateway** with registries, an effective-dated price book,
+   metering, budgets, kill switches and deterministic providers for tests; keys stay server-side;
+   no vendor lock-in; no failover claim without adapter-boundary tests.
+4. **No provider means fail closed.** No credentials exist; nothing is invented or purchased; the
+   platform ships behind `FEATURE_IDARA_INTELLIGENCE` (strict `"1"`) with provider availability,
+   organisation entitlement, agent state and a global stop as separate controls.
+5. **Grounding, risk classes, previews, confirmation, idempotency, drift refusal and human control**
+   as enumerated in the mandate; the platform never approves its own work, signs, files, releases,
+   posts, finalises payroll, hires or dismisses, changes permissions, sends campaigns, deletes
+   history or hides uncertainty.
+6. **Metering before any paid model; credits separate from tokens; no charging** until the payment
+   provider, legal setup, pricing and tax treatment exist.
+7. **Untouched matters.** Historical accounting, the H24 transition ambiguities, PO-002, the deferred
+   H22 stock-posting issue, real pricing and payments, provider contracts, production secrets and
+   genuine production data; H29 is not begun.
+
+**Implementation gate:** the H28 truth map (`docs/H28-TRUTH-MAP.md`) records the baseline, the
+inventory, the seams, the research consulted and the decisions (ADR-49 onward) before code changes;
+the completion report (`docs/H28-REPORT.md`) records the shipped commit, migrations, evidence, the
+exact live/disabled state and every owner action required before paid AI can be enabled.
+
 ## 5. Amendment log (this document, append-only)
 
 | Date | Entry | Approved |
@@ -162,3 +207,4 @@ shipped commit, migrations, evidence and the exact owner actions for provider-ba
 | 2026-08-26 | Document created: post-freeze implementation record (§1), divergence register (§2), owner directions recorded pending implementation (§3). Baseline audit at commit `d9c884c` accepted by owner. | Owner |
 | 2026-08-27 | §4 added: universal document/export contract, core document identity, canonical issuer model, historical-integrity rule, interaction-audit decisions D1–D8 ruled. Interaction Completeness Audit accepted (its §12 carries the full amendment). Implementation begins with microstep 003B.1. | Owner |
 | 2026-09-02 | §6 added: H27 CRM and Revenue Growth Studio approved as the next phase (reuse-first over the H19/H20 customer, lead, opportunity, pipeline and activity models; governed stage moves; idempotent conversion; consent as law; explainable forecasts; governed automation and fail-closed AI; `FEATURE_REVENUE_STUDIO`). North star status column intentionally left as adopted. | Owner |
+| 2026-09-03 | §7 added: H28 Idara Intelligence approved (ambient Idara Dock in the shell; Idara orchestrator with governed specialists over the H12 substrate; provider-neutral gateway with metering, credits and kill switches; fail-closed without credentials; flag `FEATURE_IDARA_INTELLIGENCE`; untouched matters restated). Public showcase divergence recorded. | Owner |

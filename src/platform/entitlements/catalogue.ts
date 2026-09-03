@@ -50,6 +50,10 @@ export const FEATURE_KEYS = [
   // capability (H27): the CRM and Revenue Growth Studio — seeded enabled on
   // every plan (0120); release-gated by FEATURE_REVENUE_STUDIO until verified.
   "cap.revenue_studio",
+  // capability (H28): Idara Intelligence presence (dock, settings) — seeded
+  // enabled on every plan (0128); release-gated by FEATURE_IDARA_INTELLIGENCE and
+  // by the organisation AI policy (ai_entitlement), never by this key alone.
+  "cap.idara",
   // behaviour
   "feat.ai_onboarding",
   "feat.ai_narration",
@@ -125,6 +129,7 @@ export const FREE_PLAN_FEATURES: readonly FeatureKey[] = [
   "cap.studio",
   "cap.documents",
   "cap.revenue_studio",
+  "cap.idara",
   "feat.ai_onboarding",
   "feat.ai_drafts",
   "feat.custom_fields",

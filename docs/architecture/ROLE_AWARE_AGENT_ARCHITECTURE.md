@@ -185,3 +185,49 @@ Each block lists only agent-specific bounds; §4 applies to all.
 - Evaluation before launch: injection resistance (law 16), redaction
   resistance (law 5), refusal correctness (PROHIBITED class), citation
   fidelity (law 6), bilingual quality.
+
+## 8. H28 amendment (owner mandate 2026-09-03, `phase2/14` §7)
+
+This section amends §5–§7 for the Idara Intelligence platform. Laws 1–17 and
+the classification of §3 are unchanged; the runtime shape below implements
+them.
+
+- **Orchestrator.** The `manager` agent is retired and replaced by **Idara**
+  (`idara`): the one front door people talk to. It routes and delegates
+  transparently, names the answering agent and every contributor, and holds
+  exactly the acting user's authority (§6 unchanged).
+- **Specialists.** The nine H11 specialists stay, with display names aligned to
+  the mandate (Project and Planning, Sales and Revenue, HR and Payroll, Data
+  and Reporting, Operations, Inventory and Purchasing, Accounting, Finance,
+  Executive). Four domains are added: **Customer Success** (retention,
+  renewal, health evidence; no automatic outreach), **Tax** (explains the
+  configured tax pack and working papers, cites the pack version, never
+  files), **Document and Contract** (summarises and compares governed
+  documents, cites clauses, drafts amendments; never signs or issues) and
+  **Organisation Administration** (explains configuration, members and
+  entitlements; never changes permissions or subscriptions).
+- **Governance fields.** Every agent carries purpose, owner, version,
+  instruction file, permitted knowledge domains, permitted tools, capability
+  class (read, draft, action), required permissions, approval requirements,
+  cost class, data-sensitivity class, enabled state (platform default and
+  per-organisation), evaluation version, change history and, when retired, its
+  replacement. Retired ids remain parseable so stored configuration keeps
+  working and resolve to the replacement.
+- **Tools by risk class.** 1 read-only, 2 draft or proposal, 3 reversible
+  change, 4 material business action, 5 restricted. Classes 3 and 4 always
+  show a preview and require an explicit confirmation that is re-checked
+  server-side; class 4 also runs through the existing approval engine with
+  separation of duties; class 5 has no handler by construction (laws 9–12, 17).
+- **Delegation.** Bounded (depth ≤ 2, ≤ 4 children per run, tool-call and
+  cost caps), traced as a parent/child run graph, never to an ancestor agent
+  or a repeated request; a child never widens authority.
+- **Gateway.** One server-side, provider-neutral gateway meters every call
+  (organisation, user, agent, run, provider, model, token categories, cost
+  estimate with the effective-dated price book, credits, budget decision) and
+  fails closed without a configured provider. Public copy stays "planned"
+  until a real production provider runs behind the tested capability flag.
+- **Memory.** Explicit and governed: preferences and organisation knowledge
+  are separate from conversation context, agent instructions, business
+  records and task state; nothing is remembered silently.
+
+Decisions and evidence: `docs/H28-TRUTH-MAP.md` (ADR-49 onward).
