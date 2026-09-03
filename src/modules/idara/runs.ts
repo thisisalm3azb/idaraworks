@@ -827,7 +827,10 @@ async function executeAgent(
       // Cited records first, then every other record the run consulted: the
       // person always sees the evidence base, not only what the model cited.
       const cited = new Set(evidence.map((e) => `${e.type}:${e.id}`));
-      outcome.evidence = [...evidence, ...[...outcome.consulted.values()].filter((r) => !cited.has(`${r.type}:${r.id}`))];
+      outcome.evidence = [
+        ...evidence,
+        ...[...outcome.consulted.values()].filter((r) => !cited.has(`${r.type}:${r.id}`)),
+      ];
       outcome.resultKind = (finalAnswer.resultKind ??
         (finalAnswer.kind as ResultKind) ??
         (outcome.actions.length ? "proposed_action" : "answer")) as ResultKind;

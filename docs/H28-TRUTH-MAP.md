@@ -250,4 +250,45 @@ Sources: developers.openai.com/api/docs/guides/your-data; privacy.claude.com art
 
 ## Part G — What was built (implementation record)
 
-_pending._
+### G.1 Migrations
+
+| File | What it adds |
+| --- | --- |
+| `0128_h28a_intelligence_foundation.sql` | `platform_operator` and its assertions, `platform_audit`, the extended `ai_interaction` ledger (agent, conversation, run, step, model version, cache and reasoning tokens, tool calls, provider request id, latency, retries, estimated and actual cost, price-book row, credits, rate source, budget decision, purpose, error) with a widened feature check, `ai_provider_state` and `ai_model_state` with `app.ai_provider_report` (five failures open a five-minute breaker), the effective-dated `ai_price_book` seeded from the published list prices with their source URLs, `ai_credit_policy`, `ai_kill_switch`, `ai_entitlement` (append-only policy versions), `ai_credit_ledger`, `ai_privacy_register`, `ai_byok_key` (ciphertext columns not granted to `app_user`; `app.ai_byok_ciphertext` reads them for the current organisation only), the operator definer functions (kill switch, provider and model state, price book, entitlement, credit grant, usage, usage rows, organisations) and the `cap.idara` entitlement on every plan. |
+| `0129_h28b_conversations_runs_actions.sql` | `ai_conversation` and `ai_message` (private to the person: org AND user), `ai_run` (parent, root, depth, plan, route, credits, cancel, idempotency) and `ai_run_step`, `ai_action` (risk class, preview, record versions, status machine, approval link, idempotency key, expiry), `ai_memory` (scope user or org, live-unique key), `ai_agent` and `ai_agent_version` (immutable snapshots with evaluation evidence), `ai_agent_state`, `ai_saved_output`, `ai_schedule` and `ai_schedule_pref`, the `ai_action` approval subject on `approval` and `approval_rule`, and the platform discovery functions `app.ai_queued_runs` and `app.orgs_with_ai_schedules`. |
+
+Every new table carries `org_id` and RLS except the global registries and the operator tables; no table has a DELETE grant; history tables (`ai_entitlement`, `ai_credit_ledger`, `ai_agent_version`, `ai_message`, `ai_interaction`) have no UPDATE grant either.
+
+### G.2 Platform substrate (`src/platform/ai`)
+
+- `registry.ts` — closed provider and model registries with capability, context, cost class, status and per-model privacy facts, each carrying the source URL and fetch date; task classes with the tier they require and whether they may run lower.
+- `adapters/` — one request and response shape (`types.ts`), the disabled adapter, the deterministic test adapter with failure markers, and fetch-only OpenAI (Responses) and Anthropic (Messages) adapters that talk to one host each, map every failure class, and never place a key in a body.
+- `pricebook.ts` — effective-dated lookups and exact integer cost estimation, rounded up per category; credits from the effective credit policy; no currency conversion.
+- `budget.ts` — the organisation policy, the allowance computed in the database, the switch state and the one ordered `decideBudget`.
+- `gateway.ts` — `invokeModel`: size limits, per-organisation availability, routing with recorded reasons, the budget decision, the adapter call with timeout, cancellation and one idempotent retry, response validation, metering of success, failure and denial, and the breaker report. Denials and failures are metered inside their transaction and thrown after it commits.
+- `metering.ts` — one `ai_interaction` row per call plus the credit-ledger row and the billing meter (deduplicated by interaction id).
+- `byok.ts` — AES-256-GCM encryption under `AI_BYOK_KEK`; fails closed without it.
+- `gate.ts` — `idaraGateFor`: flag, organisation policy, switches, provider availability, allowance; `agentsEnabled` (H12) now resolves through it, so the H25, H26 and H27 seams follow the same law.
+- `privacy.ts`, `operator.ts`, `prompts/`, `evals/dataset.v1.json`.
+
+### G.3 The Idara module (`src/modules/idara`)
+
+`service.ts` is the door. Inside: conversations and messages, the run engine (plan, context tools, model turns with a strict tool channel, validation, delegation, merge, provenance), the tool registry (37 tools: 24 read, 3 change, 9 restricted with no handler and one draft-class placeholder), actions (preview, confirm, approve, execute, drift, replay), memory, custom agents with versions and the narrowing law, proactive schedules, the queue executor and the evaluation runner.
+
+### G.4 Surfaces
+
+The dock mount in the authenticated shell, the launcher island, the working window, the deep workspace route, the contextual "Ask Idara" menu on customer, deal and document pages, the palette entries, the organisation AI settings, the agent builder, and the operator economics centre at `/platform/ai`.
+
+### G.5 Tests and evidence
+
+_pending: filled from the run results._
+
+### G.6 Honest limits
+
+- No AI provider is configured in production; every provider-dependent capability is unavailable and says so with the exact owner action.
+- The OpenAI and Anthropic adapters are contract-tested against recorded shapes with a fake fetch. They have never been run against the live endpoints, so provider failover is proven only at the adapter boundary.
+- Provider-reported cost is recorded only when a provider returns it; today neither returns it inline, so the ledger keeps the estimate and says so.
+- Voice, transcription, image and spreadsheet understanding are declared seams with no provider and no code path that could call one.
+- Charging is not enabled: credits are internal units, the billing adapter records intent only, and no revenue or margin is claimed anywhere.
+- Semantic search and embeddings were deliberately not built: retrieval is structured through the module doors, which keeps tenant isolation and citation ground truth exact.
+- Inngest is not configured in production, so the background run executor and the schedule sweep only run through the authenticated cron route once its secret is set.

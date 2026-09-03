@@ -36,6 +36,12 @@ export {
 } from "./runs";
 export { executeQueuedIdaraRuns, type IdaraRunSweep } from "./queue";
 export {
+  runAgentEvaluation,
+  EVAL_THRESHOLDS,
+  type EvalRunOutcome,
+  type EvalCategoryResult,
+} from "./evals";
+export {
   createCustomAgent,
   getCustomAgent,
   listCustomAgents,

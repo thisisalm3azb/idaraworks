@@ -23,6 +23,7 @@ import {
   validateDraft,
   CustomAgentDraftSchema,
   AGENT_TEMPLATES,
+  runAgentEvaluation,
 } from "@/modules/idara/service";
 
 const base = (orgId: string) => `/o/${orgId}/settings/ai/agents`;
@@ -109,7 +110,6 @@ export async function publishAgentAction(orgId: string, id: string): Promise<voi
     if (!v.ok) throw v.error;
     // The evaluation runner: the safety categories the platform enforces for
     // every agent version, executed here against the deterministic pipeline.
-    const { runAgentEvaluation } = await import("@/platform/ai/evals/run");
     const outcome = await runAgentEvaluation(row.baseAgentId, row.draft);
     await publishCustomAgent(r.ctx, r.archetype, id, outcome);
   } catch (e) {

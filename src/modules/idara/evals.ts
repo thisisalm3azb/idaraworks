@@ -8,10 +8,12 @@
  * the outcome (version, pass, per-category detail) is stored on the version
  * as evidence.
  */
-import dataset from "./dataset.v1.json";
-import { deterministicAdapter } from "../adapters/deterministic";
-import { AI_MODELS } from "../registry";
-import { decideBudget, DEFAULT_POLICY, type BudgetFacts } from "../budget";
+import dataset from "@/platform/ai/evals/dataset.v1.json";
+import { deterministicAdapter } from "@/platform/ai/adapters/deterministic";
+import { AI_MODELS, decideBudget, DEFAULT_POLICY, type BudgetFacts } from "@/platform/ai";
+import { detectSuspicious, redactForModel } from "./injection";
+import { classifyIntent } from "./orchestrator";
+import { getTool, toolWithheldReason } from "./tools/registry";
 
 export type EvalCategoryResult = {
   category: string;
@@ -79,16 +81,13 @@ function budgetFacts(f: Record<string, unknown>): BudgetFacts {
 
 /**
  * Score one case. Imports of the Idara module happen lazily so this file stays
- * usable from the platform layer.
+ * pure over the module s own pieces (the dataset is data in the platform layer).
  */
 async function score(
   c: Case,
   allowedTools: readonly string[],
   instructions: string,
 ): Promise<boolean> {
-  const { detectSuspicious, redactForModel } = await import("@/modules/idara/injection");
-  const { classifyIntent } = await import("@/modules/idara/orchestrator");
-  const { getTool, toolWithheldReason } = await import("@/modules/idara/tools/registry");
   switch (c.category) {
     case "injection": {
       const flagged = detectSuspicious(String(c.text), c.id).length > 0;
