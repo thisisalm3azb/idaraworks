@@ -20,6 +20,8 @@ import {
   adoptPack,
   CountryError,
   createEstablishment,
+  reviewPrivacyEntry,
+  setPrivacyEntry,
   setRegistration,
   updateEstablishment,
 } from "@/modules/country/service";
@@ -133,6 +135,53 @@ export async function setRegistrationAction(
   }
   revalidatePath(`/o/${orgId}/settings/countries/${establishmentId}`);
   redirect(`/o/${orgId}/settings/countries/${establishmentId}?notice=registration`);
+}
+
+/**
+ * Record one data category in the establishment's privacy register.
+ *
+ * Editing an entry clears its review inside the module: someone read the old
+ * wording, not the new one.
+ */
+export async function setPrivacyEntryAction(
+  orgId: string,
+  establishmentId: string,
+  fd: FormData,
+): Promise<void> {
+  const { ctx, archetype } = await resolve(orgId);
+  try {
+    await setPrivacyEntry(ctx, archetype, {
+      establishmentId,
+      dataCategory: str(fd, "dataCategory"),
+      purpose: str(fd, "purpose"),
+      provider: str(fd, "provider") ?? null,
+      processingRegion: str(fd, "processingRegion") ?? null,
+      retention: str(fd, "retention") ?? null,
+      crossBorder: fd.get("crossBorder") === "on",
+      transferBasis: str(fd, "transferBasis") ?? null,
+      lawfulBasis: str(fd, "lawfulBasis") ?? null,
+    });
+  } catch (e) {
+    fail(orgId, `/${establishmentId}`, e);
+  }
+  revalidatePath(`/o/${orgId}/settings/countries/${establishmentId}`);
+  redirect(`/o/${orgId}/settings/countries/${establishmentId}?notice=privacy`);
+}
+
+/** Mark one privacy entry as read by a person, with who and when. */
+export async function reviewPrivacyEntryAction(
+  orgId: string,
+  establishmentId: string,
+  fd: FormData,
+): Promise<void> {
+  const { ctx, archetype } = await resolve(orgId);
+  try {
+    await reviewPrivacyEntry(ctx, archetype, str(fd, "entryId") ?? "");
+  } catch (e) {
+    fail(orgId, `/${establishmentId}`, e);
+  }
+  revalidatePath(`/o/${orgId}/settings/countries/${establishmentId}`);
+  redirect(`/o/${orgId}/settings/countries/${establishmentId}?notice=privacy_reviewed`);
 }
 
 /**

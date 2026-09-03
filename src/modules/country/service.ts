@@ -20,6 +20,14 @@ export {
 export { establishmentReadiness, organisationReadiness } from "./readiness";
 
 export {
+  SetPrivacyEntryInput,
+  listPrivacyEntries,
+  reviewPrivacyEntry,
+  setPrivacyEntry,
+  type PrivacyEntryRow,
+} from "./privacy";
+
+export {
   AdoptPackInput,
   adoptPack,
   listAdoptions,

@@ -11,11 +11,14 @@ import {
   establishmentReadiness,
   getEstablishment,
   listAdoptions,
+  listPrivacyEntries,
   listRegistrations,
   packTimeline,
 } from "@/modules/country/service";
 import {
   previewAdoptionAction,
+  reviewPrivacyEntryAction,
+  setPrivacyEntryAction,
   setRegistrationAction,
   updateEstablishmentAction,
 } from "../actions";
@@ -57,10 +60,11 @@ export default async function EstablishmentPage({
     ? sp.on!
     : new Date().toISOString().slice(0, 10);
 
-  const [readiness, registrations, adoptions] = await Promise.all([
+  const [readiness, registrations, adoptions, privacyEntries] = await Promise.all([
     establishmentReadiness(resolved.ctx, establishmentId, on),
     listRegistrations(resolved.ctx, establishmentId),
     listAdoptions(resolved.ctx, establishmentId),
+    listPrivacyEntries(resolved.ctx, establishmentId),
   ]);
   const timeline = packTimeline(establishment.country, on);
   const packToday = resolvePack(establishment.country, on);
@@ -81,6 +85,8 @@ export default async function EstablishmentPage({
   const save = updateEstablishmentAction.bind(null, orgId, establishmentId);
   const addRegistration = setRegistrationAction.bind(null, orgId, establishmentId);
   const preview = previewAdoptionAction.bind(null, orgId, establishmentId);
+  const setPrivacy = setPrivacyEntryAction.bind(null, orgId, establishmentId);
+  const reviewPrivacy = reviewPrivacyEntryAction.bind(null, orgId, establishmentId);
 
   return (
     <div className="flex flex-col gap-4">
@@ -323,6 +329,114 @@ export default async function EstablishmentPage({
             <div className="sm:col-span-2">
               <Button type="submit" variant="secondary">
                 {t("country.registration.save")}
+              </Button>
+            </div>
+          </form>
+        ) : null}
+      </Card>
+
+      {/* ── the privacy register ────────────────────────────────────────── */}
+      <Card>
+        <CardHeader title={t("country.privacy")} />
+        <p className="text-sm text-ink-secondary">{t("country.privacy_hint")}</p>
+        {packToday?.privacy.regime.value ? (
+          <p className="mt-2 text-sm text-ink-secondary">
+            {t("country.privacy_regime", {
+              regime: packToday.privacy.regime.value,
+              authority: packToday.privacy.authority ?? "",
+            })}
+          </p>
+        ) : null}
+        {packToday && packToday.privacy.organisationActions.length > 0 ? (
+          <ul className="mt-2 list-disc ps-5 text-sm text-ink-secondary">
+            {packToday.privacy.organisationActions.map((action) => (
+              <li key={action}>{action}</li>
+            ))}
+          </ul>
+        ) : null}
+
+        {privacyEntries.length === 0 ? (
+          <p className="mt-3 text-sm text-ink-muted">{t("country.privacy_empty")}</p>
+        ) : (
+          <ul className="mt-3 flex flex-col gap-2 text-sm">
+            {privacyEntries.map((entry) => (
+              <li key={entry.id} className="rounded-md border border-line px-3 py-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-medium text-ink">{entry.dataCategory}</span>
+                  {entry.crossBorder ? (
+                    <Badge tone="warning">{t("country.privacy.cross_border")}</Badge>
+                  ) : null}
+                  <Badge tone={entry.reviewedAt ? "success" : "neutral"}>
+                    {t(
+                      entry.reviewedAt ? "country.privacy.reviewed" : "country.privacy.unreviewed",
+                    )}
+                  </Badge>
+                </div>
+                <p className="mt-1 text-ink-secondary">{entry.purpose}</p>
+                <p className="mt-1 text-ink-muted">
+                  {[
+                    entry.provider,
+                    entry.processingRegion,
+                    entry.retention,
+                    entry.lawfulBasis,
+                    entry.transferBasis,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </p>
+                {mayManage && !entry.reviewedAt ? (
+                  <form action={reviewPrivacy} className="mt-2">
+                    <input type="hidden" name="entryId" value={entry.id} />
+                    <Button type="submit" variant="ghost">
+                      {t("country.privacy.mark_reviewed")}
+                    </Button>
+                  </form>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {mayManage ? (
+          <form action={setPrivacy} className="mt-4 grid gap-3 sm:grid-cols-2">
+            <label className="flex flex-col gap-1 text-sm">
+              <span className="font-medium text-ink">{t("country.privacy.category")}</span>
+              <input name="dataCategory" required maxLength={80} className={input} />
+            </label>
+            <label className="flex flex-col gap-1 text-sm">
+              <span className="font-medium text-ink">{t("country.privacy.purpose")}</span>
+              <input name="purpose" required maxLength={500} className={input} />
+            </label>
+            <label className="flex flex-col gap-1 text-sm">
+              <span className="font-medium text-ink">{t("country.privacy.provider")}</span>
+              <input name="provider" maxLength={200} className={input} />
+            </label>
+            <label className="flex flex-col gap-1 text-sm">
+              <span className="font-medium text-ink">{t("country.privacy.region")}</span>
+              <input name="processingRegion" maxLength={80} className={input} />
+            </label>
+            <label className="flex flex-col gap-1 text-sm">
+              <span className="font-medium text-ink">{t("country.privacy.retention")}</span>
+              <input name="retention" maxLength={200} className={input} />
+            </label>
+            <label className="flex flex-col gap-1 text-sm">
+              <span className="font-medium text-ink">{t("country.privacy.lawful_basis")}</span>
+              <input name="lawfulBasis" maxLength={200} className={input} />
+            </label>
+            <label className="flex items-center gap-2 text-sm text-ink sm:col-span-2">
+              <input type="checkbox" name="crossBorder" className="size-4" />
+              {t("country.privacy.leaves_country")}
+            </label>
+            <label className="flex flex-col gap-1 text-sm sm:col-span-2">
+              <span className="font-medium text-ink">{t("country.privacy.transfer_basis")}</span>
+              <input name="transferBasis" maxLength={200} className={input} />
+              <span className="text-xs text-ink-muted">
+                {t("country.privacy.transfer_basis_hint")}
+              </span>
+            </label>
+            <div className="sm:col-span-2">
+              <Button type="submit" variant="secondary">
+                {t("country.privacy.save")}
               </Button>
             </div>
           </form>
