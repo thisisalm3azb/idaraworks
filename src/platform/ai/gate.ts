@@ -38,6 +38,9 @@ export type IdaraGate = {
   ownerAction: string | null;
 };
 
+export const FLAG_OFF_OWNER_ACTION =
+  'Idara Intelligence is not released in this deployment. Set FEATURE_IDARA_INTELLIGENCE to the exact value "1" in the server environment, then provision an AI provider. Until then no agent surface appears and nothing is simulated.';
+
 export const NO_PROVIDER_OWNER_ACTION =
   "Provision an AI provider for this deployment (AI_OPENAI_API_KEY or AI_ANTHROPIC_API_KEY in the server environment, or an organisation-supplied key with AI_BYOK_KEK), record the organisation's privacy register for that provider, and set the organisation's AI policy to a mode other than disabled. Until then Idara stays off and nothing is simulated.";
 
@@ -53,7 +56,7 @@ export async function idaraGateFor(ctx: Ctx, deps: GatewayDeps = {}): Promise<Id
       globalStop: false,
       orgStop: false,
       reason: "flag_off",
-      ownerAction: null,
+      ownerAction: FLAG_OFF_OWNER_ACTION,
     };
   }
   const a = await aiAvailability(ctx, deps);

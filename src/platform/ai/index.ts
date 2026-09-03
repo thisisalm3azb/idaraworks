@@ -34,7 +34,12 @@ export {
   type OperatorUsageRow,
   type OperatorOrgRow,
 } from "./operator";
-export { idaraGateFor, NO_PROVIDER_OWNER_ACTION, type IdaraGate } from "./gate";
+export {
+  idaraGateFor,
+  FLAG_OFF_OWNER_ACTION,
+  NO_PROVIDER_OWNER_ACTION,
+  type IdaraGate,
+} from "./gate";
 export { PLATFORM_CONTRACT, AGENT_PROMPTS, agentPrompt, PROMPT_VERSION } from "./prompts";
 export {
   invokeModel,

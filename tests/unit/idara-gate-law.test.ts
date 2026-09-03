@@ -87,3 +87,49 @@ describe("H28 — Idara gate law", () => {
     expect(layout).not.toMatch(/nav[^\n]*IdaraDock/);
   });
 });
+
+describe("H28 — the gate explains itself", () => {
+  it("a deployment with the release flag off states the owner action, and it names the exact value", async () => {
+    const before = process.env.FEATURE_IDARA_INTELLIGENCE;
+    delete process.env.FEATURE_IDARA_INTELLIGENCE;
+    try {
+      const { idaraGateFor } = await import("@/platform/ai");
+      const gate = await idaraGateFor({
+        orgId: "00000000-0000-0000-0000-000000000000",
+        userId: "00000000-0000-0000-0000-000000000000",
+        requestId: "gate-law",
+      });
+      expect(gate.flagOn).toBe(false);
+      expect(gate.surfaceOn).toBe(false);
+      expect(gate.modelAvailable).toBe(false);
+      expect(gate.reason).toBe("flag_off");
+      // Not silence: the reason a person cannot use Idara here is stated, with
+      // the exact value the flag must carry.
+      expect(gate.ownerAction).toBeTruthy();
+      expect(gate.ownerAction).toContain("FEATURE_IDARA_INTELLIGENCE");
+      expect(gate.ownerAction).toContain('"1"');
+      // And it reached that answer without touching the database.
+      expect(gate.providers).toEqual([]);
+      expect(gate.policy).toBeNull();
+    } finally {
+      if (before === undefined) delete process.env.FEATURE_IDARA_INTELLIGENCE;
+      else process.env.FEATURE_IDARA_INTELLIGENCE = before;
+    }
+  });
+
+  it("every value other than the exact string one leaves the flag off", async () => {
+    const before = process.env.FEATURE_IDARA_INTELLIGENCE;
+    const { idaraEnabled } = await import("@/platform/flags");
+    try {
+      for (const v of ["", "0", "true", "yes", "on", " 1", "1 ", "01"]) {
+        process.env.FEATURE_IDARA_INTELLIGENCE = v;
+        expect(idaraEnabled(), `value ${JSON.stringify(v)}`).toBe(false);
+      }
+      process.env.FEATURE_IDARA_INTELLIGENCE = "1";
+      expect(idaraEnabled()).toBe(true);
+    } finally {
+      if (before === undefined) delete process.env.FEATURE_IDARA_INTELLIGENCE;
+      else process.env.FEATURE_IDARA_INTELLIGENCE = before;
+    }
+  });
+});
