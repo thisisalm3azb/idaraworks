@@ -60,6 +60,26 @@ const REQUIRED: Array<{ route: string; needs: RegExp; label: string; why: string
     label: "Arabic font",
     why: "an Arabic PDF falls back to nothing on a Linux container",
   },
+  /*
+   * H31, found in production on the day it shipped: the manifest returned 200
+   * and the icon returned 500, because this route rasterises through sharp and
+   * the native libraries were never traced into its function. The same defect
+   * shape as every entry above — a config key that looked right and matched
+   * nothing — and the same reason this file reads the built trace rather than
+   * next.config.ts.
+   */
+  {
+    route: "api/o/[orgId]/icon/[spec]/route.js",
+    needs: /@img\/sharp-linux-x64\//,
+    label: "sharp native binding",
+    why: "the per-tenant app icon is rasterised by sharp",
+  },
+  {
+    route: "api/o/[orgId]/icon/[spec]/route.js",
+    needs: /@img\/sharp-libvips-linux-x64\//,
+    label: "sharp libvips",
+    why: "sharp's binding is useless without libvips beside it",
+  },
 ];
 
 /** Everything @sparticuz decompresses at runtime; a rename must fail the build. */

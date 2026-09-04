@@ -22,6 +22,8 @@ import { brandedCompanyAppsEnabled } from "@/platform/flags";
 import { publicAppIdentity } from "@/modules/companyapp/service";
 import { ICON_SIZES, generateIconSet, type IconSize } from "@/platform/tenanthost/icon";
 import { logger } from "@/platform/logger";
+import { solidPng } from "@/platform/tenanthost/png";
+import { parseHex } from "@/platform/tenanthost/contrast";
 
 export const dynamic = "force-dynamic";
 /** sharp on a cold serverless container needs room to start. */
@@ -73,27 +75,45 @@ export async function GET(
     });
     const icon = icons.find((i) => i.size === size && i.maskable === maskable);
     if (!icon) return NextResponse.json({ error: "not_found" }, { status: 404 });
-
-    return new NextResponse(new Uint8Array(icon.buffer), {
-      headers: {
-        "content-type": "image/png",
-        /*
-         * `private` keeps a shared cache out of it; the org-scoped URL is what
-         * actually prevents crossover. An hour is long enough to make repeat
-         * launches cheap and short enough that a colour change is visible the
-         * same morning it is made.
-         */
-        "cache-control": "private, max-age=3600",
-        "x-robots-tag": "noindex, nofollow",
-        "content-disposition": "inline",
-      },
-    });
+    return png(icon.buffer);
   } catch (err) {
+    /*
+     * H31, found in production: this returned 500 because sharp's Linux
+     * libraries were not traced into the function.
+     *
+     * A 500 here is not cosmetic. Chromium requires a 192px and a 512px icon to
+     * consider an app installable, so a failing icon endpoint can take the
+     * whole feature down — which is a far worse outcome than a plainer icon.
+     *
+     * So the fallback draws a solid square in the company's own colour using
+     * `node:zlib` and nothing else. It is less handsome than the initials mark
+     * and it is still the customer's brand, still valid, still installable. The
+     * failure is logged loudly because it means the trace regressed, and
+     * check-traced-payloads.ts is what should have caught it first.
+     */
     logger.error(
       { err: err instanceof Error ? `${err.name}: ${err.message}` : String(err), orgId, spec },
-      "company app icon generation failed",
+      "company app icon generation failed — serving the dependency-free fallback",
     );
-    // A failed icon must not look like a missing organisation.
-    return NextResponse.json({ error: "icon_unavailable" }, { status: 500 });
+    const rgb = parseHex(identity.brandColor) ?? { r: 31, g: 111, b: 92 };
+    return png(solidPng(size, rgb.r, rgb.g, rgb.b));
   }
+}
+
+/** One place decides the icon headers, so the fallback cannot differ. */
+function png(body: Buffer): NextResponse {
+  return new NextResponse(new Uint8Array(body), {
+    headers: {
+      "content-type": "image/png",
+      /*
+       * `private` keeps a shared cache out of it; the org-scoped URL is what
+       * actually prevents crossover. An hour is long enough to make repeat
+       * launches cheap and short enough that a colour change is visible the
+       * same morning it is made.
+       */
+      "cache-control": "private, max-age=3600",
+      "x-robots-tag": "noindex, nofollow",
+      "content-disposition": "inline",
+    },
+  });
 }

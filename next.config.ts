@@ -123,6 +123,30 @@ const nextConfig: NextConfig = {
       "./node_modules/@img/sharp-libvips-linux-x64/**/*",
     ],
     /*
+     * H31 — the per-tenant app icon. The SAME defect shape, found the same way,
+     * on the day it shipped: the manifest returned 200 and the icon returned
+     * 500 in production, because this route rasterises through sharp and its
+     * native libraries were never traced into the function.
+     *
+     * Worth stating for whoever adds the next sharp route: nothing local
+     * catches this. The build passes, the typecheck passes and the route works
+     * on any machine with sharp installed. It fails only on the serverless
+     * container, only after deploy — which is why check-traced-payloads.ts
+     * reads the built .nft.json rather than trusting this file.
+     */
+    /*
+     * The key shape matters more than it looks. `/api/o/[orgId]/icon/[spec]/**`
+     * — the literal route directory — matched NOTHING and was silently ignored,
+     * exactly as the comment above this block warns. The shape proven to work
+     * here is `**` in place of each dynamic segment, which is what the chromium
+     * entries below use. Verified by reading the built .nft.json, not by
+     * reading this file.
+     */
+    "/api/o/**/icon/**": [
+      "./node_modules/@img/sharp-linux-x64/**/*",
+      "./node_modules/@img/sharp-libvips-linux-x64/**/*",
+    ],
+    /*
      * H22F — Download PDF. The SAME defect shape as sharp, found by reading the
      * built .nft.json: the trace pulled in @sparticuz/chromium's JavaScript and
      * none of its `bin/` payload, because nothing in the code imports those
