@@ -79,6 +79,43 @@ function escapeXml(s: string): string {
 }
 
 /**
+ * The fonts, base64-encoded, read once per process.
+ *
+ * ── Why they are embedded rather than named ─────────────────────────────────
+ * Found by looking at the deployed icon: it rendered as a plain coloured square
+ * with no initials. A serverless Linux container ships no fonts at all, so
+ * `font-family="Helvetica,Arial,sans-serif"` resolved to nothing and the text
+ * drew nothing — the same class of defect the PDF renderer already handles by
+ * embedding, and which its own comment records as "an Arabic PDF falls back to
+ * nothing on a Linux container".
+ *
+ * Naming a font that is not there fails silently. Carrying the bytes cannot.
+ * Both faces travel because a company name may be in either script, and Noto
+ * Sans has no Arabic glyphs.
+ */
+let fontCache: { latin: string; arabic: string } | null = null;
+
+async function embeddedFonts(): Promise<{ latin: string; arabic: string }> {
+  if (fontCache) return fontCache;
+  const { readFile } = await import("node:fs/promises");
+  const path = await import("node:path");
+  const read = async (file: string) => {
+    const bytes = await readFile(path.join(process.cwd(), "public", "fonts", file));
+    return bytes.toString("base64");
+  };
+  fontCache = {
+    latin: await read("NotoSans-Bold.ttf"),
+    arabic: await read("NotoNaskhArabic-Bold.ttf"),
+  };
+  return fontCache;
+}
+
+/** True when the initials contain any Arabic-script character. */
+function isArabic(text: string): boolean {
+  return /[؀-ۿݐ-ݿࢠ-ࣿﭐ-﷿ﹰ-﻿]/.test(text);
+}
+
+/**
  * The SVG we rasterise for a generated mark.
  *
  * This SVG is never served. It is built here from validated inputs — a hex
@@ -86,14 +123,27 @@ function escapeXml(s: string): string {
  * straight to sharp, and discarded. Nothing a customer typed is served as
  * markup to a browser.
  */
-function markSvg(size: number, bg: string, fg: string, initials: string): string {
+function markSvg(
+  size: number,
+  bg: string,
+  fg: string,
+  initials: string,
+  fonts: { latin: string; arabic: string },
+): string {
   const radius = Math.round(size * 0.22);
   const fontSize = Math.round(size * (initials.length > 1 ? 0.38 : 0.5));
+  // One face, chosen by script. Embedding both in every icon would double the
+  // work for a glyph that is never used.
+  const arabic = isArabic(initials);
+  const data = arabic ? fonts.arabic : fonts.latin;
+  const family = arabic ? "IdaraArabic" : "IdaraLatin";
   return [
     `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">`,
+    `<defs><style type="text/css">@font-face{font-family:"${family}";`,
+    `src:url(data:font/ttf;base64,${data}) format("truetype");}</style></defs>`,
     `<rect width="${size}" height="${size}" rx="${radius}" ry="${radius}" fill="${bg}"/>`,
     `<text x="50%" y="50%" dy="0.35em" text-anchor="middle" fill="${fg}"`,
-    ` font-family="Helvetica,Arial,sans-serif" font-weight="600" font-size="${fontSize}">`,
+    ` font-family="${family}" font-size="${fontSize}">`,
     escapeXml(initials),
     `</text></svg>`,
   ].join("");
@@ -122,6 +172,7 @@ export async function generateIconSet(input: {
   brandColor: string | null;
 }): Promise<{ icons: GeneratedIcon[]; kind: IconSourceKind }> {
   const { default: sharp } = await import("sharp");
+  const fonts = await embeddedFonts();
 
   const bgRgb: Rgb = parseHex(input.brandColor) ?? parseHex(FALLBACK_BRAND_COLOR)!;
   const bg =
@@ -148,11 +199,13 @@ export async function generateIconSet(input: {
         } catch {
           // A source that decodes for metadata but fails to resize must not take
           // the whole icon set down: fall back to the generated mark.
-          markBuffer = Buffer.from(markSvg(inner, bg, fg, initialsFor(input.orgName)));
+          markBuffer = Buffer.from(markSvg(inner, bg, fg, initialsFor(input.orgName), fonts));
           markBuffer = await sharp(markBuffer).png().toBuffer();
         }
       } else {
-        markBuffer = await sharp(Buffer.from(markSvg(inner, bg, fg, initialsFor(input.orgName))))
+        markBuffer = await sharp(
+          Buffer.from(markSvg(inner, bg, fg, initialsFor(input.orgName), fonts)),
+        )
           .png()
           .toBuffer();
       }
