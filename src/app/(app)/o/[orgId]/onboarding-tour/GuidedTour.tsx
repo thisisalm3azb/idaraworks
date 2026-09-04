@@ -273,8 +273,17 @@ export function GuidedTour({
 
   let panelStyle: React.CSSProperties;
   if (!rect || narrow) {
+    /*
+     * On a phone the panel is a full-width sheet, and WHICH end it sticks to is
+     * not cosmetic. Most of the mobile steps point at the bottom navigation bar,
+     * so a sheet pinned to the bottom would sit directly on top of the thing it
+     * is describing. It goes to whichever end the target is not at.
+     */
+    const targetLow = rect !== null && rect.top + rect.height / 2 > vh / 2;
     panelStyle = narrow
-      ? { left: 12, right: 12, bottom: 12 }
+      ? targetLow
+        ? { left: 12, right: 12, top: 12 }
+        : { left: 12, right: 12, bottom: 12 }
       : {
           left: Math.max(12, vw / 2 - PANEL_W / 2),
           top: Math.max(12, vh / 2 - 90),
