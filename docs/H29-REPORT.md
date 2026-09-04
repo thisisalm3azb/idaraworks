@@ -96,8 +96,10 @@ invoice has been sent anywhere.
 
 ### 1.7 Spanish, and translation governance
 
-The message catalogue is complete in Spanish: 4,881 translated keys, 66 recorded
-as legitimately identical, **zero left in English**. Arabic gained the same kind
+The message catalogue is complete in Spanish: of 5,163 keys, 5,097 are
+translated and 66 are recorded as legitimately identical (product names,
+standard acronyms, keyboard shortcuts, bare placeholders). **None is left in
+English.** Arabic gained the same kind
 of record (`ar.same.json`, 25 keys), so the leakage test covers every translated
 locale rather than only the newest.
 
