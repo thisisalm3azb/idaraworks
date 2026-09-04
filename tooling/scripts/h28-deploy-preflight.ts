@@ -61,8 +61,15 @@ const PREREQUISITES = [
 async function main(): Promise<void> {
   const problems: string[] = [];
   const notes: string[] = [];
-  if (!targetsOnlyProductionProject({ ...process.env } as Record<string, string | undefined>)) {
+  // .ok, not the verdict object: a truthy object made this guard vacuous,
+  // so it could never refuse anything (H29, found by CI).
+  const target = targetsOnlyProductionProject({ ...process.env } as Record<
+    string,
+    string | undefined
+  >);
+  if (!target.ok) {
     console.error(`Refusing: the environment does not point only at ${PRODUCTION_PROJECT_REF}`);
+    for (const p of target.problems) console.error(`  - ${p}`);
     process.exitCode = 1;
     return;
   }

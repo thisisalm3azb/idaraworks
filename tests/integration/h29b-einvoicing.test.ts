@@ -315,6 +315,40 @@ describe("the document list pages", () => {
     const clamped = await listDocuments(A(), channelId, { limit: 100_000, offset: 0 });
     expect(clamped.rows.length).toBeLessThanOrEqual(200);
   });
+
+  it("counts and pages correctly past a thousand documents", async () => {
+    // The mandate's rule for every new unbounded list. A thousand is the number
+    // that matters: it is where a hosted PostgREST read silently stops, and a
+    // list that quietly returns its first thousand rows looks exactly like a
+    // list that has a thousand rows.
+    const before = (await listDocuments(A(), channelId, { limit: 1, offset: 0 })).total;
+    await owner`
+      insert into public.einvoice_document
+        (org_id, channel_id, establishment_id, source_kind, source_id, counter,
+         document_hash, status, idempotency_key, prepared_at)
+      select ${orgA}, ${channelId}, ${riyadh}, 'invoice', gen_random_uuid(), 1000 + g,
+             ${"bulk-"} || g, 'prepared', ${`bulk-${run}-`} || g, now() - (g || ' minutes')::interval
+        from generate_series(1, 1200) g`;
+
+    const after = await listDocuments(A(), channelId, { limit: 1, offset: 0 });
+    expect(after.total).toBe(before + 1200);
+    expect(after.total).toBeGreaterThan(1000);
+
+    // Paging reaches rows beyond the thousandth, and the pages do not overlap.
+    const deep = await listDocuments(A(), channelId, { limit: 50, offset: 1000 });
+    expect(deep.rows).toHaveLength(50);
+    const first = await listDocuments(A(), channelId, { limit: 50, offset: 0 });
+    const overlap = new Set(first.rows.map((d) => d.id));
+    expect(deep.rows.some((d) => overlap.has(d.id))).toBe(false);
+
+    // And the whole set is reachable by paging, with no silent truncation.
+    const seen = new Set<string>();
+    for (let offset = 0; offset < after.total; offset += 200) {
+      const page = await listDocuments(A(), channelId, { limit: 200, offset });
+      for (const d of page.rows) seen.add(d.id);
+    }
+    expect(seen.size).toBe(after.total);
+  });
 });
 
 describe("nothing leaks between tenants", () => {

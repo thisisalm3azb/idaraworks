@@ -121,8 +121,15 @@ async function main(): Promise<void> {
     .find((a) => a.startsWith("--confirm="))
     ?.slice("--confirm=".length);
   const surfaces = process.argv.includes("--surfaces=on");
-  if (!targetsOnlyProductionProject({ ...process.env } as Record<string, string | undefined>)) {
+  // .ok, not the verdict object: a truthy object made this guard vacuous,
+  // so it could never refuse anything (H29, found by CI).
+  const target = targetsOnlyProductionProject({ ...process.env } as Record<
+    string,
+    string | undefined
+  >);
+  if (!target.ok) {
     console.error("Refusing: the environment does not point only at production");
+    for (const p of target.problems) console.error(`  - ${p}`);
     process.exitCode = 1;
     return;
   }

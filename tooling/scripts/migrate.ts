@@ -152,7 +152,16 @@ if (isDirect) {
   // It now refuses. CI is unaffected: its local stack is not the production
   // project, and the test project is not either. Production has one door, and
   // that door prints what it will do and demands a phrase naming the project.
-  if (targetsOnlyProductionProject({ ...process.env } as Record<string, string | undefined>)) {
+  //
+  // `.ok`, not the verdict object. The guard returns { ok, refs, problems }, and
+  // an object is always truthy — reading it as a boolean makes the check either
+  // vacuous or universal depending on which way round it is written. It was
+  // written the universal way here, and CI's local stack was refused.
+  const productionTarget = targetsOnlyProductionProject({ ...process.env } as Record<
+    string,
+    string | undefined
+  >);
+  if (productionTarget.ok) {
     console.error(
       [
         `Refusing: this environment points at PRODUCTION (${PRODUCTION_PROJECT_REF}).`,

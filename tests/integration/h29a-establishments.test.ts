@@ -327,6 +327,32 @@ describe("rule versions are effective-dated, and history is not rewritten", () =
     ).toMatch(/cannot apply before it exists/i);
   });
 
+  it("rolls back by adopting forward, and keeps the record of both", async () => {
+    // "Rollback" for an effective-dated rule is not an undo: undoing an adoption
+    // would rewrite what applied on dates that have already passed. Going back
+    // to an earlier arrangement means adopting it again from a NEW date, so the
+    // history says what applied when, and both decisions stay readable.
+    const before = await listAdoptions(A(), dubai, { limit: 200, offset: 0 });
+    await adoptPack(A(), "owner", {
+      establishmentId: dubai,
+      packKey: AE_PACK.packKey,
+      effectiveFrom: "2027-03-01",
+      note: `h29a rollback ${run}`,
+    });
+    const after = await listAdoptions(A(), dubai, { limit: 200, offset: 0 });
+    expect(after.length).toBe(before.length + 1);
+    // Every earlier row survives untouched: nothing was edited or removed.
+    const beforeById = new Map(before.map((a) => [a.id, a]));
+    for (const row of after.filter((a) => beforeById.has(a.id)))
+      expect(row).toEqual(beforeById.get(row.id));
+    // And the dates before the new one still resolve to what they always did.
+    const october = (
+      await owner`
+      select app.establishment_pack_on(${dubai}::uuid, '2026-10-15'::date) as k`
+    )[0]!.k;
+    expect(october).toBe(AE_PACK.packKey);
+  });
+
   it("the adoption history pages instead of returning everything", async () => {
     const first = await listAdoptions(A(), dubai, { limit: 1, offset: 0 });
     const second = await listAdoptions(A(), dubai, { limit: 1, offset: 1 });
