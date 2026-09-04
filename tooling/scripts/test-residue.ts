@@ -29,6 +29,7 @@
  */
 import { config } from "dotenv";
 import postgres from "postgres";
+import { classifyOrg } from "../fixtures/evidence";
 
 config({ path: [".env.local", ".env"], quiet: true });
 
@@ -113,39 +114,24 @@ async function main() {
       order by o.created_at
     `) as unknown as Row[];
 
+    /*
+     * H30: the rule itself now lives in tooling/fixtures/evidence.ts, because
+     * the script that DELETES must reach the same verdict as the report a human
+     * reads before authorising it. When the two carried their own copies, the
+     * report was careful and the cleanup selected by allow-list complement —
+     * and the two disagreed about all forty organisations in production.
+     */
     const confirmed: Row[] = [];
     const review: Row[] = [];
     const simulation: Row[] = [];
     /** Everything that is not a candidate at all, with the reason it is not. */
     const notCandidates: Array<Row & { why: string }> = [];
     for (const r of rows) {
-      // A deliberately seeded demo org is never test residue, whatever it looks like.
-      if (r.is_simulation) {
-        simulation.push(r);
-        continue;
-      }
-      const byName = FIXTURE_NAMES.includes(r.name);
-      const allTestEmails = r.members > 0 && r.real_emails === 0 && r.test_emails === r.members;
-      const noBusiness =
-        r.customers === 0 && r.invoices === 0 && r.payments === 0 && r.quotes === 0;
-      // The marker is the org saying so itself. Otherwise every other kind of
-      // evidence must agree — a name alone never decides anything.
-      if (r.has_marker) confirmed.push(r);
-      else if (byName && allTestEmails && noBusiness) confirmed.push(r);
-      else if (byName || (allTestEmails && r.members > 0)) review.push(r);
-      else {
-        // Every organization must be accounted for, or the totals do not add up
-        // and a reader cannot tell whether something was overlooked.
-        notCandidates.push({
-          ...r,
-          why:
-            r.real_emails > 0
-              ? `${r.real_emails} real login(s) — a live organization`
-              : r.members === 0
-                ? "no members at all"
-                : "no fixture evidence of any kind",
-        });
-      }
+      const verdict = classifyOrg(r);
+      if (verdict.classification === "simulation") simulation.push(r);
+      else if (verdict.classification === "confirmed_fixture") confirmed.push(r);
+      else if (verdict.classification === "needs_review") review.push(r);
+      else notCandidates.push({ ...r, why: verdict.reason });
     }
 
     if (process.argv.includes("--json")) {
