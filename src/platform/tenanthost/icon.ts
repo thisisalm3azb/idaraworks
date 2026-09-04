@@ -79,35 +79,27 @@ function escapeXml(s: string): string {
 }
 
 /**
- * The fonts, base64-encoded, read once per process.
+ * Where the initials come from, and why not from the SVG.
  *
- * ── Why they are embedded rather than named ─────────────────────────────────
- * Found by looking at the deployed icon: it rendered as a plain coloured square
- * with no initials. A serverless Linux container ships no fonts at all, so
- * `font-family="Helvetica,Arial,sans-serif"` resolved to nothing and the text
- * drew nothing — the same class of defect the PDF renderer already handles by
- * embedding, and which its own comment records as "an Arabic PDF falls back to
- * nothing on a Linux container".
+ * ── Two attempts, both instructive ──────────────────────────────────────────
+ * The deployed icon first rendered as a plain coloured square: a serverless
+ * Linux container ships no fonts, so `font-family="Helvetica,Arial,sans-serif"`
+ * in the SVG resolved to nothing and the text drew nothing. The PNG was valid,
+ * the right size and the right colour, which is why no assertion noticed.
  *
- * Naming a font that is not there fails silently. Carrying the bytes cannot.
- * Both faces travel because a company name may be in either script, and Noto
- * Sans has no Arabic glyphs.
+ * Embedding the font as a base64 `@font-face` in the SVG produced a
+ * byte-IDENTICAL result — the tell that librsvg, which sharp uses for SVG, does
+ * not honour `@font-face` at all.
+ *
+ * So the text is not drawn by the SVG. sharp's own text renderer takes a font
+ * FILE path and goes through Pango, which does not need a system font: the
+ * background stays an SVG (shapes render fine), the initials are a separate
+ * text layer, and the two are composited. The fonts are traced into this
+ * function by next.config.ts alongside sharp's native libraries.
  */
-let fontCache: { latin: string; arabic: string } | null = null;
-
-async function embeddedFonts(): Promise<{ latin: string; arabic: string }> {
-  if (fontCache) return fontCache;
-  const { readFile } = await import("node:fs/promises");
+async function fontPath(file: string): Promise<string> {
   const path = await import("node:path");
-  const read = async (file: string) => {
-    const bytes = await readFile(path.join(process.cwd(), "public", "fonts", file));
-    return bytes.toString("base64");
-  };
-  fontCache = {
-    latin: await read("NotoSans-Bold.ttf"),
-    arabic: await read("NotoNaskhArabic-Bold.ttf"),
-  };
-  return fontCache;
+  return path.join(process.cwd(), "public", "fonts", file);
 }
 
 /** True when the initials contain any Arabic-script character. */
@@ -116,37 +108,19 @@ function isArabic(text: string): boolean {
 }
 
 /**
- * The SVG we rasterise for a generated mark.
+ * The rounded-square background. Shapes only — no text.
  *
- * This SVG is never served. It is built here from validated inputs — a hex
- * colour that matched a regex and initials that were XML-escaped — handed
- * straight to sharp, and discarded. Nothing a customer typed is served as
- * markup to a browser.
+ * This SVG is never served. It is built from validated input (a hex colour that
+ * matched a regex) and handed straight to sharp. Nothing a customer typed
+ * reaches it, which is the other reason the initials moved out of here.
  */
-function markSvg(
-  size: number,
-  bg: string,
-  fg: string,
-  initials: string,
-  fonts: { latin: string; arabic: string },
-): string {
+function backgroundSvg(size: number, bg: string): string {
   const radius = Math.round(size * 0.22);
-  const fontSize = Math.round(size * (initials.length > 1 ? 0.38 : 0.5));
-  // One face, chosen by script. Embedding both in every icon would double the
-  // work for a glyph that is never used.
-  const arabic = isArabic(initials);
-  const data = arabic ? fonts.arabic : fonts.latin;
-  const family = arabic ? "IdaraArabic" : "IdaraLatin";
-  return [
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">`,
-    `<defs><style type="text/css">@font-face{font-family:"${family}";`,
-    `src:url(data:font/ttf;base64,${data}) format("truetype");}</style></defs>`,
-    `<rect width="${size}" height="${size}" rx="${radius}" ry="${radius}" fill="${bg}"/>`,
-    `<text x="50%" y="50%" dy="0.35em" text-anchor="middle" fill="${fg}"`,
-    ` font-family="${family}" font-size="${fontSize}">`,
-    escapeXml(initials),
-    `</text></svg>`,
-  ].join("");
+  return (
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" ` +
+    `viewBox="0 0 ${size} ${size}">` +
+    `<rect width="${size}" height="${size}" rx="${radius}" ry="${radius}" fill="${bg}"/></svg>`
+  );
 }
 
 export type GeneratedIcon = {
@@ -172,12 +146,69 @@ export async function generateIconSet(input: {
   brandColor: string | null;
 }): Promise<{ icons: GeneratedIcon[]; kind: IconSourceKind }> {
   const { default: sharp } = await import("sharp");
-  const fonts = await embeddedFonts();
 
   const bgRgb: Rgb = parseHex(input.brandColor) ?? parseHex(FALLBACK_BRAND_COLOR)!;
   const bg =
     input.brandColor && parseHex(input.brandColor) ? input.brandColor : FALLBACK_BRAND_COLOR;
   const fg = readableForeground(bgRgb).color;
+  const initials = initialsFor(input.orgName);
+  const face = isArabic(initials) ? "NotoNaskhArabic-Bold.ttf" : "NotoSans-Bold.ttf";
+  const fontfile = await fontPath(face);
+
+  /**
+   * The initials, rendered by sharp's text engine rather than by the SVG.
+   *
+   * `fontfile` is the whole point: Pango loads that file directly, so no system
+   * font and no fontconfig entry is required — which is what the two earlier
+   * attempts needed and did not have.
+   */
+  const initialsLayer = async (box: number): Promise<Buffer | null> => {
+    try {
+      return await sharp({
+        text: {
+          text: escapeXml(initials),
+          fontfile,
+          // Pango needs a family name; the file is what actually supplies the
+          // glyphs, and the name only has to match what the file declares.
+          font: `${isArabic(initials) ? "Noto Naskh Arabic" : "Noto Sans"} Bold ${Math.round(
+            box * (initials.length > 1 ? 0.3 : 0.4),
+          )}`,
+          rgba: true,
+          align: "center",
+        },
+      })
+        .png()
+        .toBuffer();
+    } catch {
+      // A missing font must cost the letters, never the icon.
+      return null;
+    }
+  };
+
+  /** The rounded square with the initials centred on it. */
+  const drawMark = async (box: number): Promise<Buffer> => {
+    const base = sharp(Buffer.from(backgroundSvg(box, bg)));
+    const letters = await initialsLayer(box);
+    if (!letters) return base.png().toBuffer();
+    // Tint the text layer to the readable foreground and centre it. `dest-in`
+    // keeps the glyph shapes as a mask, so the colour is ours rather than
+    // whatever Pango produced.
+    const tinted = await sharp({
+      create: {
+        width: (await sharp(letters).metadata()).width ?? box,
+        height: (await sharp(letters).metadata()).height ?? box,
+        channels: 4,
+        background: { ...(parseHex(fg) ?? { r: 255, g: 255, b: 255 }), alpha: 1 },
+      },
+    })
+      .composite([{ input: letters, blend: "dest-in" }])
+      .png()
+      .toBuffer();
+    return base
+      .composite([{ input: tinted, gravity: "centre" }])
+      .png()
+      .toBuffer();
+  };
 
   let kind: IconSourceKind = "generated";
   const icons: GeneratedIcon[] = [];
@@ -199,15 +230,10 @@ export async function generateIconSet(input: {
         } catch {
           // A source that decodes for metadata but fails to resize must not take
           // the whole icon set down: fall back to the generated mark.
-          markBuffer = Buffer.from(markSvg(inner, bg, fg, initialsFor(input.orgName), fonts));
-          markBuffer = await sharp(markBuffer).png().toBuffer();
+          markBuffer = await drawMark(inner);
         }
       } else {
-        markBuffer = await sharp(
-          Buffer.from(markSvg(inner, bg, fg, initialsFor(input.orgName), fonts)),
-        )
-          .png()
-          .toBuffer();
+        markBuffer = await drawMark(inner);
       }
 
       const pad = Math.round((size - inner) / 2);
