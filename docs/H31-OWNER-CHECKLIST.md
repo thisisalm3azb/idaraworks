@@ -63,14 +63,45 @@ do not have yet.
 
 ---
 
-## 2. Before turning the flag on
+## 2. Finishing the activation — one command, once the cap resets
 
-**O31-2 — Confirm the flag-off deployment is healthy**, then set
-`FEATURE_BRANDED_COMPANY_APPS` to the exact string `1` in the Vercel production
-environment and redeploy. Any other value — `true`, `yes`, `on`, `1` with a
-space — reads as off, and a unit test pins each one.
+**O31-2 — Redeploy to activate the flag.** This is the only step between today's
+state and a live branded app.
 
-**O31-3 — Look at one company's app yourself** before telling any customer it
+The flag is already set to the exact string `1` in the Vercel production
+environment, and the flag-off production smoke passed 16 of 16. What is missing
+is a deployment: Vercel binds environment variables when a deployment is
+created, and the **Hobby plan's 100-deployments-per-day cap was reached** while
+verifying H31, so no further deployment could be made today.
+
+Once the allowance resets:
+
+```bash
+npx vercel redeploy https://idaraworks-6phwnfreg-najolatech-s-projects.vercel.app \
+  --target production --scope team_QclRvv3fkiOghwLNOZDL8K6i
+```
+
+That redeploys the **exact source production already runs** (`6fa05fe`, the
+CI-green commit) with the Production environment, so the only thing that changes
+is the flag.
+
+**Then run the flag-on smoke**, which has not yet been able to run:
+
+```bash
+npx tsx tooling/scripts/h31-prod-smoke.ts \
+  --confirm=apply-migrations-to-anhgeeutrwftsvuzfinf --surfaces=on --expect-flag=on
+```
+
+If anything fails, `vercel env rm FEATURE_BRANDED_COMPANY_APPS production` and
+redeploy — H31 disappears completely and no data is lost.
+
+**O31-3 — Stop four projects from building this repository.** Five Vercel
+projects (`idaraworks`, `-bfs`, `-bfsc`, `-cd61`, `-wfft`) build on every push, so
+one push costs five deployments. Only `idaraworks` serves the site. Disconnecting
+the other four cuts deployment usage by 80% and removes this cap as a recurring
+obstacle. It costs nothing and needs no plan change.
+
+**O31-4 — Look at one company's app yourself** before telling any customer it
 exists. Open Settings → Company app in a real workspace, press Install on a
 Windows or Android device, and confirm it opens into that workspace.
 
@@ -80,9 +111,9 @@ Windows or Android device, and confirm it opens into that workspace.
 
 | # | Decision | What H31 did instead |
 | --- | --- | --- |
-| **O31-4** | **Whether customer-owned domains are a paid feature.** | Built the foundation, labelled it "Not yet available", and activated nothing. No billing behaviour was invented. |
-| **O31-5** | **Whether to accept customer-uploaded app icons.** | Ships the generated mark only. Serving a customer's uploaded image on an unauthenticated icon endpoint is how a private asset becomes public, and it was left un-built rather than half-built. |
-| **O31-6** | **Whether to submit anything to an app store.** | Nothing was submitted, and no marketing language implies otherwise. |
+| **O31-5** | **Whether customer-owned domains are a paid feature.** | Built the foundation, labelled it "Not yet available", and activated nothing. No billing behaviour was invented. |
+| **O31-6** | **Whether to accept customer-uploaded app icons.** | Ships the generated mark only. Serving a customer's uploaded image on an unauthenticated icon endpoint is how a private asset becomes public, and it was left un-built rather than half-built. |
+| **O31-7** | **Whether to submit anything to an app store.** | Nothing was submitted, and no marketing language implies otherwise. |
 
 ---
 

@@ -285,7 +285,46 @@ quarantined.
 | **Wildcard `*.idaraworks.com`** | Owner action — nameserver migration. See A.2.1. |
 | **Cross-subdomain single sign-on** | Deliberately refused. Part H says prefer separate sign-in over weakened cookie boundaries; cookies stay host-only, and a user installing two companies signs into each. |
 
-### F.5 Release state
+### F.5 The deployment limit, and a correction to H30's diagnosis
+
+H31 was merged to `main` with a **merge commit** precisely to avoid H30's
+same-SHA trap. Vercel still created no deployment. The diagnostic that settled it
+was the one H30 used: check every project.
+
+**No project created a deployment for the merge commit**, though all five had
+fired simultaneously for the branch push eight minutes earlier. That ruled out
+per-project deduplication. The answer arrived when the CLI refused a redeploy:
+
+```
+Error: Resource is limited - try again in 24 hours
+(more than 100, code: "api-deployments-free-per-day"). (402)
+```
+
+**The Hobby plan's 100-deployments-per-day cap was reached.** Five Vercel
+projects build on every push to this repository, so a single push costs five
+deployments and a working day of verification exhausts the allowance.
+
+This also corrects H30's truth map §A.10, which recorded the same silence as
+"unexplained, and not guessed at". It was not a webhook fault. It was this cap,
+and H30's count of 71 by mid-morning was the same allowance filling up.
+
+Nothing here needs a purchase to fix. The cheap remedy is to stop four unused
+Vercel projects from building this repository, which would cut deployment
+consumption by 80%. That is an owner action, not a code change.
+
+### F.5.1 What this meant for activation
+
+Production runs the exact CI-green source and the migrations are applied, but
+`FEATURE_BRANDED_COMPANY_APPS` is set in the production environment **after** the
+running deployment was created — and Vercel binds environment variables at
+deployment time. The flag is therefore registered and inert until the next
+production deployment, which the cap defers by up to 24 hours.
+
+H31 is consequently **live flag-off**, which is a complete and safe state: every
+surface is absent, `/o/{orgId}` is unchanged, and no customer is affected. The
+flag-on production smoke has **not** run and is the immediate next action.
+
+### F.6 Release state
 
 `FEATURE_BRANDED_COMPANY_APPS` — off through the first production deployment,
 turned on only after the flag-off smoke passes. With it off there is no manifest,
