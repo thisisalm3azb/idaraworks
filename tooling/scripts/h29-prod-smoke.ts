@@ -447,7 +447,11 @@ async function main(): Promise<void> {
         body.ok === true,
         `commit ${String(body.commit).slice(0, 7)}`,
       );
-      for (const path of ["/platform/languages", `/o/${orgId}/settings/countries`]) {
+      for (const path of [
+        "/platform/languages",
+        "/platform/countries",
+        `/o/${orgId}/settings/countries`,
+      ]) {
         const res = await fetch(`${BASE}${path}`, { redirect: "manual" });
         check(
           `http: ${path} is not public`,

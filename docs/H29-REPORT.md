@@ -70,6 +70,13 @@ and outstanding external actions (an unappointed service provider, an
 unperformed professional review) are listed as what they are: waiting on someone
 outside IdaraWorks.
 
+Whether a version has been reviewed is a recorded fact, not something the
+configuration can imply, so it needs somewhere to be recorded. `/platform/countries`
+is that place: one operator screen per shipped version with its four review
+kinds, each demanding a named reviewer before it can be marked passed or failed.
+Without it the only way to record a professional review would be to write SQL
+against production.
+
 ### 1.5 The rule impact simulator
 
 Reads, overlays, and writes nothing. It shows what would change, what is still
@@ -279,10 +286,10 @@ change, and the platform behaves correctly with all of them outstanding.
 | # | Action | Unlocks |
 | --- | --- | --- |
 | OA-1 | Set `FEATURE_COUNTRY_PACKS=1` in the production environment (the only enabling value is the exact string `"1"`). | The Country Readiness Centre, establishments, the version timeline, the simulator, the electronic-invoicing channels and the operator language centre. |
-| OA-2 | Obtain a professional tax review of the UAE pack and record it in the readiness centre. | The `legally_reviewed` state for UAE establishments. |
-| OA-3 | Obtain a professional tax, labour and data-protection review of the Saudi pack and record it. | The `legally_reviewed` state for Saudi establishments. |
+| OA-2 | Obtain a professional tax review of the UAE pack and record it at `/platform/countries` with the reviewer's name. | The `legally_reviewed` state for UAE establishments. |
+| OA-3 | Obtain a professional tax, labour and data-protection review of the Saudi pack and record it at `/platform/countries`. | The `legally_reviewed` state for Saudi establishments. |
 | OA-4 | Complete ZATCA onboarding and obtain a compliance CSID, then a production CSID. Set the credential's environment variable and name it on the channel. | Saudi electronic-invoicing submission, and cryptographic stamping. |
-| OA-5 | Appoint a UAE Accredited Service Provider and record the appointment. | The UAE electronic-invoicing channel. |
+| OA-5 | Appoint a UAE Accredited Service Provider and record the provider review at `/platform/countries`. | The UAE electronic-invoicing channel. |
 | OA-6 | Confirm the UAE e-invoicing phase dates from an official text and record them. | A dated UAE activation instead of an organisation decision. |
 | OA-7 | Confirm the ZATCA previous-invoice-hash value required for a chain's first document. | Removes the `pih-initial-unknown` warning from first documents. |
 | OA-8 | Confirm the GOSI contributory-wage ceiling, the 2024 pension transition and the Saudi end-of-service wage base, and record them as configuration. | Saudi payroll calculating without a review flag. |
