@@ -190,6 +190,19 @@ issued contract does not change language because of who opens it.
   in `src/app`. It found LB-6 and one further link before the scope was narrowed
   to the route that actually defaults to English.
 
+### What the browser walk did and did not cover
+
+The warehouse setup screen was exercised against the test project with the stock
+flag on: English desktop, Arabic desktop, and Arabic at 375px.
+
+The LB-7 units card was **not** photographed. It renders only when an
+organisation has stock items lacking a base unit, and the UI fixture seeds a
+unit, so in that fixture the card is correctly hidden. It is covered instead by
+the build, by three integration tests over `createUnit` (including that adoption
+never overwrites a unit somebody chose), and by the three-language copy parity
+test — and it sits inside the page whose rendering was verified above. Said here
+rather than left as an implied screenshot.
+
 ### Driven in a real browser
 
 The new screen was exercised against the test project with the stock flag on:
@@ -227,8 +240,9 @@ Recorded so nobody re-opens a settled question. Full list in truth map §A.8.
 | --- | --- |
 | Migrations | **none.** H30 changed no file under `supabase/migrations/`; both deployments are code-only |
 | First deployment | `9842df2` merged to `main` and served by production. `/api/health` reports it, and the queue probe now carries `stale: true` — LB-4's alarm working in production against the very stall that previously read as healthy |
-| Production smoke on `9842df2` | 8 of 9 checks passed. **The failing check was the point**: it asserted PO-002 would appear in the unposted list, it did not, and diagnosing that found LB-7 |
-| Second deployment | `2b721c2` — LB-7 — _pending CI_ |
+| First smoke on `9842df2` | 8 of 9. **The failing check was the point**: it asserted PO-002 would appear in the unposted list, it did not, and diagnosing that found LB-7 |
+| Final deployment | `5a63020` — CI green on the exact commit (run 33854593203), merged to `main` and served by production |
+| Production smoke on the final build | **ALL 13 CHECKS PASSED** with the flags off |
 | Residue | 0. The smoke creates nothing; it reads, classifies and reports |
 | Business counts | identical before and after: 40 organisations, 61 users, 51 customers, 93 jobs, 78 invoices, 0 warehouses, 0 stock movements, 646 audit rows |
 
