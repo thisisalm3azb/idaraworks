@@ -168,6 +168,25 @@ export type SlugAvailability =
   { available: true; slug: string; host: string } | { available: false; reasonKey: string };
 
 /**
+ * Is this hostname unavailable to the given organisation?
+ *
+ * A cross-tenant read through the platform door, because the question is
+ * inherently cross-tenant and the answer is one boolean. See migration 0136.
+ */
+async function hostIsTaken(host: string, exceptOrgId: string): Promise<boolean> {
+  const { createAppDb } = await import("@/platform/tenancy");
+  const { db, end } = createAppDb({ max: 1 });
+  try {
+    const rows = (await db.execute(sql`
+      select app.tenant_host_is_taken(${host}, ${exceptOrgId}::uuid) as taken
+    `)) as unknown as Array<{ taken: boolean }>;
+    return rows[0]?.taken === true;
+  } finally {
+    await end();
+  }
+}
+
+/**
  * Is this slug claimable?
  *
  * Reads the registry across ALL organisations, which is why it runs as a
@@ -188,27 +207,18 @@ export async function checkSlug(
   if (isReservedSlug(slug)) return { available: false, reasonKey: "app.slug.reserved" };
 
   const host = `${slug}.${TENANT_PARENT}`;
-  const [taken] = await withCtx(
-    ctx,
-    async (tx) =>
-      (await tx.execute(sql`
-        select
-          exists(
-            select 1 from public.tenant_host
-            where host = ${host} and status in ('pending', 'active')
-              and org_id <> ${ctx.orgId}
-          ) as by_other,
-          exists(
-            select 1 from public.tenant_host
-            where host = ${host} and status = 'released'
-              and (claimable_after is null or claimable_after > now())
-          ) as quarantined
-      `)) as unknown as Array<{ by_other: boolean; quarantined: boolean }>,
-  );
+  /*
+   * Availability is a CROSS-TENANT question and must not be asked through the
+   * tenant's own connection. RLS scopes `tenant_host` to the caller's own
+   * organisation, so a claim held by another company reads as absent — the
+   * integration test caught exactly that, with both tenants told one name was
+   * free and only the unique index stopping the second, as a raw constraint
+   * violation. `app.tenant_host_is_taken` answers with a single boolean and can
+   * report nothing about who holds a name.
+   */
+  const taken = await hostIsTaken(host, ctx.orgId);
+  if (taken) return { available: false, reasonKey: "app.slug.taken" };
 
-  if (taken?.by_other || taken?.quarantined) {
-    return { available: false, reasonKey: "app.slug.taken" };
-  }
   return { available: true, slug, host };
 }
 
@@ -249,11 +259,17 @@ export async function claimSubdomain(
        * common case from surfacing as a constraint violation to a user.
        */
       await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${host}, 0))`);
+      /*
+       * Inside the transaction the connection is tenant-scoped, so this read
+       * sees only THIS organisation and can never observe another company's
+       * claim — the same RLS blind spot the availability check had. The
+       * cross-tenant question is asked through the platform door instead, and
+       * the unique index remains the final guard either way.
+       */
       const clash = (await tx.execute(sql`
-        select 1 from public.tenant_host
-        where host = ${host} and status in ('pending', 'active') and org_id <> ${ctx.orgId}
-      `)) as unknown as unknown[];
-      if (clash.length > 0) {
+        select app.tenant_host_is_taken(${host}, ${ctx.orgId}::uuid) as taken
+      `)) as unknown as Array<{ taken: boolean }>;
+      if (clash[0]?.taken) {
         throw new CompanyAppError(`host taken: ${host}`, "app.slug.taken");
       }
       // Re-claiming the organisation's own pending host is idempotent.
@@ -307,11 +323,17 @@ export async function requestCustomDomain(
     },
     async (tx) => {
       await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${host}, 0))`);
+      /*
+       * Inside the transaction the connection is tenant-scoped, so this read
+       * sees only THIS organisation and can never observe another company's
+       * claim — the same RLS blind spot the availability check had. The
+       * cross-tenant question is asked through the platform door instead, and
+       * the unique index remains the final guard either way.
+       */
       const clash = (await tx.execute(sql`
-        select 1 from public.tenant_host
-        where host = ${host} and status in ('pending', 'active') and org_id <> ${ctx.orgId}
-      `)) as unknown as unknown[];
-      if (clash.length > 0) throw new CompanyAppError(`host taken: ${host}`, "app.domain.taken");
+        select app.tenant_host_is_taken(${host}, ${ctx.orgId}::uuid) as taken
+      `)) as unknown as Array<{ taken: boolean }>;
+      if (clash[0]?.taken) throw new CompanyAppError(`host taken: ${host}`, "app.domain.taken");
 
       const [row] = (await tx.execute(sql`
         insert into public.tenant_host (org_id, host, kind, status, verification_token, created_by)
