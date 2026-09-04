@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { guidedOnboardingEnabled } from "@/platform/flags";
 import { getT } from "@/platform/i18n/server";
-import { loadOnboarding } from "@/modules/guidedtour/service";
+import { loadOnboardingCached } from "./load";
 import type { Ctx } from "@/platform/tenancy";
 import type { RoleArchetype } from "@/platform/registries";
 import { dismissChecklistAction } from "./actions";
@@ -35,10 +35,10 @@ export async function GettingStarted({
 
   // Same reasoning as the tour mount: the catch guards the query, not the
   // render, because the render has not happened yet when this returns.
-  let data: Awaited<ReturnType<typeof loadOnboarding>>;
+  let data: Awaited<ReturnType<typeof loadOnboardingCached>>;
   let t: Awaited<ReturnType<typeof getT>>;
   try {
-    data = await loadOnboarding(ctx, archetype);
+    data = await loadOnboardingCached(ctx, archetype);
     t = await getT();
   } catch {
     // Never the reason a page fails to render.

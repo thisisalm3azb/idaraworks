@@ -1,6 +1,6 @@
 import { guidedOnboardingEnabled } from "@/platform/flags";
 import { getT } from "@/platform/i18n/server";
-import { loadOnboarding } from "@/modules/guidedtour/service";
+import { loadOnboardingCached } from "./load";
 import type { Ctx } from "@/platform/tenancy";
 import type { RoleArchetype } from "@/platform/registries";
 import { GuidedTour, type TourStepView } from "./GuidedTour";
@@ -47,10 +47,10 @@ export async function GuidedTourMount({
   // The catch covers the query and the catalogue lookup, and nothing else: a
   // try/catch cannot catch a render, because React builds the tree after this
   // function has already returned.
-  let onboarding: Awaited<ReturnType<typeof loadOnboarding>>;
+  let onboarding: Awaited<ReturnType<typeof loadOnboardingCached>>;
   let t: Awaited<ReturnType<typeof getT>>;
   try {
-    onboarding = await loadOnboarding(ctx, archetype);
+    onboarding = await loadOnboardingCached(ctx, archetype);
     t = await getT();
   } catch {
     return null;
