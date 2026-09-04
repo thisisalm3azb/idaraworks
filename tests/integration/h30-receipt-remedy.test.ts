@@ -43,6 +43,9 @@ const userA = randomUUID();
 let orgA = "";
 let unitA = "";
 let supplierA = "";
+// A second tenant, created once, for the isolation checks.
+const userB = randomUUID();
+let orgB = "";
 
 const ctx = (): Ctx => ({
   orgId: orgA,
@@ -141,14 +144,21 @@ beforeAll(async () => {
     insert into public.unit_of_measure
       (id, org_id, code, name_en, name_ar, dimension, factor_to_base, is_base)
     values (${unitA}, ${orgA}, 'EA', 'Each', 'حبة', 'count', 1, true)`;
+  await owner`
+    insert into auth.users (id, instance_id, aud, role, email, raw_user_meta_data, created_at, updated_at)
+    values (${userB}, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
+            ${`h30-other-${run}@example.com`}, '{"full_name":"Other"}'::jsonb, now(), now())`;
+  orgB = await createOrgForUser(userB, { name: "H30 Other", country: "AE", baseCurrency: "AED" });
+  await markFixtureOrg(owner, orgB, "h30-receipt-remedy", run);
+
   supplierA = randomUUID();
   await owner`
     insert into public.supplier (id, org_id, name)
     values (${supplierA}, ${orgA}, 'Fasteners Co')`;
-}, 60_000);
+}, 120_000);
 
 afterAll(async () => {
-  await wipeOrgs(owner, [orgA]);
+  await wipeOrgs(owner, [orgA, orgB]);
   await closeAppDb();
   await owner.end({ timeout: 5 });
 });
@@ -314,6 +324,52 @@ describe("setup guards", () => {
       where org_id = ${orgA} and warehouse_id = ${wh.id}
         and is_default_receiving and active and can_hold_stock`) as unknown as Array<{ n: number }>;
     expect(r!.n).toBe(1);
+  });
+});
+
+describe("tenant isolation of the new write paths", () => {
+  it("a warehouse id from another organisation cannot be written into", async () => {
+    // The adversarial case for every new create path: a real, valid id that
+    // simply belongs to somebody else. RLS hides the row, and the module refuses
+    // rather than inserting an orphan into the caller's own tenant.
+    const otherCtx: Ctx = {
+      orgId: orgB,
+      userId: userB,
+      costPrivileged: true,
+      pricePrivileged: true,
+      requestId: "h30-other",
+    };
+    const { warehouseId } = await createWarehouse(otherCtx, "owner", {
+      code: "THEIRS",
+      nameEn: "Their store",
+    });
+
+    await expect(
+      createLocation(ctx(), "owner", {
+        warehouseId,
+        code: "STEAL",
+        nameEn: "Should not exist",
+        kind: "storage",
+      }),
+    ).rejects.toMatchObject({ messageKey: "stock.setup.no_warehouse" });
+
+    // And nothing was created in either tenant as a side effect.
+    const [n] = (await owner`
+      select count(*)::int as n from public.stock_location where code = 'STEAL'`) as unknown as Array<{
+      n: number;
+    }>;
+    expect(n!.n).toBe(0);
+  }, 60_000);
+
+  it("listing warehouses never returns another organisation's", async () => {
+    const { warehouses } = await listWarehouses(ctx(), "owner");
+    for (const w of warehouses) {
+      const [row] = (await owner`
+        select org_id::text as org_id from public.warehouse where id = ${w.id}`) as unknown as Array<{
+        org_id: string;
+      }>;
+      expect(row!.org_id).toBe(orgA);
+    }
   });
 });
 
