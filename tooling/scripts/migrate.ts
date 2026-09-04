@@ -13,6 +13,11 @@ import { readdirSync, readFileSync } from "node:fs";
 import { createHash, createHmac, pbkdf2Sync } from "node:crypto";
 import path from "node:path";
 import postgres from "postgres";
+import {
+  PRODUCTION_PROJECT_REF,
+  productionMigrationPhrase,
+  targetsOnlyProductionProject,
+} from "../../tests/integration/guard-env";
 
 /**
  * RFC 5802/7677 SCRAM-SHA-256 verifier — Postgres accepts it in ALTER ROLE PASSWORD.
@@ -138,6 +143,33 @@ export async function runMigrations(options: { to?: string } = {}): Promise<Migr
 // CLI entry
 const isDirect = process.argv[1]?.replace(/\\/g, "/").endsWith("tooling/scripts/migrate.ts");
 if (isDirect) {
+  // H29: this runner loads `.env.local`, which on a maintainer's machine is
+  // PRODUCTION. Typing `tsx tooling/scripts/migrate.ts` while thinking of the
+  // test project therefore changes the live database with no confirmation and
+  // no printed target — the exact accident `migrate-prod.ts` was written to
+  // make hard, walked around by the shorter command sitting next to it.
+  //
+  // It now refuses. CI is unaffected: its local stack is not the production
+  // project, and the test project is not either. Production has one door, and
+  // that door prints what it will do and demands a phrase naming the project.
+  if (targetsOnlyProductionProject({ ...process.env } as Record<string, string | undefined>)) {
+    console.error(
+      [
+        `Refusing: this environment points at PRODUCTION (${PRODUCTION_PROJECT_REF}).`,
+        "",
+        "This runner exists for local and test databases. Production migrations go",
+        "through the deliberate path, which prints the target and the exact pending",
+        "files and requires a confirmation phrase naming the project:",
+        "",
+        `  npx tsx tooling/scripts/migrate-prod.ts --confirm=${productionMigrationPhrase()}`,
+        "",
+        "To see what WOULD be applied without touching anything:",
+        "",
+        "  npx tsx tooling/scripts/migrate-prod.ts --dry-run",
+      ].join("\n"),
+    );
+    process.exit(1);
+  }
   const toFlag = process.argv.indexOf("--to");
   const to = toFlag >= 0 ? process.argv[toFlag + 1] : undefined;
   runMigrations({ to })
