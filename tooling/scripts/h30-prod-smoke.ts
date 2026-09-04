@@ -113,26 +113,38 @@ async function main() {
     );
 
     // ── LB-2/LB-3: the diagnostic reaches a verdict about real receipts ──────
+    /*
+     * H30 LB-7: a null base_unit_id is NOT excluded here.
+     *
+     * This query originally mirrored the poster's own "stockable" test, which
+     * requires a base unit — and production has none, so it reported zero
+     * unposted receipts while PO-002 sat there unposted. That disagreement is
+     * how LB-7 was found, and keeping the wider definition is what makes this
+     * check able to see the case it exists for.
+     */
     const [unposted] = (await sql`
       with stockable as (
-        select grl.id, grl.grn_id, grl.org_id
+        select grl.id, grl.grn_id, grl.org_id, (i.base_unit_id is null) as no_base_unit
         from public.goods_receipt_line grl
         join public.purchase_order_line pol
           on pol.id = grl.po_line_id and pol.org_id = grl.org_id
         join public.item i on i.id = pol.item_id and i.org_id = pol.org_id
         where i.item_type in ('inventory','asset','kit','manufactured')
-          and i.base_unit_id is not null
+      ),
+      unposted_lines as (
+        select s.* from stockable s
+        where not exists (
+          select 1 from public.stock_movement sm
+          where sm.org_id = s.org_id
+            and sm.idempotency_key like 'grl:' || s.id::text || ':%')
       )
-      select count(distinct s.grn_id)::int as n
-      from stockable s
-      where not exists (
-        select 1 from public.stock_movement sm
-        where sm.org_id = s.org_id
-          and sm.idempotency_key like 'grl:' || s.id::text || ':%')
-    `) as unknown as Array<{ n: number }>;
+      select count(distinct grn_id)::int as n,
+             count(*) filter (where no_base_unit)::int as blocked
+      from unposted_lines
+    `) as unknown as Array<{ n: number; blocked: number }>;
     ok(
       "receipts: unposted goods receipts are identifiable in production",
-      typeof unposted!.n === "number",
+      unposted!.n >= 1,
       `${unposted!.n} receipt(s) recorded but not in the ledger`,
     );
     // PO-002 is a genuine customer record. It is READ and reported, never changed.
@@ -140,6 +152,11 @@ async function main() {
       "receipts: PO-002 is reported and left untouched",
       unposted!.n >= 1,
       "the remedy is a button for the owner, not an action of this smoke",
+    );
+    ok(
+      "receipts: LB-7 is visible — lines blocked for want of a base unit are counted",
+      unposted!.blocked > 0,
+      `${unposted!.blocked} line(s) cannot post until their item has a base unit`,
     );
 
     // ── The warehouse write path, on a marked disposable fixture ─────────────
