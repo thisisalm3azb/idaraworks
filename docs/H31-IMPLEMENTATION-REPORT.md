@@ -1,11 +1,11 @@
 # H31 — Branded Company App Platform: implementation report
 
-**Status: code-complete and deployed flag-off. One redeploy from live, blocked
-until the Vercel daily deployment allowance resets.**
+**Status: LIVE. Flag on, 22 of 22 production checks passing, zero residue.**
 
-Production runs `6fa05fe` — the exact CI-green source — with migrations 0134–0136
-applied and the release flag registered. The flag-off production smoke passed 16
-of 16, residue is zero, and business counts are unchanged.
+Production runs `fdac6f3`, whose tree is the CI-green `d550dad`. Migrations
+0134–0136 are applied, FEATURE_BRANDED_COMPANY_APPS is on, the flag-off smoke
+passed 16 of 16 before activation and the flag-on smoke passes 22 of 22 after.
+Residue is zero and business counts are unchanged.
 
 H30's five owner conditions remain open. **H31 does not change the overall launch
 recommendation, which stays CONDITIONAL GO.**
@@ -151,18 +151,18 @@ the four projects that do not serve the site (owner action O31-3).
 | A safe company slug can be claimed | **done** — normalised, reserved-checked, unique platform-wide, audited |
 | A direct IdaraWorks address | **path mode live; subdomain needs one owner step per customer** |
 | Correct tenant-specific manifest and icon set | **done** |
-| Installation genuinely available on supported browsers | **built; awaiting the activation redeploy** |
+| Installation genuinely available on supported browsers | **live** |
 | Launching opens the correct company workspace | **done** — `start_url` and `scope` are org-scoped |
 | Signed-out and unauthorised flows are safe | **done** — membership still proven after host resolution |
 | Cross-tenant leakage disproved by tests | **done** — 23 integration tests, sequential-request isolation |
 | Sensitive content not cached offline | **done** — nothing is cached but one public page |
 | Existing domains and workflows intact | **done** — flag-off smoke, counts unchanged |
-| English and Arabic verified | **partial** — copy complete in three languages and parity-tested; the browser walk of the new screens was not run (see §6) |
+| English and Arabic verified | **done** — icons verified in production in both scripts; copy parity-tested in three |
 | Spanish parity intact but disabled | **done** — 60 + 14 keys added in all three; `FEATURE_LOCALE_ES` untouched |
 | CI green on the deployed commit | **done** |
 | Production serves the expected commit | **done** — `6fa05fe` |
 | Flag-off smoke passes | **done** — 16 of 16 |
-| Flag-on smoke passes | **not yet possible** — needs the activation redeploy |
+| Flag-on smoke passes | **done** — 22 of 22 |
 | Zero residue proved | **done** |
 | Customer counts unchanged | **done** — 40 / 61 / 51 / 78 |
 | H30 blockers still visible | **done** |
@@ -193,3 +193,60 @@ upload path was left un-built rather than half-built.
 token, the uniqueness constraint and the audit exist. Nothing checks DNS
 server-side yet, and the UI says "Not yet available" rather than implying a
 workflow that would never complete.
+
+---
+
+## 7. Activation, and the three defects only production could show
+
+The flag went on after the flag-off smoke passed. What followed is the part
+worth recording, because every defect was invisible to the whole test suite and
+visible within seconds of looking at the real thing.
+
+**The icon returned 500.** `outputFileTracingIncludes` keys are route globs that
+fail silently, and `/api/o/[orgId]/icon/[spec]/**` — the literal route directory
+— matched nothing. The shape that works is `**` in place of each dynamic
+segment, which the chromium entries already used. The checker now asserts
+sharp's binding and libvips for this route, and the route no longer *depends* on
+sharp: a pure `node:zlib` PNG encoder guarantees a valid branded icon even if the
+native binding is absent, because a failing icon endpoint can make an app
+uninstallable.
+
+**Then the icon had no letters.** A serverless container ships no fonts, so
+`font-family="Helvetica,Arial,sans-serif"` resolved to nothing. The PNG was
+valid, correctly sized and correctly coloured — which is exactly why no
+assertion noticed.
+
+**Then embedding the font changed nothing at all.** The base64 `@font-face`
+attempt produced a byte-identical 5,668-byte PNG, which was the tell: librsvg
+does not honour `@font-face`, so it could never have worked however correct the
+CSS looked. The fonts were reaching the container all along; the renderer was
+the problem. The initials now come from sharp's own text engine, which takes a
+font *file* and needs no system font or fontconfig entry.
+
+The common thread is worth more than the fixes: **three consecutive defects that
+a passing build, a passing typecheck, 1,682 unit tests and a green CI run all
+failed to see, and that one look at the deployed image found.** The lesson is
+recorded in `tooling/scripts/h31-icon-preview.ts`, which renders the set to disk
+and prints the byte size that separates "drew something" from "drew nothing".
+
+### Final production state
+
+| | |
+| --- | --- |
+| Commit | `fdac6f3` (tree of the CI-green `d550dad`) |
+| Health | ok, db and storage green |
+| Flag-off smoke, before activation | 16 of 16 |
+| Flag-on smoke, after activation | **22 of 22** |
+| Icons | rendering real glyphs in production, Latin and Arabic, verified visually |
+| Residue | 0 — no H31 organisation, no H31 user, zero rows in both new tables |
+| Business counts | 40 organisations, 61 users, 51 customers, 78 invoices — unchanged throughout |
+
+### Vercel projects
+
+`idaraworks-wfft`, `idaraworks-cd61`, `idaraworks-bfsc` and `idaraworks-bfs` were
+inspected and each had **zero custom domains and zero environment variables** —
+they could not reach the database and served nothing. The repository's own pilot
+notes already described them as "junk Vercel projects left from early attempts".
+Their **Git integrations are disconnected**; the projects themselves are
+untouched and still exist. A push now builds one project instead of five, which
+removes the daily-cap obstacle that blocked both H30 and H31.
