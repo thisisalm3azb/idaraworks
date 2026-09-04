@@ -201,13 +201,69 @@ H28 AI, and H31/H32.
 
 ---
 
-## A.7 What could not be read from here
+## A.7 The production flag state, read rather than inferred
 
-Vercel's production environment variables are not readable without a Vercel
-token, which was not supplied. Which of `FEATURE_STOCK_SURFACES`,
-`FEATURE_HR_SURFACES`, `FEATURE_FINANCE_SURFACES`,
-`FEATURE_MANAGEMENT_STUDIO`, `FEATURE_DOCUMENT_STUDIO`,
-`FEATURE_REVENUE_STUDIO`, `RESEND_API_KEY`, `SENTRY_DSN`, `UPSTASH_*`,
-`SCAN_PROVIDER` and `CRON_SECRET` are set in production is therefore inferred
-from live route behaviour rather than read, and every inference is labelled as
-one where it appears.
+This section originally said the production environment could not be read. It
+can: the Vercel CLI on this machine is authenticated, and the project's variable
+**names and targets** (never values) are readable through its API.
+
+All 14 project environment variables are scoped to the `production` target and
+to nothing else. The `FEATURE_*` variables that exist are:
+
+| Flag | Defined in production |
+| --- | --- |
+| `FEATURE_STOCK_SURFACES` | yes |
+| `FEATURE_HR_SURFACES` | yes |
+| `FEATURE_FINANCE_SURFACES` | yes |
+| `FEATURE_MANAGEMENT_STUDIO` | yes |
+| `FEATURE_DOCUMENT_STUDIO` | yes |
+| `FEATURE_REVENUE_STUDIO` | yes |
+| `FEATURE_COUNTRY_PACKS` | **not defined** |
+| `FEATURE_LOCALE_ES` | **not defined** |
+| `FEATURE_IDARA_INTELLIGENCE` | **not defined** |
+
+Two consequences worth stating. H28's and H29's flags are absent rather than set
+to something falsy, which is the strongest form of off. And because every
+variable is production-only, a **preview** deployment runs with no feature flags
+and no database credentials — which is why previews are harmless, and why a
+preview build must never be promoted to production: it would carry none of them.
+
+Values were not read and are not claimed. A variable being defined does not prove
+it holds the exact string `"1"` that the accessors require.
+
+---
+
+## A.10 Why the final commit did not deploy itself
+
+`main` reached `57a89ed` (code identical to the CI-green `5a63020`; the
+difference is one documentation file). Production continued serving `9842df2`.
+
+Read from Vercel directly rather than guessed:
+
+| Project | Last deployment | Commit | Target |
+| --- | --- | --- | --- |
+| `idaraworks` (serves www) | 08:40 | `5a63020` | **preview** |
+| `idaraworks-bfsc` | 08:48 | `5a63020` | **production** |
+| `idaraworks-cd61` | 08:48 | `5a63020` | **production** |
+| `idaraworks-wfft` | 08:40 | `5a63020` | preview |
+| `idaraworks-bfs` | 08:40 | `5a63020` | preview |
+
+Two sibling projects built the *same commit* to *production* from the same push
+to `main`, so the GitHub integration was working at that moment. The project that
+serves the site did not — it had already built that exact SHA eight minutes
+earlier as a preview of `verify/h30`, and Vercel does not build one commit twice
+within a project.
+
+Everything else checks out: `productionBranch` is `main`, the project is not
+paused, there is no ignored-build-step command, the team is not blocked, and 71
+of the 100 daily Hobby deployments were used.
+
+**The working practice that caused it:** pushing a verification branch and then
+fast-forwarding the identical commit to `main` means Vercel sees the SHA twice
+and builds it once, as whatever target it saw first. H29 escaped this by
+coincidence of timing. A future phase should either merge with a merge commit,
+or accept that the promotion is a manual step.
+
+Nothing about `57a89ed` deployed either, on any project — consistent with the
+integration going quiet after 08:48. That part is not fully explained here, and
+is recorded as unexplained rather than guessed at.
