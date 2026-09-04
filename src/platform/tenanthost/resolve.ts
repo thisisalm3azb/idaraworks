@@ -79,6 +79,15 @@ export function normalizeHost(raw: string | null | undefined): string | null {
   // Strip exactly one port suffix, and only a numeric one.
   const portMatch = /^(.*):(\d{1,5})$/.exec(host);
   if (portMatch) host = portMatch[1]!;
+  /*
+   * Any colon still here is not a port.
+   *
+   * Found by the unit test: `acme.idaraworks.com:abc` failed the numeric-port
+   * match and was then accepted whole, so a hostname containing a colon reached
+   * classification. A colon is not legal in a hostname, and a value that
+   * contains one after the port strip is malformed rather than interesting.
+   */
+  if (host.includes(":")) return null;
   if (host.endsWith(".")) host = host.slice(0, -1);
   if (host.length === 0 || host.length > 253) return null;
   return host;
