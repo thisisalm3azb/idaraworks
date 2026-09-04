@@ -5,6 +5,8 @@
  * implemented rule carries a source, no rule claims compliance, and the
  * validators are permissive exactly where the mandate says they must be.
  */
+import { readdirSync, readFileSync } from "node:fs";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import en from "@/platform/i18n/messages/en.json";
 import {
@@ -45,6 +47,34 @@ const SA_CTX: FormattingContext = {
   currency: "SAR",
   hijriDisplay: true,
 };
+
+describe("country packs, not country conditionals", () => {
+  /** Every TypeScript file under src/, so the rule cannot be dodged by location. */
+  function* sourceFiles(dir: string): Generator<string> {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) yield* sourceFiles(full);
+      else if (/\.(ts|tsx)$/.test(entry.name)) yield full;
+    }
+  }
+
+  it("no file branches on a country code", () => {
+    // The mandate's architectural rule. A single `country === "AE"` is harmless
+    // on the day it is written and is the thing that makes a third country a
+    // rewrite instead of a pack. The pack files themselves DECLARE their country
+    // and are the one place it may be named.
+    const BRANCH = /\bcountry\w*\s*[=!]==\s*"[A-Z]{2}"|"[A-Z]{2}"\s*[=!]==\s*\w*[Cc]ountry\b/;
+    const offenders: string[] = [];
+    for (const file of sourceFiles("src")) {
+      if (file.replace(/\\/g, "/").includes("src/platform/country/packs/")) continue;
+      const source = readFileSync(file, "utf8");
+      source.split("\n").forEach((line, i) => {
+        if (BRANCH.test(line)) offenders.push(`${file}:${i + 1} ${line.trim().slice(0, 80)}`);
+      });
+    }
+    expect(offenders).toEqual([]);
+  });
+});
 
 describe("the registry", () => {
   it("is sound: unique keys, parseable dates, no overlapping windows", () => {
