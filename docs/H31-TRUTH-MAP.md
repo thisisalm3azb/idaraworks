@@ -230,4 +230,64 @@ code, native Windows/macOS/iOS/Android application, app-store distribution.
 
 ## F. Implementation record
 
-Filled as the phase proceeds.
+### F.1 What was built
+
+| Migration | What it adds |
+| --- | --- |
+| `0134_h31a` | `tenant_host` (platform-wide unique live claim, 90-day release quarantine, status absent from the tenant UPDATE grant) and `org_app_brand` |
+| `0135_h31b` | `app.public_app_identity` and `app.resolve_tenant_host` — the two pre-authentication reads |
+| `0136_h31c` | `app.tenant_host_is_taken` — see F.3 |
+
+All three are additive. No existing row is changed, no grant is narrowed, and an
+organisation with none of these rows behaves exactly as it does today.
+
+| Surface | Path |
+| --- | --- |
+| Per-tenant manifest | `/api/o/{orgId}/manifest` |
+| Per-tenant icons | `/api/o/{orgId}/icon/{size}[-maskable].png` |
+| App & Branding centre | `/o/{orgId}/settings/app` |
+| Operator readiness | `/platform/apps` |
+| Offline shell | `/offline` |
+| Service worker | `/sw.js` |
+
+### F.2 Two defects the tests found before a customer could
+
+**A hostname containing a colon was accepted.** `acme.idaraworks.com:abc` failed
+the numeric-port strip and was then classified whole, so a malformed host reached
+tenant resolution. Any colon surviving the port strip now refuses the host.
+Found by `tenant-host-law.test.ts`.
+
+**Slug availability was blind to other tenants.** `checkSlug` read
+`public.tenant_host` through the tenant's own connection, and row-level security
+scopes that to the caller's organisation — so a hostname already claimed by
+another company read as absent. Two tenants were both told one name was free,
+and only the unique index stopped the second, as a raw constraint violation.
+Migration 0136 adds a cross-tenant boolean, and the same fix was applied to the
+in-transaction clash checks in both claim paths. Found by
+`h31-company-app.test.ts`.
+
+Both now have permanent regression tests.
+
+### F.3 The privacy shape of the availability read
+
+`app.tenant_host_is_taken` returns **one boolean**. It reports nothing about who
+holds a name, when they claimed it, or whether that company exists, so it answers
+the question a customer needs without becoming a way to enumerate the customer
+base. "Not available" is deliberately the same answer for taken, reserved and
+quarantined.
+
+### F.4 Not implemented, and why
+
+| Deferred | Reason |
+| --- | --- |
+| **Customer-uploaded app icons** | The icon endpoint is unauthenticated by necessity — a home screen draws its icon before anyone signs in. Reading a customer's private storage object on that path is how a private asset becomes public. The generated mark ships; the upload path was left un-built rather than half-built. |
+| **Automated DNS verification for custom domains** | The claim, the token, the uniqueness and the audit exist. Actually checking DNS server-side and driving a provider API is meaningful work that would be untestable until a real customer domain exists. |
+| **Wildcard `*.idaraworks.com`** | Owner action — nameserver migration. See A.2.1. |
+| **Cross-subdomain single sign-on** | Deliberately refused. Part H says prefer separate sign-in over weakened cookie boundaries; cookies stay host-only, and a user installing two companies signs into each. |
+
+### F.5 Release state
+
+`FEATURE_BRANDED_COMPANY_APPS` — off through the first production deployment,
+turned on only after the flag-off smoke passes. With it off there is no manifest,
+no icon, no service worker registration, no install affordance, no settings entry
+and no host resolution; `/o/{orgId}` is byte-for-byte what it is today.
