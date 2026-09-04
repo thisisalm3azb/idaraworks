@@ -2,7 +2,7 @@
 
 **Recommendation: CONDITIONAL GO for a controlled pilot.**
 
-The software is ready. Six launch-blocking defects were found and fixed, one of
+The software is ready. Seven launch-blocking defects were found and fixed, one of
 them a loaded gun pointed at every customer record in the database. What remains
 is not code: five owner actions in `docs/H30-OWNER-CHECKLIST.md` §1 must close
 before a pilot customer enters real data, and every one of them needs a
@@ -18,7 +18,7 @@ Privacy position: `docs/H30-PRIVACY-CHECKLIST.md`.
 
 ---
 
-## 1. The six defects
+## 1. The seven defects
 
 ### LB-1 — the cleanup script would have deleted every customer
 
@@ -100,6 +100,40 @@ approved purchase order in production.
 checked whether the limit had been reached. A 501-line receipt posted 500 and
 reported success, so the paperwork said the goods arrived and the ledger held
 part of them. It now refuses rather than truncating.
+
+### LB-7 — no item in production could become stock, ever
+
+Found by the H30 production smoke, which expected to see PO-002 in the
+unposted-receipts list and saw nothing. The diagnostic that explains it is kept
+as `tooling/scripts/h30-po002-diagnose.ts` (read-only):
+
+```
+unit_of_measure rows in the whole production database: 0
+items with no base unit:                              35
+```
+
+`resolveReceiptTarget` skips any line whose item has a null `base_unit_id`,
+quietly, as "not an inventory item". So **every goods receipt in the production
+database would have failed to post even with a perfectly configured warehouse**,
+and the failure would have looked like a shrug rather than a problem. This is the
+second cause of PO-002; `docs/H22-BLOCKER-PO002.md` named the missing warehouse
+and the receive-again trap and stopped there.
+
+Worse, the H30 remedy's own diagnostic initially excluded those lines as "not
+stockable" — so the remedy built for PO-002 could never have shown PO-002.
+
+Fixed in three places: readiness reports the count and names it after the
+warehouse; the diagnostic counts blocked lines instead of hiding them, and the
+purchase-order card says which lines cannot post and why; and `createUnit`
+creates a unit and adopts it as the base unit for every stock item that has none,
+in one statement, touching only items that are stockable and currently unset so
+it can never overwrite a unit somebody chose.
+
+The integration test then caught three defects in that fix that reading had not:
+`unit_of_measure.name_ar` is NOT NULL (a user leaving the optional Arabic name
+blank would have met a raw constraint violation), a unit code is capped at 16 not
+24, and exactly one base unit per dimension is allowed — so inserting every unit
+as a base worked once and failed for ever after.
 
 ### LB-6 — PDFs in the wrong language
 
@@ -191,12 +225,19 @@ Recorded so nobody re-opens a settled question. Full list in truth map §A.8.
 
 | Step | Result |
 | --- | --- |
-| Merge | `verify/h30` fast-forwarded into `main` at `9842df2` |
-| Migrations | **none.** H30 changed no file under `supabase/migrations/`; the deployment is code-only |
-| Deployment | _filled from the deploy_ |
-| Production smoke | _filled from the smoke_ |
-| Residue | _filled from the smoke_ |
-| Business counts | _filled from the smoke_ |
+| Migrations | **none.** H30 changed no file under `supabase/migrations/`; both deployments are code-only |
+| First deployment | `9842df2` merged to `main` and served by production. `/api/health` reports it, and the queue probe now carries `stale: true` — LB-4's alarm working in production against the very stall that previously read as healthy |
+| Production smoke on `9842df2` | 8 of 9 checks passed. **The failing check was the point**: it asserted PO-002 would appear in the unposted list, it did not, and diagnosing that found LB-7 |
+| Second deployment | `2b721c2` — LB-7 — _pending CI_ |
+| Residue | 0. The smoke creates nothing; it reads, classifies and reports |
+| Business counts | identical before and after: 40 organisations, 61 users, 51 customers, 93 jobs, 78 invoices, 0 warehouses, 0 stock movements, 646 audit rows |
+
+The smoke is narrow by design. H30 shipped no schema, so there was nothing to
+verify structurally; what it checks instead is that the fixes reach the right
+verdict about production's **real** rows — that no organisation with a real login
+is deletable, that every deletable one carries recorded evidence, that a seeded
+demo never is, that the queue's staleness is computed rather than assumed, and
+that PO-002 is reported and left untouched.
 
 ---
 

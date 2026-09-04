@@ -142,6 +142,26 @@ lives in the phase reports, not in code comments.
 | **LB-4** | high | The health check raises `alert` only on a dead letter, which requires a worker that exists. Production sat 3.2 days with eleven unprocessed jobs reporting `alert: false`. | **fixed** — staleness alarm, `af95617` |
 | **LB-5** | medium | `postGoodsReceiptToStock` read receipt lines with a bare `limit 500` and nothing checked the limit. A 501-line receipt posted 500 and reported success. | **fixed** — refuses, `321ea95` |
 | **LB-6** | medium | `DocumentActions` carried no language on any link and the document route defaults to English, so an Arabic reader's "Download PDF" returned English. There was no route to an Arabic PDF at all from invoices, quotes or week plans. | **fixed** — `af95617` |
+| **LB-7** | **high** | Production holds **zero** `unit_of_measure` rows and **35 stock items with no base unit**. `resolveReceiptTarget` skips any such line silently as "not an inventory item", so every goods receipt in the database would have failed to post even with a perfectly configured warehouse. This is the second cause of PO-002 and H22 never found it. | **fixed** — `2b721c2` |
+
+### How LB-7 was found
+
+By the H30 production smoke, which expected to see PO-002 in the unposted list
+and saw nothing. The diagnostic that explains it is kept as
+`tooling/scripts/h30-po002-diagnose.ts` (read-only):
+
+```
+unit_of_measure rows in the whole production database: 0
+items with no base unit:                              35
+```
+
+Two lessons worth keeping. First, the H22 blocker document named the missing
+warehouse and the receive-again trap and stopped there; the deeper cause was
+underneath both, and a remedy built only from that document would have left
+Najolatech exactly where it was. Second, the H30 remedy's own diagnostic
+initially excluded these lines as "not stockable", which would have made it
+blind to the one case it exists for. A smoke that asserts a specific expected
+row found both.
 
 ### The root cause behind LB-4, and why it is not fixed here
 
