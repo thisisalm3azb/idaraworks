@@ -278,6 +278,14 @@ export function DocumentWorkspace({
             >
               {dict.actions.print}
             </a>
+            {/*
+              H30 LB-6 checked and deliberately unchanged. This route ignores
+              `lang` and renders the document's OWN stored language, which is the
+              right answer for an authored document: an issued contract does not
+              change language because of who opens it. The reader-language rule
+              applies to records rendered from live data (invoices, quotes, week
+              plans), not here.
+            */}
             <a
               href={`${base}?format=pdf`}
               className="min-h-11 rounded-md border border-line px-3 py-2 text-sm text-ink hover:bg-sunken"

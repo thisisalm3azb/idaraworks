@@ -25,8 +25,19 @@ export type QueueProbe = ProbeResult & {
   unprocessed?: number;
   oldest_unprocessed_age_s?: number;
   dead_lettered?: number;
+  /** Work is waiting and nothing is collecting it — see QUEUE_STALE_AFTER_S. */
+  stale?: boolean;
   alert?: boolean;
 };
+
+/**
+ * How long a job may wait before the queue counts as stalled rather than busy.
+ *
+ * Deliberately generous. Every job in this system is a document render or a
+ * notification and should complete in seconds; an hour distinguishes "the worker
+ * is behind" from "no worker exists", without alarming on a slow afternoon.
+ */
+export const QUEUE_STALE_AFTER_S = 3600;
 export type InngestStatus = {
   configured: boolean;
   status: "configured" | "unconfigured";
@@ -118,7 +129,22 @@ export async function healthReport(requestId: string): Promise<HealthReport> {
           queue.unprocessed = s.unprocessed;
           queue.oldest_unprocessed_age_s = s.oldest_age;
           queue.dead_lettered = s.dead_lettered;
-          queue.alert = s.dead_lettered > 0;
+          /*
+           * H30 LB-4: a dead letter is not the only way a queue fails.
+           *
+           * Production ran for 3.2 days with eleven jobs unprocessed, zero dead
+           * letters, and this field reporting `false` — because nothing had
+           * FAILED. Nothing had run at all: Inngest is unprovisioned, so no
+           * worker ever picked the jobs up, no attempt was made, and no attempt
+           * could exhaust its retries. A queue that is never drained looked
+           * exactly as healthy as one with nothing to do.
+           *
+           * Staleness is now its own alarm. The threshold is generous — an hour
+           * is far longer than any job here should wait — so it stays quiet in
+           * normal operation and cannot be missed once something stops.
+           */
+          queue.stale = s.unprocessed > 0 && s.oldest_age > QUEUE_STALE_AFTER_S;
+          queue.alert = s.dead_lettered > 0 || queue.stale;
         }
       } catch (e) {
         queue.error = safeProbeError(e);
