@@ -89,7 +89,26 @@ describe("integration fixtures clean up after themselves", () => {
     const script = readFileSync("tooling/scripts/test-residue.ts", "utf8");
     expect(script).not.toMatch(/\bdelete from\b/i);
     expect(script).not.toMatch(/\bdrop\s+table\b/i);
-    // A name alone must never be sufficient evidence.
-    expect(script).toMatch(/byName && allTestEmails && noBusiness/);
+  });
+
+  /*
+   * H30 moved the "is this a fixture" rule out of the report and into
+   * tooling/fixtures/evidence.ts, so the script that DELETES reaches the same
+   * verdict as the report a human reads before authorising it. This assertion
+   * followed it there. The behaviour it protects — a name alone is never
+   * sufficient — is now covered directly by fixture-evidence-law.test.ts, which
+   * calls the classifier instead of reading its source.
+   */
+  it("the deletion rule and the report share one classifier", () => {
+    for (const path of ["tooling/scripts/test-residue.ts", "tooling/scripts/s7-cleanup.ts"]) {
+      expect(readFileSync(path, "utf8"), `${path} must not carry its own copy of the rule`).toMatch(
+        /from "\.\.\/fixtures\/evidence"/,
+      );
+    }
+  });
+
+  it("a name alone is never sufficient evidence to delete an organisation", () => {
+    const rule = readFileSync("tooling/fixtures/evidence.ts", "utf8");
+    expect(rule).toMatch(/byName && allTestEmails && noBusiness/);
   });
 });

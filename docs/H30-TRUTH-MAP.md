@@ -134,15 +134,50 @@ lives in the phase reports, not in code comments.
 
 ## A.6 Launch blockers found during the truth audit
 
-| Id | Severity | Finding |
-| --- | --- | --- |
-| **LB-1** | critical | `s7-cleanup.ts` deletes every organisation not in a two-entry hard-coded allow-list. Harmless while production held only fixtures; a customer-data destroyer the moment a pilot tenant exists. |
-| **LB-2** | high | No warehouse or stock-location setup exists anywhere in the product. `service.ts` exports no warehouse function and `src/app/…/stock/` has two pages, neither of them setup. Receiving cannot be made to work by a user. |
-| **LB-3** | high | The goods-receipt failure banner instructs an action that can duplicate a receipt, and no action exists to replay the failed posting. |
-| **LB-4** | high | Inngest is unprovisioned, so every queued job is permanently unprocessed. The health check reports `alert: false` while the oldest job is 3.2 days old. |
-| **LB-5** | medium | `postGoodsReceiptToStock` reads receipt lines with a bare `limit 500`. A receipt with more lines posts partially and reports success. |
+| Id | Severity | Finding | State |
+| --- | --- | --- | --- |
+| **LB-1** | critical | `s7-cleanup.ts` deletes every organisation not in a two-entry hard-coded allow-list. The allow-list had gone stale and matched **zero of the 40** organisations in production, so one `--apply` would have deleted every tenant, including all four with real logins, and their `auth.users` rows. | **fixed** — rule inverted, `48a64fc` |
+| **LB-2** | high | No warehouse or stock-location setup exists anywhere in the product. Receiving cannot be made to work by a user. | **fixed** — module + screen, `321ea95` |
+| **LB-3** | high | The goods-receipt failure banner instructs an action that duplicates a receipt, and no action exists to replay the failed posting. | **fixed** — guided remedy, `321ea95` |
+| **LB-4** | high | The health check raises `alert` only on a dead letter, which requires a worker that exists. Production sat 3.2 days with eleven unprocessed jobs reporting `alert: false`. | **fixed** — staleness alarm, `af95617` |
+| **LB-5** | medium | `postGoodsReceiptToStock` read receipt lines with a bare `limit 500` and nothing checked the limit. A 501-line receipt posted 500 and reported success. | **fixed** — refuses, `321ea95` |
+| **LB-6** | medium | `DocumentActions` carried no language on any link and the document route defaults to English, so an Arabic reader's "Download PDF" returned English. There was no route to an Arabic PDF at all from invoices, quotes or week plans. | **fixed** — `af95617` |
 
-Further findings are appended as later parts of H30 discover them.
+### The root cause behind LB-4, and why it is not fixed here
+
+Inngest is unprovisioned. That is why the queue never drains, and it is also why
+`po.pdf_pending` — "LPO PDF pending render" — is permanent rather than pending on
+every approved purchase order in production. Provisioning it needs an external
+account and its credentials, which were not supplied: owner action **O-6**.
+
+H30 fixed the part that was a defect (a monitor that could not see the failure)
+and left the part that needs a credential clearly named.
+
+---
+
+## A.8 Audited and deliberately left alone
+
+Recorded so a later reader does not re-open a settled question.
+
+| Thing | Finding |
+| --- | --- |
+| Document Studio's PDF link carries no `lang` | **Correct.** That route ignores `lang` and renders the document's own stored language. An issued contract does not change language because of who opens it. |
+| The revenue report PDF link carries no `lang` | **Correct.** That route reads the locale from the request cookie. |
+| `src/app/(app)/o/[orgId]/jobs/[jobId]/errors.ts` has no auth | **Not an action file.** The string `"use server"` appears in a comment explaining why it is a plain module. |
+| `/f/<token>` and `/sign/<token>` actions have no session auth | **Correct by design.** The token is the authority and every one is rate-limited per IP. |
+| `/api/health` and `/api/ready` are unauthenticated | **Correct.** Both are rate-limited, cached, and expose no secret. |
+| Seat and active-work limits | **Enforced server-side**, recounted inside the transaction under a per-organisation advisory lock, so neither can be raced and neither depends on a hidden button. |
+| The 1,000-row PostgREST ceiling | **Does not apply.** Reads go through a direct postgres connection, not PostgREST. Now proved rather than assumed — `h30-pagination-scale.test.ts` walks 1,150 rows. |
+| 26 database scripts with no environment guard | Re-read individually. `s7-cleanup.ts` was the only destructive one without positive identification and is fixed; `sim-*` carry their own `assertKnownProject()`; the rest are dry-run, read-only, or write fixtures under a caller-chosen env file. |
+
+---
+
+## A.9 What H30 did not touch, by instruction
+
+PO-002's actual stock repair (owner action **O-11** — the remedy is built and
+proved; running it changes a live customer's records), the H24 transition
+ambiguities, historical accounting conversion, the H29 country and locale flags,
+H28 AI, and H31/H32.
 
 ---
 
