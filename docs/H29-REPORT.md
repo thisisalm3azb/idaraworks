@@ -186,11 +186,76 @@ zero.
 
 ### 3.3 Integration and adversarial evidence
 
-_Filled from the run._
+Three new suites run against a real database, plus the harness that already
+existed and now covers H29's tables.
+
+**`h29a-establishments` (34 tests).** An organisation holds establishments in
+two countries at once and each keeps its name in the script it was typed in.
+`country` is absent from the UPDATE grant, so no application path can change it;
+passing one to the module is dropped before the write. Two resolvable versions
+cannot cover one day — the database refuses the overlap. An adoption applies
+from its own date and not before; adding an earlier adoption afterwards does not
+change what a later date resolves to. Adoption rows carry INSERT and SELECT
+grants and no DELETE, and the only updatable column is `superseded_by`. A
+version cannot be applied from before it exists. The preview adds no adoption
+row and no audit row, and reports what it cannot touch with real counts. A
+registration matching a published shape is recorded as **unverified**, because
+matching a pattern is not verification. An identifier the country does not have
+is refused by name. Another tenant sees nothing, cannot adopt against an
+establishment it cannot see, and gets an empty readiness rather than a borrowed
+one. A viewer reads and cannot write.
+
+**`h29b-einvoicing` (15 tests).** A channel is born with no credential; a
+credential *reference* that looks like a secret is refused; naming a variable
+that does not exist is not the same as having one, and an empty or whitespace
+value counts as absent. A document is still prepared, hashed, chained and given
+a QR payload without any credential, the counter increments per channel, and
+preparing the same source twice returns the same document. Article 53's fields
+are enforced by name. Submission is **`unavailable`** — never a fabricated
+success and never `failed`, which would invite a retry — every recorded attempt
+says `unavailable`, nothing claims a cleared or reported state, and the event
+log carries no UPDATE or DELETE grant. Another tenant can neither prepare nor
+submit.
+
+**`h29c-locale-release` (13 tests).** Only a platform operator can record a
+review; a non-operator's attempt writes nothing. A decided review with no named
+reviewer is refused by the function AND by a table constraint, so a direct owner
+UPDATE fails too. `app_user` holds SELECT and nothing else. Every change lands
+in the platform audit with the operator's identity.
+
+**The two-org bleed harness.** H29's seven new tenant tables are registered with
+seeders, so the cross-org sweep now proves their isolation with the rest of the
+schema. This was found by CI, not by the local run — see §3.5.
 
 ### 3.4 The interface, in three languages, on desktop and phone
 
-_Filled from the walk._
+`tooling/scripts/h29-ui-shots.ts` drives the real screens against the dev
+preview with both flags on, and captures thirteen screenshots. It passes with no
+errors, and it fails on the things that matter rather than on appearance:
+
+- the six readiness states each appear by name, and **a percentage anywhere on
+  the readiness page is an error**;
+- the disclaimer that a pack files nothing and certifies nothing is present;
+- the Saudi establishment shows *Building number*, *District* and *Postal code*,
+  and the presence of a generic "Address line 1" is an error;
+- reading the establishment as at a date before the version's start must NOT
+  mark it in force and must show it as starting later;
+- the simulator shows its diff, its "what this cannot touch" panel and its
+  statement that nothing on the page changes anything;
+- the switcher offers English, العربية and Español, each named in itself;
+- Arabic renders `dir="rtl"` with Arabic script; Spanish renders `lang="es"`
+  `dir="ltr"` and specific English strings from those screens are errors, as is
+  the Spanish title failing to render;
+- a visible `⟦key⟧` marker anywhere is an error, as is horizontal overflow, a
+  console error, or a control under 40px inside the page's own content.
+
+That last check found a 16px checkbox: the house pattern puts it inside a
+`min-h-11` label row, and these forms were missing it. The Spanish pass found
+four defects a text-only check could not — an English rule dropped into a
+translated sentence, a literal `{credential}{provider}`, a raw locale code shown
+to a person, and a storage key where the country's own name for a registration
+belongs. All four are fixed, and a unit test now requires every pack string a
+surface renders to be a message key with copy in all three catalogues.
 
 ### 3.5 CI on the exact commit
 
