@@ -73,6 +73,17 @@ function findTarget(name: string): HTMLElement | null {
   return null;
 }
 
+/**
+ * A store that never changes, used only to ask "am I on the client".
+ *
+ * Hoisted to module scope deliberately: `useSyncExternalStore` re-subscribes
+ * whenever the subscribe function's identity changes, so an inline arrow would
+ * tear down and re-establish a subscription on every single render.
+ */
+const NEVER_CHANGES = () => () => {};
+const ON_CLIENT = () => true;
+const ON_SERVER = () => false;
+
 const PAD = 6;
 const PANEL_W = 320;
 const GAP = 12;
@@ -111,11 +122,7 @@ export function GuidedTour({
    * do the same job by triggering a second render — which is exactly what the
    * cascading-render rule exists to prevent.
    */
-  const mounted = useSyncExternalStore(
-    () => () => {},
-    () => true,
-    () => false,
-  );
+  const mounted = useSyncExternalStore(NEVER_CHANGES, ON_CLIENT, ON_SERVER);
 
   useEffect(() => {
     returnFocus.current = document.activeElement as HTMLElement | null;
@@ -140,14 +147,35 @@ export function GuidedTour({
   useEffect(() => {
     if (phase !== "tour" || !step) return;
     let frame = 0;
+    /*
+     * Measure, but only tell React when something moved.
+     *
+     * Without this comparison the loop calls setRect with a fresh object sixty
+     * times a second, and since every one is a new reference React re-renders
+     * the whole overlay every frame for a highlight that is usually perfectly
+     * still. On a phone that is battery and jank in exchange for nothing.
+     */
     const measure = () => {
       const el = step.target ? findTarget(step.target) : null;
-      if (!el) {
-        setRect(null);
-        return;
-      }
-      const r = el.getBoundingClientRect();
-      setRect({ top: r.top, left: r.left, width: r.width, height: r.height });
+      const next: Rect | null = el
+        ? (({ top, left, width, height }) => ({ top, left, width, height }))(
+            el.getBoundingClientRect(),
+          )
+        : null;
+      setRect((prev) => {
+        if (prev === null && next === null) return prev;
+        if (
+          prev !== null &&
+          next !== null &&
+          prev.top === next.top &&
+          prev.left === next.left &&
+          prev.width === next.width &&
+          prev.height === next.height
+        ) {
+          return prev; // identical reference: React bails out of the render
+        }
+        return next;
+      });
     };
     // Deliberately NOT measured synchronously here: a sticky header, a
     // collapsing sidebar and an on-screen keyboard all move things under us, so
