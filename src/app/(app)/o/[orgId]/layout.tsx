@@ -19,6 +19,7 @@ import {
   documentStudioEnabled,
   revenueStudioEnabled,
   countryPacksEnabled,
+  brandedCompanyAppsEnabled,
 } from "@/platform/flags";
 import { resolveEntitlements } from "@/platform/entitlements";
 import {
@@ -29,6 +30,8 @@ import {
 import { getAppBranding } from "@/modules/branding/service";
 import { logoutAction, setActiveLocaleAction } from "@/app/(auth)/actions";
 import { OrgLogo } from "./OrgLogo";
+import { CompanyAppHead } from "./CompanyAppHead";
+import { InstallApp } from "./InstallApp";
 import { resolveShell } from "./shell";
 import { SidebarNav } from "./nav/SidebarNav";
 import { MobileNav } from "./nav/MobileNav";
@@ -103,6 +106,9 @@ export default async function OrgLayout({
     // H29 release gate — same law: the country screens are absent from every
     // menu until the deployment turns them on.
     countrySurfaces: countryPacksEnabled(),
+    // H31 release gate — the company-app settings entry is absent from every
+    // menu until the deployment turns it on.
+    companyAppSurfaces: brandedCompanyAppsEnabled(),
   };
   const groups: NavGroupVM[] = filterGroupsByBlueprint(
     buildNavGroups(input).map((g) => ({
@@ -169,6 +175,19 @@ export default async function OrgLayout({
     },
   ];
 
+  // H31: labels are resolved on the server so the client island ships no
+  // translation catalogue and no locale logic of its own.
+  const installLabels = {
+    install: t("app.install"),
+    installed: t("app.installed"),
+    ios: t("app.install_ios"),
+    macSafari: t("app.install_mac_safari"),
+    firefox: t("app.install_firefox"),
+    generic: t("app.install_generic"),
+    later: t("app.install_later"),
+    never: t("app.install_never"),
+  };
+
   // DEFECT 4: header menu data is computed server-side and handed to the client
   // <Menu> as plain view-models (labels already resolved). One section for the
   // quick-create panel; the account panel groups account links, the workspace
@@ -233,6 +252,9 @@ export default async function OrgLayout({
 
   return (
     <div style={accentStyle} className="min-h-dvh md:flex">
+      {/* H31: per-tenant manifest and icon links. Renders nothing with the
+          flag off, which keeps today's head byte-identical. */}
+      <CompanyAppHead orgId={orgId} />
       <SidebarNav
         groups={groups}
         brand={brand}
@@ -302,6 +324,19 @@ export default async function OrgLayout({
                 sections={languageSections}
                 panelClassName="w-44"
               />
+
+              {/*
+                H31: a quiet install affordance in the global chrome. It renders
+                nothing at all when the flag is off, when the app is already
+                running standalone, or once the user has said "don't remind me"
+                on this device — so it can never become the banner everyone has
+                learned to dismiss without reading.
+              */}
+              {brandedCompanyAppsEnabled() ? (
+                <div className="hidden sm:block">
+                  <InstallApp orgId={orgId} labels={installLabels} />
+                </div>
+              ) : null}
 
               <Menu
                 triggerLabel={t("auth.account.title")}
