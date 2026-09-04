@@ -126,3 +126,20 @@ export function countryPacksEnabled(): boolean {
 export function localeEsEnabled(): boolean {
   return process.env.FEATURE_LOCALE_ES === "1";
 }
+
+/**
+ * H31 — the branded company app platform: per-tenant manifests, icons, the
+ * install centre, and hostname-based tenant resolution.
+ *
+ * With this off the application is what it is today: no manifest is served, no
+ * service worker registers, no install affordance appears, and a verified host
+ * row routes nothing. With it on, only organisations whose branding and
+ * addressing are actually ready get the branded experience, and every other
+ * organisation keeps working exactly as before — an incomplete logo must never
+ * make a workspace unreachable.
+ *
+ * The ONLY enabled value is the exact string "1".
+ */
+export function brandedCompanyAppsEnabled(): boolean {
+  return process.env.FEATURE_BRANDED_COMPANY_APPS === "1";
+}

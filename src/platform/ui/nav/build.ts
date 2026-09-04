@@ -77,6 +77,8 @@ type ItemSpec = {
   requiresRevenueSurfaces?: boolean;
   /** H29 release gate (platform/flags.ts countryPacksEnabled). */
   requiresCountrySurfaces?: boolean;
+  /** H31 — hidden entirely until FEATURE_BRANDED_COMPANY_APPS is on. */
+  requiresCompanyApp?: boolean;
 };
 
 type GroupSpec = { key: string; labelKey: string; icon: IconName; items: ItemSpec[] };
@@ -650,6 +652,14 @@ const GROUPS: GroupSpec[] = [
         action: "config.manage",
       },
       {
+        key: "company_app",
+        labelKey: "app.nav",
+        path: "/settings/app",
+        icon: "package",
+        action: "config.view",
+        requiresCompanyApp: true,
+      },
+      {
         key: "notifications",
         labelKey: "nav.notifications",
         path: "/settings/notifications",
@@ -701,6 +711,8 @@ export type BuildNavInput = {
   revenueSurfaces?: boolean;
   /** Whether the H29 country-pack screens are released. Same law. */
   countrySurfaces?: boolean;
+  /** H31 release gate for the company-app settings entry. */
+  companyAppSurfaces?: boolean;
 };
 
 function resolveItem(spec: ItemSpec, input: BuildNavInput): NavItem | null {
@@ -712,6 +724,7 @@ function resolveItem(spec: ItemSpec, input: BuildNavInput): NavItem | null {
   if (spec.requiresDocumentSurfaces === true && input.documentSurfaces !== true) return null;
   if (spec.requiresRevenueSurfaces === true && input.revenueSurfaces !== true) return null;
   if (spec.requiresCountrySurfaces === true && input.countrySurfaces !== true) return null;
+  if (spec.requiresCompanyApp === true && input.companyAppSurfaces !== true) return null;
   if (!can(input.archetype, spec.action)) return null;
   const entitled = spec.feature === undefined || (input.features[spec.feature] ?? false);
   if (entitled) {

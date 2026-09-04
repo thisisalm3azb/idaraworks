@@ -18,6 +18,7 @@ import { H26_SEEDERS } from "./seed-h26";
 import { H27_SEEDERS } from "./seed-h27";
 import { H28_SEEDERS } from "./seed-h28";
 import { H29_SEEDERS } from "./seed-h29";
+import { H31_SEEDERS } from "./seed-h31";
 
 type Owner = ReturnType<typeof postgres>;
 /**
@@ -142,6 +143,8 @@ export const SEEDERS: Record<string, Seeder> = {
   // (tooling/scripts/seed-h29.ts). The pack registry itself is platform state
   // with no org_id and is outside the sweep.
   ...H29_SEEDERS,
+  // H31 — the company-app identity and host registry (tooling/scripts/seed-h31.ts).
+  ...H31_SEEDERS,
   // ── seeded by org creation ──
   company: noop,
   membership: noop,
