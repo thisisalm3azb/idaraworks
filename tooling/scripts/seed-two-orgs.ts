@@ -17,6 +17,7 @@ import { H25H_SEEDERS } from "./seed-h25h";
 import { H26_SEEDERS } from "./seed-h26";
 import { H27_SEEDERS } from "./seed-h27";
 import { H28_SEEDERS } from "./seed-h28";
+import { H29_SEEDERS } from "./seed-h29";
 
 type Owner = ReturnType<typeof postgres>;
 /**
@@ -137,6 +138,10 @@ export const SEEDERS: Record<string, Seeder> = {
   ...H26_SEEDERS,
   ...H27_SEEDERS,
   ...H28_SEEDERS,
+  // H29 — country packs, establishments and electronic invoicing
+  // (tooling/scripts/seed-h29.ts). The pack registry itself is platform state
+  // with no org_id and is outside the sweep.
+  ...H29_SEEDERS,
   // ── seeded by org creation ──
   company: noop,
   membership: noop,
