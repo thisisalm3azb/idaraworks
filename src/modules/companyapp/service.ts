@@ -22,6 +22,7 @@ import { truncateGraphemes } from "@/platform/tenanthost/text";
 // through this barrel like everything else (BUILD_BIBLE 3.3).
 export { publicAppIdentity, resolveHostToOrg, type PublicAppIdentity } from "./public";
 export { truncateGraphemes };
+export { operatorAppReadiness, type OperatorAppRow } from "./operator";
 
 export class CompanyAppError extends Error {
   constructor(
