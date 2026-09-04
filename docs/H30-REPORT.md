@@ -2,6 +2,9 @@
 
 **Recommendation: CONDITIONAL GO for a controlled pilot.**
 
+Status: **shipped.** Production serves `5a63020`, healthy, smoke 13 of 13, zero
+residue, business counts unchanged. H31 and H32 were not started.
+
 The software is ready. Seven launch-blocking defects were found and fixed, one of
 them a loaded gun pointed at every customer record in the database. What remains
 is not code: five owner actions in `docs/H30-OWNER-CHECKLIST.md` §1 must close
@@ -241,10 +244,11 @@ Recorded so nobody re-opens a settled question. Full list in truth map §A.8.
 | Migrations | **none.** H30 changed no file under `supabase/migrations/`; both deployments are code-only |
 | First deployment | `9842df2` merged to `main` and served by production. `/api/health` reports it, and the queue probe now carries `stale: true` — LB-4's alarm working in production against the very stall that previously read as healthy |
 | First smoke on `9842df2` | 8 of 9. **The failing check was the point**: it asserted PO-002 would appear in the unposted list, it did not, and diagnosing that found LB-7 |
-| Final deployment | `5a63020` — CI green on the exact commit (run 33854593203), merged to `main` and served by production |
-| Production smoke on the final build | **ALL 13 CHECKS PASSED** with the flags off |
-| Residue | 0. The smoke creates nothing; it reads, classifies and reports |
-| Business counts | identical before and after: 40 organisations, 61 users, 51 customers, 93 jobs, 78 invoices, 0 warehouses, 0 stock movements, 646 audit rows |
+| Final deployment | **`5a63020` live**, CI green on that exact commit (run 33854593203). It did not deploy itself — see truth map §A.10 — and was rebuilt with the Production environment by an explicitly authorised `vercel redeploy --target production` of the same commit. The preview was **not** promoted: every project variable is production-scoped, so a promoted preview would have run with no feature flags and no database credentials |
+| Health after deployment | `ok: true`, db 100 ms, storage 97 ms. `queue.alert: true` — LB-4's alarm firing on the stall that previously reported itself healthy |
+| Production smoke on the final build | **ALL 13 CHECKS PASSED**, `commit 5a63020` |
+| Residue | **0**, proved directly by `tooling/scripts/h30-residue-check.ts`: no H30 organisation, no H30 user, and zero rows in every table H30's new write paths touch (warehouse, stock_location, unit_of_measure, stock_movement) |
+| Business counts | identical before and after: 40 organisations, 61 users, 51 customers, 93 jobs, 78 invoices, 646 audit rows. The independent residue report tallies the same 40 organisations as at the start |
 
 The smoke is narrow by design. H30 shipped no schema, so there was nothing to
 verify structurally; what it checks instead is that the fixes reach the right
