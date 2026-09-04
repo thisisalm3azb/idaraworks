@@ -191,6 +191,32 @@ ceilings; the GOSI 2024 transition; and the end-of-service wage base.
 | `jobs.limit_reached` renders a literal `{jobs}` under Arabic if the call site ever stops passing it. | The new ICU-argument parity test. | Recorded as the one documented exception, naming its call site, so the test protects the invariant rather than being weakened. |
 | The Arabic catalogue restructures plurals, so it legitimately uses fewer arguments than English. | The same test, at first written as strict equality. | The law became "no translation may invent an argument", with strict equality kept for Spanish, which preserves English's plural shape. |
 | `home.gcc.n1`, `home.pricing.s2` and five other strings hard-coded the language pair. | Reading the catalogue for language claims while wiring the switcher. | Parameterised (I.2.3), with a test that fails if a marketing string ever names the pair literally again. |
+| H29's seven new tenant tables shipped with no entry in the two-org bleed harness, so nothing proved their isolation. | CI's integration job, which the local run had not yet reached. | `tooling/scripts/seed-h29.ts` registers all seven; each seeder builds its own chain so none depends on another. The three platform tables stay outside the sweep by construction. |
+| The ZATCA adapter emitted an empty previous-invoice-hash for a chain's first document, silently. | Reading the prepared payload while writing the integration suite. | The gap is reported on the document as `pih-initial-unknown`; the evidence log and the report carry it with its owner action. Inventing the value would have been a fabrication in a field an authority checks. |
+
+### I.3.1 The migration-runner accident
+
+`tooling/scripts/migrate.ts` loads `.env.local`, which on a maintainer's machine
+is **production**. It was run during this phase in the belief that it targeted
+the TEST project, and H29's four migrations reached production before the
+read-only pre-flight had been run.
+
+What that did and did not do:
+
+- **Did not** change any business data. The migrations create tables, functions,
+  policies and grants, and seed platform metadata (two country-pack versions,
+  their review records, three locale rows). No organisation, user, customer,
+  job, invoice, approval or audit row was created, changed or deleted.
+- **Left** all seven new tenant tables at zero rows, confirmed by direct count.
+- **Put** production's schema ahead of its code, which is the normal
+  expand-then-deploy order. No H29 surface exists in production until the code
+  deploys and its flag is set.
+
+The pre-flight was then run and reported CLEAR with the business counts intact.
+The hazard itself is fixed: the plain runner now refuses when the environment
+points at production and names `migrate-prod.ts`, which prints the target and
+the exact pending files and demands a phrase containing the project reference.
+CI is unaffected — neither its local stack nor the test project is production.
 
 ### I.4 What was not built, and why
 
