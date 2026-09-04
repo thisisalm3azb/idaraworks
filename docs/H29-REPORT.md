@@ -1,11 +1,13 @@
 # H29 — International Expansion and Versioned Country Packs: delivery report
 
-Status: **technical platform shipped; country and language activation pending
-the owner reviews and providers listed in section 4.** The engine, the two
-country packs, the electronic-invoicing framework and the Spanish catalogue are
-in production behind their release flags. Nothing here files a tax return,
-submits an invoice to an authority, or claims a legal, tax, labour, privacy or
-electronic-invoicing certification.
+Status: **technical platform complete and merged; country and language
+activation pending the owner reviews and providers listed in section 4.** The
+production database carries H29's migrations and the production smoke passes
+against it. The merged code is not yet the live build — see §3.6 — and that
+changes nothing a user can see, because every H29 surface is behind a release
+flag that is off. Nothing here files a tax return, submits an invoice to an
+authority, or claims a legal, tax, labour, privacy or electronic-invoicing
+certification.
 
 Mandate: `phase2/14-POST-MVP-AMENDMENTS.md` §8 (owner direction, 2026-09-03).
 Truth map: `docs/H29-TRUTH-MAP.md` (Parts A–I).
@@ -289,11 +291,64 @@ surface renders to be a message key with copy in all three catalogues.
 
 ### 3.5 CI on the exact commit
 
-_Filled from the run._
+The full pipeline ran on GitHub Actions for every candidate: format, lint with
+the boundary and tenancy rules, typecheck, unit tests, a dependency audit, the
+production build and the end-to-end smoke in one job; and in a second job a fresh
+local Supabase stack, every migration applied in order, and the complete
+integration suite including the two-org bleed harness.
+
+| Run | Commit | Result |
+| --- | --- | --- |
+| 33816554731 | `bebe7d4` | both jobs failed. The bleed harness refused seven unregistered tenant tables; the dependency audit exited 2 on an endpoint error |
+| 33820052692 | `c7a092b` | **both jobs green** |
+| 33823120403 | `5f295cb` | superseded by the next push |
+| 33823298825 | `6ab0d6e` | integration failed at "Apply all migrations" |
+| 33824367582 | `389cbf4` | superseded |
+| 33824730697 | `dc2a26a` | superseded |
+| 33825083511 | `2102482` | **both jobs green** |
+| 33825630946 | `30402e0` | superseded by the docs push |
+| 33826067196 | `4aef8c7` | **both jobs green — the deployed commit** |
+
+Both failures were worth having, and neither was cosmetic.
+
+The bleed harness enumerates every table carrying an `org_id` and fails when one
+has no seeder, so H29's seven new tenant tables would have shipped with nothing
+proving their isolation. The local run had not reached that suite.
+
+The migrations failure was a guard added the same day to stop the plain
+migration runner reaching production. `targetsOnlyProductionProject` returns a
+verdict object, and the guard read it as a boolean — so it refused every
+environment, including CI's local stack. Reading it the other way round, which
+is what four pre-existing pre-flight and smoke scripts did, makes the guard
+vacuous instead: it can never refuse anything. All five now read `.ok`.
 
 ### 3.6 Production
 
-_Filled from the deployment._
+| Step | Result |
+| --- | --- |
+| Merge | `verify/h29` fast-forwarded into `main` at `4aef8c7`, the CI-green commit |
+| Deployment | **not live yet.** `/api/health` still reports `a49ca12`. No production deployment has been created for `4aef8c7`; four *other* Vercel projects built previews of it and the main project built nothing, which is what the daily deployment limit looked like when H28 hit it. Raising that limit is a purchase, so it was left alone |
+| What that means | Nothing a user can see. Every H29 surface is behind `FEATURE_COUNTRY_PACKS`, which is unset, so the live build and the merged build present the same product. The database is already migrated and the smoke below ran the merged code against it |
+| Migrations | 0130–0133 applied; 129 → 133. **Applied before the pre-flight ran**, through a runner that loads `.env.local`; see truth map I.3.1 and §3.5 |
+| Read-only pre-flight afterwards | CLEAR: 133 migrations applied, all 10 H29 tables present, every new tenant table at zero rows, both flags unset |
+| Production smoke | **all 22 checks passed** with the flags off |
+| Residue | 0 rows: the smoke's organisation, its user, establishment, adoptions, registration, channel, document and events are all gone |
+| Business data | unchanged, counted before and after: 40 organisations, 61 users, 51 customers, 93 jobs, 78 invoices, 646 audit rows |
+
+The smoke proves, against the production database, that both shipped pack
+versions exist as rows agreeing with the registry; that no pack claims a
+professional or provider review and no locale claims a review without a named
+reviewer; that Spanish is recorded as machine-assisted and unreviewed; that an
+establishment can be created in a country that is not the organisation's own and
+keeps its local-script name exactly as typed; that a version applies from its own
+date and not before, and that adding an earlier adoption does not re-answer a
+later date; that a preview adds no adoption row and no audit row; that readiness
+reports six independent states, claims no legal review and names the outstanding
+professional one; that a document is prepared, hashed and given a QR payload with
+no credential, that the unknown initial previous-invoice-hash is reported rather
+than invented, that submission is `unavailable`, that nothing claims a cleared or
+reported state and every recorded attempt says `unavailable`; and that every
+country and invoicing operation left audit evidence.
 
 ---
 
