@@ -135,3 +135,44 @@ export async function recordGrnAction(orgId: string, formData: FormData): Promis
   revalidatePath(base);
   redirect(`${base}?ok=received`);
 }
+
+/**
+ * H30 LB-3 — replay the stock posting for a receipt that was already recorded.
+ *
+ * This is the action the old advice needed and never had. "Receive again"
+ * creates a NEW goods receipt: different lines, different ids, therefore
+ * different idempotency keys. Posting is idempotent per receipt LINE, so
+ * receiving again does not replay a failed posting — it books a second delivery
+ * that never physically happened, or fails the same way and leaves two unposted
+ * receipts. That is precisely what happened at Najolatech.
+ *
+ * This replays THE SAME receipt. `postGoodsReceiptToStock` derives its keys from
+ * the receipt's own line ids, so pressing this twice, or racing two tabs, posts
+ * each line at most once. There is nothing to undo and nothing to double.
+ */
+export async function postReceiptToStockAction(
+  orgId: string,
+  poId: string,
+  receiptId: string,
+): Promise<void> {
+  const base = `/o/${orgId}/purchase-orders/${poId}`;
+  const resolved = await resolveCtxForAction(orgId);
+  if (typeof resolved === "string") redirect("/");
+  if (!stockSurfacesEnabled()) redirect(base);
+  if (!can(resolved.archetype, "inventory.receive")) throw new ForbiddenError("inventory.receive");
+
+  try {
+    await postGoodsReceiptToStock(resolved.ctx, resolved.archetype, receiptId);
+  } catch (err) {
+    if ((err as { digest?: string }).digest?.startsWith("NEXT_REDIRECT")) throw err;
+    logger.warn(
+      { err: (err as Error).message, receiptId, orgId },
+      "replaying a goods receipt into stock failed",
+    );
+    revalidatePath(base);
+    // Still blocked, and the page says why rather than claiming success.
+    redirect(`${base}?warn=still_not_stocked`);
+  }
+  revalidatePath(base);
+  redirect(`${base}?ok=stocked`);
+}

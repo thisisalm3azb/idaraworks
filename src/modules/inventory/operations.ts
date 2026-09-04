@@ -36,6 +36,14 @@ export class NotStockableError extends Error {
 const STOCKABLE = new Set(["inventory", "asset", "kit", "manufactured"]);
 
 /**
+ * The most lines one goods receipt may post in a single transaction.
+ *
+ * Every line of a receipt posts together or not at all, so this bounds one
+ * transaction rather than one page. Exceeding it refuses; it never truncates.
+ */
+export const RECEIPT_LINE_CAP = 500;
+
+/**
  * Kinds of location a TRANSFER may move stock out of.
  *
  * Wider than ordinary issuing on purpose: releasing goods from quarantine,
@@ -437,12 +445,29 @@ export async function postGoodsReceiptToStock(
 
       const accepted = await receivingLocation(tx, ctx, opts.locationId);
 
+      /*
+       * H30 LB-5: this read was `limit 500` with nothing checking whether the
+       * limit had been reached. A receipt with 501 lines posted 500 of them and
+       * reported success, so the paperwork said the goods arrived and the ledger
+       * held part of them — the same class of silent divergence as PO-002, but
+       * without even a warning banner.
+       *
+       * The cap stays, because an unbounded read of a tenant table is worse. It
+       * is now a stated maximum that REFUSES rather than truncates: a receipt
+       * too large to post atomically is a fact the receiver must know.
+       */
       const lines = (await tx.execute(sql`
         select id::text as id from public.goods_receipt_line
         where grn_id = ${receiptId} and org_id = ${ctx.orgId}
         order by sort, created_at
-        limit 500
+        limit ${RECEIPT_LINE_CAP + 1}
       `)) as unknown as Array<{ id: string }>;
+      if (lines.length > RECEIPT_LINE_CAP) {
+        throw new StockMovementConflictError(
+          `this goods receipt has more than ${RECEIPT_LINE_CAP} lines, which cannot be posted ` +
+            "in one transaction — split the receipt",
+        );
+      }
 
       const out: ReceiptPostResult[] = [];
       for (const line of lines) {

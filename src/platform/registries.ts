@@ -124,6 +124,7 @@ export const AUDIT_ENTITY_TYPES = [
   "week_plan", // H22.0 — the weekly plan record (issue / revise / cancel)
   "stock_movement", // H22B — every posting to the stock ledger, and its reversals
   "warehouse", // H22A — warehouses and the locations inside them
+  "stock_location", // H30 — a bin inside a warehouse, and which one receives by default
   "unit_of_measure", // H22A — units and their conversion factors
   "asset", // H22E — the register, its custody history, maintenance and disposal
   "mileage_rate", // H23E — org mileage-rate config edits are audited money config

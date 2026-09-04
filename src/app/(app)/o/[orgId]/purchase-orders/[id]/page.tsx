@@ -1,12 +1,15 @@
+import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { Badge, Button, Card, CardHeader } from "@/platform/ui";
 import { getT } from "@/platform/i18n/server";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { can } from "@/platform/authz";
+import { stockSurfacesEnabled } from "@/platform/flags";
 import { getPurchaseOrder } from "@/modules/supply/service";
+import { receivingReadiness, unpostedReceipts } from "@/modules/inventory/service";
 import { formatMoney } from "@/platform/format";
 import type { CurrencyCode } from "@/platform/registries";
-import { submitPoAction, recordGrnAction } from "../actions";
+import { submitPoAction, recordGrnAction, postReceiptToStockAction } from "../actions";
 
 function todayIso(): string {
   const n = new Date();
@@ -39,6 +42,21 @@ export default async function PoDetailPage({
   const canReceive =
     can(a, "grn.create") && ["approved", "sent", "partially_received"].includes(po.status);
 
+  /*
+   * H30 LB-3: what the stock ledger actually holds for this order's receipts.
+   * Read only when the stock system is released, so a deployment with it off
+   * behaves exactly as before and pays for no extra queries.
+   */
+  const stockOn = stockSurfacesEnabled() && can(a, "inventory.view");
+  const [unposted, readiness] = stockOn
+    ? await Promise.all([
+        unpostedReceipts(resolved.ctx, a, { poId: id }),
+        receivingReadiness(resolved.ctx),
+      ])
+    : [[], { ok: true, warehouses: 0, locations: 0, missingKey: null as string | null }];
+  const canReplay = stockOn && can(a, "inventory.receive");
+  const canSetUpStock = stockOn && can(a, "inventory.adjust");
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between gap-2">
@@ -52,15 +70,76 @@ export default async function PoDetailPage({
           {t("po.grn_recorded")}
         </p>
       ) : null}
-      {/*
-       * The receipt is safe; the stock ledger did not take it. Said plainly,
-       * because the alternative is somebody trusting a stock figure that never
-       * moved. Receiving again re-posts without duplicating.
-       */}
-      {sp.warn === "not_stocked" ? (
-        <p className="rounded-md bg-warning-soft px-3 py-2 text-sm text-warning" role="alert">
-          {t("po.grn_not_stocked")}
+      {sp.ok === "stocked" ? (
+        <p className="rounded-md bg-success-soft px-3 py-2 text-sm text-success" role="status">
+          {t("po.unposted.posted_ok")}
         </p>
+      ) : null}
+      {sp.warn === "still_not_stocked" ? (
+        <p className="rounded-md bg-warning-soft px-3 py-2 text-sm text-warning" role="alert">
+          {t("po.unposted.still_blocked")}
+        </p>
+      ) : null}
+
+      {/*
+       * H30 LB-3 — the guided remedy.
+       *
+       * This replaces a one-line banner reading "check the warehouse setup and
+       * receive again". Both halves of that advice were wrong: there was no
+       * warehouse setup screen to check, and receiving again creates a SECOND
+       * receipt rather than replaying the failed one, which counts the goods
+       * twice. Najolatech followed it and ended with two receipts and no stock.
+       *
+       * What replaces it: the specific thing that is missing, a link to the
+       * screen that fixes it, and a button that replays THIS receipt — with the
+       * duplication warning stated rather than implied. It is driven by the
+       * ledger's own state, so it appears whenever a receipt is genuinely
+       * unposted, not only on the redirect that first reported it.
+       */}
+      {unposted.length > 0 ? (
+        <Card>
+          <CardHeader title={t("po.unposted.title")} />
+          <p className="text-sm text-ink-secondary">{t("po.unposted.body")}</p>
+          <p className="mt-2 rounded-md bg-warning-soft px-3 py-2 text-sm text-warning">
+            {t("po.unposted.do_not_receive_again")}
+          </p>
+          {!readiness.ok ? (
+            <div className="mt-3 flex flex-col gap-2">
+              <p className="text-sm text-ink">{t(readiness.missingKey!)}</p>
+              {canSetUpStock ? (
+                <Link
+                  href={`/o/${orgId}/stock/warehouses`}
+                  className="inline-flex min-h-11 w-fit items-center rounded-md bg-brand px-4 text-sm font-medium text-on-brand"
+                >
+                  {t("po.unposted.fix_setup")}
+                </Link>
+              ) : null}
+            </div>
+          ) : null}
+          <ul className="mt-3 flex flex-col gap-2">
+            {unposted.map((r) => (
+              <li key={r.receiptId} className="rounded-md border border-line px-3 py-2">
+                <p className="text-sm text-ink">
+                  {t("po.unposted.receipt", { reference: r.reference, date: r.receivedDate })}
+                </p>
+                <p className="text-xs text-ink-muted">
+                  {t("po.unposted.progress", { posted: r.postedLines, total: r.stockableLines })}
+                </p>
+                {canReplay ? (
+                  <form
+                    action={postReceiptToStockAction.bind(null, orgId, id, r.receiptId)}
+                    className="mt-2"
+                  >
+                    <Button type="submit" variant="secondary" className="min-h-11">
+                      {t("po.unposted.post_now")}
+                    </Button>
+                  </form>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 text-xs text-ink-muted">{t("po.unposted.post_hint")}</p>
+        </Card>
       ) : null}
       {sp.error ? (
         <p className="rounded-md bg-danger-soft px-3 py-2 text-sm text-danger">

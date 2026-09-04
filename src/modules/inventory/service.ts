@@ -76,6 +76,26 @@ export {
 } from "./attention";
 
 export {
+  listWarehouses,
+  receivingReadiness,
+  createWarehouse,
+  createLocation,
+  setDefaultReceiving,
+  renameWarehouse,
+  unpostedReceipts,
+  type UnpostedReceipt,
+  WarehouseSetupError,
+  LOCATION_KINDS,
+  WAREHOUSE_LIST_CAP,
+  type WarehouseRow,
+  type LocationRow,
+  type LocationKind,
+  type ReceivingReadiness,
+  type CreateWarehouseInput,
+  type CreateLocationInput,
+} from "./warehouses";
+
+export {
   listStockLevels,
   getStockItem,
   listMovements,
