@@ -160,9 +160,9 @@ describe("nobody who was already here is interrupted", () => {
 
   it("never greets somebody who finished or declined", () => {
     for (const status of ["completed", "skipped"]) {
-      expect(
-        shouldAutoStart({ ...base, status, storedTourKey: "owner", memberSince: after }),
-      ).toBe(false);
+      expect(shouldAutoStart({ ...base, status, storedTourKey: "owner", memberSince: after })).toBe(
+        false,
+      );
     }
   });
 
@@ -179,9 +179,7 @@ describe("nobody who was already here is interrupted", () => {
 
   it("resumes an unfinished tour regardless of when they joined", () => {
     // Cross-device resume: started on the laptop, opened on the phone.
-    expect(
-      shouldAutoStart({ ...base, status: "in_progress", memberSince: before }),
-    ).toBe(true);
+    expect(shouldAutoStart({ ...base, status: "in_progress", memberSince: before })).toBe(true);
   });
 
   it("does not greet somebody whose join date is unknown", () => {

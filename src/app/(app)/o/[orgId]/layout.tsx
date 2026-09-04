@@ -299,22 +299,22 @@ export default async function OrgLayout({
             <nav className="flex items-center gap-0.5" aria-label={t("nav.top_bar")}>
               {quickCreateSections.length > 0 ? (
                 <span data-tour="create" className="contents">
-                <Menu
-                  triggerLabel={t("nav.create.title")}
-                  triggerClassName="flex h-11 min-w-11 items-center justify-center gap-1 rounded-md px-2 text-sm font-medium text-ink hover:bg-sunken"
-                  trigger={
-                    <>
-                      <span
-                        className="flex h-6 w-6 items-center justify-center rounded-full bg-accent text-ink-inverse"
-                        aria-hidden
-                      >
-                        <Icon name="plus" size={16} />
-                      </span>
-                      <span className="hidden lg:inline">{t("nav.create.title")}</span>
-                    </>
-                  }
-                  sections={quickCreateSections}
-                />
+                  <Menu
+                    triggerLabel={t("nav.create.title")}
+                    triggerClassName="flex h-11 min-w-11 items-center justify-center gap-1 rounded-md px-2 text-sm font-medium text-ink hover:bg-sunken"
+                    trigger={
+                      <>
+                        <span
+                          className="flex h-6 w-6 items-center justify-center rounded-full bg-accent text-ink-inverse"
+                          aria-hidden
+                        >
+                          <Icon name="plus" size={16} />
+                        </span>
+                        <span className="hidden lg:inline">{t("nav.create.title")}</span>
+                      </>
+                    }
+                    sections={quickCreateSections}
+                  />
                 </span>
               ) : null}
 
@@ -355,13 +355,13 @@ export default async function OrgLayout({
               ) : null}
 
               <span data-tour="account" className="contents">
-              <Menu
-                triggerLabel={t("auth.account.title")}
-                triggerClassName="flex h-11 w-11 items-center justify-center rounded-md text-ink-secondary hover:bg-sunken hover:text-ink"
-                trigger={<Icon name="user" size={20} />}
-                sections={accountSections}
-                panelClassName="w-64"
-              />
+                <Menu
+                  triggerLabel={t("auth.account.title")}
+                  triggerClassName="flex h-11 w-11 items-center justify-center rounded-md text-ink-secondary hover:bg-sunken hover:text-ink"
+                  trigger={<Icon name="user" size={20} />}
+                  sections={accountSections}
+                  panelClassName="w-64"
+                />
               </span>
             </nav>
           </div>

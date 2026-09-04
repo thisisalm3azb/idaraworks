@@ -102,7 +102,11 @@ async function main() {
       order by polname
     `) as unknown as Array<{ name: string; using_expr: string | null; check_expr: string | null }>;
 
-    ok("policies: select, insert and update all exist", policies.length === 3, `${policies.length}`);
+    ok(
+      "policies: select, insert and update all exist",
+      policies.length === 3,
+      `${policies.length}`,
+    );
     for (const p of policies) {
       const text = `${p.using_expr ?? ""} ${p.check_expr ?? ""}`;
       ok(
@@ -117,9 +121,7 @@ async function main() {
       from information_schema.column_privileges
       where table_schema = 'public' and table_name = 'onboarding_state' and grantee = 'app_user'
     `) as unknown as Array<{ privilege_type: string; column_name: string }>;
-    const updatable = grants
-      .filter((g) => g.privilege_type === "UPDATE")
-      .map((g) => g.column_name);
+    const updatable = grants.filter((g) => g.privilege_type === "UPDATE").map((g) => g.column_name);
     ok("grants: a tenant cannot re-key a row to another org", !updatable.includes("org_id"));
     ok("grants: a tenant cannot re-key a row to another user", !updatable.includes("user_id"));
 
@@ -156,7 +158,11 @@ async function main() {
 
     // ── Content laws, re-checked against what actually shipped ────────────────
     for (const { key, steps } of allTours()) {
-      ok(`tour ${key}: within the ${MAX_STEPS}-step cap`, steps.length <= MAX_STEPS, `${steps.length}`);
+      ok(
+        `tour ${key}: within the ${MAX_STEPS}-step cap`,
+        steps.length <= MAX_STEPS,
+        `${steps.length}`,
+      );
     }
     ok(
       "tours: every one ends by explaining how to find it again",

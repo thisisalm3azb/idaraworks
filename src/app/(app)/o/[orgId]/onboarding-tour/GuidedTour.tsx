@@ -247,7 +247,11 @@ export function GuidedTour({
   if (!rect || narrow) {
     panelStyle = narrow
       ? { left: 12, right: 12, bottom: 12 }
-      : { left: Math.max(12, vw / 2 - PANEL_W / 2), top: Math.max(12, vh / 2 - 90), width: PANEL_W };
+      : {
+          left: Math.max(12, vw / 2 - PANEL_W / 2),
+          top: Math.max(12, vh / 2 - 90),
+          width: PANEL_W,
+        };
   } else {
     const below = rect.top + rect.height + GAP;
     const fitsBelow = below + 180 < vh;

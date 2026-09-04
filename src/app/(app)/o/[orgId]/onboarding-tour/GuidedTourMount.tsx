@@ -87,9 +87,7 @@ export async function GuidedTourMount({
         close: t("tour.close"),
         // Resolved here, one per step: ICU stays on the server and the island
         // ships no formatter and no catalogue.
-        progress: onboarding.steps.map((_, i) =>
-          t("tour.progress", { current: i + 1, total }),
-        ),
+        progress: onboarding.steps.map((_, i) => t("tour.progress", { current: i + 1, total })),
       }}
     />
   );
