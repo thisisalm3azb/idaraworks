@@ -11,7 +11,12 @@ import {
   LOCATION_KINDS,
   type LocationKind,
 } from "@/modules/inventory/service";
-import { createLocationAction, createWarehouseAction, setDefaultReceivingAction } from "./actions";
+import {
+  createLocationAction,
+  createUnitAction,
+  createWarehouseAction,
+  setDefaultReceivingAction,
+} from "./actions";
 
 /**
  * H30 LB-2 — warehouse and location setup.
@@ -38,7 +43,7 @@ export default async function WarehousesPage({
   searchParams,
 }: {
   params: Promise<{ orgId: string }>;
-  searchParams: Promise<{ ok?: string; error?: string }>;
+  searchParams: Promise<{ ok?: string; error?: string; n?: string }>;
 }) {
   // Gated here, before the first await that could render anything: in the App
   // Router the layout and the page render concurrently, so a gate that lives
@@ -69,7 +74,11 @@ export default async function WarehousesPage({
           ? "stock.setup.created"
           : sp.ok === "location_created"
             ? "stock.setup.location_created"
-            : "stock.setup.default_set",
+            : sp.ok === "unit"
+              ? "stock.setup.unit_created"
+              : sp.ok === "base_unit"
+                ? "stock.setup.base_unit_applied"
+                : "stock.setup.default_set",
       )
     : null;
   // An unknown error key must never render as a bracketed marker, so an
@@ -206,6 +215,48 @@ export default async function WarehousesPage({
 
       {truncated ? (
         <p className="text-sm text-ink-muted">{t("stock.setup.truncated", { count: 200 })}</p>
+      ) : null}
+
+      {/*
+        H30 LB-7 — the second cause of PO-002.
+        A warehouse is necessary and not sufficient: the poster also needs the
+        ITEM to carry a base unit, and production holds 35 stock items with none
+        and no units at all. Creating a unit and adopting it in one step is the
+        only remedy that does not ask somebody to open 35 item records by hand.
+        Shown only while there is something to fix, so a healthy workspace is not
+        offered a cure for a disease it does not have.
+      */}
+      {mayManage && readiness.itemsWithoutBaseUnit > 0 ? (
+        <Card>
+          <CardHeader title={t("stock.setup.units_title")} />
+          <p className="text-sm text-ink-secondary">{t("stock.setup.units_hint")}</p>
+          <form action={createUnitAction.bind(null, orgId)} className="mt-3 flex flex-col gap-3">
+            <Field
+              name="code"
+              label={t("stock.setup.code")}
+              defaultValue="EA"
+              required
+              maxLength={24}
+            />
+            <Field
+              name="name_en"
+              label={t("stock.setup.name")}
+              defaultValue="Each"
+              required
+              maxLength={120}
+            />
+            <Field name="name_ar" label={t("stock.setup.name_ar")} maxLength={120} />
+            <label className="flex min-h-11 items-start gap-2 text-sm text-ink">
+              <input type="checkbox" name="adopt" defaultChecked className="mt-0.5 h-5 w-5" />
+              <span>
+                {t("stock.setup.apply_base_unit", { count: readiness.itemsWithoutBaseUnit })}
+              </span>
+            </label>
+            <Button type="submit" className="min-h-11">
+              {t("stock.setup.add_unit")}
+            </Button>
+          </form>
+        </Card>
       ) : null}
 
       {mayManage ? (

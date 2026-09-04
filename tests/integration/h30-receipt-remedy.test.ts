@@ -29,6 +29,7 @@ import {
   postGoodsReceiptToStock,
   createWarehouse,
   createLocation,
+  createUnit,
   setDefaultReceiving,
   receivingReadiness,
   unpostedReceipts,
@@ -325,6 +326,72 @@ describe("setup guards", () => {
         and is_default_receiving and active and can_hold_stock`) as unknown as Array<{ n: number }>;
     expect(r!.n).toBe(1);
   });
+});
+
+describe("LB-7 — the second cause of PO-002: no base unit", () => {
+  it("an item with no base unit blocks its receipt, and the readiness says so", async () => {
+    // Production holds ZERO unit_of_measure rows and 35 stock items with a null
+    // base unit, so every goods receipt in it would fail to post even with a
+    // perfect warehouse. resolveReceiptTarget skips such a line silently as
+    // "not an inventory item", which reads as a shrug rather than a problem.
+    const noUnit = randomUUID();
+    await owner`
+      insert into public.item (id, org_id, sku, name, category_key, unit, item_type, base_unit_id)
+      values (${noUnit}, ${orgA}, ${"NU-" + randomUUID().slice(0, 8)}, 'Unitless part', 'general',
+              'ea', 'inventory', null)`;
+    const poId = await seedPo();
+    const { grId } = await seedReceipt(poId, [{ itemId: noUnit, qty: 5 }]);
+
+    const readiness = await receivingReadiness(ctx());
+    expect(readiness.itemsWithoutBaseUnit).toBeGreaterThan(0);
+    expect(readiness.ok).toBe(false);
+    expect(readiness.missingKey).toBe("stock.setup.missing_base_unit");
+
+    // The remedy must SEE it. Excluding these lines is what made PO-002
+    // invisible to the diagnostic built for PO-002.
+    const listed = await unpostedReceipts(ctx(), "owner", { poId });
+    expect(listed).toHaveLength(1);
+    expect(listed[0]!.blockedLines).toBe(1);
+    expect(listed[0]!.postedLines).toBe(0);
+
+    // Posting does not throw — it reports the line as skipped and books nothing.
+    const result = await postGoodsReceiptToStock(ctx(), "owner", grId);
+    expect(result.every((r) => !r.posted)).toBe(true);
+    expect(await onHand(noUnit)).toBe(0);
+  }, 120_000);
+
+  it("creating a unit adopts it for every stock item that has none, and unblocks them", async () => {
+    const before = await receivingReadiness(ctx());
+    expect(before.itemsWithoutBaseUnit).toBeGreaterThan(0);
+
+    const { itemsUpdated } = await createUnit(ctx(), "owner", {
+      code: "box",
+      nameEn: "Box",
+      adoptAsBaseUnit: true,
+    });
+    expect(itemsUpdated).toBe(before.itemsWithoutBaseUnit);
+
+    const after = await receivingReadiness(ctx());
+    expect(after.itemsWithoutBaseUnit).toBe(0);
+    expect(after.ok).toBe(true);
+  }, 120_000);
+
+  it("adopting never overwrites a base unit somebody already chose", async () => {
+    // The item seeded by seedItem() already carries unitA. A later adoption must
+    // leave it alone — silently re-basing an item would change what its recorded
+    // quantities mean.
+    const item = await seedItem();
+    const [beforeRow] = (await owner`
+      select base_unit_id::text as u from public.item where id = ${item}`) as unknown as Array<{
+      u: string;
+    }>;
+    await createUnit(ctx(), "owner", { code: "pallet", nameEn: "Pallet", adoptAsBaseUnit: true });
+    const [afterRow] = (await owner`
+      select base_unit_id::text as u from public.item where id = ${item}`) as unknown as Array<{
+      u: string;
+    }>;
+    expect(afterRow!.u).toBe(beforeRow!.u);
+  }, 120_000);
 });
 
 describe("tenant isolation of the new write paths", () => {

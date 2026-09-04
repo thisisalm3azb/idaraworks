@@ -149,6 +149,8 @@ export type ReceivingReadiness = {
   ok: boolean;
   warehouses: number;
   locations: number;
+  /** Stockable items that cannot post because they carry no base unit. */
+  itemsWithoutBaseUnit: number;
   /** A message key naming the first thing missing, or null when nothing is. */
   missingKey: string | null;
 };
@@ -166,14 +168,38 @@ export async function receivingReadiness(ctx: Ctx): Promise<ReceivingReadiness> 
       (select count(*)::int from public.stock_location l
          join public.warehouse w on w.id = l.warehouse_id and w.org_id = l.org_id
         where l.org_id = ${ctx.orgId}
-          and l.is_default_receiving and l.active and l.can_hold_stock) as receiving
-  `)) as unknown as Array<{ warehouses: number; locations: number; receiving: number }>,
+          and l.is_default_receiving and l.active and l.can_hold_stock) as receiving,
+      (select count(*)::int from public.item
+        where org_id = ${ctx.orgId}
+          and item_type in ('inventory', 'asset', 'kit', 'manufactured')
+          and base_unit_id is null) as no_base_unit
+  `)) as unknown as Array<{
+        warehouses: number;
+        locations: number;
+        receiving: number;
+        no_base_unit: number;
+      }>,
   );
 
   const warehouses = row?.warehouses ?? 0;
   const locations = row?.locations ?? 0;
   const receiving = row?.receiving ?? 0;
+  const itemsWithoutBaseUnit = row?.no_base_unit ?? 0;
 
+  /*
+   * H30 LB-7 — the SECOND cause of PO-002, which docs/H22-BLOCKER-PO002.md did
+   * not name.
+   *
+   * A warehouse is necessary and not sufficient. `resolveReceiptTarget` also
+   * skips any line whose item has no `base_unit_id`, quietly, as "not an
+   * inventory item". Production holds ZERO unit_of_measure rows and all 35 items
+   * have a null base unit, so every goods receipt in the database would have
+   * failed to post even with a perfectly configured warehouse — and the failure
+   * would have looked like a shrug rather than a problem.
+   *
+   * Reported last, because a person should fix the warehouse first; but reported,
+   * which is the whole point.
+   */
   const missingKey =
     warehouses === 0
       ? "stock.setup.missing_warehouse"
@@ -181,9 +207,11 @@ export async function receivingReadiness(ctx: Ctx): Promise<ReceivingReadiness> 
         ? "stock.setup.missing_location"
         : receiving === 0
           ? "stock.setup.missing_receiving"
-          : null;
+          : itemsWithoutBaseUnit > 0
+            ? "stock.setup.missing_base_unit"
+            : null;
 
-  return { ok: missingKey === null, warehouses, locations, missingKey };
+  return { ok: missingKey === null, warehouses, locations, itemsWithoutBaseUnit, missingKey };
 }
 
 function cleanCode(raw: string, what: string): string {
@@ -415,6 +443,8 @@ export type UnpostedReceipt = {
   poReference: string;
   stockableLines: number;
   postedLines: number;
+  /** Lines that cannot post at all until their item is given a base unit. */
+  blockedLines: number;
 };
 
 export async function unpostedReceipts(
@@ -430,16 +460,24 @@ export async function unpostedReceipts(
     async (tx) =>
       (await tx.execute(sql`
     with stockable as (
-      -- A receipt line names no item of its own; it points at the purchase
-      -- order line, which is where the catalogue item lives.
-      select grl.id, grl.grn_id
+      /*
+       * A receipt line names no item of its own; it points at the purchase
+       * order line, which is where the catalogue item lives.
+       *
+       * H30 LB-7: a null base_unit_id is deliberately NOT excluded here, though
+       * the poster requires one. A line whose item has no base unit can never
+       * post, and excluding it made the one case this diagnostic exists for --
+       * PO-002 -- invisible to it. A thing that cannot happen is exactly what
+       * the person needs to be told, so blockedLines counts them separately and
+       * the remedy can say which problem it is.
+       */
+      select grl.id, grl.grn_id, (i.base_unit_id is null) as no_base_unit
       from public.goods_receipt_line grl
       join public.purchase_order_line pol
         on pol.id = grl.po_line_id and pol.org_id = grl.org_id
       join public.item i on i.id = pol.item_id and i.org_id = pol.org_id
       where grl.org_id = ${ctx.orgId}
         and i.item_type in ('inventory', 'asset', 'kit', 'manufactured')
-        and i.base_unit_id is not null
     ),
     posted as (
       select s.id
@@ -457,7 +495,8 @@ export async function unpostedReceipts(
       gr.po_id::text as "poId",
       po.reference as "poReference",
       count(s.id)::int as "stockableLines",
-      count(p.id)::int as "postedLines"
+      count(p.id)::int as "postedLines",
+      count(*) filter (where s.no_base_unit)::int as "blockedLines"
     from public.goods_receipt gr
     join public.purchase_order po on po.id = gr.po_id and po.org_id = gr.org_id
     join stockable s on s.grn_id = gr.id
@@ -470,6 +509,107 @@ export async function unpostedReceipts(
     order by gr.received_date desc, gr.created_at desc
     limit ${limit}
   `)) as unknown as UnpostedReceipt[],
+  );
+}
+
+/**
+ * H30 LB-7 — create a unit of measure, and optionally adopt it as the base unit
+ * for every stock item that has none.
+ *
+ * The second half is the part that matters. A unit nobody attaches to an item
+ * changes nothing: `resolveReceiptTarget` reads the ITEM's `base_unit_id`, and
+ * production has 35 items with a null one and no units at all. Creating a unit
+ * and then asking a person to open 35 item records one at a time is a remedy in
+ * name only.
+ *
+ * `adoptAsBaseUnit` therefore fills the gap in one statement — and only the gap:
+ * it touches solely items that are stockable by type AND currently have no base
+ * unit, so it can never overwrite a unit somebody chose.
+ */
+export async function createUnit(
+  ctx: Ctx,
+  archetype: RoleArchetype,
+  input: {
+    code: string;
+    nameEn: string;
+    nameAr?: string | null;
+    adoptAsBaseUnit?: boolean;
+  },
+): Promise<{ unitId: string; itemsUpdated: number }> {
+  assertCan(archetype, "inventory.adjust");
+  /*
+   * A unit's own limits, not a warehouse's: `unit_of_measure.code` is capped at
+   * 16 characters and `name_ar` is NOT NULL. Both were found by the integration
+   * test rather than by reading — an English-only user would have met a raw
+   * constraint violation on a form that asked for the Arabic name optionally.
+   *
+   * A blank Arabic name falls back to the English one rather than refusing.
+   * "EA" is the same word in both languages more often than not, and an
+   * organisation that cares can rename it; a hard requirement here would block
+   * the remedy on a translation nobody has.
+   */
+  const code = cleanCode(input.code, "unit").slice(0, 16);
+  if (code.length === 0) {
+    throw new WarehouseSetupError("unit code must not be empty", "stock.setup.bad_code");
+  }
+  const nameEn = cleanName(input.nameEn, "unit").slice(0, 60);
+  const nameAr = (optional(input.nameAr, 60) ?? nameEn).slice(0, 60);
+
+  return command<{ unitId: string; itemsUpdated: number }>(
+    ctx,
+    {
+      audit: (r) => ({
+        action: "stock.unit_created",
+        entityType: "unit_of_measure" as const,
+        entityId: r.unitId,
+        summary:
+          `Created unit ${code} (${nameEn})` +
+          (r.itemsUpdated > 0 ? `, adopted as the base unit for ${r.itemsUpdated} item(s)` : ""),
+      }),
+    },
+    async (tx) => {
+      const dup = (await tx.execute(sql`
+        select 1 from public.unit_of_measure where org_id = ${ctx.orgId} and code = ${code}
+      `)) as unknown as unknown[];
+      if (dup.length > 0) {
+        throw new WarehouseSetupError(
+          `a unit with code ${code} already exists`,
+          "stock.setup.duplicate_unit",
+        );
+      }
+      /*
+       * Exactly one base unit per dimension per organisation, enforced by a
+       * partial unique index, so "convert to base" is never ambiguous. The
+       * FIRST count unit becomes the base; a later one is an ordinary unit at
+       * the same scale. Found by the integration test — inserting every unit as
+       * a base worked once and then violated the index for ever after.
+       */
+      const existingBase = (await tx.execute(sql`
+        select 1 from public.unit_of_measure
+        where org_id = ${ctx.orgId} and dimension = 'count' and is_base and active
+      `)) as unknown as unknown[];
+      const isBase = existingBase.length === 0;
+
+      const [u] = (await tx.execute(sql`
+        insert into public.unit_of_measure
+          (org_id, code, name_en, name_ar, dimension, factor_to_base, is_base)
+        values (${ctx.orgId}, ${code}, ${nameEn}, ${nameAr}, 'count', 1, ${isBase})
+        returning id::text as id
+      `)) as unknown as Array<{ id: string }>;
+      const unitId = u!.id;
+
+      if (input.adoptAsBaseUnit === false) return { unitId, itemsUpdated: 0 };
+
+      const updated = (await tx.execute(sql`
+        update public.item
+        set base_unit_id = ${unitId}, updated_at = now()
+        where org_id = ${ctx.orgId}
+          and item_type in ('inventory', 'asset', 'kit', 'manufactured')
+          and base_unit_id is null
+        returning id
+      `)) as unknown as unknown[];
+      return { unitId, itemsUpdated: updated.length };
+    },
   );
 }
 

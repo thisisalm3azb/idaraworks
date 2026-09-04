@@ -125,6 +125,17 @@ export default async function PoDetailPage({
                 <p className="text-xs text-ink-muted">
                   {t("po.unposted.progress", { posted: r.postedLines, total: r.stockableLines })}
                 </p>
+                {/*
+                  H30 LB-7: a line whose item has no base unit can never post,
+                  and the poster skips it silently as "not an inventory item".
+                  Saying so is the difference between a remedy and a button that
+                  appears to do nothing.
+                */}
+                {r.blockedLines > 0 ? (
+                  <p className="text-xs text-warning">
+                    {t("po.unposted.blocked_no_unit", { count: r.blockedLines })}
+                  </p>
+                ) : null}
                 {canReplay ? (
                   <form
                     action={postReceiptToStockAction.bind(null, orgId, id, r.receiptId)}

@@ -82,6 +82,7 @@ export {
   createLocation,
   setDefaultReceiving,
   renameWarehouse,
+  createUnit,
   unpostedReceipts,
   type UnpostedReceipt,
   WarehouseSetupError,

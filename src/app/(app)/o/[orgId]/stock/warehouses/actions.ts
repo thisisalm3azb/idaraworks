@@ -14,6 +14,7 @@ import { resolveCtx } from "@/platform/auth/resolve";
 import { stockSurfacesEnabled } from "@/platform/flags";
 import {
   createLocation,
+  createUnit,
   createWarehouse,
   setDefaultReceiving,
   WarehouseSetupError,
@@ -78,6 +79,26 @@ export async function createLocationAction(orgId: string, form: FormData): Promi
     throw err;
   }
   back(orgId, { ok: "location_created" });
+}
+
+export async function createUnitAction(orgId: string, form: FormData): Promise<void> {
+  const resolved = await guard(orgId);
+  try {
+    const r = await createUnit(resolved.ctx, resolved.archetype, {
+      code: str(form, "code"),
+      nameEn: str(form, "name_en"),
+      nameAr: str(form, "name_ar"),
+      adoptAsBaseUnit: form.get("adopt") !== null,
+    });
+    back(
+      orgId,
+      r.itemsUpdated > 0 ? { ok: "base_unit", n: String(r.itemsUpdated) } : { ok: "unit" },
+    );
+  } catch (err) {
+    if ((err as { digest?: string }).digest?.startsWith("NEXT_REDIRECT")) throw err;
+    if (err instanceof WarehouseSetupError) back(orgId, { error: err.messageKey });
+    throw err;
+  }
 }
 
 export async function setDefaultReceivingAction(orgId: string, form: FormData): Promise<void> {
