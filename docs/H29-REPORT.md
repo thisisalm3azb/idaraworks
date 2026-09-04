@@ -137,6 +137,27 @@ from the thing it describes; a count taken from the file cannot.
 | A legal pack for any Spanish-speaking country | Spanish-language support does not create a Spain, Mexico or Latin American legal pack, and none was built. |
 | Spanish as a document-issuance language | `DOC_LANGUAGES` stays `en / ar / bilingual`. No shipped pack requires or permits Spanish documents. |
 | Contributory-wage ceilings, the GOSI 2024 transition, the Saudi end-of-service wage base | Could not be confirmed on an official page. Encoded as explicit configuration with a review flag; the engine never applies a value the organisation has not set. |
+| The pack version stamped onto each new invoice, pay run or journal entry | Not built. See 2.2 — the reproducibility that exists today is real, and it is not this. |
+
+### 2.2 What "historical reproducibility" means here, exactly
+
+The pack layer resolves by date and nothing else: `app.establishment_pack_on`
+answers for the date it is asked about, adopting a newer version never re-answers
+an earlier date, and the integration suite proves both.
+
+What H29 does **not** yet do is write the resolved pack version onto each new
+business record. Records issued today therefore stay reproducible the way they
+already were — H23's payroll runs carry their own calculation snapshot, H24's tax
+entries carry theirs, H26's issued documents are immutable — and nothing H29
+adds rewrites any of them. But asking "which country-pack version produced this
+invoice?" is, today, answered by resolving the establishment's adoption history
+for the invoice's date, not by reading a column on the invoice.
+
+That is a real difference. Resolving through history is correct while the
+adoption record is intact, and a stamped column would survive even a corrupted
+one. Stamping it means touching the write path of every money module, which is
+not a change to make in the last hour of a phase; it is named here rather than
+implied away.
 
 ### 2.1 Claims deliberately not made
 
