@@ -283,9 +283,9 @@ export const SA_PACK: CountryPack = {
         source: VAT_REGS,
       },
       requiresConfiguration: [
-        "registration status",
-        "tax period (monthly or quarterly)",
-        "treatment of each supply",
+        "country.item.registration_status",
+        "country.item.tax_period_choice",
+        "country.item.supply_treatment",
       ],
     },
   ],
@@ -378,9 +378,9 @@ export const SA_PACK: CountryPack = {
       },
     ],
     requiresConfiguration: [
-      "the wage base for the end-of-service award",
-      "the GOSI contributory-wage ceiling and floor",
-      "which employees are subject to annuities and SANED",
+      "country.item.eos_wage_base",
+      "country.item.gosi_bounds",
+      "country.item.annuities_saned",
     ],
   },
 
@@ -447,12 +447,10 @@ export const SA_PACK: CountryPack = {
       source: XML_STD,
     },
     requiredCredentials: [
-      "A compliance CSID obtained through the Fatoora portal with a one-time password",
-      "A production CSID and its secret, issued after compliance checks",
+      "country.credential.sa_compliance_csid",
+      "country.credential.sa_production_csid",
     ],
-    requiredProviders: [
-      "ZATCA onboarding for the invoicing device or solution; no third-party provider is required",
-    ],
+    requiredProviders: ["country.provider.sa_onboarding"],
     phaseDates: {
       value: [
         { label: "Phase 1 (generation)", on: "2021-12-04" },
@@ -485,9 +483,9 @@ export const SA_PACK: CountryPack = {
       requiresReview: true,
     },
     organisationActions: [
-      "Register as a controller where the national register requires it",
-      "Record the lawful basis and purpose for each category of personal data",
-      "Obtain legal review before transferring personal data outside the Kingdom",
+      "country.privacy_action.controller_registration",
+      "country.privacy_action.lawful_basis_purpose",
+      "country.privacy_action.transfer_review",
     ],
   },
 
@@ -515,11 +513,11 @@ export const SA_PACK: CountryPack = {
   ],
 
   knownLimitations: [
-    "No ZATCA credential exists, so no invoice can be submitted, cleared or reported. The adapter is contract-tested against the published standards with deterministic fixtures.",
-    "Cryptographic stamping needs a certificate issued through ZATCA onboarding. The stamping seam refuses without one.",
-    "The GOSI contributory-wage ceiling, the 2024 pension transition and the end-of-service wage base are configuration, not product defaults.",
-    "No Saudi tax, labour or data-protection professional has reviewed this pack.",
-    "Nothing here files a return, submits an invoice or gives advice.",
+    "country.limit.sa_no_credential",
+    "country.limit.sa_no_stamp",
+    "country.limit.sa_configuration",
+    "country.limit.sa_no_professional_review",
+    "country.limit.sa_no_filing",
   ],
 
   changeHistory: [

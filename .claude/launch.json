@@ -30,6 +30,12 @@
       "runtimeExecutable": "node",
       "runtimeArgs": ["tooling/scripts/dev-revenue-preview.mjs"],
       "port": 3214
+    },
+    {
+      "name": "country-preview",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["tooling/scripts/dev-country-preview.mjs"],
+      "port": 3216
     }
   ]
 }

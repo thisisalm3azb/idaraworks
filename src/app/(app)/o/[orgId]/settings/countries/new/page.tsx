@@ -142,7 +142,7 @@ export default async function NewEstablishmentPage({
             </fieldset>
           ) : null}
 
-          <label className="flex items-center gap-2 text-sm text-ink">
+          <label className="flex min-h-11 items-center gap-2 text-sm text-ink">
             <input type="checkbox" name="isPrimary" className="size-4" />
             {t("country.field.primary")}
           </label>

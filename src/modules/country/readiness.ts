@@ -17,6 +17,8 @@ import {
   type CountryPack,
   type ReadinessState,
 } from "@/platform/country";
+import { LOCALE_NATIVE_NAME } from "@/platform/i18n/locale";
+import type { Locale } from "@/platform/registries";
 import { listEstablishmentsIn } from "./establishments";
 import type {
   AreaReadiness,
@@ -119,8 +121,10 @@ function taxArea(f: Facts): AreaReadiness {
         key: `tax.${taxModule.key}.config.${item}`,
         labelKey: "country.readiness.tax_configuration",
         state: "missing",
-        detailKey: "country.readiness.needs_person",
-        detail: { item },
+        // The pack states each item as a MESSAGE KEY, so the line reads in the
+        // reader's own language instead of dropping an English rule into a
+        // translated sentence.
+        detailKey: item,
       });
   }
   return { area: "tax", checks, complete: checks.every((c) => c.state === "ok") };
@@ -144,8 +148,7 @@ function payrollArea(f: Facts): AreaReadiness {
       key: `payroll.config.${item}`,
       labelKey: "country.readiness.payroll_configuration",
       state: "missing",
-      detailKey: "country.readiness.needs_person",
-      detail: { item },
+      detailKey: item,
     });
   return { area: "payroll", checks, complete: checks.every((c) => c.state === "ok") };
 }
@@ -166,7 +169,13 @@ function documentsArea(f: Facts): AreaReadiness {
           labelKey: "country.readiness.document_language",
           state: "missing",
           detailKey: "country.readiness.document_language_required",
-          detail: { languages: required.join(", ") },
+          // Named, not coded: "ar" on a screen means nothing to the person
+          // reading it, and the name is the same in every interface language.
+          detail: {
+            languages: required
+              .map((code) => LOCALE_NATIVE_NAME[code as Locale] ?? code)
+              .join(", "),
+          },
         },
   );
   const identity = f.establishment.invoiceIdentity;
@@ -220,7 +229,7 @@ function privacyArea(f: Facts): AreaReadiness {
       : missing(
           "privacy.reviewed",
           "country.readiness.privacy_reviewed",
-          "country.readiness.needs_person",
+          "country.readiness.privacy_unreviewed",
         ),
   );
   return { area: "privacy", checks, complete: checks.every((c) => c.state === "ok") };
@@ -256,16 +265,14 @@ function einvoicingArea(f: Facts): AreaReadiness {
       key: `einvoice.credential.${credential.slice(0, 32)}`,
       labelKey: "country.readiness.einvoice_credential",
       state: "missing",
-      detailKey: "country.readiness.needs_owner",
-      detail: { credential },
+      detailKey: credential,
     });
   for (const provider of spec.requiredProviders)
     checks.push({
       key: `einvoice.provider.${provider.slice(0, 32)}`,
       labelKey: "country.readiness.einvoice_provider",
       state: "missing",
-      detailKey: "country.readiness.needs_owner",
-      detail: { provider },
+      detailKey: provider,
     });
   return { area: "einvoicing", checks, complete: checks.every((c) => c.state === "ok") };
 }
@@ -382,9 +389,11 @@ export async function establishmentReadiness(
     const externalActions = [
       ...(f.pack?.einvoicing.requiredProviders ?? []),
       ...(f.pack?.privacy.organisationActions ?? []),
+      // A message key, like everything else here: an outstanding review is
+      // reported in the reader's language, not in the one the pack was written in.
       ...(f.reviews.get("professional") === "passed"
         ? []
-        : ["A tax or labour professional has not reviewed this country pack."]),
+        : ["country.external.no_professional_review"]),
     ];
     return {
       establishmentId,

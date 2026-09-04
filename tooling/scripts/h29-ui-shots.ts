@@ -109,15 +109,22 @@ async function main(): Promise<void> {
     const markers = await missingStrings(page);
     if (markers.length) errors.push(`establishment: missing strings ${markers.join(", ")}`);
 
-    // 3) Reading the world as at an earlier date changes the answer.
+    // 3) Reading the world as at an earlier date gives a DIFFERENT answer.
+    //
+    // This is the effective-dating law seen from the screen: the fixture adopts
+    // its pack from the version's own start date, so a date before that must
+    // report the pack as missing and must not mark the version in force.
+    const today = await page.evaluate(() => document.body.innerText);
+    if (!/In force on this date/.test(today))
+      errors.push("as-at: today does not mark a version in force");
     await page.goto(`${BASE}${establishment}?on=2026-01-01`, { waitUntil: "load" });
     await page.waitForTimeout(1000);
     await shot(page, "establishment-earlier");
     const earlier = await page.evaluate(() => document.body.innerText);
-    if (!/No country pack version adopted yet|not adopted/i.test(earlier))
-      notes.push(
-        "as-at: the earlier date still shows an adopted version (check the fixture dates)",
-      );
+    if (/In force on this date/.test(earlier))
+      errors.push("as-at: a date before the version's start still marks it in force");
+    if (!/Starts later/.test(earlier))
+      errors.push("as-at: the version is not shown as starting later than the chosen date");
 
     // 4) The simulator: a diff, what it cannot touch, and no write.
     await page.goto(`${BASE}${establishment}`, { waitUntil: "load" });
@@ -217,14 +224,30 @@ async function main(): Promise<void> {
       await shot(m, name);
     }
     // Every control a thumb has to hit is at least 44px tall.
+    //
+    // The TARGET is not always the element: a checkbox is drawn 16px and sits
+    // inside a label whose whole row is tappable, which is the house pattern.
+    // So the measurement walks up to the nearest label or link that wraps the
+    // control and asks how tall THAT is. A control with no such wrapper is
+    // measured on its own, which is the case that actually matters.
+    //
+    // Scoped to the page's own content. The application shell is shared by every
+    // screen in the product and is not H29's to change from inside a country
+    // walk; a finding there belongs to whoever owns the shell.
     await m.goto(`${BASE}${countries}/new`, { waitUntil: "load" });
     await m.waitForTimeout(1000);
     const small = (await m.evaluate(`(() => {
       const out = [];
-      for (const el of Array.from(document.querySelectorAll("button, a, input, select"))) {
+      const scope = document.querySelector("main") || document.body;
+      for (const el of Array.from(scope.querySelectorAll("button, a, input, select"))) {
+        if (el.type === "hidden") continue;
         const r = el.getBoundingClientRect();
         if (r.width === 0 || r.height === 0) continue;
-        if (r.height < 40) out.push(el.tagName.toLowerCase() + " h=" + Math.round(r.height));
+        const wrapper = el.closest("label") || el.closest("a");
+        const target = wrapper && wrapper !== el ? wrapper.getBoundingClientRect() : r;
+        const h = Math.max(r.height, target.height);
+        const cls = typeof el.className === "string" ? el.className.slice(0, 40) : "";
+        if (h < 40) out.push(el.tagName.toLowerCase() + " h=" + Math.round(h) + " cls=" + cls);
         if (out.length >= 6) break;
       }
       return out;

@@ -190,8 +190,8 @@ export default async function SimulatePage({
               <CardHeader title={t("country.simulate.providers")} />
               <p className="text-sm text-ink-secondary">{t("country.simulate.providers_hint")}</p>
               <ul className="mt-2 list-disc ps-5 text-sm text-ink-secondary">
-                {preview.newProviderRequirements.map((p) => (
-                  <li key={p}>{p}</li>
+                {preview.newProviderRequirements.map((requirement) => (
+                  <li key={requirement}>{t(requirement)}</li>
                 ))}
               </ul>
             </Card>

@@ -73,7 +73,7 @@ export const AE_PACK: CountryPack = {
     {
       kind: "professional",
       state: "not_started",
-      note: "No tax or labour professional has reviewed this pack.",
+      note: "country.limit.ae_no_professional_review",
     },
     {
       kind: "native_language",
@@ -221,7 +221,11 @@ export const AE_PACK: CountryPack = {
         ],
         source: H24_VAT,
       },
-      requiresConfiguration: ["registration status", "tax period", "emirate of supply"],
+      requiresConfiguration: [
+        "country.item.registration_status",
+        "country.item.tax_period",
+        "country.item.emirate_of_supply",
+      ],
     },
     {
       key: "corporate_tax",
@@ -236,9 +240,9 @@ export const AE_PACK: CountryPack = {
       },
       documentFields: { value: [], source: H24_VAT },
       requiresConfiguration: [
-        "free-zone status",
-        "small business relief election",
-        "every adjustment line",
+        "country.item.free_zone_status",
+        "country.item.small_business_relief",
+        "country.item.adjustment_lines",
       ],
     },
   ],
@@ -292,7 +296,7 @@ export const AE_PACK: CountryPack = {
         note: "A payment-file export seam. It is not a Wage Protection System certification and claims none.",
       },
     ],
-    requiresConfiguration: ["contractual rest days", "GPSSA private-sector floor"],
+    requiresConfiguration: ["country.item.contractual_rest_days", "country.item.gpssa_floor"],
   },
 
   documents: {
@@ -333,12 +337,8 @@ export const AE_PACK: CountryPack = {
       ],
       source: MOF_GUIDELINES,
     },
-    requiredCredentials: [
-      "A Participant Identifier (the first ten digits of the TRN, or a TIN obtained from the FTA)",
-    ],
-    requiredProviders: [
-      "A UAE Accredited Service Provider, appointed by the organisation (corner 2 of the five-corner model)",
-    ],
+    requiredCredentials: ["country.credential.ae_participant_id"],
+    requiredProviders: ["country.provider.ae_asp"],
     phaseDates: {
       value: null,
       source: NOT_PUBLISHED_AS_TEXT,
@@ -373,9 +373,9 @@ export const AE_PACK: CountryPack = {
       note: "Not researched in H29. Nothing in the product asserts a transfer basis.",
     },
     organisationActions: [
-      "Record the lawful basis for processing personal data",
-      "Hold a processor agreement with every provider that receives personal data",
-      "Obtain legal review before relying on any cross-border transfer",
+      "country.privacy_action.lawful_basis",
+      "country.privacy_action.processor_agreement",
+      "country.privacy_action.cross_border_review",
     ],
   },
 
@@ -398,10 +398,10 @@ export const AE_PACK: CountryPack = {
   ],
 
   knownLimitations: [
-    "No phase date for UAE electronic invoicing is encoded, because none could be read from an official text.",
-    "Electronic invoicing needs an Accredited Service Provider, which the organisation must appoint. The channel ships disabled.",
-    "No tax or labour professional has reviewed this pack.",
-    "Nothing here files a return, submits an invoice or gives tax advice.",
+    "country.limit.ae_no_phase_date",
+    "country.limit.ae_asp_required",
+    "country.limit.ae_no_professional_review",
+    "country.limit.ae_no_filing",
   ],
 
   changeHistory: ["2026-09-03: first version, assembled from the H23 and H24 evidence logs."],

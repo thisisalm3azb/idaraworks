@@ -179,7 +179,12 @@ export type TaxModuleRef = {
   periodRule: Sourced<string | null>;
   /** Mandatory fields the jurisdiction requires on a tax document. */
   documentFields: Sourced<string[]>;
-  /** Set when a value must be configured or reviewed before it is used. */
+  /**
+   * What a person must set or confirm before this module can be used, as
+   * MESSAGE KEYS, not sentences. A pack is read by people in three languages,
+   * and a rule stated only in English becomes English text on an Arabic or
+   * Spanish screen the moment a surface renders it.
+   */
   requiresConfiguration: string[];
 };
 
@@ -207,6 +212,7 @@ export type PayrollModuleRef = {
   annualLeave: Sourced<{ minimumDays: number; afterYearsDays: Array<[number, number]> } | null>;
   /** Payment-file or wage-protection seams; architecture, never a compliance claim. */
   paymentSeams: Array<{ key: string; labelKey: string; note: string }>;
+  /** What a person must set or confirm, as MESSAGE KEYS (see TaxModuleRef). */
   requiresConfiguration: string[];
 };
 
@@ -221,9 +227,9 @@ export type EInvoiceSpec = {
   standard: Sourced<string | null>;
   /** The legal instruments, quoted by name and number only. */
   instruments: Sourced<string[]>;
-  /** What the organisation must obtain before anything can be sent. */
+  /** What the organisation must obtain before anything can be sent, as message keys. */
   requiredCredentials: string[];
-  /** What an external party must do (appoint a provider, onboard a device). */
+  /** What an external party must do, as message keys (appoint, onboard). */
   requiredProviders: string[];
   /** Dates are encoded ONLY where an official source states them (D2). */
   phaseDates: Sourced<Array<{ label: string; on: string }> | null>;
@@ -246,7 +252,7 @@ export type PrivacyMetadata = {
   authority: string | null;
   /** Whether a transfer outside the country has its own published regime. */
   crossBorderRegime: Sourced<string | null>;
-  /** What an organisation must do itself before processing personal data here. */
+  /** What an organisation must do itself before processing personal data here, as message keys. */
   organisationActions: string[];
 };
 
@@ -282,7 +288,7 @@ export type CountryPack = {
   privacy: PrivacyMetadata;
   /** Configuration the organisation must supply before the pack is usable. */
   requiredConfiguration: Array<{ key: string; labelKey: string; why: string }>;
-  /** Said plainly, in the product, not only here. */
+  /** Said plainly, in the product and in every language, as message keys. */
   knownLimitations: string[];
   changeHistory: string[];
 };

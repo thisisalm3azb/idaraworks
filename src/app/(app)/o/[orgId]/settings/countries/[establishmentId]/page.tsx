@@ -188,7 +188,7 @@ export default async function EstablishmentPage({
             <p className="font-medium text-ink">{t("country.external_actions")}</p>
             <ul className="mt-1 list-disc ps-5 text-ink-secondary">
               {readiness.externalActions.map((action) => (
-                <li key={action}>{action}</li>
+                <li key={action}>{t(action)}</li>
               ))}
             </ul>
           </div>
@@ -224,7 +224,7 @@ export default async function EstablishmentPage({
             <p className="font-medium text-ink">{t("country.known_limits")}</p>
             <ul className="mt-1 list-disc ps-5 text-ink-secondary">
               {packToday.knownLimitations.map((limit) => (
-                <li key={limit}>{limit}</li>
+                <li key={limit}>{t(limit)}</li>
               ))}
             </ul>
           </div>
@@ -280,7 +280,15 @@ export default async function EstablishmentPage({
           <ul className="mt-2 flex flex-col gap-2 text-sm">
             {registrations.map((r) => (
               <li key={r.id} className="rounded-md border border-line px-3 py-2">
-                <span className="font-medium text-ink">{r.identifierKey}</span>{" "}
+                {/* The country's own name for it ("Tax Registration Number"),
+                    not the storage key. A person who has the paper in front of
+                    them recognises the name on the paper. */}
+                <span className="font-medium text-ink">
+                  {t(
+                    packToday?.identifiers.find((i) => i.key === r.identifierKey)?.labelKey ??
+                      r.identifierKey,
+                  )}
+                </span>{" "}
                 <span className="font-mono text-ink-secondary" dir="ltr">
                   {r.value}
                 </span>
@@ -353,7 +361,7 @@ export default async function EstablishmentPage({
         {packToday && packToday.privacy.organisationActions.length > 0 ? (
           <ul className="mt-2 list-disc ps-5 text-sm text-ink-secondary">
             {packToday.privacy.organisationActions.map((action) => (
-              <li key={action}>{action}</li>
+              <li key={action}>{t(action)}</li>
             ))}
           </ul>
         ) : null}
@@ -426,7 +434,7 @@ export default async function EstablishmentPage({
               <span className="font-medium text-ink">{t("country.privacy.lawful_basis")}</span>
               <input name="lawfulBasis" maxLength={200} className={input} />
             </label>
-            <label className="flex items-center gap-2 text-sm text-ink sm:col-span-2">
+            <label className="flex min-h-11 items-center gap-2 text-sm text-ink sm:col-span-2">
               <input type="checkbox" name="crossBorder" className="size-4" />
               {t("country.privacy.leaves_country")}
             </label>

@@ -6,6 +6,7 @@
  * validators are permissive exactly where the mandate says they must be.
  */
 import { describe, expect, it } from "vitest";
+import en from "@/platform/i18n/messages/en.json";
 import {
   AE_PACK,
   COUNTRY_PACKS,
@@ -215,7 +216,37 @@ describe("UAE rules", () => {
 
   it("names the five-corner model's provider requirement", () => {
     expect(AE_PACK.einvoicing.model).toBe("peppol_network");
-    expect(AE_PACK.einvoicing.requiredProviders.join(" ")).toMatch(/Accredited Service Provider/);
+    // The requirement is a MESSAGE KEY, so it reaches an Arabic or Spanish
+    // reader in their own language instead of arriving as an English sentence
+    // dropped into a translated screen. The English behind it still says it.
+    expect(AE_PACK.einvoicing.requiredProviders).toEqual(["country.provider.ae_asp"]);
+    expect(String(en["country.provider.ae_asp" as keyof typeof en])).toMatch(
+      /accredited service provider/i,
+    );
+  });
+
+  it("states every pack sentence a surface renders as a message key", () => {
+    // The rule the previous test is one case of: a pack is read by people in
+    // three languages, and prose written into a pack is English on every screen
+    // that shows it. Anything a surface renders must be a key with copy behind
+    // it in every catalogue — which the i18n parity test then guards.
+    for (const pack of [AE_PACK, SA_PACK]) {
+      const keys = [
+        ...pack.tax.flatMap((t) => t.requiresConfiguration),
+        ...(pack.payroll?.requiresConfiguration ?? []),
+        ...pack.einvoicing.requiredCredentials,
+        ...pack.einvoicing.requiredProviders,
+        ...pack.privacy.organisationActions,
+        ...pack.knownLimitations,
+      ];
+      expect(keys.length).toBeGreaterThan(0);
+      for (const key of keys) {
+        expect(key, `${pack.packKey}: "${key}" is prose, not a message key`).toMatch(
+          /^country\.[a-z0-9_.]+$/,
+        );
+        expect(key in en, `${pack.packKey}: ${key} has no English copy`).toBe(true);
+      }
+    }
   });
 
   it("fixes a count of rest days, not a day", () => {
