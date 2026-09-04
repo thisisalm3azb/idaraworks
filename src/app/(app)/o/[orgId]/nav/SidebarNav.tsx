@@ -105,6 +105,7 @@ export function SidebarNav({
                       <li key={item.key}>
                         <Link
                           href={item.href}
+                          data-tour={`nav:${item.key}`}
                           aria-current={active ? "page" : undefined}
                           aria-label={rail ? item.label : undefined}
                           title={rail ? item.label : item.locked ? lockedHint : undefined}

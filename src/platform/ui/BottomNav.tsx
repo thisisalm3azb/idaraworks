@@ -45,7 +45,7 @@ export function BottomNav({ items, ariaLabel }: { items: BottomNavItem[]; ariaLa
             item.active ? "font-semibold text-accent" : "text-ink-secondary",
           );
           return (
-            <li key={item.key} className="min-w-0 flex-1">
+            <li key={item.key} data-tour={`nav:${item.key}`} className="min-w-0 flex-1">
               {item.onSelect ? (
                 <button type="button" onClick={item.onSelect} className={className}>
                   {inner}

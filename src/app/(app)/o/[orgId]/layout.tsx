@@ -20,6 +20,7 @@ import {
   revenueStudioEnabled,
   countryPacksEnabled,
   brandedCompanyAppsEnabled,
+  guidedOnboardingEnabled,
 } from "@/platform/flags";
 import { resolveEntitlements } from "@/platform/entitlements";
 import {
@@ -32,6 +33,8 @@ import { logoutAction, setActiveLocaleAction } from "@/app/(auth)/actions";
 import { OrgLogo } from "./OrgLogo";
 import { CompanyAppHead } from "./CompanyAppHead";
 import { InstallApp } from "./InstallApp";
+import { GuidedTourMount } from "./onboarding-tour/GuidedTourMount";
+import { restartTourAction } from "./onboarding-tour/actions";
 import { resolveShell } from "./shell";
 import { SidebarNav } from "./nav/SidebarNav";
 import { MobileNav } from "./nav/MobileNav";
@@ -156,7 +159,10 @@ export default async function OrgLayout({
   const accentStyle = accentColor ? ({ "--accent": accentColor } as CSSProperties) : undefined;
 
   const brand = (
-    <Link href={`/o/${orgId}`} className="block min-w-0 font-semibold text-ink">
+    // H32: a deliberate, stable tour anchor. The tour points at meanings,
+    // never at DOM positions or translated labels, so this attribute exists
+    // for that and for nothing else.
+    <Link data-tour="brand" href={`/o/${orgId}`} className="block min-w-0 font-semibold text-ink">
       <OrgLogo ctx={resolved.ctx} archetype={a} orgName={resolved.orgName} />
     </Link>
   );
@@ -227,6 +233,14 @@ export default async function OrgLayout({
       href: `/o/${orgId}/settings/members`,
     });
   }
+  // H32: the restart. Behind the flag, so with it off the menu is unchanged.
+  if (guidedOnboardingEnabled()) {
+    accountLinks.push({
+      key: "tour",
+      label: t("tour.restart"),
+      formAction: restartTourAction.bind(null, orgId),
+    });
+  }
   const accountSections: MenuSection[] = [
     {
       key: "account",
@@ -284,6 +298,7 @@ export default async function OrgLayout({
 
             <nav className="flex items-center gap-0.5" aria-label={t("nav.top_bar")}>
               {quickCreateSections.length > 0 ? (
+                <span data-tour="create" className="contents">
                 <Menu
                   triggerLabel={t("nav.create.title")}
                   triggerClassName="flex h-11 min-w-11 items-center justify-center gap-1 rounded-md px-2 text-sm font-medium text-ink hover:bg-sunken"
@@ -300,6 +315,7 @@ export default async function OrgLayout({
                   }
                   sections={quickCreateSections}
                 />
+                </span>
               ) : null}
 
               <Link
@@ -338,6 +354,7 @@ export default async function OrgLayout({
                 </div>
               ) : null}
 
+              <span data-tour="account" className="contents">
               <Menu
                 triggerLabel={t("auth.account.title")}
                 triggerClassName="flex h-11 w-11 items-center justify-center rounded-md text-ink-secondary hover:bg-sunken hover:text-ink"
@@ -345,12 +362,22 @@ export default async function OrgLayout({
                 sections={accountSections}
                 panelClassName="w-64"
               />
+              </span>
             </nav>
           </div>
         </header>
 
         <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 pb-24 md:pb-8">{children}</main>
         {/* H28 — the Idara Dock: rendered only behind FEATURE_IDARA_INTELLIGENCE, the person's permission and the organisation's AI policy. */}
+        {/* H32 — the welcome panel and the short tour. Renders nothing with
+            the flag off, and nothing for anybody who is not newly arrived. */}
+        <GuidedTourMount
+          orgId={orgId}
+          ctx={resolved.ctx}
+          archetype={resolved.archetype}
+          orgName={resolved.orgName}
+          terms={{ job: navVars.job, jobs: navVars.jobs }}
+        />
         <IdaraDockMount
           orgId={orgId}
           ctx={resolved.ctx}

@@ -156,6 +156,7 @@ export function MobileNav({
                         <li key={item.key}>
                           <Link
                             href={item.href}
+                            data-tour={`nav:${item.key}`}
                             aria-current={active ? "page" : undefined}
                             className={cn(
                               "flex min-h-11 items-center gap-3 rounded-md border-s-[3px] px-2.5 text-sm",

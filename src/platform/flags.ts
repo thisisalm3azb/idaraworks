@@ -143,3 +143,19 @@ export function localeEsEnabled(): boolean {
 export function brandedCompanyAppsEnabled(): boolean {
   return process.env.FEATURE_BRANDED_COMPANY_APPS === "1";
 }
+
+/**
+ * H32 — the guided onboarding: welcome panel, short role-aware tour, and the
+ * getting-started checklist.
+ *
+ * With this off nothing about signing in changes: no panel appears, no tour
+ * mounts, no checklist renders, and the Help menu offers no restart. With it on
+ * only people who are genuinely new are greeted automatically (see
+ * `AUTO_START_FROM` in the guided-tour module) — an existing user who has been
+ * working here for months must never be interrupted by a first-run experience.
+ *
+ * The ONLY enabled value is the exact string "1".
+ */
+export function guidedOnboardingEnabled(): boolean {
+  return process.env.FEATURE_GUIDED_ONBOARDING === "1";
+}
