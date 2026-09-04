@@ -1,13 +1,11 @@
 # H29 — International Expansion and Versioned Country Packs: delivery report
 
-Status: **technical platform complete and merged; country and language
-activation pending the owner reviews and providers listed in section 4.** The
-production database carries H29's migrations and the production smoke passes
-against it. The merged code is not yet the live build — see §3.6 — and that
-changes nothing a user can see, because every H29 surface is behind a release
-flag that is off. Nothing here files a tax return, submits an invoice to an
-authority, or claims a legal, tax, labour, privacy or electronic-invoicing
-certification.
+Status: **technical platform shipped; country and language activation pending
+the owner reviews and providers listed in section 4.** The engine, the two
+country packs, the electronic-invoicing framework and the Spanish catalogue are
+live in production behind their release flags, which are off. Nothing here files
+a tax return, submits an invoice to an authority, or claims a legal, tax,
+labour, privacy or electronic-invoicing certification.
 
 Mandate: `phase2/14-POST-MVP-AMENDMENTS.md` §8 (owner direction, 2026-09-03).
 Truth map: `docs/H29-TRUTH-MAP.md` (Parts A–I).
@@ -327,11 +325,11 @@ vacuous instead: it can never refuse anything. All five now read `.ok`.
 | Step | Result |
 | --- | --- |
 | Merge | `verify/h29` fast-forwarded into `main` at `4aef8c7`, the CI-green commit |
-| Deployment | **not live yet.** `/api/health` still reports `a49ca12`. No production deployment has been created for `4aef8c7`; four *other* Vercel projects built previews of it and the main project built nothing, which is what the daily deployment limit looked like when H28 hit it. Raising that limit is a purchase, so it was left alone |
-| What that means | Nothing a user can see. Every H29 surface is behind `FEATURE_COUNTRY_PACKS`, which is unset, so the live build and the merged build present the same product. The database is already migrated and the smoke below ran the merged code against it |
+| Deployment | `4aef8c7` live and serving: `/api/health` reports it. The build arrived about twenty-five minutes after the merge, later than this project usually takes |
+| Live routes with the flags off | `/platform/countries` and `/platform/languages` both return not-found, and an organisation's `/settings/countries` redirects rather than rendering |
 | Migrations | 0130–0133 applied; 129 → 133. **Applied before the pre-flight ran**, through a runner that loads `.env.local`; see truth map I.3.1 and §3.5 |
 | Read-only pre-flight afterwards | CLEAR: 133 migrations applied, all 10 H29 tables present, every new tenant table at zero rows, both flags unset |
-| Production smoke | **all 22 checks passed** with the flags off |
+| Production smoke | **all 26 checks passed** against the deployed build with the flags off |
 | Residue | 0 rows: the smoke's organisation, its user, establishment, adoptions, registration, channel, document and events are all gone |
 | Business data | unchanged, counted before and after: 40 organisations, 61 users, 51 customers, 93 jobs, 78 invoices, 646 audit rows |
 
