@@ -1,6 +1,6 @@
 # H32 — Simple Guided Onboarding: implementation report
 
-**Status: shipped, flag on.** Merge commit `2ff35ad`, CI green on `826c5be`,
+**Status: shipped, flag on; a production defect was found by the owner and fixed — see the second pass below.** First merge `2ff35ad`, CI green on `826c5be`,
 migration `0137_h32a_onboarding_state.sql` applied to production.
 
 ---
@@ -152,59 +152,83 @@ recommendation.**
 
 ---
 
-## Verification actually performed, and the one gate that was not
+## The defect the owner found, and why every gate missed it
+
+The owner signed in to production, opened the account menu, clicked
+**"Show me around"** — and nothing happened. Every gate was green.
+
+### Cause (proven, not inferred)
+
+Reproduced with a signed-in disposable fixture against the isolated test
+project. The dev server's own log gave the answer:
+
+```
+POST /o/<org> 303 in 13.4s        ← the action ran and issued its redirect
+                                   ← …and no GET followed. Nothing at all.
+```
+
+`restartTourAction` wrote the row correctly (status `in_progress`, step 0 —
+asserted through the owner connection), then called `redirect()` to the org
+home, which is where the person already was. A redirect to the current URL is a
+**soft navigation**, and a soft navigation reuses the layout segment from the
+client router cache. The tour is mounted by the org **layout**. So the server
+said "in progress", the browser kept its cached copy of the shell that said
+"nothing to show", and the click was invisible.
+
+The sibling `dismissExceptionAction` in the same directory calls
+`revalidatePath` before its redirect for exactly this reason. Mine did not.
+
+### Fix
+
+`revalidatePath("/o/<orgId>", "layout")` before the redirect — `"layout"`
+because revalidating the page alone re-renders everything *except* the thing
+that needs it. And the three swallowing actions now report every caught failure
+through the house error channel: "does not break the page" and "nobody ever
+finds out" are different properties, and the first version had confused them.
+
+### Why nothing caught it
+
+| Gate | Why it was green |
+| --- | --- |
+| Unit laws | Content and eligibility only — no browser |
+| Integration (15) | Called `restartTour` directly and read the row back — the row was right |
+| Production smokes (2 × 25) | Read-only, signed out — could not click |
+| Build / lint / typecheck | The code was valid; it was the *wrong* code |
+
+The one thing that would have caught it was the signed-in browser walk, and the
+first report recorded that as NOT PERFORMED. It is now performed on every run of
+the regression spec below, and the spec is written so that it fails without the
+fix (it did).
+
+### The regression test
+
+`tests/e2e/h32-show-me-around.spec.ts` — six checks across desktop and 375px:
+
+1. A **pre-cutoff** member signs in and is **not** greeted, and the menu offers
+   "Show me around".
+2. Clicking it shows the first step **immediately**, on that page, as a result
+   of that click — "Your home page", "Step 1 of 7"; the first target is
+   visible; the server row is `in_progress` / 0 / `owner`; Next advances;
+   Escape closes; the console is clean.
+3. A **newcomer** is greeted; "Not now" sticks across a reload.
+
+The session is minted through the Supabase admin API and consumed by the app's
+own `/auth/confirm` route — no password exists anywhere in the file. It refuses
+any environment that resolves to production, and removes everything it creates.
+
+To run it here (no Docker needed): export `.env.test.local`, set
+`FEATURE_GUIDED_ONBOARDING=1`, start `next dev -p 3000`, then
+`npx playwright test --config playwright.local.config.ts tests/e2e/h32-show-me-around.spec.ts`.
+Clear `.next` first if a production build has been run since — a build into the
+dev cache makes every route 404, which cost an hour of this diagnosis.
+
+---
+
+## Verification, second pass
 
 | Gate | Result |
 | --- | --- |
-| Unit (1702, incl. 20 new H32 laws) | green |
-| Integration, real database (15 new) | green |
-| Two-org bleed harness | green, teardown included |
-| Typecheck / lint / format / build | green |
-| CI on `826c5be` | success |
-| Merge tree == verified branch tree | identical (`0f4d6a4…`) |
-| Production migration | 1 file, additive, applied |
-| Production smoke, flag OFF | 25/25 |
-| Production smoke, flag ON | 25/25 |
-| Signed-out production, desktop + 375px | no tour anchors, no tour dialog, no horizontal scroll |
-| **Signed-in browser walk (EN/AR, desktop/375px, standalone)** | **NOT PERFORMED** |
-
-### Why the signed-in walk was not performed
-
-Three routes to an authenticated session were available in principle and none
-was usable here:
-
-1. **The user's own Chrome**, which carries existing sessions — the extension is
-   not connected in this environment.
-2. **A local stack** (`supabase start` + the founder-style e2e suite, which is
-   the repo's sanctioned way to drive an authenticated UI) — Docker is not
-   installed on this machine, so the local stack cannot start. CI does not run
-   that suite either: it is gated behind `E2E_FOUNDER=1` and requires the
-   integration stage's local stack, and the workflow sets neither.
-3. **Signing in to production by hand** — this would mean entering a password
-   into a live service, which I do not do.
-
-So the tour's *visual* behaviour in a real browser — the spotlight anchoring, the
-375px sheet placement, Arabic RTL, and installed-PWA standalone mode — rests on
-the build, the unit law that every step's target is an attribute the source
-actually emits, and code review. That is weaker than seeing it, and it is stated
-here rather than glossed.
-
-**This is the highest-value thing left to check.** Everything else about H32 has
-been proven against a real database or a live deployment.
-
-### How to run it in five minutes
-
-Sign in to `https://www.idaraworks.com`, then:
-
-1. Account menu (top right) → **"Show me around"**.
-   This is the real restart path, and it works for an existing account — the
-   automatic welcome deliberately will not fire for anyone who was already a
-   member, which is the whole point of the eligibility rule.
-2. Step through with **Next**; check the highlight lands on the control named in
-   each step, and that the page behind stays clickable.
-3. Press **Escape** mid-tour — it must close immediately.
-4. Repeat at a phone width, and with the language switched to **العربية**.
-5. Check the home page for the three-item **Getting started** list.
-
-Anything wrong with the highlight positions is a change to one client file; the
-copy is data and changes without a deployment of logic.
+| Signed-in browser walk, desktop + 375px, pre-cutoff member and newcomer | **6/6 green** against the fixed code; the click test fails without the fix |
+| Unit (1702) / typecheck / lint / format / build | green |
+| Test-project residue after the harness | 0 orgs, 0 users, 0 onboarding rows |
+| Production | see the deployment note appended below |

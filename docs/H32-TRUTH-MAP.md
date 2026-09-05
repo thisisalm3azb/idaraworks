@@ -171,3 +171,25 @@ the arrow is better than losing the sentence.
 
 **H30's five owner conditions remain open.** H32 does not change the launch
 recommendation.
+
+---
+
+## Part G — the defect found in production, after the first close
+
+**Symptom.** "Show me around" did nothing for the owner.
+
+**Cause.** `restartTourAction` redirected to the URL the person was already on
+without `revalidatePath`. Same-URL soft navigation → layout segment served from
+the client router cache → the tour mount (which lives in the layout) never
+re-rendered. Proven by the dev server log: `POST … 303` and then no request.
+
+**Fix.** `revalidatePath(\`/o/${orgId}\`, "layout")` before `redirect()`; caught
+failures in all three actions now reported through `captureRequestError`.
+
+**Regression test.** `tests/e2e/h32-show-me-around.spec.ts` — signed-in, both
+viewports, pre-cutoff and newcomer; fails without the fix.
+
+**Two harness traps recorded for next time.**
+- A production build into `.next` corrupts the dev cache: every route, including
+  API routes, renders the root not-found. Clear `.next` before `next dev`.
+- Supabase magic-link tokens are single-use. Mint one per sign-in, not per user.
