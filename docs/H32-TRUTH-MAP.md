@@ -220,3 +220,10 @@ step after every click, Back, Done, restart, and unchanged business counts.
 **Law:** a card positioned relative to an anchor must prove the anchor is on
 screen first, and must never trust that its own box is. Every earlier gate
 passed while the card was 185 px below the screen.
+
+---
+
+## Closure
+
+**2026-09-05 — owner acceptance.** All seven steps of the live tour walked and
+confirmed correct by the owner. H32 complete. No new phase started.

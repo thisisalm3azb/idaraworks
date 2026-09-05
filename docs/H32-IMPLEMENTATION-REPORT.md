@@ -1,7 +1,14 @@
 # H32 — Simple Guided Onboarding: implementation report
 
-**Status: shipped, flag on; a production defect was found by the owner and fixed — see the second pass below.** First merge `2ff35ad`, CI green on `826c5be`,
-migration `0137_h32a_onboarding_state.sql` applied to production.
+**Status: COMPLETE — accepted by the owner on 2026-09-05.** The owner signed in to
+production and walked all seven steps of the live tour; every step behaved
+correctly. Live commit `8d89e96`; migration `0137_h32a_onboarding_state.sql`;
+`FEATURE_GUIDED_ONBOARDING=1`.
+
+The phase was closed three times. The first close rested on every gate except
+the one that mattered; the owner found two production defects in it; the third
+close rests on a signed-in browser walking the whole tour on the same code the
+owner then used. That history is kept below deliberately.
 
 ---
 
@@ -340,3 +347,14 @@ after it, it passes.
 What remains before H32 can be marked complete is the one thing no fixture can
 stand in for: the owner walking all seven steps in production. Everything that
 walk exercises has now been proven by a signed-in browser on the same code.
+
+
+---
+
+## Acceptance
+
+2026-09-05 — the owner tested the complete live tour in production and
+reported that all seven steps worked correctly. H32 is closed at 100%.
+
+H30's five owner conditions remain open. H32 does not change the launch
+recommendation, and no further phase has been started.
