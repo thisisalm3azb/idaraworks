@@ -232,3 +232,21 @@ dev cache makes every route 404, which cost an hour of this diagnosis.
 | Unit (1702) / typecheck / lint / format / build | green |
 | Test-project residue after the harness | 0 orgs, 0 users, 0 onboarding rows |
 | Production | see the deployment note appended below |
+
+### Deployment of the fix
+
+| | |
+| --- | --- |
+| Fix commit | `31fc81f`, CI success |
+| Merge | `d89fe46` (`--no-ff`; merge tree identical to the verified branch tree `315c0a4…`) |
+| Live | www.idaraworks.com serves `d89fe46`, auto-deployed; `FEATURE_GUIDED_ONBOARDING=1` bound |
+| Flag-on smoke on the live commit | 25/25 |
+| Business counts | unchanged throughout: 41 orgs / 62 users / 51 customers / 78 invoices / 93 jobs / 670 audit rows |
+| Harness residue in production | 0 orgs, 0 users — the harness never touched production |
+| `onboarding_state` in production | exactly one row: the owner's own click from 06:30, `in_progress` / step 0 / `owner`. Deliberately left as is. |
+
+That single row is the whole diagnosis in one line: the click handler ran and the
+restart wrote the right state on the first attempt. Only the re-render failed.
+With the fix live, that row means the tour will open on the owner's next page
+load without any click; "Show me around" also works, and both paths are what
+the regression test proves.
