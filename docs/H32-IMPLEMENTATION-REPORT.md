@@ -323,3 +323,20 @@ after it, it passes.
   page in 6–16 s while compiling. The walk sets its own budget.
 - Two workers against one dev server doubled every round-trip; the walk runs
   with one.
+
+### Deployment of the third pass
+
+| | |
+| --- | --- |
+| Fix commit | `841f441`, CI success |
+| Merge | `8d89e96` (`--no-ff`; merge tree identical to the verified branch tree `634bb3e…`) |
+| Live | www.idaraworks.com serves `8d89e96`, auto-deployed, flag bound |
+| Signed-in e2e on the fixed code | 6/6: desktop and 375 px × English and Arabic RTL, plus the newcomer path |
+| Flag-on smoke on the live commit | 25/25 |
+| Business counts | unchanged: 41 orgs / 62 users / 51 customers / 78 invoices / 93 jobs / 670 audit rows |
+| Harness residue | production 0 orgs / 0 users; test project 0 / 0 / 0 |
+| Owner's own row | `skipped` / step 2 — left exactly as found; a manual "Show me around" restarts from step 1 |
+
+What remains before H32 can be marked complete is the one thing no fixture can
+stand in for: the owner walking all seven steps in production. Everything that
+walk exercises has now been proven by a signed-in browser on the same code.
