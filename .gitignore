@@ -67,3 +67,6 @@ sim-screenshots/
 .h28-*
 .h29-*
 .h31-icons/
+
+# H33 Pilot Lab local state (checkpoints, manifest) — never committed
+.pilot-lab/

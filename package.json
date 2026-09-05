@@ -19,7 +19,13 @@
     "test:residue": "tsx tooling/scripts/test-residue.ts",
     "storage:setup": "tsx tooling/scripts/setup-storage.ts",
     "smoke:prod": "tsx tooling/scripts/smoke-prod.ts",
-    "perf": "tsx tooling/scripts/s5-perf-harness.ts"
+    "perf": "tsx tooling/scripts/s5-perf-harness.ts",
+    "lab:status": "tsx tooling/pilot-lab/run.ts status",
+    "lab:dry-run": "tsx tooling/pilot-lab/run.ts dry-run",
+    "lab:seed": "tsx tooling/pilot-lab/run.ts seed --confirm",
+    "lab:verify": "tsx tooling/pilot-lab/run.ts verify",
+    "lab:cleanup-preview": "tsx tooling/pilot-lab/cleanup.ts",
+    "lab:open": "tsx tooling/pilot-lab/open.ts"
   },
   "dependencies": {
     "@dagrejs/dagre": "3.1.1",
