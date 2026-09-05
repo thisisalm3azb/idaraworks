@@ -193,3 +193,30 @@ viewports, pre-cutoff and newcomer; fails without the fix.
 - A production build into `.next` corrupts the dev cache: every route, including
   API routes, renders the root not-found. Clear `.next` before `next dev`.
 - Supabase magic-link tokens are single-use. Mint one per sign-in, not per user.
+
+---
+
+## Part H — the second production defect: "it stopped at step 2 of 7"
+
+**Read-only verdict on the owner's row:** `skipped`, `step_index=2` — the client
+had advanced to step 3 and the server recorded it. Transition fine; **step 3's
+card was never seen.**
+
+**Exact cause (instrumented walk):** card at `top=905` in a 720-px viewport,
+because its target — the "Customers" sidebar item — sat at `y=1097` inside the
+sidebar's `overflow-y-auto` column. No scroll-into-view, no clamp.
+
+**Also found:** `create`/`account` anchors were `display: contents` (0×0, never
+ringed); progress writes queued behind one another on fast clicking.
+
+**Fixes:** scroll the target into view once per step; treat a still-off-screen
+target as absent; clamp the card to the viewport with its measured height;
+give the two anchors real boxes; coalesce progress writes to one in flight.
+
+**Regression:** the e2e now walks all seven steps on desktop and 375 px, in
+English and Arabic, asserting the card is inside the viewport and the database
+step after every click, Back, Done, restart, and unchanged business counts.
+
+**Law:** a card positioned relative to an anchor must prove the anchor is on
+screen first, and must never trust that its own box is. Every earlier gate
+passed while the card was 185 px below the screen.
