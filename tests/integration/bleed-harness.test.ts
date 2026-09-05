@@ -110,14 +110,45 @@ afterAll(async () => {
    *
    * Set inside a transaction (`local`) so it cannot leak into another test.
    */
+  /*
+   * One round trip, not one per table per org.
+   *
+   * This used to issue `tables.length × 2` statements from Node. Against the
+   * remote test project that is roughly five hundred sequential round trips,
+   * which grew past the 180-second hook budget as the schema grew — and a hook
+   * that times out leaves the fixture orgs behind. Several pairs of "Bleed A" /
+   * "Bleed B" orgs had accumulated in the test project before anyone noticed,
+   * because the assertions themselves were passing and only the teardown failed.
+   *
+   * The loop now runs inside the server. The table list is still computed in
+   * FK-topological order here and passed in, so the deletion order is unchanged;
+   * only the number of network hops is.
+   */
+  const orgs = [orgA, orgB].filter(Boolean);
+  /*
+   * Built as text and sent as ONE simple query, which is why both inputs are
+   * validated first rather than trusted. The table names come from pg_class and
+   * the ids from randomUUID, so neither is attacker-controlled — but a teardown
+   * that concatenates SQL should say out loud why that is safe, and a regex is
+   * a cheaper way to say it than a paragraph.
+   *
+   * A plpgsql DO block would read better and cannot be used: DO takes no
+   * parameters, and passing the ids through the extended protocol costs one
+   * round trip per statement, which is the thing being removed.
+   */
+  const SAFE_IDENT = /^[a-z_][a-z0-9_]*$/;
+  const SAFE_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  for (const t of tables) if (!SAFE_IDENT.test(t)) throw new Error(`unexpected table: ${t}`);
+  for (const id of orgs) if (!SAFE_UUID.test(id)) throw new Error(`unexpected org id: ${id}`);
+  const idList = orgs.map((id) => `'${id}'`).join(",");
+  const script = [
+    ...tables.map((t) => `delete from public."${t}" where org_id in (${idList});`),
+    `delete from public.org where id in (${idList});`,
+  ].join("\n");
+
   await owner.begin(async (tx) => {
     await tx.unsafe("set local session_replication_role = replica");
-    for (const org of [orgA, orgB].filter(Boolean)) {
-      for (const t of tables) {
-        await tx.unsafe(`delete from public.${t} where org_id = $1`, [org]);
-      }
-      await tx.unsafe(`delete from public.org where id = $1`, [org]);
-    }
+    await tx.unsafe(script);
     await tx.unsafe("set local session_replication_role = default");
   });
   await owner`delete from public.user_profile where id = any(${[userA, userB]}::uuid[])`;

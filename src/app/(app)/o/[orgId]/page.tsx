@@ -31,6 +31,7 @@ import {
 } from "@/platform/ui/dashboard";
 import { getAppBranding } from "@/modules/branding/service";
 import { OrgLogo } from "./OrgLogo";
+import { GettingStarted } from "./onboarding-tour/GettingStarted";
 import { getT, getServerLocale, type Translator } from "@/platform/i18n/server";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { can } from "@/platform/authz";
@@ -426,6 +427,16 @@ export default async function OrgHome({
           <Badge tone="neutral">{t(`today.screen.${payload?.screen ?? "viewer"}`)}</Badge>
         </div>
       )}
+
+      {/* H32 — the getting-started checklist. Renders nothing with the
+          flag off, nothing once its items are done, and nothing once the person
+          has dismissed it. */}
+      <GettingStarted
+        orgId={orgId}
+        ctx={resolved.ctx}
+        archetype={a}
+        terms={{ job: jobVars.job, jobs: jobVars.jobs }}
+      />
 
       {sp.welcome === "1" ? (
         <WelcomeBanner

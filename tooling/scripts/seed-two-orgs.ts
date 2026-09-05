@@ -43,7 +43,14 @@ export type Seeder = (
  * is seeded under its own org's user and its cross-USER isolation is what the
  * sweep checks.
  */
-export const ORG_AND_USER_TABLES = ["notification", "notification_preference"] as const;
+export const ORG_AND_USER_TABLES = [
+  "notification",
+  "notification_preference",
+  // H32: onboarding_state's policy is org AND user in the same predicate, so
+  // the cross-USER sweep is the one that matters here — an administrator must
+  // not see a colleague's tour progress any more than another tenant's.
+  "onboarding_state",
+] as const;
 
 /** Tables that app.create_org_with_owner already populates — seeded by org creation. */
 export const CREATE_ORG_SEEDED = [
@@ -217,6 +224,11 @@ export const SEEDERS: Record<string, Seeder> = {
   notification_preference: async (o, org, _u, recipient) => {
     await o`insert into public.notification_preference (org_id, user_id, channels)
             values (${org}, ${recipient}, '{}'::jsonb) on conflict (org_id, user_id) do nothing`;
+  },
+  onboarding_state: async (o, org, _u, recipient) => {
+    await o`insert into public.onboarding_state (org_id, user_id, status, step_index, tour_key)
+            values (${org}, ${recipient}, 'in_progress', 2, 'owner')
+            on conflict (org_id, user_id) do nothing`;
   },
   org_addon: async (o, org) => {
     await o`insert into public.org_addon (org_id, addon_key, quantity, status)
