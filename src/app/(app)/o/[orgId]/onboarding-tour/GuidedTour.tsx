@@ -54,6 +54,7 @@ export type TourLabels = {
 };
 
 type Rect = { top: number; left: number; width: number; height: number };
+type ReportStatus = "welcomed" | "in_progress" | "completed" | "skipped";
 
 /**
  * Find the element a step points at.
@@ -66,11 +67,23 @@ type Rect = { top: number; left: number; width: number; height: number };
  */
 function findTarget(name: string): HTMLElement | null {
   const nodes = document.querySelectorAll<HTMLElement>(`[data-tour="${CSS.escape(name)}"]`);
+  let boxed: HTMLElement | null = null;
   for (const node of nodes) {
     const r = node.getBoundingClientRect();
-    if (r.width > 0 && r.height > 0) return node;
+    if (r.width <= 0 || r.height <= 0) continue;
+    // Prefer the copy that is actually within the viewport; remember the first
+    // with a box in case none is, so the caller can scroll it into view.
+    if (intersectsViewport(r)) return node;
+    boxed ??= node;
   }
-  return null;
+  return boxed;
+}
+
+/** True when any part of the box is inside the visible viewport. */
+function intersectsViewport(r: DOMRect | Rect): boolean {
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  return r.top < vh && r.top + r.height > 0 && r.left < vw && r.left + r.width > 0;
 }
 
 /**
@@ -131,17 +144,65 @@ export function GuidedTour({
     return () => returnFocus.current?.focus?.();
   }, []);
 
+  /**
+   * Progress writes: fire-and-forget, but never more than one in flight.
+   *
+   * Server actions from one browser run in order, one at a time. Somebody who
+   * clicks Next six times in six seconds would otherwise queue six round trips
+   * and the database would trail the screen for half a minute — the instrumented
+   * walk saw "completed" still queued ten seconds after Done. So while a write
+   * is in flight only the LATEST state is remembered, and it is sent when the
+   * current one returns. Nothing meaningful is lost: the server keeps the
+   * highest step it has seen, and a terminal state is always the last thing
+   * requested.
+   */
+  const inFlight = useRef(false);
+  const pending = useRef<{ status: ReportStatus; step: number } | null>(null);
   const report = useCallback(
-    (status: "welcomed" | "in_progress" | "completed" | "skipped", step: number) => {
-      // Fire and forget, by design: the tour must not wait on a round trip and
-      // must not surface a failure. `void` documents that the promise is
-      // intentionally unobserved.
-      void saveTourProgressAction(orgId, status, step).catch(() => {});
+    (status: ReportStatus, step: number) => {
+      pending.current = { status, step };
+      if (inFlight.current) return;
+      const flush = (): void => {
+        const next = pending.current;
+        pending.current = null;
+        if (!next) {
+          inFlight.current = false;
+          return;
+        }
+        inFlight.current = true;
+        // `void`: the promise is deliberately unobserved beyond scheduling the
+        // next write. Failures are reported server-side and must not reach the
+        // tour.
+        void saveTourProgressAction(orgId, next.status, next.step)
+          .catch(() => {})
+          .finally(flush);
+      };
+      flush();
     },
     [orgId],
   );
 
   const step = steps[index];
+  const [panelHeight, setPanelHeight] = useState(180);
+
+  /**
+   * Bring the target on screen when the step changes.
+   *
+   * Once, not every frame: the sidebar is a scrollable column and its lower
+   * items sit below the fold on an ordinary laptop. The first version measured
+   * such a target faithfully and placed the card relative to it — 185 pixels
+   * below the bottom of the screen. Every assertion about the card passed;
+   * nobody could see it. `nearest` scrolls the least that makes it visible,
+   * and `auto` (instant) so the measurement that follows is not chasing an
+   * animation and reduced-motion preferences are respected without asking.
+   */
+  useEffect(() => {
+    if (phase !== "tour" || !step?.target) return;
+    const el = findTarget(step.target);
+    if (el && !intersectsViewport(el.getBoundingClientRect())) {
+      el.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "auto" });
+    }
+  }, [phase, step]);
 
   /** Measure the current target, and keep measuring while the page moves. */
   useEffect(() => {
@@ -157,11 +218,17 @@ export function GuidedTour({
      */
     const measure = () => {
       const el = step.target ? findTarget(step.target) : null;
-      const next: Rect | null = el
-        ? (({ top, left, width, height }) => ({ top, left, width, height }))(
-            el.getBoundingClientRect(),
-          )
-        : null;
+      const box = el?.getBoundingClientRect() ?? null;
+      // A target that is still off screen after the scroll attempt — inside a
+      // closed drawer, a collapsed group, a hidden column — is treated as absent,
+      // so the card is placed where a person is, never where the anchor is.
+      const next: Rect | null =
+        box && intersectsViewport(box)
+          ? { top: box.top, left: box.left, width: box.width, height: box.height }
+          : null;
+      // The card's real height, so placement can keep all of it on screen.
+      const h = panelRef.current?.offsetHeight ?? 0;
+      if (h > 0) setPanelHeight((prev) => (prev === h ? prev : h));
       setRect((prev) => {
         if (prev === null && next === null) return prev;
         if (
@@ -286,19 +353,28 @@ export function GuidedTour({
         : { left: 12, right: 12, bottom: 12 }
       : {
           left: Math.max(12, vw / 2 - PANEL_W / 2),
-          top: Math.max(12, vh / 2 - 90),
+          top: Math.max(12, vh / 2 - panelHeight / 2),
           width: PANEL_W,
         };
   } else {
+    /*
+     * Below the target if it fits, above it if not — and then CLAMPED, on both
+     * axes, to the viewport. The clamp is not belt-and-braces: the first
+     * version had none, and a target low in a scrollable sidebar produced a
+     * card at top=905 in a 720-pixel viewport. Clamping uses the card's
+     * measured height rather than a guess, so a longer sentence in another
+     * language cannot push its buttons off the bottom either.
+     */
+    const maxTop = Math.max(12, vh - panelHeight - 12);
+    const maxLeft = Math.max(12, vw - PANEL_W - 12);
     const below = rect.top + rect.height + GAP;
-    const fitsBelow = below + 180 < vh;
-    // Clamped to the viewport on both axes, which is what keeps a step anchored
-    // to something near the right edge from rendering off screen — the usual
-    // way this breaks in RTL, where the sidebar is on the other side.
-    const left = Math.min(Math.max(12, rect.left), Math.max(12, vw - PANEL_W - 12));
-    panelStyle = fitsBelow
-      ? { top: below, left, width: PANEL_W }
-      : { top: Math.max(12, rect.top - GAP - 180), left, width: PANEL_W };
+    const fitsBelow = below + panelHeight + 12 <= vh;
+    const top = fitsBelow ? below : rect.top - GAP - panelHeight;
+    panelStyle = {
+      top: Math.min(Math.max(12, top), maxTop),
+      left: Math.min(Math.max(12, rect.left), maxLeft),
+      width: PANEL_W,
+    };
   }
 
   const isLast = index === steps.length - 1;

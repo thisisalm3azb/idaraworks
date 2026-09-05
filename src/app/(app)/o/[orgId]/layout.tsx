@@ -298,7 +298,9 @@ export default async function OrgLayout({
 
             <nav className="flex items-center gap-0.5" aria-label={t("nav.top_bar")}>
               {quickCreateSections.length > 0 ? (
-                <span data-tour="create" className="contents">
+                // A real box, not display:contents — the tour rings this element,
+                // and a box-less wrapper measures 0×0 and can never be ringed.
+                <span data-tour="create" className="inline-flex">
                   <Menu
                     triggerLabel={t("nav.create.title")}
                     triggerClassName="flex h-11 min-w-11 items-center justify-center gap-1 rounded-md px-2 text-sm font-medium text-ink hover:bg-sunken"
@@ -354,7 +356,7 @@ export default async function OrgLayout({
                 </div>
               ) : null}
 
-              <span data-tour="account" className="contents">
+              <span data-tour="account" className="inline-flex">
                 <Menu
                   triggerLabel={t("auth.account.title")}
                   triggerClassName="flex h-11 w-11 items-center justify-center rounded-md text-ink-secondary hover:bg-sunken hover:text-ink"

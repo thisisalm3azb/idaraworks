@@ -250,3 +250,76 @@ restart wrote the right state on the first attempt. Only the re-render failed.
 With the fix live, that row means the tour will open on the owner's next page
 load without any click; "Show me around" also works, and both paths are what
 the regression test proves.
+
+---
+
+## Third pass — "it stopped at step 2 of 7"
+
+### What the database said, read-only
+
+The owner's own row, untouched: `status=skipped step_index=2 dismissed_at=07:14:27`.
+`step_index=2` is index 2 — **step 3**. The Next click at step 2 ran, the client
+advanced to step 3 and the server recorded it. The tour was then closed
+(Escape) while the client was at step 3. So the state machine worked; **step 3's
+card was never seen**. A display problem, not a transition problem.
+
+### The exact reason, captured
+
+An instrumented walk (signed-in disposable owner, isolated test project, the
+card's box and every target's rect logged after each click):
+
+```
+step 3 +2000ms  dialog: 12,905 320x180   viewport 1280x720   nav:customers: 8,1097
+```
+
+The card was placed at `top=905` in a 720-pixel viewport — **185 pixels below
+the bottom of the screen**. Its target, the "Customers" sidebar item, sits at
+`y=1097` inside the sidebar's `overflow-y-auto` column, below the fold on an
+ordinary laptop. The tour measured that target faithfully, positioned the card
+relative to it, and clamped nothing. Playwright reported Back and Next as
+"outside of the viewport"; a person sees a dimmed page and no card.
+
+Two further findings from the same walk:
+
+- The `create` and `account` anchors measured **0×0**: they were
+  `display: contents` wrappers, which have no box, so those steps could never be
+  ringed and always fell back to centred.
+- Progress writes **queued**. Server actions from one browser run one at a time;
+  a person clicking Next quickly built a queue of round-trips and the database
+  trailed the screen — "completed" was still queued ten seconds after Done.
+
+### Fixes
+
+| | |
+| --- | --- |
+| Off-screen target | On each step change the target is scrolled into view once (`block: "nearest"`, instant, so measurement never chases an animation and reduced motion needs no special case). |
+| Still off-screen after that | Treated as **absent** — the card is placed where the person is, never where the anchor is. Covers closed drawers, collapsed groups, hidden columns. |
+| Card placement | Clamped to the viewport on both axes using the card's **measured** height, so a longer sentence in another language cannot push the buttons off the bottom either. |
+| Box-less anchors | The two wrappers are `inline-flex` — real boxes, real rings. |
+| Queued writes | At most one progress write in flight; only the latest state is remembered while one is out. The server keeps the highest step it has seen and a terminal state is always last, so nothing meaningful is lost and completion lands promptly. |
+
+### What the regression test now proves (`tests/e2e/h32-show-me-around.spec.ts`)
+
+Desktop and 375 px; English and Arabic RTL; a pre-cutoff owner and a newcomer:
+
+1. Sign in as a pre-cutoff owner: not greeted; every target attached to the DOM.
+2. Start by hand from the account menu.
+3. Step 1: title and "Step 1 of 7" from the catalogue, **card fully inside the viewport**, database `in_progress/0`.
+4. Next through steps 2–7, asserting title, progress, in-viewport box, and the database step after **every** click.
+5. Back once at step 3: step 2 shown; database stays at 2 (never backwards); Next returns to 3.
+6. Done: dialog gone; database `completed/7` with `completed_at`; reload does not re-greet.
+7. Restart from the menu: step 1 again; database `in_progress/0`, `completed_at` cleared; Escape → `skipped/0`.
+8. Customer, job, invoice, quote, audit and membership counts for the organisation identical before and after.
+9. Console error-free throughout.
+10. Everything created is removed in `afterAll`.
+
+Before the fix the walk failed at step 3 with the card outside the viewport;
+after it, it passes.
+
+### Two harness lessons
+
+- Playwright's base config budgets 30 s per test — right for a smoke, wrong for a
+  walk with two restarts and eight writes on a dev server that serves an org
+  page in 6–16 s while compiling. The walk sets its own budget.
+- Two workers against one dev server doubled every round-trip; the walk runs
+  with one.
