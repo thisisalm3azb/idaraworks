@@ -28,10 +28,14 @@ import { resolveIssuer } from "./issuer-resolve";
 import { getQuote } from "@/modules/quotes/service";
 import { getInvoice } from "@/modules/invoices/service";
 import { formatDate, formatMoney } from "@/platform/format";
+import { PURCHASE_ORDER_ISSUED_STATUSES } from "./purchase-order-document";
 
 export const DOCUMENT_KINDS = [
   "quote",
   "invoice",
+  // H33: a purchase order could not be printed at all until it became a kind
+  // here — the route answered 404 and the screen said "PDF pending" for ever.
+  "purchase_order",
   "week_plan",
   // H23F — HR documents through the SAME model/HTML/PDF pipeline.
   "payslip",
@@ -63,6 +67,7 @@ export type DocumentKind = (typeof DOCUMENT_KINDS)[number];
 const VIEW_ACTION: Record<DocumentKind, Action> = {
   quote: "quotes.view",
   invoice: "invoices.view",
+  purchase_order: "po.view",
   week_plan: "week.view",
   // hr.self is the COARSE gate every member holds; each builder narrows to the
   // caller's own employee row unless the wider action ALSO holds (weekPlanModel
@@ -127,6 +132,7 @@ export class DocumentNotShareableError extends Error {
 const ISSUED_STATUSES: Record<DocumentKind, readonly string[]> = {
   quote: ["sent", "accepted", "converted", "converting", "rejected", "expired"],
   invoice: ["issued", "partially_paid", "paid", "cancelled"],
+  purchase_order: PURCHASE_ORDER_ISSUED_STATUSES,
   week_plan: ["issued", "revised", "cancelled"],
   // A payslip row EXISTS only issued (immutable, snapshot on the row); the
   // other HR letters render on demand from live records — current identity,
@@ -349,6 +355,10 @@ export async function documentModel(
       return quoteModel(ctx, archetype, doc.id, doc.language);
     case "invoice":
       return invoiceModel(ctx, archetype, doc.id, doc.language);
+    case "purchase_order": {
+      const { purchaseOrderModel } = await import("./purchase-order-document");
+      return purchaseOrderModel(ctx, archetype, doc.id, doc.language);
+    }
     case "week_plan": {
       const { weekPlanModel } = await import("./week-plan-document");
       return weekPlanModel(ctx, archetype, doc.id, doc.language);

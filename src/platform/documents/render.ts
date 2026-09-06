@@ -58,6 +58,7 @@ export type DocumentRenderModel = {
   kind:
     | "quote"
     | "invoice"
+    | "purchase_order"
     | "week_plan"
     | "payslip"
     | "salary_certificate"

@@ -6,6 +6,7 @@ import { resolveCtx } from "@/platform/auth/resolve";
 import { can } from "@/platform/authz";
 import { stockSurfacesEnabled } from "@/platform/flags";
 import { getPurchaseOrder } from "@/modules/supply/service";
+import { DocumentActions } from "../../documents/DocumentActions";
 import { receivingReadiness, unpostedReceipts } from "@/modules/inventory/service";
 import { formatMoney } from "@/platform/format";
 import type { CurrencyCode } from "@/platform/registries";
@@ -195,13 +196,15 @@ export default async function PoDetailPage({
           <span>{t("po.total")}</span>
           <span dir="ltr">{money(po.totalMinor)}</span>
         </div>
-        <p className="mt-3 text-sm">
-          {po.pdfFileId ? (
-            <span className="text-success">{t("po.download_pdf")}</span>
-          ) : (
-            <span className="text-ink-muted">{t("po.pdf_pending")}</span>
-          )}
-        </p>
+        {/*
+          H33: this used to read "PDF pending" for ever. The order now renders on
+          demand through the same pipeline as a quote or an invoice, so Preview,
+          Print, Download and the other language all work; nothing waits on a
+          background worker.
+        */}
+        <div className="mt-3">
+          <DocumentActions orgId={orgId} kind="purchase_order" id={po.id} />
+        </div>
       </Card>
 
       {canSubmit ? (

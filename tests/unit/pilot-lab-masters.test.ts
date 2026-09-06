@@ -7,7 +7,15 @@
  * in a state the database's guards would refuse. All of that is checked here
  * against an in-memory `insert`, for every one of the five companies.
  */
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+/*
+ * These build a whole company in memory — tens of thousands of rows for the
+ * larger profiles — so the 5-second default is a stopwatch on the machine, not
+ * on the code. Under full-suite parallel load it fired on the biggest company
+ * and looked like a logic failure.
+ */
+vi.setConfig({ testTimeout: 120_000, hookTimeout: 120_000 });
 import { COMPANIES } from "../../tooling/pilot-lab/companies";
 import { id as labId } from "../../tooling/pilot-lab/ids";
 import { SEED_VERSION } from "../../tooling/pilot-lab/marker";

@@ -35,7 +35,6 @@ import {
   checksumOf,
   cleanupPhrase,
   type Manifest,
-  type CompanyManifest,
 } from "./manifest";
 import { FAMILIES } from "./families";
 import { Rng } from "../simulation/rng";

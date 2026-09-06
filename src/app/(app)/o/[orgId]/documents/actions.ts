@@ -15,6 +15,7 @@ import {
 const DETAIL_PATH: Record<DocumentKind, (orgId: string, id: string) => string> = {
   quote: (o, id) => `/o/${o}/quotes/${id}`,
   invoice: (o, id) => `/o/${o}/invoices/${id}`,
+  purchase_order: (o, id) => `/o/${o}/purchase-orders/${id}`,
   week_plan: (o, id) => `/o/${o}/week/plans/${id}`,
   // H23F — HR kinds are NOT shareable (SHAREABLE_KINDS), so no share ever
   // exists to revoke on these paths; the entries satisfy the exhaustive type

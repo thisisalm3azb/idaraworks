@@ -41,7 +41,7 @@ type Lab = {
   viewerUserId: string;
   foremanUserId: string;
 };
-let labs: Lab[] = [];
+const labs: Lab[] = [];
 let tenantTables: string[] = [];
 
 const ctxOf = (orgId: string, userId: string, privileged = true): Ctx => ({
