@@ -8,9 +8,12 @@
  * exist rather than a re-seed, because the generator that produced them is now
  * right and only the history is stale:
  *
- *   1. A maintenance plan's `last_done_on` and `next_due_on`, left one interval
- *      behind when the service recorded the newest event without advancing the
- *      plan. Recomputed from the plan's own events.
+ *   1. A maintenance plan's `last_done_on` and `next_due_on`, set from the
+ *      plan's OLDEST occurrence instead of its newest, because the generating
+ *      loop counts down in days-ago and a comment claimed it counted up.
+ *      Recomputed from the plan's own events. The generator is now right, so a
+ *      future clean seed finds nothing here; this repairs the builds made
+ *      before the fix landed.
  *   2. The payroll periods hr should never have written. setup owns the pay
  *      calendar and derives one id per calendar month of the company's
  *      history; anything else on that calendar came from hr's old thirty-day
