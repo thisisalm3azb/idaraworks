@@ -108,6 +108,50 @@ function main() {
   if (wc) p(`| Slowest cold compile | \`${wc.company}/${wc.surface}\` at ${ms(wc.cold.ms)} |`);
   p();
 
+  /*
+   * Say how much of the measurement is fixed cost. In development every
+   * surface carries the same compile-and-render overhead, so if they all
+   * cluster near the fastest one, the numbers describe the dev server and the
+   * network — not the data volume the lab exists to exercise. Computed, so it
+   * cannot drift away from the run it describes.
+   */
+  const floor = medians[0];
+  if (floor && medians.length > 3) {
+    const near = medians.filter((m) => m <= floor * 1.6).length;
+    const worst = rs.reduce((a, b) => (b.median > a.median ? b : a));
+    p("### How much of this is the development server");
+    p();
+    p(
+      "The fastest surface's median is " +
+        ms(floor) +
+        ", and " +
+        near +
+        " of " +
+        medians.length +
+        " surfaces fall within 1.6x of it. A floor that flat means the figures are " +
+        "dominated by fixed development-server and network cost rather than by how " +
+        "much data a page lists, so they should NOT be read as 'which surfaces are " +
+        "heavy'. Production timings were not measured; treat that as an open " +
+        "question rather than an answered one.",
+    );
+    p();
+    if (worst.median > floor * 2) {
+      p(
+        "The one figure that does stand clear of the floor is `" +
+          worst.company +
+          "/" +
+          worst.surface +
+          "` at " +
+          ms(worst.median) +
+          " — " +
+          (worst.median / floor).toFixed(1) +
+          "x the fastest surface. That gap is large enough to be a property of the " +
+          "page rather than of the server, and is worth a look before a pilot.",
+      );
+      p();
+    }
+  }
+
   if (errors.length) {
     p("### Responses that were not successful");
     p();
