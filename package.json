@@ -30,7 +30,8 @@
     "test:lab": "vitest run --config vitest.lab.config.ts",
     "lab:residue-check": "tsx tooling/scripts/h33-residue-check.ts",
     "lab:report": "tsx tooling/pilot-lab/report.ts",
-    "lab:perf-report": "tsx tooling/pilot-lab/perf-report.ts"
+    "lab:perf-report": "tsx tooling/pilot-lab/perf-report.ts",
+    "lab:access": "tsx tooling/pilot-lab/access-report.ts"
   },
   "dependencies": {
     "@dagrejs/dagre": "3.1.1",
