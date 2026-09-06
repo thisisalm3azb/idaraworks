@@ -7,17 +7,18 @@
 Companion documents: [H33-DATA-MANIFEST.md](H33-DATA-MANIFEST.md) (what exists,
 counted from the database), [H33-SECURITY-AND-ISOLATION-REPORT.md](H33-SECURITY-AND-ISOLATION-REPORT.md)
 (what keeps it contained), [H33-PERFORMANCE-REPORT.md](H33-PERFORMANCE-REPORT.md)
-(how it behaves at size), [H33-PILOT-LAB.md](H33-PILOT-LAB.md) (how to open it),
-[H33-MANUAL-ACCEPTANCE.md](H33-MANUAL-ACCEPTANCE.md) (what to try).
+(how it behaves at size), [H33-RECONCILIATION-FINDINGS.md](H33-RECONCILIATION-FINDINGS.md)
+(what verification found, and why), [H33-PILOT-LAB.md](H33-PILOT-LAB.md) (how to
+open it), [H33-MANUAL-ACCEPTANCE.md](H33-MANUAL-ACCEPTANCE.md) (what to try).
 
 ---
 
 ## 1. What was built
 
-A **Pilot Lab**: five fictional companies, each with several years of coherent
-operating history, in the isolated test project. Not a demo script — a working
-dataset the owner can sign into as any of nine roles and use as a customer
-would.
+A **Pilot Lab**: five fictional companies, each with about three years of
+coherent operating history, in the isolated test project. Not a demo script — a
+working dataset the owner can sign into as any of nine roles and use as a
+customer would.
 
 The generator is fifteen families, each owning one slice of a company's life and
 declaring what it depends on:
@@ -60,98 +61,182 @@ declaring what it depends on:
 - **Resumable.** A checkpoint per (company, family), plus a progress marker
   inside each service phase, so an interruption resumes rather than repeats.
 
-## 3. Defects this phase found and fixed
+## 3. What this phase found
 
-Every one of these was found by building the thing, not by reading it.
+Fifteen defects, and every one was found by **running** something — not by
+reading code. Nine of them were only reachable once a real database was on the
+other end.
 
-**D1 — Purchase orders could not be printed at all.** `purchase_order` was
-never registered as a document kind, so the document route 404ed and the screen
-said "PDF pending" for ever. It now renders on demand through the same
-model → HTML → PDF pipeline as every other document, in English and Arabic, with
-the issuer, supplier, lines, totals and dates. Eight regression tests, including
-one that asserts the downloaded bytes really begin `%PDF-`.
+### Shipped as its own fix
 
-**D2 — The repository's secret-scanning allowlist had never worked.** gitleaks
-matches allowlist regexes against the *secret*, not the whole line, so the
-`key: "..."` patterns the file was built around could never fire. Five findings
-repo-wide were being suppressed by luck rather than by the allowlist. Fixed with
-`regexTarget = "match"` and patterns that match what is actually scanned.
+**D1 — Purchase orders could not be printed at all.** `purchase_order` was never
+registered as a document kind, so the route 404ed and the screen said "PDF
+pending" for ever. It now renders through the same model → HTML → PDF pipeline as
+every other document, in English and Arabic, with the issuer, supplier, lines,
+totals and dates. Eight regression tests, including one asserting the downloaded
+bytes really begin `%PDF-`.
 
-**D3 — Unit tests were silently connecting to the test database.** Importing
+**D2 — A product defect in Studio: an edge could name a dependency that was
+never written.** Two causes, and the second needs no transaction trouble at all:
+`addEdge` materialised the dependency by calling `addDependency(ctx, …)` from
+*inside* its own transaction, so the two writes could not commit or fail
+together; and `addDependency` inserts with `on conflict … do nothing` but
+returned the uuid it had just minted rather than the row's, so asking twice for
+the same dependency handed back an id that had never been inserted. Four such
+edges existed in the lab. Fixed with `addDependencyIn(tx, …)`, which returns the
+id of the row that actually exists; all three Studio call sites now use it. The
+regression test was verified by reinstating the old behaviour — it fails with
+the bug and passes without it.
+
+### Repository and tooling
+
+**D3 — The secret-scanning allowlist had never worked.** gitleaks matches
+allowlist regexes against the *secret*, not the line, so the `key: "..."`
+patterns the file was built around could never fire. Five findings repo-wide
+were being suppressed by luck. Fixed with `regexTarget = "match"`.
+
+**D4 — Unit tests were silently connecting to the test database.** Importing
 `run.ts` for one exported helper executed the whole orchestrator. In CI it
 exited 1; locally it had been opening a database connection on every unit-test
-run. Guarded like `migrate.ts`.
+run.
 
-**D4 — The batch writer never actually worked.** Postgres infers a parameter's
-type from its cast, so `$1::json` declared the parameter as json and postgres.js
-JSON-encoded the already-stringified payload a second time — the server received
-one JSON string where an array of rows was meant. Casting through
-`$1::text::json` sends and parses it once. Nothing caught it earlier because the
-unit tests substitute an in-memory insert and a dry run writes nothing: the
-first real exercise of that function was the seed itself.
+### Only a real database could have found these
 
-**D5 — A relabelled job kept the wrong history.** The generator guarantees that
-every job category appears, by converting a job when a category did not come up
-naturally. It changed the label without touching the stages, tasks and daily
-reports that job had already accumulated, so a `draft` job could carry completed
-stages and a fortnight of site diaries. Invisible at the original scale because
-every category came up on its own. A conversion now prefers a job whose content
-already suits the category, and otherwise brings the content into line.
+**D5 — The batch writer had never worked.** Postgres infers a parameter's type
+from its cast, so `$1::json` made postgres.js JSON-encode the already-stringified
+payload a second time — the server received one JSON string where an array of
+rows was meant. `$1::text::json` sends and parses it once. The unit tests
+substitute an in-memory insert and a dry run writes nothing, so the seed was the
+first real exercise of that function.
 
-**D6 — Two invented vocabularies.** `supplier_return_line.disposition` as
-"return_to_supplier" where the schema allows accepted / damaged / quarantine,
-and `stock_reservation.status` as "consumed" where a fulfilled reservation is
-"issued". Both failed at insert time, deep into a slow seed. The dry run now
-loads every single-column enumeration from `pg_constraint` and checks every
-generated value against it, so this class of mistake is caught in seconds
-instead of minutes.
+**D6 — Four classes of value the schema refuses.** An invented vocabulary
+(`supplier_return_line.disposition`, `stock_reservation.status`), a missing
+required value (`stock_movement.idempotency_key`, `stock_cost_layer.currency`,
+`candidate.requisition_id`), a negated figure (`pay_run.employer_total_minor` —
+a reversal carries the same money, because the sign lives in `run_kind`), and a
+column that is not there (`stock_movement_lot.qty_delta`, which is `qty`).
 
-**D7 — A handoff read as the wrong shape.** `supply` and `stock` read the
-catalogue as an array where `masters` hands it over as a map keyed by item id. A
-live seed would have died at `supply` — the first family after `sales`. The unit
-tests were green only because their fixtures had been written against the same
-wrong shape; both now mirror the real contract.
+Rather than keep discovering these one slow seed at a time, **the dry run now
+lints against the live schema**: every single-column enumeration and sign floor
+from `pg_constraint`, every NOT NULL column without a default, and every column
+of every table. It turned a five-minute failure cycle into a five-second one and
+reports clean across all fifteen families and five companies.
+
+**D7 — Deferred constraint triggers need one transaction.**
+`stock_movement_tracking_is_complete` fires at commit and counts the lots or
+serials a movement names; inserting one table per statement committed the
+movements before any link row existed, so it refused every tracked movement.
+`insertGroup` writes such tables together.
+
+**D8 — `created_at` is when the row was written, not when the event happened.**
+Backdating `stock_movement.created_at` made every movement look already-posted,
+and the tracking triggers refuse to attach units to a posted movement.
+
+**D9 — Tracked stock has to name what it moves.** Serials were minted but never
+linked; lots were attached on a coin flip regardless of whether the item was
+lot-tracked. Both now follow the catalogue, and tracked items are received and
+held rather than issued, so no movement can be short of what it must name.
+
+**D10 — A relabelled job kept the wrong history.** The guarantee that every job
+category appears converted a job's label without touching the stages, tasks and
+daily reports it had already accumulated, so a `draft` job could carry completed
+work. Invisible at the original scale because every category came up naturally.
+
+**D11 — A handoff read as the wrong shape.** `supply` and `stock` read the
+catalogue as an array where `masters` hands over a map keyed by item id. The unit
+tests were green only because their fixtures had the same wrong shape.
+
+**D12 — Pointers to rows written later.** `doc_document.working_revision_id` and
+`issued_snapshot_id` are foreign keys to rows the same family writes afterwards,
+and neither constraint is deferrable. The product has the same problem and
+solves it the same way: create, then point.
+
+**D13 — A budget is born a draft**, because approving one is what freezes its
+figures; `budget_line_frozen` refuses a line on anything else.
+
+### Found by reconciliation, after the data existed
+
+**D14 — A maintenance plan that never learned its own history.** The lab
+recorded each plan's newest event without `advancePlan`, so 62 plans showed the
+date the bulk insert gave them, one interval behind. The product was right and
+the caller had not opted in.
+
+**D15 — Two families writing one payroll calendar.** `setup` owns the pay group
+and its periods; `hr` was minting a second series at thirty-day intervals onto
+the same group — 61 periods for gulfbuild where 37 are real, 48 overlapping a
+neighbour. Two periods covering the same fortnight make "what was paid for
+September" unanswerable. `hr` now cites setup's months.
 
 ## 4. What the scale-down cost, and what it did not
 
 The first whole-chain dry run projected ~437,000 rows ≈ 500 MB against a 300 MB
-ceiling. The five volume profiles were rescaled to ~198,000 rows ≈ 227 MB.
+ceiling. The five volume profiles were rescaled to ~195,000 rows; the first
+complete seed wrote 156,019 and took the database to 160 MB, so the 1,200 B/row
+estimate was conservative by nearly half.
 
-Scaling down starved a dozen things that had been met by volume alone: a company
-with fewer than twenty manufactured parents kept only active bills of material,
-a company whose work is mostly closed had no approvals waiting, a sixty-week
-plan board missed its one cancelled week. Each is now met **by construction** —
+Scaling down starved a dozen things that had been met by volume alone: fewer
+than twenty manufactured parents kept only active bills of material, a company
+whose work is mostly closed had no approvals waiting, a sixty-week plan board
+missed its one cancelled week. Each is now met **by construction** —
 deterministic top-ups that walk in index order and consume no randomness — so
 every state a pilot needs to look at is present at any scale.
 
-What the smaller size does change, honestly stated: the operations boards carry
+What the smaller size does change, stated plainly: the operations boards carry
 tens of open jobs rather than hundreds, and only one company crosses the 1,205
-row pagination boundary on each major surface. That is the deliberate trade: one
-company past the boundary proves the pagination, and five would have cost half a
-gigabyte.
+row pagination boundary on each major surface. That is the deliberate trade —
+one company past the boundary proves the pagination, and five would have cost
+half a gigabyte.
 
 ## 5. Verification
 
 | Gate | Result |
 | --- | --- |
-| Unit tests (`tests/unit/pilot-lab-*`) | 1,195 across the fifteen families |
+| Unit tests | 2,897 across the repository, 1,195 of them the lab's own |
 | Typecheck, lint, format | clean |
-| Value vocabularies vs `pg_constraint` | every generated value satisfies the schema |
-| Dry run | all fifteen families, all five companies, no family unestimated |
-| Seed | see the data manifest |
-| Reconciliation (`npm run lab:verify`) | see §6 |
-| Tenant isolation (`npm run test:lab`) | see the security report |
-| Production residue (`npm run lab:residue-check`) | see the security report |
+| Value vocabularies vs the live schema | every generated row satisfies it |
+| Dry run | all fifteen families, all five companies |
+| Seed | five companies, fifteen families each — see the data manifest |
+| Idempotency | a second seed writes nothing; every family checkpointed and skipped, database unchanged |
+| Reconciliation | 2,115 / 2,124 on the first build; see §6 |
+| Tenant isolation | 8 / 8 |
+| Production residue | 0 |
+| CI | green on the branch |
 
-## 6. Reconciliation
+## 6. Reconciliation, and the rebuild
 
-Filled from `npm run lab:verify` once the seed completed — see the data
-manifest for the counts and this section for the checks that compare them
-against each other (ledger balance, stock ledger against balances, payroll
-against its lines, receivables against the invoices, the document evidence
-chain, and the absences the `country` family exists to prove).
+The first complete seed verified at **2,115 / 2,124** checks. The nine failures
+are set out with their diagnoses in
+[H33-RECONCILIATION-FINDINGS.md](H33-RECONCILIATION-FINDINGS.md): three lab
+defects, two checks that asserted more than the product promises, one product
+defect, and three smaller data observations.
 
-## 7. What H33 deliberately did not do
+Two of the fixes could be applied to the rows that already existed, and were: 62
+maintenance plans recomputed from their own events, and 4 dangling Studio edges.
+The payroll calendar could not — `pay_run` is append-only by trigger, so the
+runs citing the overlapping periods, and the periods themselves, cannot be
+removed.
+
+**The owner chose a clean rebuild.** The five companies were deleted through the
+guarded cleanup — exactly five organisations and their 45 logins, nothing else —
+and seeded again with every fix in place, so the current lab has one payroll
+calendar per company, plans that agree with their own events, and no dangling
+edges, corrected at source rather than after the fact.
+
+## 7. Two "leaks" that were the policy working
+
+The isolation sweep reported a restricted foreman reading 22 payslips and 25
+pay-run lines. Neither is a leak. Both policies read "cost wall **or** the
+employee's own row", and the migration for `pay_run_line` says so in as many
+words: *"the line that pays THEM, and nobody else's."* The lab holds 946
+payslips across 43 employees — exactly 22 each — so 22 is precisely one person's
+own.
+
+Asserting zero was asserting against the product's stated design. The check now
+asserts the half that matters: a restricted employee sees their own rows and not
+one belonging to anybody else, which is a stronger claim than the one it
+replaced.
+
+## 8. What H33 deliberately did not do
 
 - No pilot customer was invited; no real person was contacted.
 - No legally gated feature was enabled in production; AI, country packs,
@@ -160,3 +245,7 @@ chain, and the absences the `country` family exists to prove).
 - PO-002 was not touched. The remedy exists and is idempotent; it has not been
   run.
 - No production record was read, written or copied.
+- Payments are not approval-gated in this lab. `approval_rule.subject_type`
+  allows it and the engine would gate them if a rule existed, but the lab
+  configures approval for task completions and asset disposals instead — a
+  configuration a real organisation may equally choose.
