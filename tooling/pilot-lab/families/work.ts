@@ -1923,6 +1923,15 @@ function build(
     r.returnedBy = want === "returned" ? found.j.managerUser : null;
     r.returnedAt = want === "returned" ? tsOn(r.reportDate, 18) : null;
     r.returnReason = want === "returned" ? "Quantities do not match the site measure" : null;
+    /*
+     * The lines were flagged as having deducted stock because the report was
+     * SUBMITTED; demoting it to draft or returned has to take that with it, or
+     * the report shows inventory moved by a report nobody has accepted. Two
+     * such lines survived on facilico, the only company with enough reports to
+     * reach this top-up. cost_only is derived from `deducted` at insert, so
+     * clearing this clears both.
+     */
+    if (want !== "submitted" && want !== "reviewed") for (const m of r.material) m.deducted = false;
     reportStatuses.add(want);
   }
 

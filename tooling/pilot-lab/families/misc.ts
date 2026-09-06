@@ -2042,7 +2042,7 @@ export const misc: Family = {
     );
     ck(
       "customer updates sent via service",
-      s.sendTarget === 0 || sent >= 1,
+      sent >= s.sendTarget,
       `${sent} sent (target ${s.sendTarget})`,
     );
     const cuOrphans = await count(

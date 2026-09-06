@@ -84,6 +84,20 @@ async function main() {
       for (const r of live) if (!mine.has(r.id)) orphanPeriods.push(r.id);
     }
 
+    /*
+     * A material line marked as having deducted stock, on a report nobody has
+     * accepted. The line was flagged because the report was "submitted"; the
+     * top-up that guarantees every report status appears then demoted it to
+     * draft or returned without taking the deduction with it. The generator
+     * now clears it; these are the rows written before that landed.
+     */
+    const [deducts] = (await sql`
+      select count(*)::int as n from public.report_material_line l
+      join public.daily_report r on r.id = l.report_id
+      where l.org_id = any(${ids}::uuid[]) and l.deducted_from_inventory
+        and (l.item_id is null or r.status not in ('submitted', 'reviewed'))
+    `) as unknown as Array<{ n: number }>;
+
     const [edges] = (await sql`
       select count(*)::int as n from public.studio_edge e
       where e.org_id = any(${ids}::uuid[]) and e.task_dependency_id is not null
@@ -94,6 +108,7 @@ async function main() {
     console.log(`  maintenance plans behind their own newest event: ${plans!.n}`);
     console.log(`  studio edges citing a dependency that is not there: ${edges!.n}`);
     console.log(`  payroll periods setup did not derive: ${orphanPeriods.length}`);
+    console.log(`  deductions on reports nobody accepted: ${deducts!.n}`);
     /*
      * A repair that wants to delete the entire calendar is not a repair, it is
      * a derivation that has drifted from the generator. Refuse rather than
@@ -146,6 +161,14 @@ async function main() {
           where org_id = any(${safe}::uuid[]) and id = any(${orphanPeriods}::uuid[])
         `;
       }
+      await tx`
+        update public.report_material_line l
+        set deducted_from_inventory = false, cost_only = true
+        from public.daily_report r
+        where r.id = l.report_id and l.org_id = any(${safe}::uuid[])
+          and l.deducted_from_inventory
+          and (l.item_id is null or r.status not in ('submitted', 'reviewed'))
+      `;
       await tx`
         update public.studio_edge e set task_dependency_id = null
         where e.org_id = any(${safe}::uuid[]) and e.task_dependency_id is not null
