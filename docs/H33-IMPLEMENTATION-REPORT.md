@@ -311,6 +311,23 @@ number look better:
 - **One facilico Studio scenario refuses to apply.** Reproducible, and the
   cause is not established — see above.
 
+### What the performance run is worth, and the one thing it found
+
+135 measurements, 27 surfaces across all five companies, every one a 200.
+They are development-server timings and the report says so in its own words:
+129 of the 135 medians fall within 1.6x of the fastest, so the figures are
+dominated by fixed compile and network cost rather than by how much data a
+page lists. They are not production numbers and should not be quoted as such.
+
+One thing does stand clear of that floor, and it is not what volume would
+predict. Management Studio takes 29-41 seconds on four companies and **8.9
+seconds on facilico** - the largest company in the lab, with 1,210 jobs. The
+slowest is consult, the smallest. Studio's cost therefore tracks the shape of
+the plan graph, not the size of the organisation, which is the opposite of the
+way the other twenty-six surfaces behave. That is worth a look before a pilot,
+and it is the kind of thing only a lab with five differently-shaped companies
+would have shown.
+
 ## 6. Reconciliation, and the rebuild
 
 The first complete seed verified at **2,115 / 2,124** checks; the rebuild,
