@@ -1737,7 +1737,9 @@ async function sendViaService(ctx: LabContext, list: MiscBuild["send"]): Promise
 
 export const misc: Family = {
   key: "misc",
-  deps: ["setup", "people", "masters", "work", "sales"],
+  // docstudio too: resolveTargets reads doc_document, so the documents must
+  // exist before the notifications, comments and activities that point at them.
+  deps: ["setup", "people", "masters", "work", "sales", "docstudio"],
   appliesTo: () => true,
 
   plan(ctx: LabContext): FamilyPlan {
