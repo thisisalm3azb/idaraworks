@@ -319,14 +319,34 @@ They are development-server timings and the report says so in its own words:
 dominated by fixed compile and network cost rather than by how much data a
 page lists. They are not production numbers and should not be quoted as such.
 
-One thing does stand clear of that floor, and it is not what volume would
-predict. Management Studio takes 29-41 seconds on four companies and **8.9
-seconds on facilico** - the largest company in the lab, with 1,210 jobs. The
-slowest is consult, the smallest. Studio's cost therefore tracks the shape of
-the plan graph, not the size of the organisation, which is the opposite of the
-way the other twenty-six surfaces behave. That is worth a look before a pilot,
-and it is the kind of thing only a lab with five differently-shaped companies
-would have shown.
+One thing does stand clear of that floor: Management Studio, at 29-41 seconds
+against a ~9 second floor everywhere else.
+
+**An earlier version of this section drew the wrong conclusion from it**, and
+the correction is worth keeping. facilico measured **8.9 seconds** — the fastest
+Studio in the lab, on the largest company — and that looked like evidence that
+Studio's cost tracks the plan graph's shape rather than the organisation's size.
+It was not. facilico was fast **because its schedule was throwing**: the
+scheduling-window defect above meant the page never computed one. With that
+fixed, facilico's Studio measures ~40 seconds, in line with the other four. The
+two findings were one finding, and the "insight" was an artefact of the bug.
+
+What the cost actually is, measured on one server in one session with a plain
+`fetch` — no React, no rendering, just reading the response body:
+
+| Surface | First byte | Full body | HTML |
+| --- | ---: | ---: | ---: |
+| `/jobs` | 9.4 s | **12.9 s** | 733 KB |
+| `/studio` | 11.1 s | **39.5 s** | 140 KB |
+
+Studio costs about **27 seconds more server time** than a comparable list page
+while returning five times less HTML. It is not the client: the rendered page
+holds 850 DOM nodes, pulls 8 KB of resources and logs no long tasks. The shell
+is flushed at ~11 s and the rest streams while the server computes the schedule.
+
+The ~9-11 second floor is the development server and disappears in a production
+build. The ~27 second delta is Studio's own work and would not. That is the
+number worth attacking before a pilot, and it is server-side.
 
 ## 6. Reconciliation, and the rebuild
 
