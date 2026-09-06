@@ -975,7 +975,11 @@ export function buildRows(ctx: LabContext, layout: MastersLayout, units: UnitRef
     const cost = priceMinor(rng, lo, hi);
     const price = Math.max(cost, niceMinor(Math.round(cost * rng.float(1.15, 1.9))));
     const tracking: ItemHandoff["tracking"] =
-      kind === "inventory" && company.profile.enables.serials && i % 19 === 0
+      // One item in sixty, not one in nineteen: every unit of a serialised
+      // item is a row of its own in the serial register and another naming it
+      // on the receipt movement, so this knob is the most expensive in the
+      // catalogue. A handful of serialised lines is all a pilot needs to see.
+      kind === "inventory" && company.profile.enables.serials && i % 60 === 0
         ? "serial"
         : kind === "inventory" && company.profile.enables.lots && i % 7 === 0
           ? "lot"

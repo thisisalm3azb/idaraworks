@@ -187,6 +187,8 @@ type LotM = {
 
 export type StockModel = {
   movements: MovementM[];
+  /** Which serial each movement names — the database insists they add up. */
+  movementSerials: Array<{ id: string; movementId: string; serialId: string; at: string }>;
   layers: LayerM[];
   lots: LotM[];
   serials: Array<{
@@ -308,8 +310,46 @@ function buildModel(ctx: LabContext): StockModel & { handoff: StockHandoff } {
   const nextId = (family: string) => ctx.id(family, seq++);
 
   /** Apply a movement to the running balance. Nothing else may touch it. */
+  /*
+   * A serialised item is one the database will not let you move vaguely: an
+   * after-commit trigger counts the serials a movement names and refuses it
+   * unless they equal the units moved, to the unit. So serials are minted and
+   * named HERE, in the one funnel every movement passes through, rather than
+   * left to each caller to remember.
+   *
+   * Only receipts move serialised stock in this lab. Issues, transfers, counts
+   * and adjustments skip those items at their source, so the pool only ever
+   * grows and no movement can be short of the serials it must name. That is
+   * what a serial register looks like for the kind of thing worth serialising:
+   * received, numbered, and still on the shelf.
+   */
+  const isSerial = (itemId: string) => itemById.get(itemId)?.tracking === "serial";
+  const movementSerials: StockModel["movementSerials"] = [];
+
   function post(m: MovementM): void {
     movements.push(m);
+    if (isSerial(m.itemId) && m.qtyDelta > 0) {
+      const units = Math.round(m.qtyDelta);
+      for (let u = 0; u < units; u++) {
+        const serialId = nextId("stock_serial");
+        serials.push({
+          id: serialId,
+          itemId: m.itemId,
+          serialNo: `SN-${String(serials.length + 1).padStart(7, "0")}`,
+          lotId: m.lotId,
+          status: "in_stock",
+          warehouseId: m.warehouseId,
+          locationId: m.locationId,
+          receivedAt: m.effectiveAt,
+        });
+        movementSerials.push({
+          id: nextId("stock_movement_serial"),
+          movementId: m.id,
+          serialId,
+          at: m.effectiveAt,
+        });
+      }
+    }
     const k = key3(m.itemId, m.warehouseId, m.locationId);
     const b =
       balances.get(k) ??
@@ -433,22 +473,6 @@ function buildModel(ctx: LabContext): StockModel & { handoff: StockHandoff } {
     layers.push(layer);
     const qk = `${rl.itemId}|${wh.id}`;
     layerQueue.set(qk, [...(layerQueue.get(qk) ?? []), layer]);
-
-    if (serialsOn && (item.tracking === "serial" || rng.chance(0.05))) {
-      const n = Math.min(3, Math.floor(rl.acceptedQty));
-      for (let s = 0; s < n; s++) {
-        serials.push({
-          id: nextId("stock_serial"),
-          itemId: rl.itemId,
-          serialNo: `SN-${String(serials.length + 1).padStart(7, "0")}`,
-          lotId,
-          status: "in_stock",
-          warehouseId: wh.id,
-          locationId: wh.receivingLocationId,
-          receivedAt: m.effectiveAt,
-        });
-      }
-    }
   }
 
   // ── 2. Materials issued to jobs, sourced from the daily reports ───────────
@@ -464,6 +488,9 @@ function buildModel(ctx: LabContext): StockModel & { handoff: StockHandoff } {
       : (raw as { lineId: string; itemId: string; qty: number; reportDate: string });
     const item = itemById.get(line.itemId);
     if (!item || !(line.qty > 0)) continue;
+    // Serialised stock is received and held in this lab; issuing it would mean
+    // naming each unit as it leaves, which nothing here has to demonstrate.
+    if (isSerial(line.itemId)) continue;
     // Issue from wherever the item actually is; never from an empty shelf.
     const holding = [...balances.values()].find(
       (b) => b.itemId === line.itemId && b.onHand >= line.qty,
@@ -788,7 +815,7 @@ function buildModel(ctx: LabContext): StockModel & { handoff: StockHandoff } {
     stock_reservation: reservations.length,
     stock_movement: movements.length,
     stock_movement_lot: movements.filter((m) => m.lotId !== null).length,
-    stock_movement_serial: 0,
+    stock_movement_serial: movementSerials.length,
     stock_cost_layer: layers.length,
     stock_layer_consumption: layers.reduce((n, l) => n + l.consumption.length, 0),
     stock_balance: balances.size,
@@ -800,6 +827,7 @@ function buildModel(ctx: LabContext): StockModel & { handoff: StockHandoff } {
     layers,
     lots: modelLots,
     serials,
+    movementSerials,
     transfers,
     counts,
     reservations,
@@ -857,6 +885,16 @@ function toRows(ctx: LabContext, m: StockModel): Record<StockTable, Row[]> {
       created_by: by,
       created_at: s.receivedAt,
       updated_at: s.receivedAt,
+    });
+
+  // The link rows the after-commit trigger counts.
+  for (const ms of m.movementSerials)
+    rows.stock_movement_serial.push({
+      id: ms.id,
+      org_id: org,
+      movement_id: ms.movementId,
+      serial_id: ms.serialId,
+      created_at: ms.at,
     });
 
   for (const t of m.transfers) {
