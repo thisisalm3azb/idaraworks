@@ -1113,17 +1113,23 @@ export async function seedStock(ctx: LabContext): Promise<FamilyReport> {
     "stock_movement_serial",
   ];
   for (const table of STOCK_TABLES) {
+    // The declared order still rules: cost layers cite the movement that
+    // created them, so the group has to go in at the point the movements
+    // themselves appear, not after everything else.
+    if (table === "stock_movement") {
+      const grouped = await ctx.insertGroup(
+        TOGETHER.map((t) => ({ table: t, rows: rows[t], conflict: "nothing" as const })),
+      );
+      for (const [t, r] of Object.entries(grouped)) {
+        counts[t] = r.attempted;
+        ctx.log(`${t}: ${r.attempted} rows (one transaction with its movements)`);
+      }
+      continue;
+    }
     if (TOGETHER.includes(table)) continue;
     const r = await ctx.insert(table, rows[table], "nothing");
     counts[table] = r.attempted;
     ctx.log(`${table}: ${r.attempted} rows`);
-  }
-  const grouped = await ctx.insertGroup(
-    TOGETHER.map((table) => ({ table, rows: rows[table], conflict: "nothing" as const })),
-  );
-  for (const [table, r] of Object.entries(grouped)) {
-    counts[table] = r.attempted;
-    ctx.log(`${table}: ${r.attempted} rows (one transaction with its movements)`);
   }
   return {
     family: "stock",
