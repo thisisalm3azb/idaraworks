@@ -213,6 +213,34 @@ without taking the deduction with it - so the diary showed stock moved by a
 report nobody had accepted. The same shape as D10, and only facilico has
 enough reports to reach that top-up.
 
+**D19 - A correct fix emptied a screen.** Taking `last_done_on` from the
+plan's newest event instead of its oldest (D14) moved every due date forward
+with it, and consult - the smallest asset register - was left with no overdue
+maintenance at all. The due list is a screen the owner opens; an empty one
+shows nothing. The generator now shifts one plan's history back by an interval
+so a company always has something due, walked in index order and consuming no
+randomness.
+
+It SHIFTS the dates rather than truncating the series, and that distinction
+cost a round trip: the first attempt replaced the occurrence list with a single
+entry, which changed how many rows the family plans. The checks compare seeded
+counts against a plan recomputed from the build, so nine of them began failing
+on data that was perfectly fine. **Changing a generator after the seed makes
+the verifier's expectations disagree with the data** - a family can only be
+changed after seeding if the change leaves the row counts alone, or if the
+family is re-seeded.
+
+The repair that went with it was wrong too, and is worth recording rather than
+quietly fixing: it forced `next_due_on` into the past, which broke the
+family's own invariant that a serviced plan's next due date is its last
+service plus its interval. It was removed and replaced by a repair that
+restores that invariant.
+
+**consult keeps the empty due list in this build.**
+`asset_maintenance_event` is append-only at the database, so the seeded history
+cannot be moved and the company cannot be re-run; only a full rebuild would
+correct it. The check is left failing rather than relaxed.
+
 ### Found, reproducible, and NOT explained
 
 **One Studio scenario refuses to apply.** facilico plans three scenario
