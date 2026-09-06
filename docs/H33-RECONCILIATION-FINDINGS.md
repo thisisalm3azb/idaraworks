@@ -117,14 +117,29 @@ Traced. Of 1,220 edges, 8 were offered for materialisation and 2 carry a
 exist at all — not soft-removed, absent. Both ids are v4 UUIDs, so they came
 from the product's own service rather than the lab's deterministic v5 scheme.
 
-So the lab recorded the id the service returned onto the edge, and the
-dependency it names was never committed: the pointer outlived the row it points
-at. Writing a foreign id optimistically, outside the transaction that creates
-it, is the whole bug.
+**This one is the product, not the lab.** The lab does not write
+`task_dependency_id` at all — it calls `addEdge`, and the product sets it.
 
-**Fix:** record `task_dependency_id` only after confirming the row is there —
-read it back, or do both writes in one transaction. Least consequential of the
-six (it degrades one Studio panel) but the most clearly wrong.
+`addEdge` runs inside its own `command(ctx, …)` transaction, and from within
+that callback it calls `addDependency(ctx, …)` — passing the CONTEXT, not the
+transaction. `addDependency` therefore opens a transaction of its own, and
+there is no `addDependencyIn(tx, …)` variant to call instead. So the two writes
+are not atomic: the edge records an id produced outside the transaction that
+inserts it, and the edge can outlive the dependency it names. That is precisely
+the state found — an edge citing `a1112bf5-…`, a row that is not there.
+
+Nesting one `command(ctx, …)` inside another on the same context is itself
+worth a look: depending on how the tenancy layer hands out connections it
+either opens a second connection to the same rows or creates a savepoint that
+can roll back under a committing parent.
+
+**Proposed product fix:** add `addDependencyIn(tx, ctx, …)` and have `addEdge`
+call it, so the dependency and the edge that names it commit together. Small
+and well understood, but it touches a product module and needs its own tests
+and a CI run — the owner's call whether it lands in this phase.
+
+**Lab repair meanwhile:** null the dangling `task_dependency_id`, so the Studio
+panel does not cite a row that is not there.
 
 ---
 
@@ -139,7 +154,7 @@ need one.
 | 1 | sales: payments are not approval-gated in this lab | verify only | none |
 | 2 | finance: assert what is true when the bank account has no ledger movements | verify only | none |
 | 3 | assets: pass `advancePlan: true`, and repair the 18 stale plans with one UPDATE from their own newest event | code + repair | one statement |
-| 4 | studio: null the dangling `task_dependency_id`, and record it only after the row is confirmed | code + repair | one statement |
+| 4 | studio: null the dangling `task_dependency_id` (lab repair); the underlying defect is in the product's `addEdge` | repair + product finding | one statement |
 | 5 | hr: stop writing `pay_period`; take setup's from the handoff | code + **re-seed hr** | hr is all bulk, no service phase — seconds per company |
 | 6 | work/sales: consider a `payment` approval rule in a later seed version | deferred | would re-run most of the lab |
 
