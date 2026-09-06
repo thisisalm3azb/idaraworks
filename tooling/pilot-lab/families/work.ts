@@ -104,12 +104,18 @@ export type WorkTable = (typeof WORK_TABLES)[number];
  * studio write reference_sequence) or grow when the services run (activity),
  * so verify() expects at least the plan there.
  */
+/*
+ * Tables only THIS family writes, so their counts can be asserted exactly.
+ * A table two families write cannot be: an equality check on a shared table
+ * fails the moment the other family touches it, and says nothing about either.
+ * `approval` is shared with assets and sales, and `task_dependency` with
+ * studio, which materialises a plan's edges into real dependencies.
+ */
 export const EXCLUSIVE_TABLES: ReadonlySet<string> = new Set([
   "job",
   "job_stage",
   "job_crew",
   "task",
-  "task_dependency",
   "task_allocation",
   "daily_report",
   "report_work_line",
@@ -117,7 +123,6 @@ export const EXCLUSIVE_TABLES: ReadonlySet<string> = new Set([
   "report_material_line",
   "issue",
   "approval_rule",
-  "approval",
   "week_plan",
   "week_plan_job",
 ]);

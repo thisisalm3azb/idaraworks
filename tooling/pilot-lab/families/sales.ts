@@ -1570,11 +1570,27 @@ export const sales: Family = {
     };
 
     // ── counts vs plan ──────────────────────────────────────────────────────
+    /*
+     * misc writes customer_update and the share tokens that hang off them, and
+     * every family advances reference_sequence, so an equality check on those
+     * fails the moment another family runs and says nothing about this one.
+     * The rest are this family's alone and are asserted exactly.
+     */
+    const SHARED = new Set([
+      "reference_sequence",
+      "customer_update",
+      "share_token",
+      "document_share",
+    ]);
     for (const t of SALES_TABLES) {
       const n = await count(t);
       const want = expected[t] ?? 0;
-      const ok = t === "reference_sequence" ? n >= want : n === want;
-      checks.push({ name: `count ${t}`, ok, detail: `${n} live vs ${want} planned` });
+      const shared = SHARED.has(t);
+      checks.push({
+        name: shared ? `count ${t} (at least)` : `count ${t}`,
+        ok: shared ? n >= want : n === want,
+        detail: `${n} live vs ${want} planned`,
+      });
     }
 
     // ── money and states ────────────────────────────────────────────────────

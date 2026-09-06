@@ -1034,11 +1034,16 @@ export const hr: Family = {
 
     checks.push({
       name: "the reversal mirrors the run it reverses",
+      /*
+       * MIRRORS, not negates. Payroll keeps every figure non-negative — the
+       * schema says so on the run and on every line — because the sign of a
+       * reversal lives in run_kind and reverses_run_id, not in the money.
+       */
       ok: m.runs
         .filter((r) => r.runKind === "reversal")
         .every((r) => {
           const t = m.runs.find((x) => x.id === r.reversesRunId);
-          return t !== undefined && r.netTotal === -t.netTotal;
+          return t !== undefined && r.netTotal === t.netTotal && r.grossTotal === t.grossTotal;
         }),
       detail: `${m.runs.filter((r) => r.runKind === "reversal").length} reversals`,
     });

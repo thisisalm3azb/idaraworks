@@ -1972,12 +1972,22 @@ export const assets: Family = {
       const planned = model.counts[table] ?? 0;
       const extra = model.service.counts[table] ?? 0;
       if (!planned && !extra) continue;
+      /*
+       * `approval` is written by work and sales as well, so counting every row
+       * in the organisation says nothing about this family. Count the ones it
+       * owns — the disposals it raised — and leave reference_sequence, which
+       * everyone advances, to its own scoped query.
+       */
       const n =
         table === "reference_sequence"
           ? await count(
               `select count(*)::int as n from public.reference_sequence where org_id = $1 and scope_key in ('asset', 'asset_disposal', 'asset_depreciation_run')`,
             )
-          : await count(`select count(*)::int as n from public.${table} where org_id = $1`);
+          : table === "approval"
+            ? await count(
+                `select count(*)::int as n from public.approval where org_id = $1 and subject_type = 'asset_disposal'`,
+              )
+            : await count(`select count(*)::int as n from public.${table} where org_id = $1`);
       const want = planned + extra;
       checks.push({
         name: `${table} count`,
