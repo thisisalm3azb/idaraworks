@@ -17,6 +17,13 @@
  *   3. The family must have NO checkpoint. A checkpointed family completed;
  *      undoing it would leave the families that depend on it pointing at rows
  *      that no longer exist, and that is a cleanup, not a reset.
+ *
+ * It cannot undo everything. Some tables carry their own delete guards — the
+ * lines of a paid expense claim, an append-only stock movement — and the
+ * DELETE is refused. The whole thing runs in one transaction, so a refusal
+ * leaves the family exactly as it was rather than half-removed; when that
+ * happens the choices are to re-run the family (safe when the fix did not
+ * shift the ids it derives) or to clean up the whole company and seed again.
  */
 import { loadLabEnv } from "./guard";
 import { openOwner } from "./db";
