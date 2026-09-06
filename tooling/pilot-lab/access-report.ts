@@ -90,10 +90,11 @@ function main(): void {
 
   p("## Leaving the lab alone");
   p();
-  p("Nothing here writes to the lab. `lab:open` mints a link and starts the app;");
-  p("the app itself is the product, so anything you change while signed in is a");
-  p("real change to that company's data — which is the point. To put a company");
-  p("back the way it was, the whole lab has to be rebuilt; there is no undo.");
+  p("Nothing in this document writes business data. `lab:open` mints a sign-in");
+  p("token and starts the app; the app itself is the product, so anything you");
+  p("change while signed in is a real change to that company's data — which is");
+  p("the point. To put a company back the way it was, the whole lab has to be");
+  p("rebuilt; there is no undo.");
   p();
   writeFileSync(OUT, out.join("\n"));
   console.log(

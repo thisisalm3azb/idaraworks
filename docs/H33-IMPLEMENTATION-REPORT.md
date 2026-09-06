@@ -64,7 +64,7 @@ declaring what it depends on:
 
 ## 3. What this phase found
 
-Fifteen defects, and every one was found by **running** something — not by
+Twenty defects, and every one was found by **running** something — not by
 reading code. Nine of them were only reachable once a real database was on the
 other end.
 
@@ -242,29 +242,47 @@ restores that invariant.
 cannot be moved and the company cannot be re-run; only a full rebuild would
 correct it. The check is left failing rather than relaxed.
 
-### Found, reproducible, and NOT explained
+### A second product defect, found by the lab and fixed
 
-**One Studio scenario refuses to apply.** facilico plans three scenario
-applications through the real services; two succeed and the third stops at
-`approved`. Driving `applyScenario` directly returns
+**D20 - a Management Studio plan could not be scheduled at all.** facilico
+plans three scenario applications through the real services; two succeeded and
+the third stopped at `approved`. Driving `applyScenario` directly returned
 `date outside scheduling window: 2027-03-17`.
 
-What was checked and ruled out: it is **not** drift - every change the
-scenario records still matches the node's current value, which is the
-condition `applyScenario` tests before that point. It is **not** an obviously
-short horizon either: the engine sizes its working-day window as
-`min(max(totalDur * 2 + 260, 400), 15000)` working days from the earliest
-dated input, which for facilico's four plans is 992-1,304 working days,
-roughly four to five years, and every plan's own span (2025-03 to 2027-06)
-sits inside that.
+**Four diagnoses were wrong before the right one**, and all four were guesses
+about code rather than measurements of it: scenario drift (ruled out - every
+recorded change still matched the node's live value); the launcher's Windows
+spawn (rewritten, no effect, reverted); `ModuleGate` (it renders an unavailable
+card, never a 404); and the organisation's working calendar (normal - a six-day
+week and no holiday longer than three days).
 
-So the refusal is real and reproducible, and the cause is **not established**.
-It is recorded here rather than guessed at, because two diagnoses in this
-phase were published before they were checked and both were wrong. The check
-is left failing rather than relaxed - it is reporting something true. Whether
-this is a product limit worth fixing or lab data worth changing is an open
-question, and the reproduction above is enough to answer it.
+What settled it was **instrumenting the error rather than theorising about
+it** - adding the window's own bounds to the message it throws:
 
+```
+date outside scheduling window: 2027-03-17
+[epoch=2024-01-18 last=2027-03-13 n=952 workdays=mon..sat hols=23]
+```
+
+The engine sizes its window as `totalDur * 2 + 260` working days **from the
+earliest dated input**. That assumes the epoch sits near the plan's work. It
+does not have to: this plan is anchored at 2024-01-18 because some of its nodes
+link to older records, while its own work runs into 2027. The window held 952
+working days and ended 2027-03-13 - **four days before a task the plan owns** -
+and `toOrdinal` threw rather than placing it. My earlier estimate that the
+horizon was comfortable had assumed the epoch was the plan's own earliest node,
+which is exactly the assumption the bug violates.
+
+The horizon now also covers the span between the earliest and latest dated
+input; calendar days are a safe floor for working days, so the span plus the
+same margin always reaches the far end. The regression test reproduces the
+exact production error with the old sizing and passes with the new one, and a
+compact plan still finishes on the date it did before. With the fix in place
+the scenario applied - three changes - and facilico verifies 425/425.
+
+This is the second product defect the Pilot Lab found, and neither was
+reachable by reading code: both needed a real organisation with years of
+history behind it.
 ## 4. What the scale-down cost, and what it did not
 
 The first whole-chain dry run projected ~437,000 rows ≈ 500 MB against a 300 MB

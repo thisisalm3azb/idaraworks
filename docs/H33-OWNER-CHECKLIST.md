@@ -109,13 +109,17 @@ before somebody else looks at the lab, so nothing surprises you.
   verification it made finance and revenue appear missing from the product, and
   they were not. `rm -rf .next` then `npm run lab:open`.
 
-- **One thing is left failing on purpose.** On facilico, one Management Studio
-  scenario sits at `approved` because the product refused to apply it:
-  `date outside scheduling window: 2027-03-17`. It is not drift, and the
-  engine's window is comfortably wide enough on paper, so the cause is not yet
-  established. The check was left failing rather than relaxed, because it is
-  reporting something true. Nothing else depends on it, and the other two
-  scenarios applied normally.
+- **A second product defect was found and fixed.** A Management Studio plan
+  could not be scheduled at all when its earliest dated element sat years
+  before its own work — the scheduling window was sized from task duration
+  rather than from the dates the plan actually holds, and ended four days
+  short. Applying an approved scenario onto such a plan threw. Fixed, with a
+  regression test that reproduces the original error. Both Studio defects this
+  phase found needed a real organisation with years of history to reach.
+
+- **Every check now passes.** 2,124 of 2,124 across the five companies. The two
+  that were failing — the Studio scenario above, and one company whose
+  maintenance due list had emptied — are both resolved.
 
 Full detail, with causes: `docs/H33-RECONCILIATION-FINDINGS.md`.
 

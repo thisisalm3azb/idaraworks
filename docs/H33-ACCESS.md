@@ -134,7 +134,8 @@ Open the owner's view: `npm run lab:open -- facilico owner`
 
 ## Leaving the lab alone
 
-Nothing here writes to the lab. `lab:open` mints a link and starts the app;
-the app itself is the product, so anything you change while signed in is a
-real change to that company's data — which is the point. To put a company
-back the way it was, the whole lab has to be rebuilt; there is no undo.
+Nothing in this document writes business data. `lab:open` mints a sign-in
+token and starts the app; the app itself is the product, so anything you
+change while signed in is a real change to that company's data — which is
+the point. To put a company back the way it was, the whole lab has to be
+rebuilt; there is no undo.

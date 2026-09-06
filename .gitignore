@@ -70,3 +70,7 @@ sim-screenshots/
 
 # H33 Pilot Lab local state (checkpoints, manifest) — never committed
 .pilot-lab/
+
+# Throwaway lab probes. These get written during investigation and must never
+# reach a commit — one did, and CI failed on formatting because of it.
+tooling/pilot-lab/tmp-*.ts
