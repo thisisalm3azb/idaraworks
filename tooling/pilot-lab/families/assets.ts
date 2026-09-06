@@ -433,11 +433,6 @@ function distinctDays(rng: Rng, lo: number, hi: number, k: number): number[] {
 function addDays(date: string, days: number): string {
   return new Date(Date.parse(`${date}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10);
 }
-function daysBetween(later: string, earlier: string): number {
-  return Math.round(
-    (Date.parse(`${later}T00:00:00Z`) - Date.parse(`${earlier}T00:00:00Z`)) / 86_400_000,
-  );
-}
 /** The legal hops from `draft` to a planned state (the trigger's own table). */
 export function pathTo(target: AssetStatus): AssetStatus[] {
   switch (target) {

@@ -909,22 +909,6 @@ function notificationText(
   }
 }
 
-function personaByArchetype(company: Company, archetype: RoleArchetype): PersonaKey {
-  const order: PersonaKey[] = [
-    "manager",
-    "finance",
-    "admin",
-    "owner",
-    "warehouse",
-    "hr",
-    "field",
-    "restricted",
-    "auditor",
-  ];
-  for (const k of order) if (archetypeOf(company, k) === archetype) return k;
-  return "owner";
-}
-
 export function buildMisc(ctx: LabContext, t: MiscTargets): MiscBuild {
   const { company, rng, clock, orgId } = ctx;
   const s = miscSizes(company, clock);

@@ -384,7 +384,23 @@ function finalize(m: Manifest, before: number, after: number): Manifest {
   return m;
 }
 
-main().catch((e) => {
-  console.error(e);
-  process.exit(1);
-});
+/*
+ * Run the orchestrator ONLY when this file is the script being executed.
+ *
+ * Without this guard, importing anything from here — the unit test imports
+ * `orderedFamilies` to check the registry — runs the whole seeder as a side
+ * effect of the import. In CI, where there is no test-project env, it threw and
+ * called process.exit(1), failing the unit-test job from inside a test that had
+ * nothing to do with it. Locally it was worse and quieter: the env WAS present,
+ * so every unit-test run silently opened a connection to the test project and
+ * listed its organisations. A unit test must touch no database at all.
+ *
+ * Same shape as tooling/scripts/migrate.ts, which learned this the same way.
+ */
+const isDirect = process.argv[1]?.replace(/\\/g, "/").endsWith("tooling/pilot-lab/run.ts");
+if (isDirect) {
+  main().catch((e) => {
+    console.error(e);
+    process.exit(1);
+  });
+}
