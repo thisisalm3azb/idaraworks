@@ -1035,7 +1035,10 @@ function toRows(ctx: LabContext, m: StockModel): Record<StockTable, Row[]> {
         org_id: org,
         movement_id: mv.id,
         lot_id: mv.lotId,
-        qty_delta: mv.qtyDelta,
+        // The column is `qty`, and the trigger sums it against the movement's
+        // qty_delta; a reservation moves nothing and names no lot, which is why
+        // `qty <> 0` can be a constraint here.
+        qty: mv.qtyDelta,
         created_at: mv.effectiveAt,
       });
   }

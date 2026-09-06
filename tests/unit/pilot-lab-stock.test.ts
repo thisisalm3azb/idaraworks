@@ -362,7 +362,8 @@ for (const company of stocked) {
       const byLot = new Map<string, number>();
       for (const ml of r.rows("stock_movement_lot")) {
         const k = ml.lot_id as string;
-        byLot.set(k, (byLot.get(k) ?? 0) + num(ml.qty_delta));
+        // The link table calls it `qty`; the movement calls it `qty_delta`.
+        byLot.set(k, (byLot.get(k) ?? 0) + num(ml.qty));
       }
       for (const b of r.rows("stock_lot_balance")) {
         expect(num(b.on_hand), `lot ${b.lot_id}`).toBeCloseTo(

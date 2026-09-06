@@ -440,7 +440,7 @@ async function main() {
         process.exitCode = 1;
       } else {
         console.log(
-          "every generated value satisfies the schema: enumerations, NOT NULL columns and sign floors.",
+          "every generated row satisfies the schema: real columns, enumerations, NOT NULL and sign floors.",
         );
       }
       return;
