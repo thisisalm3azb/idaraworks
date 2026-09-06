@@ -966,7 +966,14 @@ function toRows(ctx: LabContext, m: StockModel): Record<StockTable, Row[]> {
       recorded_at: mv.effectiveAt,
       source_type: mv.sourceType,
       source_id: mv.sourceId,
-      idempotency_key: mv.idempotencyKey,
+      /*
+       * NOT NULL, at least eight characters: the column exists so a retried
+       * write cannot post twice. Movements that come from a source row carry
+       * that row's key; the rest fall back to their own deterministic id,
+       * which is unique by construction and re-derives identically on a
+       * second run.
+       */
+      idempotency_key: mv.idempotencyKey ?? `movement:${mv.id}`,
       reverses_movement_id: null,
       reason: mv.reason,
       note: mv.note,
@@ -994,9 +1001,11 @@ function toRows(ctx: LabContext, m: StockModel): Record<StockTable, Row[]> {
       qty_received: l.qtyReceived,
       qty_remaining: l.qtyRemaining,
       unit_cost_minor: l.unitCostMinor,
-      currency: null,
+      // NOT NULL: a cost without a currency is not a cost. Everything the lab
+      // buys is priced in the company's own currency at par.
+      currency: ctx.company.currency,
       original_unit_cost_minor: l.unitCostMinor,
-      exchange_rate: null,
+      exchange_rate: 1,
       received_at: l.receivedAt,
       depleted_at: l.depletedAt,
       created_at: l.receivedAt,

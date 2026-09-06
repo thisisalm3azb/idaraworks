@@ -37,7 +37,7 @@ import {
   type Manifest,
 } from "./manifest";
 import { FAMILIES } from "./families";
-import { loadEnumConstraints, violationsIn, type EnumMap, type Violation } from "./constraints";
+import { loadSchema, violationsIn, type Schema, type Violation } from "./constraints";
 import { Rng } from "../simulation/rng";
 import { SimClock } from "../simulation/dates";
 import { id as labId } from "./ids";
@@ -94,8 +94,8 @@ function makeCtx(input: {
   handoffs: Record<string, Record<string, unknown>>;
   dryRun: boolean;
   log: (m: string) => void;
-  /** Dry run only: enumerations to check generated values against. */
-  enums?: EnumMap;
+  /** Dry run only: what the schema would refuse. */
+  enums?: Schema;
   onViolations?: (v: Violation[]) => void;
 }): LabContext {
   const { company } = input;
@@ -164,7 +164,7 @@ async function main() {
   const families = orderedFamilies(FAMILIES);
 
   try {
-    const enums = MODE === "dry-run" ? await loadEnumConstraints(sql) : undefined;
+    const enums = MODE === "dry-run" ? await loadSchema(sql) : undefined;
     const violations: Array<Violation & { company: string }> = [];
     const before = await dbSizeBytes(sql);
     console.log(

@@ -34,6 +34,7 @@ export const HR_TABLES = [
   "expense_claim_line",
   "cash_advance",
   "disciplinary_record",
+  "job_requisition",
   "candidate",
   "pay_period",
   "pay_run",
@@ -613,6 +614,7 @@ function buildModel(ctx: LabContext): HrModel & { handoff: HrHandoff } {
     expense_claim_line: claims.reduce((n, c) => n + c.lines.length, 0),
     cash_advance: advances.length,
     disciplinary_record: disciplinary.length,
+    job_requisition: candidates.length ? 1 : 0,
     candidate: candidates.length,
     pay_period: periods.length,
     pay_run: runs.length,
@@ -818,11 +820,34 @@ function toRows(ctx: LabContext, m: HrModel): Record<HrTable, Row[]> {
       updated_at: `${d.occurredOn}T10:00:00.000Z`,
     });
 
+  /*
+   * A candidate belongs to a requisition: the column is NOT NULL, and a
+   * hiring pipeline with no role to hire into is not a pipeline. One open
+   * requisition carries the whole shortlist, which is how a small company
+   * actually recruits.
+   */
+  const requisitionId = ctx.id("job_requisition", 0);
+  if (m.candidates.length)
+    rows.job_requisition.push({
+      id: requisitionId,
+      org_id: org,
+      reference: "REQ-001",
+      title: "Site supervisor",
+      department_id: null,
+      position_id: null,
+      headcount: 1,
+      status: "open",
+      notes: "Replacement for a leaver; shortlist under review.",
+      created_by: by,
+      created_at: ctx.clock.tsAgo(120, 9, 0),
+      updated_at: ctx.clock.tsAgo(120, 9, 0),
+    });
+
   for (const c of m.candidates)
     rows.candidate.push({
       id: c.id,
       org_id: org,
-      requisition_id: null,
+      requisition_id: requisitionId,
       name: c.name,
       email: c.email,
       phone: c.phone,
