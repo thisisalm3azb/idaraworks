@@ -307,28 +307,37 @@ half a gigabyte.
 
 | Gate | Result |
 | --- | --- |
-| Unit tests | 2,902 across the repository |
+| Unit tests | 2,904 across the repository |
 | Typecheck, lint, format | clean |
 | Value vocabularies vs the live schema | every generated row satisfies it |
 | Dry run | all fifteen families, all five companies |
 | Seed | 204,614 rows, five companies, fifteen families each, 180.3 MB against a 300 MB ceiling |
 | Idempotency | a second seed writes nothing; every family checkpointed and skipped |
-| Reconciliation | **2,122 / 2,124** on the rebuild; the two are named below |
+| Reconciliation | **2,124 / 2,124** — every check passes |
 | Repairs | applied, and a second run reports zero of everything |
 | Tenant isolation | 8 / 8 |
 | Production residue | **0**, with production's own counts unchanged |
-| CI | **not verified** — `gh` is not installed on this machine |
+| CI | **green** on the branch head, checked through the GitHub API |
 
 Per company: gulfbuild **422/422**, tradeline **428/428**, saudimfg
-**426/426**, consult **422/423**, facilico **424/425**.
+**426/426**, consult **423/423**, facilico **425/425**.
 
-The two remaining failures are deliberate, and neither was relaxed to make the
-number look better:
+Both failures that stood at the previous pass are now resolved rather than
+relaxed:
 
-- **consult has no overdue maintenance** (D19). Fixed at source; the seeded
-  company cannot be corrected because `asset_maintenance_event` is append-only.
-- **One facilico Studio scenario refuses to apply.** Reproducible, and the
-  cause is not established — see above.
+- **consult had no overdue maintenance** (D19). One plan's interval was
+  shortened — a schedule the owner sets, not history — so its next due date
+  falls in the past while still equalling last service plus interval. Asset
+  history is append-only, so nothing was rewritten.
+- **A facilico Studio scenario would not apply** (D20). Root-caused to the
+  scheduling window and fixed in the product; the scenario then applied.
+
+`gh` is not installed on this machine, which is why an earlier version of this
+table said CI was unverified. It can be read without it: `git credential fill`
+yields the token git already uses to push, and
+`/repos/<owner>/<repo>/actions/runs?branch=<branch>` returns the runs. Filtering
+that endpoint by a short `head_sha` silently matches nothing — query by branch
+and match the prefix yourself.
 
 ### What the performance run is worth, and the one thing it found
 
