@@ -70,7 +70,12 @@ const ADJUSTMENT_REASONS = [
 type SetupHandoff = {
   warehouses: Record<
     string,
-    { id: string; receivingLocationId: string; issueLocationId: string; locations: Record<string, string> }
+    {
+      id: string;
+      receivingLocationId: string;
+      issueLocationId: string;
+      locations: Record<string, string>;
+    }
   >;
   units: Record<string, { id: string; dimension: string; factorToBase: number; isBase: boolean }>;
 };
@@ -155,12 +160,79 @@ export type StockModel = {
   movements: MovementM[];
   layers: LayerM[];
   lots: LotM[];
-  serials: Array<{ id: string; itemId: string; serialNo: string; lotId: string | null; status: string; warehouseId: string; locationId: string; receivedAt: string }>;
-  transfers: Array<{ id: string; reference: string; status: string; fromWh: string; fromLoc: string; toWh: string; toLoc: string; dayAgo: number; lines: Array<{ id: string; itemId: string; unitId: string; qty: number; sort: number }> }>;
-  counts: Array<{ id: string; reference: string; status: string; warehouseId: string; locationId: string; dayAgo: number; lines: Array<{ id: string; itemId: string; locationId: string; unitId: string; expectedQty: number; countedQty: number; reason: string | null; sort: number }> }>;
-  reservations: Array<{ id: string; itemId: string; warehouseId: string; locationId: string; unitId: string; qty: number; jobId: string | null; status: string; dayAgo: number }>;
-  balances: Map<string, { itemId: string; warehouseId: string; locationId: string; onHand: number; reserved: number; lastAt: string; avgCostMinor: number }>;
-  lotBalances: Map<string, { itemId: string; warehouseId: string; locationId: string; lotId: string; onHand: number; lastAt: string }>;
+  serials: Array<{
+    id: string;
+    itemId: string;
+    serialNo: string;
+    lotId: string | null;
+    status: string;
+    warehouseId: string;
+    locationId: string;
+    receivedAt: string;
+  }>;
+  transfers: Array<{
+    id: string;
+    reference: string;
+    status: string;
+    fromWh: string;
+    fromLoc: string;
+    toWh: string;
+    toLoc: string;
+    dayAgo: number;
+    lines: Array<{ id: string; itemId: string; unitId: string; qty: number; sort: number }>;
+  }>;
+  counts: Array<{
+    id: string;
+    reference: string;
+    status: string;
+    warehouseId: string;
+    locationId: string;
+    dayAgo: number;
+    lines: Array<{
+      id: string;
+      itemId: string;
+      locationId: string;
+      unitId: string;
+      expectedQty: number;
+      countedQty: number;
+      reason: string | null;
+      sort: number;
+    }>;
+  }>;
+  reservations: Array<{
+    id: string;
+    itemId: string;
+    warehouseId: string;
+    locationId: string;
+    unitId: string;
+    qty: number;
+    jobId: string | null;
+    status: string;
+    dayAgo: number;
+  }>;
+  balances: Map<
+    string,
+    {
+      itemId: string;
+      warehouseId: string;
+      locationId: string;
+      onHand: number;
+      reserved: number;
+      lastAt: string;
+      avgCostMinor: number;
+    }
+  >;
+  lotBalances: Map<
+    string,
+    {
+      itemId: string;
+      warehouseId: string;
+      locationId: string;
+      lotId: string;
+      onHand: number;
+      lastAt: string;
+    }
+  >;
   tableCounts: Record<StockTable, number>;
 };
 
@@ -396,7 +468,10 @@ function buildModel(ctx: LabContext): StockModel & { handoff: StockHandoff } {
   // ── 3. Transfers between warehouses: out and in, always in pairs ──────────
   const transfers: StockModel["transfers"] = [];
   if (whKeys.length >= 2) {
-    const wanted = Math.min(40, Math.max(6, Math.round(company.profile.stockMovementsTarget / 400)));
+    const wanted = Math.min(
+      40,
+      Math.max(6, Math.round(company.profile.stockMovementsTarget / 400)),
+    );
     for (let t = 0; t < wanted; t++) {
       const from = whOf(whKeys[t % whKeys.length]!);
       const to = whOf(whKeys[(t + 1) % whKeys.length]!);
@@ -997,7 +1072,9 @@ export const stock: Family = {
     });
 
     const badLayer = m.layers.filter(
-      (l) => Math.abs(l.qtyReceived - l.consumption.reduce((n, c) => n + c.qty, 0) - l.qtyRemaining) > 1e-6,
+      (l) =>
+        Math.abs(l.qtyReceived - l.consumption.reduce((n, c) => n + c.qty, 0) - l.qtyRemaining) >
+        1e-6,
     ).length;
     checks.push({
       name: "a layer's remaining equals received minus consumed",
@@ -1020,9 +1097,7 @@ export const stock: Family = {
     checks.push({
       name: "every movement cites a legal source",
       ok: m.movements.every(
-        (mv) =>
-          mv.sourceType === "manual" ||
-          (mv.sourceId !== null && mv.sourceId.length > 0),
+        (mv) => mv.sourceType === "manual" || (mv.sourceId !== null && mv.sourceId.length > 0),
       ),
       detail: `${m.movements.length} movements`,
     });
