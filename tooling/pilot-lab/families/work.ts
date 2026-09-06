@@ -1693,7 +1693,23 @@ function build(
   const seenCategories = new Set(jobs.map((j) => j.category));
   for (const want of JOB_CATEGORIES) {
     if (seenCategories.has(want)) continue;
-    const victim = jobs.find((j) => j.category === "active" && !j.archived);
+    /*
+     * Prefer a job whose content already suits the category, so the conversion
+     * changes a label and nothing else. Only when none exists does the job's
+     * own history have to be brought into line below.
+     */
+    const suits = (j: JobM): boolean => {
+      if (want === "draft")
+        return (
+          j.reports.length === 0 &&
+          j.stages.every((x) => x.status === "not_started") &&
+          j.tasks.every((t) => t.status === "pending")
+        );
+      if (want === "done") return j.tasks.every((t) => t.status === "completed" || t.status === "cancelled");
+      return true;
+    };
+    const pool = jobs.filter((j) => j.category === "active" && !j.archived);
+    const victim = pool.find(suits) ?? pool[0];
     if (!victim) break;
     victim.category = want;
     victim.statusKey =
@@ -1716,6 +1732,54 @@ function build(
     victim.cancellationReason = want === "cancelled" ? "Cancelled at the client's request" : null;
     victim.completedDate =
       want === "done" ? minDate(maxDate(victim.createdDate, victim.startDate), asOf) : null;
+    /*
+     * And neither does a category travel alone from its OWN history. A job
+     * relabelled `draft` that still carries completed stages, finished tasks
+     * and a fortnight of daily reports is not draft work — it is a
+     * contradiction, and the first thing a pilot would notice. Whatever the
+     * new category asserts, the job's content is made to say the same thing.
+     */
+    if (want === "draft") {
+      for (const st of victim.stages) {
+        st.status = "not_started";
+        st.startedAt = null;
+        st.completedAt = null;
+        st.completionRequestedBy = null;
+        st.completionRequestedAt = null;
+      }
+      // Draft work has a next stage, it simply has not started it.
+      victim.currentStageId = currentStageOf(victim.stages)?.id ?? null;
+      for (const t of victim.tasks) {
+        t.status = "pending";
+        t.completedAt = null;
+        t.actualMinutes = null;
+        t.blockedReason = null;
+        t.requiresApproval = false;
+        t.approval = null;
+      }
+      // Nothing has been reported on work that has not begun.
+      victim.reports = [];
+      victim.progressOverride = null;
+    }
+    if (want === "done") {
+      for (const st of victim.stages) {
+        if (st.status === "skipped") continue;
+        st.status = "completed";
+        st.startedAt = st.startedAt ?? tsOn(victim.startDate, 8);
+        st.completedAt = st.completedAt ?? tsOn(victim.completedDate ?? victim.dueDate, 16);
+      }
+      // Finished work has no stage in front of it.
+      victim.currentStageId = currentStageOf(victim.stages)?.id ?? null;
+      for (const t of victim.tasks) {
+        if (t.status === "cancelled") continue;
+        t.status = "completed";
+        t.completedAt = t.completedAt ?? tsOn(victim.completedDate ?? victim.dueDate, 15);
+        t.actualMinutes = t.actualMinutes ?? t.estimatedMinutes;
+        t.blockedReason = null;
+        t.requiresApproval = false;
+        t.approval = null;
+      }
+    }
     seenCategories.add(want);
   }
 
@@ -1723,11 +1787,26 @@ function build(
   const awaitingNow = () =>
     jobs.reduce((n, j) => n + j.tasks.filter((t) => t.status === "awaiting_approval").length, 0);
   if (awaitingNow() < MIN_AWAITING) {
-    const candidates = jobs
+    /*
+     * Prefer a step that is genuinely mid-flight; a smaller company can have
+     * none at all, in which case a step that is merely ready is promoted
+     * instead. Either way the walk is over jobs and steps in index order and
+     * consumes no randomness.
+     */
+    const eligible = (t: TaskM, statuses: string[]) =>
+      statuses.includes(t.status) && t.deps.length === 0 && !t.approval;
+    const pool = jobs
       .filter((j) => j.category === "active")
       .flatMap((j) => j.tasks.map((t) => ({ j, t })))
-      .filter(({ t }) => t.status === "in_progress" && t.deps.length === 0)
       .sort((a, b) => a.j.index - b.j.index || a.t.ord - b.t.ord);
+    const tiers = [
+      pool.filter(({ t }) => eligible(t, ["in_progress"])),
+      pool.filter(({ t }) => eligible(t, ["ready", "pending"])),
+      // A finished step waiting on a signature is precisely what this state
+      // means, so on a company whose work is mostly closed one of those does.
+      pool.filter(({ t }) => eligible(t, [...TASK_STATUSES])),
+    ];
+    const candidates = tiers.find((x) => x.length > 0) ?? [];
     for (const { j, t } of candidates) {
       if (awaitingNow() >= MIN_AWAITING) break;
       const requestedOn = minDate(addDays(t.startDate ?? j.createdDate, 1), asOf);
@@ -1770,6 +1849,110 @@ function build(
     }
     if (want !== "blocked") found.blockedReason = null;
     seenStatuses.add(want);
+  }
+
+  /*
+   * Decided approvals, guaranteed. The queue above is what is WAITING; a lab
+   * also has to show what was settled, and on a smaller company neither an
+   * approved nor a rejected decision came up at all. Both are attached to
+   * steps that already suit them — an approved decision to a finished step, a
+   * rejected one to a step that went back into progress — and the decider is
+   * never the requester, which is the segregation the product enforces.
+   */
+  const approvalStates = new Set(
+    jobs.flatMap((j) => j.tasks.map((t) => t.approval?.state).filter(Boolean)),
+  );
+  const decide = (want: "approved" | "rejected", wantTask: (t: TaskM) => boolean) => {
+    if (approvalStates.has(want)) return;
+    for (const j of jobs) {
+      if (j.category === "draft" || j.archived) continue;
+      const t = j.tasks.find((x) => !x.approval && wantTask(x));
+      if (!t) continue;
+      const at = minDate(t.completedAt?.slice(0, 10) ?? j.startDate, asOf);
+      t.requiresApproval = true;
+      t.approval = {
+        id: id("approval", j.index, t.ord),
+        state: want,
+        requestedBy: j.foremanUser,
+        createdAt: tsOn(at, 9),
+        decidedBy: j.managerUser,
+        decidedAt: tsOn(at, 14),
+        note: want === "rejected" ? "Returned: the measurements do not match the drawing" : null,
+        expiresHint: tsOn(at, 17),
+      };
+      approvalStates.add(want);
+      return;
+    }
+  };
+  decide("approved", (t) => t.status === "completed");
+  decide("rejected", (t) => t.status === "in_progress" || t.status === "ready");
+
+  /*
+   * Every weekly-plan status, at any scale. `cancelled` is a 1-in-many draw
+   * over sixty weeks and a smaller company can miss it; a plan board that
+   * cannot show a cancelled week is a plan board with a hole in it. A revision
+   * needs a partner, so filling `revised` mints the revision too.
+   */
+  const planStatuses = new Set(weekPlans.map((w) => w.status));
+  const drafts = () =>
+    weekPlans.filter(
+      (w) =>
+        w.status === "draft" &&
+        w.revisionOfId === null &&
+        !weekPlans.some((x) => x.revisionOfId === w.id),
+    );
+  /*
+   * Convert a spare draft — never the last one. Spending it would fill the
+   * status being looked for and empty `draft` in the same move, which is how
+   * the first version of this guarantee traded one missing status for another.
+   */
+  const spareplan = (want: string) => {
+    const d = drafts();
+    if (d.length > 1) return d[0];
+    // Never the last draft — spending it would fill the status being looked
+    // for and empty `draft` in the same move, which is how the first version
+    // of this guarantee traded one missing status for another. An issued plan
+    // that nobody revised is the next best donor.
+    if (want === "issued") return undefined;
+    return weekPlans.find(
+      (w) =>
+        w.status === "issued" &&
+        w.revisionOfId === null &&
+        !weekPlans.some((x) => x.revisionOfId === w.id),
+    );
+  };
+  for (const want of WEEK_PLAN_STATUSES) {
+    if (planStatuses.has(want)) continue;
+    const victim = spareplan(want);
+    if (!victim) break;
+    victim.status = want === "revised" ? "revised" : want;
+    victim.issuedAt = want === "draft" ? null : tsOn(victim.weekStart, 9);
+    victim.cancelledReason =
+      want === "cancelled" ? "Cancelled: the site was closed for the week" : null;
+    if (want === "revised") {
+      weekPlans.push({
+        id: id("week_plan", victim.weekStart, "guaranteed-r1"),
+        reference: `${victim.reference}-R1`,
+        weekStart: victim.weekStart,
+        weekEnd: victim.weekEnd,
+        title: victim.title,
+        notes: victim.notes,
+        status: "issued",
+        issuedAt: tsOn(addDays(victim.weekStart, 1), 9),
+        cancelledReason: null,
+        revisionOfId: victim.id,
+        revisionReason: "Reissued after the crew list changed",
+        createdAt: tsOn(addDays(victim.weekStart, 1), 8),
+        jobs: victim.jobs.map((x, n) => ({
+          id: id("week_plan_job", victim.weekStart, "guaranteed-r1", n),
+          jobId: x.jobId,
+          sort: x.sort,
+          note: x.note,
+        })),
+      });
+      planStatuses.add("issued");
+    }
+    planStatuses.add(want);
   }
 
   const sequences = [...seqByScope.entries()]
@@ -2622,6 +2805,21 @@ export async function loadRefs(ctx: LabContext): Promise<WorkRefs> {
     `) as unknown as Array<{ id: string; code: string }>;
   }
 
+  if (ctx.dryRun && presets.length === 0) {
+    /*
+     * A dry run happens before the organisation exists, so there is nothing
+     * installed to find. Stand in deterministic ids for the template's own
+     * preset codes purely so the estimate can be produced. Gated on dryRun on
+     * purpose: a LIVE seed that found no presets must still fail loudly,
+     * because jobs pointing at ids that were never installed would break on
+     * the foreign key halfway through the company.
+     */
+    const tpl = TEMPLATES[ctx.company.templateKey];
+    presets = (tpl?.presets ?? []).map((x) => ({
+      id: ctx.id("job_preset", x.code),
+      code: x.code,
+    }));
+  }
   let employees = strings(people.activeEmployeeIds) ?? strings(people.employeeIds);
   if (!employees && Array.isArray(people.employees))
     employees = (people.employees as Array<{ id: string }>).map((e) => e.id);
