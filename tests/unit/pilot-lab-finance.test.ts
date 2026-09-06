@@ -184,7 +184,6 @@ async function runFor(company: Company, overrides?: Record<string, Record<string
   return { ctx, plan, report, rows, model: buildFinance(ctx) };
 }
 
-
 describe("the finance family", () => {
   it("is declared correctly and runs last", () => {
     expect(finance.key).toBe("finance");
