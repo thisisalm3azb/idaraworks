@@ -288,20 +288,33 @@ half a gigabyte.
 
 | Gate | Result |
 | --- | --- |
-| Unit tests | 2,897 across the repository, 1,195 of them the lab's own |
+| Unit tests | 2,902 across the repository |
 | Typecheck, lint, format | clean |
 | Value vocabularies vs the live schema | every generated row satisfies it |
 | Dry run | all fifteen families, all five companies |
-| Seed | five companies, fifteen families each — see the data manifest |
-| Idempotency | a second seed writes nothing; every family checkpointed and skipped, database unchanged |
-| Reconciliation | 2,115 / 2,124 on the first build; see §6 |
+| Seed | 204,614 rows, five companies, fifteen families each, 180.3 MB against a 300 MB ceiling |
+| Idempotency | a second seed writes nothing; every family checkpointed and skipped |
+| Reconciliation | **2,122 / 2,124** on the rebuild; the two are named below |
+| Repairs | applied, and a second run reports zero of everything |
 | Tenant isolation | 8 / 8 |
-| Production residue | 0 |
-| CI | green on the branch |
+| Production residue | **0**, with production's own counts unchanged |
+| CI | **not verified** — `gh` is not installed on this machine |
+
+Per company: gulfbuild **422/422**, tradeline **428/428**, saudimfg
+**426/426**, consult **422/423**, facilico **424/425**.
+
+The two remaining failures are deliberate, and neither was relaxed to make the
+number look better:
+
+- **consult has no overdue maintenance** (D19). Fixed at source; the seeded
+  company cannot be corrected because `asset_maintenance_event` is append-only.
+- **One facilico Studio scenario refuses to apply.** Reproducible, and the
+  cause is not established — see above.
 
 ## 6. Reconciliation, and the rebuild
 
-The first complete seed verified at **2,115 / 2,124** checks. The nine failures
+The first complete seed verified at **2,115 / 2,124** checks; the rebuild,
+with every fix at source and the repairs applied, verifies at **2,122 / 2,124**. The nine failures
 are set out with their diagnoses in
 [H33-RECONCILIATION-FINDINGS.md](H33-RECONCILIATION-FINDINGS.md): three lab
 defects, two checks that asserted more than the product promises, one product
