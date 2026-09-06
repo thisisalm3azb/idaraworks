@@ -372,6 +372,32 @@ while returning five times less HTML. It is not the client: the rendered page
 holds 850 DOM nodes, pulls 8 KB of resources and logs no long tasks. The shell
 is flushed at ~11 s and the rest streams while the server computes the schedule.
 
+Where that time goes, timed inside the process against facilico:
+
+```
+listStudioPlans:                  2,226 ms  (3 plans)
+  plan 3dfb6885  schedule 2,786 ms  capacity 6,305 ms  (126 nodes)
+  plan e297c32d  schedule 3,246 ms  capacity 6,598 ms  (144 nodes)
+  plan 3b14589a  schedule 3,848 ms  capacity 6,604 ms  (188 nodes)
+portfolioSummary TOTAL:          33,724 ms  (3 rows)
+```
+
+Thirty-four seconds to produce **three summary rows**. Two things stand out,
+and neither is data volume - these plans hold 126 to 188 scheduled nodes:
+
+- **The walk is serial.** `portfolioSummary` loops plans with `await` inside
+  the loop, so three plans cost three times one plan. Nothing in the
+  computation depends on the previous plan's result.
+- **Capacity levelling costs about twice what scheduling does** - 6.3-6.6 s
+  against 2.8-3.8 s, or 19.5 s of the 33.7 s total.
+
+That suggests an obvious first move (run the plans concurrently) and an
+obvious second one (find out why levelling a 150-node plan takes six seconds).
+**Neither was made here.** H33's remit was to assess this, and a performance
+change to a shipped Studio surface deserves its own phase with its own tests
+rather than being folded into a simulation phase. The measurement is recorded
+so that work can start from a number instead of a hunch.
+
 The ~9-11 second floor is the development server and disappears in a production
 build. The ~27 second delta is Studio's own work and would not. That is the
 number worth attacking before a pilot, and it is server-side.
