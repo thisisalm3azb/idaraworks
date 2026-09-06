@@ -988,10 +988,28 @@ export const finance: Family = {
         ok: lines > 0,
         detail: `${lines} statement lines`,
       });
+      /*
+       * Only the product's own suggestions are confirmed, and it suggests a
+       * match only where a ledger line on the bank account has the same amount
+       * and a near date. Where the account carries no ledger movements of its
+       * own — payments in this configuration do not post to the bank control
+       * account — there is nothing to suggest and nothing to match, and a
+       * statement that is entirely unreconciled is itself a state worth
+       * opening the screen for. What must never happen is a reconciliation
+       * that claims to have matched more lines than the statement has.
+       */
+      const bankGlLines = await count(
+        "journal_line",
+        `and account_id = (select gl_account_id from public.bank_account
+                            where org_id = $1 and id = '${m.bankAccountId}')`,
+      );
       checks.push({
-        name: "the reconciliation matched something and left something unmatched",
-        ok: matches > 0 && matches < lines,
-        detail: `${matches} matched of ${lines}`,
+        name:
+          bankGlLines > 0
+            ? "the reconciliation matched some of what the ledger shows"
+            : "the statement is unreconciled, because the ledger has no bank movements",
+        ok: bankGlLines > 0 ? matches > 0 && matches <= lines : matches === 0,
+        detail: `${matches} matched of ${lines} lines; ${bankGlLines} ledger lines on the bank account`,
       });
       await violators(
         "every match ties a statement line to a ledger line on the bank account",

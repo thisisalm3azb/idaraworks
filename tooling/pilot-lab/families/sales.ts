@@ -376,15 +376,6 @@ export const SERVICE_SAMPLE = {
   voidedPayments: 2, // k 10, 11 (their full payment is voided → back to issued)
 } as const;
 
-/**
- * Members the pending payment approval notifies: the requester is the finance
- * persona (archetype accounts, the rule's assigned role); with no other
- * accounts member the engine escalates to admin, whose one member — the admin
- * persona — receives the redacted notification. verify() recomputes this from
- * the live memberships.
- */
-const APPROVAL_NOTIFIED_MEMBERS = 1;
-
 function sampleApplies(company: Company): boolean {
   return company.profile.invoices >= SERVICE_SAMPLE.invoices * 3;
 }
@@ -430,10 +421,15 @@ export function serviceRowsFor(company: Company, samples: ServiceSample[]): Reco
   const outboxEvents = s.invoices + payments + s.creditNotes; // issued / recorded / credit note
   return {
     ...serviceDocCounts(company),
-    approval: payments,
-    notification: payments * APPROVAL_NOTIFIED_MEMBERS,
+    /*
+     * No payment approval, and so no approval/submitted event and no
+     * notification either: the organisation gates task completions and asset
+     * disposals, not payments. Three expectations, one cause.
+     */
+    approval: 0,
+    notification: 0,
     audit_log: s.invoices * 2 + payments + s.creditNotes + s.voidedPayments,
-    domain_event: outboxEvents + payments, // + one approval/submitted per payment
+    domain_event: outboxEvents,
     journal_entry: journalEntries,
     journal_line: journalLines,
     tax_entry: company.country === "AE" ? vatDocs : 0,
@@ -1846,13 +1842,16 @@ export const sales: Family = {
         s.voidedPayments,
         "and status = 'void'",
       );
-      await expectIds(
-        "approvals opened for payments",
-        "approval",
-        "subject_id",
-        paymentIds,
-        want("approval"),
-      );
+      /*
+       * Payments are NOT approval-gated in this lab. `approval_rule.subject_type`
+       * allows 'payment' and the engine would gate them if a rule existed, but
+       * the work family installs exactly one rule, for task completion — which
+       * is a configuration a real organisation may equally choose. The
+       * Approvals screen is populated by task completions and asset disposals
+       * instead. Asserting the absence keeps it deliberate rather than
+       * forgotten.
+       */
+      await expectIds("approvals opened for payments", "approval", "subject_id", paymentIds, 0);
       await expectIds("audit rows", "audit_log", "entity_id", allIds, want("audit_log"));
       await expectIds(
         "journal entries (postings and reversals)",
