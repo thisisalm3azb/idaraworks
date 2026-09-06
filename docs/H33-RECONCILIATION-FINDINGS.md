@@ -128,6 +128,38 @@ six (it degrades one Studio panel) but the most clearly wrong.
 
 ---
 
+## Remediation plan
+
+Most of these are REPAIRS, not re-seeds. That matters: a re-seed of a
+checkpointed family costs its whole service phase, and four of the six do not
+need one.
+
+| # | Fix | Kind | Cost |
+| --- | --- | --- | --- |
+| 1 | sales: payments are not approval-gated in this lab | verify only | none |
+| 2 | finance: assert what is true when the bank account has no ledger movements | verify only | none |
+| 3 | assets: pass `advancePlan: true`, and repair the 18 stale plans with one UPDATE from their own newest event | code + repair | one statement |
+| 4 | studio: null the dangling `task_dependency_id`, and record it only after the row is confirmed | code + repair | one statement |
+| 5 | hr: stop writing `pay_period`; take setup's from the handoff | code + **re-seed hr** | hr is all bulk, no service phase — seconds per company |
+| 6 | work/sales: consider a `payment` approval rule in a later seed version | deferred | would re-run most of the lab |
+
+### What makes the hr re-seed safe
+
+hr's pay runs cite hr's own periods, so the overlapping periods cannot simply
+be deleted — the runs would lose their foreign key. The family has to be
+rebuilt. Two guards stand in the way and both are answerable:
+
+- **The checkpoint.** `reset-family` refuses a checkpointed family, because
+  undoing one usually strands the families that depend on it. Only `finance`
+  declares `hr`, and it declares it for ORDERING — it reads no hr handoff, only
+  setup's. So nothing is stranded, and the reset may drop the checkpoint in the
+  same transaction.
+- **The delete guards.** `expense_claim_line` refuses deletion for a paid
+  claim. Reset only the payroll tables — `--tables=payslip,pay_run_line,pay_run,pay_period`
+  — and leave attendance, leave and claims where they are; the generator
+  re-derives them identically, so `ON CONFLICT DO NOTHING` makes the re-run a
+  no-op for everything else.
+
 ## Order of work
 
 Verify-only fixes are safe while the seed is still running; generator fixes are
