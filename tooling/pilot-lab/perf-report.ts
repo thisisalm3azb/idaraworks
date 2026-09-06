@@ -116,6 +116,16 @@ function main() {
     for (const e of errors)
       p(`| ${e.company} | ${e.surface} | \`${e.path}\` | **${e.cold.status}** |`);
     p();
+    if (errors.some((e) => e.cold.status === 404)) {
+      p(
+        "A **404** here is far more often a stale `.next` development cache than " +
+          "a missing feature: a damaged route manifest serves some routes and " +
+          "refuses others. Delete `.next`, restart the app and measure again " +
+          "before reading anything into it. It cost this phase two wrong " +
+          "diagnoses.",
+      );
+      p();
+    }
   }
 
   if (over3s.length) {
