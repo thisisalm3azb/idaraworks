@@ -66,9 +66,16 @@ async function main() {
     for (const c of COMPANIES) {
       const org = await findLabOrg(sql, c.key);
       if (!org) continue;
+      /*
+       * The family segment is NOT optional. setup mints these as
+       * ctx.id(FAMILY, "pay_period", start), which is labId(key, "setup",
+       * "pay_period", start); recomputing without "setup" derives a different
+       * uuid for every period, so every real one looks like an orphan and this
+       * repair would delete the company's whole payroll calendar.
+       */
       const mine = new Set(
         monthSpans(c.history.from, c.history.asOf).map((sp) =>
-          labId(c.key, "pay_period", sp.start),
+          labId(c.key, "setup", "pay_period", sp.start),
         ),
       );
       const live = (await sql`
@@ -87,6 +94,23 @@ async function main() {
     console.log(`  maintenance plans behind their own newest event: ${plans!.n}`);
     console.log(`  studio edges citing a dependency that is not there: ${edges!.n}`);
     console.log(`  payroll periods setup did not derive: ${orphanPeriods.length}`);
+    /*
+     * A repair that wants to delete the entire calendar is not a repair, it is
+     * a derivation that has drifted from the generator. Refuse rather than
+     * obey: deleting every pay_period would take the pay runs citing them with
+     * it, and pay_run is append-only.
+     */
+    const [livePeriods] = (await sql`
+      select count(*)::int as n from public.pay_period where org_id = any(${ids}::uuid[])
+    `) as unknown as Array<{ n: number }>;
+    if (orphanPeriods.length && orphanPeriods.length >= (livePeriods?.n ?? 0)) {
+      throw new Error(
+        `refusing: ${orphanPeriods.length} of ${livePeriods?.n ?? 0} pay periods look ` +
+          "undrived, which means this tool's derivation no longer matches the setup " +
+          "family, not that the data is wrong. Fix the derivation before running again.",
+      );
+    }
+
     if (!CONFIRM) {
       console.log("\npreview only — pass --confirm to apply");
       return;
