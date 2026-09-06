@@ -291,7 +291,6 @@ function buildModel(ctx: LabContext): StockModel & { handoff: StockHandoff } {
   const asOf = clock.asOf;
   const horizon = historyDays(company);
   const lots = company.profile.enables.lots;
-  const serialsOn = company.profile.enables.serials;
 
   const whKeys = Object.keys(setup.warehouses);
   const whOf = (k: string) => setup.warehouses[k] ?? setup.warehouses[whKeys[0]!]!;
@@ -323,7 +322,8 @@ function buildModel(ctx: LabContext): StockModel & { handoff: StockHandoff } {
    * what a serial register looks like for the kind of thing worth serialising:
    * received, numbered, and still on the shelf.
    */
-  const isSerial = (itemId: string) => itemById.get(itemId)?.tracking === "serial";
+  const isSerial = (itemId: string) =>
+    company.profile.enables.serials && itemById.get(itemId)?.tracking === "serial";
   const movementSerials: StockModel["movementSerials"] = [];
 
   function post(m: MovementM): void {
