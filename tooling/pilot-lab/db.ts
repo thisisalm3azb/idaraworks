@@ -7,7 +7,7 @@
  * row and why the marker is checked before any of it runs.
  *
  * ── Batching without per-column typing ──────────────────────────────────────
- * `json_populate_recordset(null::public.<table>, $1::json)` casts a JSON array
+ * `json_populate_recordset(null::public.<table>, $1::text::json)` casts a JSON array
  * into the table's own row type, so a family can hand over plain objects and
  * the database does the typing — dates, numerics, jsonb, enums. One statement
  * per 2,000 rows keeps each call well under the pooler's limits and, measured
@@ -66,13 +66,27 @@ export async function insertBatch(
   let inserted = 0;
   for (let i = 0; i < rows.length; i += BATCH) {
     const chunk = rows.slice(i, i + BATCH);
-    const res = await sql.unsafe(
-      `insert into public.${t} (${cols})
-       select ${cols} from json_populate_recordset(null::public.${t}, $1::json)
-       ${tail}`,
-      [JSON.stringify(chunk)],
-    );
-    inserted += res.count ?? 0;
+    const payload = JSON.stringify(chunk);
+    try {
+      const res = await sql.unsafe(
+        `insert into public.${t} (${cols})
+         select ${cols} from json_populate_recordset(null::public.${t}, $1::text::json)
+         ${tail}`,
+        [payload],
+      );
+      inserted += res.count ?? 0;
+    } catch (e) {
+      // Name the table and show the shape: a batch failure deep in a fifteen
+      // family seed is otherwise a stack trace with nothing in it.
+      const head = payload.slice(0, 300);
+      throw new Error(
+        `${t}: batch ${i / BATCH} of ${chunk.length} rows failed — ${
+          e instanceof Error ? e.message : String(e)
+        }
+  columns: ${cols}
+  payload starts: ${head}`,
+      );
+    }
   }
   return { attempted: rows.length, inserted };
 }

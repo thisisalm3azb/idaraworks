@@ -27,7 +27,8 @@
     "lab:cleanup-preview": "tsx tooling/pilot-lab/cleanup.ts",
     "lab:open": "tsx tooling/pilot-lab/open.ts",
     "lab:perf": "tsx tooling/pilot-lab/perf.ts",
-    "test:lab": "vitest run --config vitest.lab.config.ts"
+    "test:lab": "vitest run --config vitest.lab.config.ts",
+    "lab:residue-check": "tsx tooling/scripts/h33-residue-check.ts"
   },
   "dependencies": {
     "@dagrejs/dagre": "3.1.1",
