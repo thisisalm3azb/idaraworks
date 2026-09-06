@@ -166,6 +166,42 @@ panel does not cite a row that is not there.
 
 ---
 
+### Five surfaces answered 404, and the cause was a stale build cache
+
+The first performance run reported HTTP 404 on `finance/journals`,
+`finance/reports`, `finance/tax`, `revenue/pipeline` and `revenue/forecast`,
+while every other surface answered 200. Signed in as the owner, the browser
+showed Next's own "This page could not be found" — not the module-unavailable
+card, so it was not `ModuleGate`.
+
+**Two wrong diagnoses came before the right one**, and both are recorded because
+each cost time that a cheaper check would have saved:
+
+1. *The launcher fails to pass the flags on Windows.* `open.ts` spawns
+   `next dev` through `npx.cmd` with `shell: true`, which looked like a
+   plausible way to lose environment. It was rewritten to spawn Next's resolved
+   bin with `process.execPath` and no shell — and the surfaces still 404ed. The
+   change was reverted, because the code it replaced was not at fault.
+2. *The organisation has the modules switched off.* Both subtrees do sit behind
+   a `ModuleGate` for `cap.finance` and `cap.revenue_studio`, which made the
+   correlation look decisive — those were the only two subtrees with such a
+   layout. But `ModuleGate` renders a calm unavailable state, never a 404, so it
+   could not have produced what we saw.
+
+**The actual cause: a corrupted `.next` development cache.** Two pieces of
+evidence pointed at it once they were put together — `tsc` was reporting syntax
+errors inside the generated `.next/dev/types/routes.d.ts`, and a temporary probe
+route added under `src/app/api` never compiled at all. A dev server with a
+damaged route manifest serves some routes and 404s others, which is exactly the
+pattern. Deleting `.next` and restarting turned all five into a normal 307.
+
+**What it means for the lab:** nothing is wrong with the product, the launcher
+or the seeded organisations, and no fix was needed. What it changes is the
+instructions: an owner who opens the lab on a stale cache would conclude that
+finance and revenue are missing from the product. Clearing `.next` before a
+session is now in the owner checklist, and the first performance run — measured
+against that damaged cache — was discarded and taken again.
+
 ## Remediation plan
 
 Most of these are REPAIRS, not re-seeds. That matters: a re-seed of a

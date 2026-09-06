@@ -104,6 +104,11 @@ before somebody else looks at the lab, so nothing surprises you.
   account, so there is nothing for the matcher to match. Worth seeing, but not a
   fault.
 
+- **If a page shows 404 while the rest of the app works, clear `.next` and
+  reopen.** A stale build cache makes whole modules look absent — during
+  verification it made finance and revenue appear missing from the product, and
+  they were not. `rm -rf .next` then `npm run lab:open`.
+
 Full detail, with causes: `docs/H33-RECONCILIATION-FINDINGS.md`.
 
 ## 8. Still deliberately off — no action unless you choose

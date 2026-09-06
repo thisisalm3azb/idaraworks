@@ -95,6 +95,21 @@ generated from the seed's own manifest.
 The cleanup phrase names the test project; the preview prints it. The cleanup
 refuses if it finds more or fewer than the five marked companies.
 
+### If a whole module looks missing
+
+A page that answers **404** when the rest of the app works is almost always a
+stale `.next` development cache, not a missing feature. A dev server with a
+damaged route manifest serves some routes and refuses others, and the two that
+happen to sit deepest — finance and revenue — are the ones you notice. It cost
+this phase two wrong diagnoses.
+
+```bash
+rm -rf .next && npm run lab:open -- gulfbuild owner
+```
+
+Clear it before a session you intend to judge the product by, and before any
+performance measurement.
+
 ## Recreating or removing the lab
 
 - **Recreate after a schema change:** run the seed again. Checkpointed families
