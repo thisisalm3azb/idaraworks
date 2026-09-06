@@ -319,6 +319,20 @@ for (const company of COMPANIES) {
         b.exceptions.filter((e) => e.resolved_at === null).map((e) => String(e.id)),
       );
       for (const d of b.dismiss) expect(openIds.has(d.id), d.id).toBe(true);
+      /*
+       * And there are enough of them. Age resolves most exceptions, so the pool
+       * of open manager-visible rows ran to one or two at this scale, and a
+       * stride of 3 over it left the seeded companies dismissing 2 of 3, 1 of 7
+       * and 0 of 3. The check in the family only demanded one, so two of those
+       * three passed. Assert the target itself.
+       */
+      const want = miscSizes(company, clock).dismissTarget;
+      expect(
+        b.dismiss.length,
+        `${company.key} dismissals: got ${b.dismiss.length} of target ${want}`,
+      ).toBe(want);
+      const dismissIds = new Set(b.dismiss.map((d) => d.id));
+      expect(dismissIds.size, "no exception dismissed twice").toBe(b.dismiss.length);
     });
 
     it("sends only drafts through the service", () => {

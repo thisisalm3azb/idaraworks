@@ -1037,10 +1037,32 @@ export function buildMisc(ctx: LabContext, t: MiscTargets): MiscBuild {
       audience: rule.audience,
     });
   }
+  /*
+   * Keep enough open, manager-visible exceptions for the dismissals below.
+   * Age resolves most of them, so at this scale the pool ran to one or two and
+   * the dismissals came out at 2 of 3, 1 of 7, and for saudimfg 0 of 3. Walk in
+   * index order and re-open the first few - deterministic, consuming no
+   * randomness, so every other row keeps the value it already had.
+   */
+  const needOpen = s.dismissTarget + 2;
+  let reopened = excMeta.filter(
+    (e) => e.resolved === null && e.audience.includes("manager"),
+  ).length;
+  for (const m of excMeta) {
+    if (reopened >= needOpen) break;
+    if (m.resolved === null || !m.audience.includes("manager")) continue;
+    const row = exceptions.find((x) => x.id === m.id);
+    if (!row) continue;
+    row.resolved_at = null;
+    row.resolution = null;
+    m.resolved = null;
+    reopened++;
+  }
+
   // Representative dismissals through the real service (open rows the manager may see).
   const dismiss: MiscBuild["dismiss"] = [];
   const dismissable = excMeta.filter((e) => e.resolved === null && e.audience.includes("manager"));
-  for (let k = 0; k < dismissable.length && dismiss.length < s.dismissTarget; k += 3) {
+  for (let k = 0; k < dismissable.length && dismiss.length < s.dismissTarget; k++) {
     const note = DISMISS_NOTES[dismiss.length % DISMISS_NOTES.length]!;
     dismiss.push({
       id: dismissable[k]!.id,
@@ -1737,7 +1759,7 @@ async function dismissViaService(ctx: LabContext, list: MiscBuild["dismiss"]): P
       n++;
     } catch (e) {
       // Already dismissed on a previous run, or out of audience — both are fine to skip.
-      ctx.log(`misc: dismiss ${d.id.slice(0, 8)} skipped — ${(e as Error).name}`);
+      ctx.log(`misc: dismiss ${d.id.slice(0, 8)} skipped: ${(e as Error).message}`);
     }
   }
   return n;
@@ -1954,7 +1976,7 @@ export const misc: Family = {
     );
     ck(
       "dismissed exceptions carry a note and a resolver",
-      s.dismissTarget === 0 || dismissed >= 1,
+      dismissed >= s.dismissTarget,
       `${dismissed} dismissed (target ${s.dismissTarget})`,
     );
     const orphanJobs = await count(
