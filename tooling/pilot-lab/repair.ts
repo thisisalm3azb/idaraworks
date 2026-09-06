@@ -112,6 +112,29 @@ async function main() {
         and p.next_due_on is distinct from (p.last_done_on + (p.interval_days || ' days')::interval)::date
     `) as unknown as Array<{ n: number }>;
 
+    /*
+     * A company whose maintenance due list is empty. Correcting last_done_on to
+     * the plan's newest event (D14) moved every due date forward with it, and
+     * consult was left with nothing due at all - a screen the owner opens and
+     * finds blank. The generator now guarantees one overdue plan, but asset
+     * history is append-only, so a company already seeded cannot be re-run.
+     *
+     * This SHORTENS one plan's interval, which is a schedule the owner sets,
+     * rather than forcing next_due_on to a date that contradicts it. An earlier
+     * version of this repair did exactly that and broke the family's own rule
+     * that a serviced plan's next due is its last service plus its interval.
+     */
+    const emptyDueLists: Array<{ org: string; asOf: string }> = [];
+    for (const c of COMPANIES) {
+      const org = await findLabOrg(sql, c.key);
+      if (!org) continue;
+      const [n] = (await sql`
+        select count(*)::int as n from public.asset_maintenance_plan
+        where org_id = ${org} and active and next_due_on < ${c.history.asOf}::date
+      `) as unknown as Array<{ n: number }>;
+      if ((n?.n ?? 0) === 0) emptyDueLists.push({ org, asOf: c.history.asOf });
+    }
+
     const [edges] = (await sql`
       select count(*)::int as n from public.studio_edge e
       where e.org_id = any(${ids}::uuid[]) and e.task_dependency_id is not null
@@ -124,6 +147,7 @@ async function main() {
     console.log(`  payroll periods setup did not derive: ${orphanPeriods.length}`);
     console.log(`  deductions on reports nobody accepted: ${deducts!.n}`);
     console.log(`  next due dates off their own interval: ${dues!.n}`);
+    console.log(`  companies whose maintenance due list is empty: ${emptyDueLists.length}`);
     /*
      * A repair that wants to delete the entire calendar is not a repair, it is
      * a derivation that has drifted from the generator. Refuse rather than
@@ -174,6 +198,21 @@ async function main() {
         await tx`
           delete from public.pay_period
           where org_id = any(${safe}::uuid[]) and id = any(${orphanPeriods}::uuid[])
+        `;
+      }
+      for (const e of emptyDueLists) {
+        if (!safe.includes(e.org)) throw new Error("unmarked org in the due-list repair");
+        await tx`
+          update public.asset_maintenance_plan p
+          set interval_days = (${e.asOf}::date - 20) - p.last_done_on,
+              next_due_on = (${e.asOf}::date - 20),
+              updated_at = now()
+          where p.org_id = ${e.org} and p.id = (
+            select id from public.asset_maintenance_plan
+            where org_id = ${e.org} and active and last_done_on is not null
+              and interval_days is not null
+              and (${e.asOf}::date - 20) - last_done_on >= 7
+            order by last_done_on asc, id asc limit 1)
         `;
       }
       await tx`
