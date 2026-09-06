@@ -57,6 +57,13 @@ export const DOCSTUDIO_TABLES = [
 ] as const;
 export type DocstudioTable = (typeof DOCSTUDIO_TABLES)[number];
 
+/**
+ * Switches the one part of seed() that needs a database beyond ctx.insert: the
+ * update that points each document at its working revision and issued
+ * snapshot. The unit test turns it off.
+ */
+export const docstudioRuntime = { live: true };
+
 const SEQ_CONFLICT =
   "on conflict (org_id, scope_key) do update set next_value = greatest(reference_sequence.next_value, excluded.next_value)";
 
@@ -663,8 +670,16 @@ export function buildDocstudio(ctx: LabContext): DocstudioModel {
       template_id: d.templateId,
       template_version_id: d.templateVersionId,
       workflow_id: d.workflowId,
-      working_revision_id: issued ? d.rev2Id : d.rev1Id,
-      issued_snapshot_id: d.snapshotId,
+      /*
+       * Both of these are foreign keys to rows this family writes AFTER the
+       * document — a revision and a snapshot — and neither constraint is
+       * deferrable, so they cannot be set on insert. The product has the same
+       * problem and solves it the same way: create the document, write the
+       * revision, then point one at the other. `linkDocuments` below does it
+       * in a single statement once every child row exists.
+       */
+      working_revision_id: null,
+      issued_snapshot_id: null,
       issued_at: d.issuedAgo === null ? null : ts(d.issuedAgo, 11),
       issued_by: issued ? users.owner : null,
       effective_from: d.effectiveFrom,
@@ -1265,6 +1280,29 @@ export function buildDocstudio(ctx: LabContext): DocstudioModel {
   return model;
 }
 
+/**
+ * Point every document at its working revision and its issued snapshot, in one
+ * statement. Up to a few hundred documents a company; one round trip.
+ */
+async function linkDocuments(ctx: LabContext, m: DocstudioModel): Promise<number> {
+  const links = m.docs
+    .map((d) => ({
+      id: d.id,
+      wr: d.issuedAgo !== null ? d.rev2Id : d.rev1Id,
+      sn: d.snapshotId,
+    }))
+    .filter((x) => x.wr !== null || x.sn !== null);
+  if (!links.length) return 0;
+  const res = await ctx.sql.unsafe(
+    `update public.doc_document d
+        set working_revision_id = v.wr, issued_snapshot_id = v.sn
+       from json_to_recordset($1::text::json) as v(id uuid, wr uuid, sn uuid)
+      where d.id = v.id and d.org_id = $2`,
+    [JSON.stringify(links), ctx.orgId] as never[],
+  );
+  return res.count ?? links.length;
+}
+
 export function planDocstudio(ctx: LabContext): FamilyPlan {
   const m = buildDocstudio(ctx);
   return { family: "docstudio", expected: { ...m.tableCounts } };
@@ -1281,6 +1319,10 @@ export async function seedDocstudio(ctx: LabContext): Promise<FamilyReport> {
     );
     counts[table] = r.attempted;
     if (m.rows[table].length) ctx.log(`${table}: ${r.attempted} rows`);
+  }
+  if (docstudioRuntime.live && !ctx.dryRun) {
+    const linked = await linkDocuments(ctx, m);
+    ctx.log(`doc_document: ${linked} linked to their revision and snapshot`);
   }
   return {
     family: "docstudio",
