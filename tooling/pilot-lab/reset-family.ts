@@ -3,6 +3,7 @@
  * be re-run cleanly.
  *
  *   npx tsx tooling/pilot-lab/reset-family.ts <company> <family> --confirm
+ *   npx tsx tooling/pilot-lab/reset-family.ts <company> <family> --tables=file --confirm
  *
  * A family inserts table by table. If it fails on the fourth table, the first
  * three are already in — and if the fix changes the ids the family derives (a
@@ -17,6 +18,13 @@
  *   3. The family must have NO checkpoint. A checkpointed family completed;
  *      undoing it would leave the families that depend on it pointing at rows
  *      that no longer exist, and that is a cleanup, not a reset.
+ *
+ * The delete is by organisation, so a table TWO families write — misc and
+ * sales both write customer_update — cannot be reset for one of them without
+ * taking the other's rows too, and the foreign keys will say so. `--tables=`
+ * narrows the reset to the tables actually affected, which is usually what a
+ * partial failure needs: the tables written before the one that failed, minus
+ * any that a later fix left untouched.
  *
  * It cannot undo everything. Some tables carry their own delete guards — the
  * lines of a paid expense claim, an append-only stock movement — and the
@@ -35,6 +43,12 @@ import { SEED_VERSION } from "./marker";
 
 const [companyKey, familyKey] = process.argv.slice(2);
 const CONFIRM = process.argv.includes("--confirm");
+const ONLY_TABLES = process.argv
+  .find((a) => a.startsWith("--tables="))
+  ?.slice(9)
+  .split(",")
+  .map((t) => t.trim())
+  .filter(Boolean);
 
 /** The tables each family owns, read from the family's own exported list. */
 async function tablesOf(family: string): Promise<string[]> {
@@ -73,7 +87,13 @@ async function main() {
     }
 
     // Children before parents: the families list their tables in insert order.
-    const tables = (await tablesOf(family.key)).reverse();
+    let tables = (await tablesOf(family.key)).reverse();
+    if (ONLY_TABLES?.length) {
+      const owned = new Set(tables);
+      const unknown = ONLY_TABLES.filter((t) => !owned.has(t));
+      if (unknown.length) throw new Error(`${family.key} does not write: ${unknown.join(", ")}`);
+      tables = tables.filter((t) => ONLY_TABLES.includes(t));
+    }
     console.log(
       `H33 reset — ${company.key} (${orgId}) family ${family.key} in ${env.ref}, seed ${SEED_VERSION}`,
     );

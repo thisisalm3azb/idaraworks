@@ -60,6 +60,24 @@ type Row = Record<string, unknown>;
 // ── Catalogues (mirrors of the product's closed lists) ──────────────────────
 
 /** The exception rule catalogue — the migration check constraint (0045). */
+/** The tables this family writes, in the order seed() writes them. */
+export const MISC_TABLES = [
+  "exception",
+  "notification",
+  "notification_preference",
+  "activity",
+  "comment",
+  "digest",
+  "import_batch",
+  "import_row",
+  "file",
+  "org_storage_usage",
+  "customer_update",
+  "sign_in_log",
+  "usage_event",
+  "org_holiday_calendar",
+] as const;
+
 export const MISC_RULE_KEYS = [
   "missing_report",
   "overdue_stage",
@@ -1377,6 +1395,13 @@ export function buildMisc(ctx: LabContext, t: MiscTargets): MiscBuild {
     kind: "png" | "pdf";
     uploader: PersonaKey;
   };
+  /*
+   * Every attachment is an image, because that is all the product accepts:
+   * ALLOWED_UPLOAD_MIMES is jpeg/png/webp and both buckets are configured to
+   * match. PDFs in this system are RENDERED on demand by the document
+   * pipeline and never stored as files, so a stored PDF would be a fixture of
+   * something the product cannot produce — and the bucket refuses it anyway.
+   */
   const fileSpecs: FileSpec[] = [
     ...Array.from({ length: 6 }, (_, k): FileSpec => ({
       cls: "job_media",
@@ -1396,14 +1421,14 @@ export function buildMisc(ctx: LabContext, t: MiscTargets): MiscBuild {
       cls: "hr_doc",
       pool: t.employees,
       type: "employee",
-      kind: "pdf",
+      kind: "png",
       uploader: "admin",
     })),
     ...Array.from({ length: 3 }, (_, k): FileSpec => ({
       cls: "document_file",
       pool: t.documents,
       type: "document",
-      kind: "pdf",
+      kind: "png",
       uploader: k % 2 ? "manager" : "admin",
     })),
   ];
