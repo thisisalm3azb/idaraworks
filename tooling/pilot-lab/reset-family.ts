@@ -39,8 +39,14 @@ const CONFIRM = process.argv.includes("--confirm");
 /** The tables each family owns, read from the family's own exported list. */
 async function tablesOf(family: string): Promise<string[]> {
   const mod: Record<string, unknown> = await import(`./families/${family}`);
-  const key = Object.keys(mod).find((k) => /_TABLES$/.test(k));
-  if (!key) throw new Error(`family ${family} exports no <NAME>_TABLES list`);
+  /*
+   * The family's OWN list, not any other list it happens to export. finance
+   * also exports FINANCE_SERVICE_TABLES — the tables its service phase fills,
+   * which are append-only and not this tool's to remove.
+   */
+  const exact = `${family.toUpperCase()}_TABLES`;
+  const key = exact in mod ? exact : Object.keys(mod).find((k) => /^[A-Z_]+_TABLES$/.test(k));
+  if (!key) throw new Error(`family ${family} exports no ${exact} list`);
   return [...(mod[key] as readonly string[])];
 }
 
