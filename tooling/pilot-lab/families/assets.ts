@@ -1037,7 +1037,10 @@ function build(ctx: LabContext): AssetsModel {
         const pid = id("plan", i, p);
         const active = rng.chance(0.92);
         const withUsage = usageUnit !== null && rng.chance(0.4);
-        // Occurrences: every `interval` days since registration, latest first, at most five.
+        // Occurrences: every `interval` days since registration, at most five.
+        // The loop counts DOWN in days-ago, so occ[0] is the OLDEST and the
+        // last entry is the most recent — the comment used to claim the
+        // opposite, and last_done_on believed it.
         const occ: number[] = [];
         if (active) {
           const offset = rng.int(0, Math.max(0, interval - 1));
@@ -1048,7 +1051,8 @@ function build(ctx: LabContext): AssetsModel {
           )
             occ.push(Math.max(d, lo));
         }
-        const lastDone = occ.length ? clock.dayAgo(occ[0]!) : null;
+        // The most recent occurrence is the smallest days-ago, not the first.
+        const lastDone = occ.length ? clock.dayAgo(Math.min(...occ)) : null;
         const nextDue = lastDone
           ? addDays(lastDone, interval)
           : addDays(clock.dayAgo(registeredDaysAgo), interval);
@@ -1786,13 +1790,8 @@ async function driveServices(ctx: LabContext, model: AssetsModel): Promise<strin
           kind: m.event.kind,
           performedOn: m.event.performedOn,
           performedBy: field.userId,
-          /*
-           * The event being recorded is the plan's NEWEST, so the plan should
-           * move with it. `advancePlan` defaults off for a good reason —
-           * recording a historical event must not shift a live schedule — but
-           * omitting it here left every plan the service touched showing the
-           * date the bulk insert gave it, one interval behind its own history.
-           */
+          // Explicit, though it is also the default: this plan is created
+          // with this single event, so the plan moves with it.
           advancePlan: true,
           costMinor: m.event.costMinor ?? undefined,
           currency: m.event.costMinor !== null ? ctx.company.currency : undefined,
