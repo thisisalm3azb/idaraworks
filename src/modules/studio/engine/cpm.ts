@@ -185,7 +185,22 @@ export function computeSchedule(
     );
   }
   const totalDur = tasks.reduce((s, t) => s + Math.max(1, t.dur), 0);
-  const horizon = Math.min(Math.max(totalDur * 2 + 260, 400), 15000);
+  /*
+   * The window must cover the dates the plan actually names, not only the work
+   * it contains. Sizing it from duration alone assumes the epoch is close to
+   * the plan's own tasks — but the epoch is the EARLIEST dated input, and a
+   * plan whose nodes link to records from years back starts there. One such
+   * plan ran from 2024-01-18 with a 952-working-day window that ended
+   * 2027-03-13, four days before a task it owned, and the whole schedule threw
+   * rather than placing it. Calendar days are a safe floor for working days,
+   * so asking for the span plus the same margin always reaches the far end.
+   */
+  const latestInput = datedInputs.length ? max(datedInputs) : epochCandidate;
+  const spanDays = Math.max(
+    0,
+    Math.round((Date.parse(latestInput) - Date.parse(epochCandidate)) / 86_400_000),
+  );
+  const horizon = Math.min(Math.max(totalDur * 2 + 260, spanDays + 260, 400), 15000);
   const idx = new WorkdayIndex(cal, epochCandidate, horizon);
 
   const ord = (date: string, what: string): number => {
@@ -453,6 +468,10 @@ function countWorkingDaysInclusive(cal: Calendar, from: string, to: string): num
 
 function min(dates: string[]): string {
   return dates.reduce((a, b) => (b < a ? b : a));
+}
+
+function max(dates: string[]): string {
+  return dates.reduce((a, b) => (b > a ? b : a));
 }
 
 function pct(part: number, whole: number): number {

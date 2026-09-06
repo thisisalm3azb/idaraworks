@@ -296,3 +296,29 @@ describe("project finish", () => {
     expect(r.projectDurationDays).toBe(3);
   });
 });
+
+describe("the scheduling window", () => {
+  /*
+   * H33 found a plan that could not be scheduled at all. The window is sized
+   * from the EARLIEST dated input, and this plan was anchored in 2024 because
+   * some of its nodes linked to old records, while its own work sat in 2027.
+   * A duration-derived horizon ran out four days before the plan's last task
+   * and the whole schedule threw instead of placing it.
+   */
+  it("covers a plan whose dates outrun its duration", () => {
+    const anchor = task("OLD", 1, { startDate: "2024-01-18" });
+    const far = task("FAR", 6, { startDate: "2027-03-17" });
+    const r = computeSchedule(FIVE_DAY, [anchor, far], [], {});
+    expect(r.ok, r.warnings.join(" | ")).toBe(true);
+    expect(r.tasks.get("FAR"), "the far task was scheduled").toBeDefined();
+    expect(r.unscheduled.map((u) => u.id)).not.toContain("FAR");
+  });
+
+  it("still schedules a compact plan the old sizing already covered", () => {
+    const r = computeSchedule(FIVE_DAY, [task("A", 5), task("B", 3)], [fs("A", "B")], {
+      projectStart: START,
+    });
+    expect(r.ok).toBe(true);
+    expect(r.projectFinish).toBe("2026-09-16");
+  });
+});
