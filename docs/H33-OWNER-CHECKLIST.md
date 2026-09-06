@@ -82,12 +82,36 @@ the sentence of approval required. Nothing has been applied.
 
 - [ ] Decide: repair it (say the sentence in the preview), or leave it.
 
-## 7. Still deliberately off — no action unless you choose
+## 7. What verification found, and what it means for you
+
+Nothing here blocks a pilot. It is the short list of things worth knowing
+before somebody else looks at the lab, so nothing surprises you.
+
+- **A product defect was found and fixed in this phase.** A Management Studio
+  edge could name a task dependency that was never written — two causes, both
+  in `addEdge`. Shipped with a regression test that was itself verified by
+  reinstating the bug. Nothing else in the product changed.
+- **Payments are not approval-gated in the lab.** The engine supports it; the
+  lab configures approval for task completions and asset disposals instead. If
+  you want payments routed through approval in a pilot, that is a rule to add,
+  not a change to build.
+- **A restricted employee can see their own payslip and pay-run line.** That is
+  the policy as designed and written in the migration — "cost wall or the
+  employee's own row" — not a leak. They see nobody else's; the isolation sweep
+  asserts exactly that.
+- **The bank reconciliation screen will show an unreconciled statement** in the
+  lab, because payments in this configuration do not post to the bank control
+  account, so there is nothing for the matcher to match. Worth seeing, but not a
+  fault.
+
+Full detail, with causes: `docs/H33-RECONCILIATION-FINDINGS.md`.
+
+## 8. Still deliberately off — no action unless you choose
 
 H28 AI · H29 country packs and Spanish · e-invoicing submission · billing
 provider · Sentry (O-7 — `runbooks/sentry-provisioning.md`).
 
-## 8. What you do not need to do
+## 9. What you do not need to do
 
 - Delete the Pilot Lab. It is marked, listed in `docs/H33-DATA-MANIFEST.md`,
   and removable in one command (`npm run lab:cleanup-preview` shows the phrase).
