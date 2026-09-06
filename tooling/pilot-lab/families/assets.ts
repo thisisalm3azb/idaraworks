@@ -1786,6 +1786,14 @@ async function driveServices(ctx: LabContext, model: AssetsModel): Promise<strin
           kind: m.event.kind,
           performedOn: m.event.performedOn,
           performedBy: field.userId,
+          /*
+           * The event being recorded is the plan's NEWEST, so the plan should
+           * move with it. `advancePlan` defaults off for a good reason —
+           * recording a historical event must not shift a live schedule — but
+           * omitting it here left every plan the service touched showing the
+           * date the bulk insert gave it, one interval behind its own history.
+           */
+          advancePlan: true,
           costMinor: m.event.costMinor ?? undefined,
           currency: m.event.costMinor !== null ? ctx.company.currency : undefined,
           notes: m.event.notes,

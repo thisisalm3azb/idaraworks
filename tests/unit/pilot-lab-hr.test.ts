@@ -48,13 +48,37 @@ const PERSONAS: PersonaKey[] = [
   "auditor",
 ];
 
+/** Every calendar month from the company's history start through its as-of. */
+function monthKeysOf(company: Company): string[] {
+  const out: string[] = [];
+  const from = new Date(`${company.history.from}T00:00:00Z`);
+  const to = new Date(`${company.history.asOf}T00:00:00Z`);
+  for (
+    let d = new Date(Date.UTC(from.getUTCFullYear(), from.getUTCMonth(), 1));
+    d <= to;
+    d.setUTCMonth(d.getUTCMonth() + 1)
+  )
+    out.push(d.toISOString().slice(0, 7));
+  return out;
+}
+
 function setupHandoff(company: Company): Record<string, unknown> {
   return {
     leaveTypes: {
       annual: { id: labId(company.key, "leave_type", "annual"), policyId: "" },
       sick: { id: labId(company.key, "leave_type", "sick"), policyId: "" },
     },
-    payGroups: { activeId: labId(company.key, "pay_group", "monthly"), periods: {} },
+    /*
+     * setup hands the payroll calendar over keyed by month, and hr cites it
+     * rather than minting periods of its own — an empty map here would hide
+     * exactly the coupling this fixture exists to exercise.
+     */
+    payGroups: {
+      activeId: labId(company.key, "pay_group", "monthly"),
+      periods: Object.fromEntries(
+        monthKeysOf(company).map((k) => [k, labId(company.key, "pay_period", `${k}-01`)]),
+      ),
+    },
   };
 }
 

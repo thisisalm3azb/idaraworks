@@ -36,7 +36,6 @@ export const HR_TABLES = [
   "disciplinary_record",
   "job_requisition",
   "candidate",
-  "pay_period",
   "pay_run",
   "pay_run_line",
   "payslip",
@@ -503,18 +502,27 @@ function buildModel(ctx: LabContext): HrModel & { handoff: HrHandoff } {
   // ── Payroll: monthly runs, the older ones finalized ───────────────────────
   const periods: HrModel["periods"] = [];
   const runs: PayRunM[] = [];
-  if (payGroupId && employees.length > 0) {
-    const monthCount = Math.min(24, Math.max(6, Math.floor(horizon / 30)));
-    for (let m = monthCount; m >= 1; m--) {
-      const endDayAgo = (m - 1) * 30;
-      const startDayAgo = endDayAgo + 29;
-      const periodId = nextId("pay_period");
-      periods.push({
-        id: periodId,
-        groupId: payGroupId,
-        start: clock.dayAgo(startDayAgo),
-        end: clock.dayAgo(endDayAgo),
-      });
+  /*
+   * setup owns the pay group AND its calendar; this family adds the runs. It
+   * used to mint its own periods at thirty-day intervals, which put a second
+   * series on the same pay group — sixty-one periods for gulfbuild, forty-eight
+   * of them overlapping a neighbour. Two periods covering the same fortnight
+   * make "what was paid for September" unanswerable, so the runs now cite the
+   * calendar months setup already created, newest last.
+   */
+  const setupMonths = Object.entries(setup.payGroups?.periods ?? {}).sort(([a], [b]) =>
+    a < b ? -1 : 1,
+  );
+  if (payGroupId && employees.length > 0 && setupMonths.length > 0) {
+    const use = setupMonths.slice(-Math.min(24, setupMonths.length));
+    for (const [idx, [monthKey, setupPeriodId]] of use.entries()) {
+      // 1 is the most recent month, so the "still moving" runs stay at the end.
+      const m = use.length - idx;
+      const start = `${monthKey}-01`;
+      const [y, mo] = monthKey.split("-").map(Number) as [number, number];
+      const end = new Date(Date.UTC(y, mo, 0)).toISOString().slice(0, 10);
+      const periodId = setupPeriodId;
+      periods.push({ id: periodId, groupId: payGroupId, start, end });
 
       // The two most recent runs are still moving; everything older is done.
       const status: PayRunM["status"] = m <= 2 ? (m === 1 ? "draft" : "review") : "finalized";
@@ -553,8 +561,8 @@ function buildModel(ctx: LabContext): HrModel & { handoff: HrHandoff } {
       runs.push({
         id: nextId("pay_run"),
         periodId,
-        periodStart: clock.dayAgo(startDayAgo),
-        periodEnd: clock.dayAgo(endDayAgo),
+        periodStart: start,
+        periodEnd: end,
         reference: `PR-${String(1000 + runs.length)}`,
         runKind: "regular",
         status,
@@ -563,8 +571,9 @@ function buildModel(ctx: LabContext): HrModel & { handoff: HrHandoff } {
         deductionTotal: deduction,
         employerTotal: employer,
         netTotal: net,
-        finalizedAt: status === "finalized" ? clock.tsAgo(Math.max(0, endDayAgo - 2), 12, 0) : null,
-        dayAgo: endDayAgo,
+        finalizedAt:
+          status === "finalized" ? clock.tsAgo(Math.max(0, clock.daysAgoOf(end) - 2), 12, 0) : null,
+        dayAgo: Math.max(0, clock.daysAgoOf(end)),
         lines,
       });
     }
@@ -624,7 +633,6 @@ function buildModel(ctx: LabContext): HrModel & { handoff: HrHandoff } {
     disciplinary_record: disciplinary.length,
     job_requisition: candidates.length ? 1 : 0,
     candidate: candidates.length,
-    pay_period: periods.length,
     pay_run: runs.length,
     pay_run_line: runs.reduce((n, r) => n + r.lines.length, 0),
     payslip: payslipCount,
@@ -868,14 +876,7 @@ function toRows(ctx: LabContext, m: HrModel): Record<HrTable, Row[]> {
       updated_at: ctx.clock.tsAgo(c.dayAgo, 9, 0),
     });
 
-  for (const p of m.periods)
-    rows.pay_period.push({
-      id: p.id,
-      org_id: org,
-      pay_group_id: p.groupId,
-      period_start: p.start,
-      period_end: p.end,
-    });
+  // pay_period rows are deliberately NOT written: setup owns the calendar.
 
   for (const r of m.runs) {
     rows.pay_run.push({
