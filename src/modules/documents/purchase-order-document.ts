@@ -39,19 +39,19 @@ const dateLocale = (language: DocLanguage) => (language === "ar" ? "ar" : "en");
  * cancelled, because a supplier who was sent it needs to see that.
  */
 export const PURCHASE_ORDER_ISSUED_STATUSES = [
-  "sent",
   "approved",
+  "sent",
   "partially_received",
   "received",
-  "closed",
   "cancelled",
 ] as const;
 
+// The only PO statuses are draft, approved, sent, partially_received,
+// received and cancelled. A draft is watermarked by the "not issued" branch
+// below; a cancelled order still prints, marked cancelled, because a supplier
+// who was sent it needs to see that it no longer stands.
 const WATERMARK: Record<string, "draft" | "cancelled" | null> = {
-  draft: "draft",
-  pending_approval: "draft",
   cancelled: "cancelled",
-  rejected: "cancelled",
 };
 
 type Extra = {
