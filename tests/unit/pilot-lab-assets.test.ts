@@ -430,6 +430,22 @@ for (const company of active) {
        * of the list gives the same answer and the bug is invisible.
        */
       expect(multi, "plans carrying more than one event").toBeGreaterThan(0);
+
+      /*
+       * And at least one plan is genuinely overdue. This used to hold by
+       * accident, because last_done_on was taken from the OLDEST occurrence and
+       * every due date therefore sat in the past; correcting that moved them all
+       * forward and left one company with an empty maintenance due list.
+       */
+      const overdue = r
+        .rows("asset_maintenance_plan")
+        .filter(
+          (pl) =>
+            pl.active === true &&
+            pl.next_due_on !== null &&
+            String(pl.next_due_on) < company.history.asOf,
+        );
+      expect(overdue.length, `${company.key} overdue plans`).toBeGreaterThan(0);
     });
 
     it("keeps custody, inspection and maintenance rows attached to real assets", async () => {

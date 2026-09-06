@@ -98,6 +98,20 @@ async function main() {
         and (l.item_id is null or r.status not in ('submitted', 'reviewed'))
     `) as unknown as Array<{ n: number }>;
 
+    /*
+     * next_due_on that is not last_done_on plus the interval. The family
+     * asserts that invariant, and an earlier version of THIS tool broke it on
+     * one consult plan while trying to force an overdue row - recorded rather
+     * than quietly corrected, because a repair that breaks an invariant is
+     * worth remembering.
+     */
+    const [dues] = (await sql`
+      select count(*)::int as n from public.asset_maintenance_plan p
+      where p.org_id = any(${ids}::uuid[]) and p.last_done_on is not null
+        and p.interval_days is not null
+        and p.next_due_on is distinct from (p.last_done_on + (p.interval_days || ' days')::interval)::date
+    `) as unknown as Array<{ n: number }>;
+
     const [edges] = (await sql`
       select count(*)::int as n from public.studio_edge e
       where e.org_id = any(${ids}::uuid[]) and e.task_dependency_id is not null
@@ -109,6 +123,7 @@ async function main() {
     console.log(`  studio edges citing a dependency that is not there: ${edges!.n}`);
     console.log(`  payroll periods setup did not derive: ${orphanPeriods.length}`);
     console.log(`  deductions on reports nobody accepted: ${deducts!.n}`);
+    console.log(`  next due dates off their own interval: ${dues!.n}`);
     /*
      * A repair that wants to delete the entire calendar is not a repair, it is
      * a derivation that has drifted from the generator. Refuse rather than
@@ -161,6 +176,14 @@ async function main() {
           where org_id = any(${safe}::uuid[]) and id = any(${orphanPeriods}::uuid[])
         `;
       }
+      await tx`
+        update public.asset_maintenance_plan p
+        set next_due_on = (p.last_done_on + (p.interval_days || ' days')::interval)::date,
+            updated_at = now()
+        where p.org_id = any(${safe}::uuid[]) and p.last_done_on is not null
+          and p.interval_days is not null
+          and p.next_due_on is distinct from (p.last_done_on + (p.interval_days || ' days')::interval)::date
+      `;
       await tx`
         update public.report_material_line l
         set deducted_from_inventory = false, cost_only = true

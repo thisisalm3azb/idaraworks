@@ -675,6 +675,16 @@ function build(ctx: LabContext): AssetsModel {
   };
   const svc = (table: string, n = 1) => (service.counts[table] = (service.counts[table] ?? 0) + n);
 
+  /*
+   * One plan per company must be genuinely overdue: the maintenance due list
+   * is a screen the owner opens, and an empty one shows nothing. This used to
+   * happen by accident, because last_done_on was being taken from the OLDEST
+   * occurrence and every due date therefore sat in the past. Fixing that
+   * correctly moved them all forward and left consult with none, so the
+   * guarantee is now explicit - the first active plan with a history, walked
+   * in index order, consuming no randomness.
+   */
+  let overdueForced = false;
   for (let i = 0; i < N; i++) {
     const sample = sampleIdx.has(i);
     const aid = id("asset", i);
@@ -1050,6 +1060,20 @@ function build(ctx: LabContext): AssetsModel {
             d -= interval
           )
             occ.push(Math.max(d, lo));
+        }
+        if (!overdueForced && active && occ.length) {
+          /*
+           * SHIFT the history back rather than truncating it: the family's own
+           * checks compare seeded row counts against a plan recomputed from this
+           * build, so changing how MANY occurrences exist makes every count
+           * disagree. Only the dates move, and only if the whole series still
+           * fits after the asset was registered.
+           */
+          const shift = interval + 20 - Math.min(...occ);
+          if (shift > 0 && Math.max(...occ) + shift <= registeredDaysAgo) {
+            for (let k = 0; k < occ.length; k++) occ[k]! += shift;
+            overdueForced = true;
+          }
         }
         // The most recent occurrence is the smallest days-ago, not the first.
         const lastDone = occ.length ? clock.dayAgo(Math.min(...occ)) : null;
