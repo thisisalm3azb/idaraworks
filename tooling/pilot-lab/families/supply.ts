@@ -79,7 +79,14 @@ const RETURN_REASONS = [
   "Short-dated stock",
   "Surplus to requirement",
 ];
-const DISPOSITIONS = ["return_to_supplier", "scrap", "replace"] as const;
+/*
+ * Which stock bucket the returned goods LEAVE from — not why they are going
+ * back. The column carries the source disposition so the right stock is
+ * reduced, and the schema allows only accepted, damaged and quarantine. Every
+ * return here is raised against a damaged or rejected receipt line, so those
+ * are the two that apply.
+ */
+const DISPOSITIONS = ["damaged", "quarantine"] as const;
 
 // ── What each family member consumes from the ones before it ────────────────
 

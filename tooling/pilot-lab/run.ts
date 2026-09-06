@@ -37,6 +37,7 @@ import {
   type Manifest,
 } from "./manifest";
 import { FAMILIES } from "./families";
+import { loadEnumConstraints, violationsIn, type EnumMap, type Violation } from "./constraints";
 import { Rng } from "../simulation/rng";
 import { SimClock } from "../simulation/dates";
 import { id as labId } from "./ids";
@@ -93,6 +94,9 @@ function makeCtx(input: {
   handoffs: Record<string, Record<string, unknown>>;
   dryRun: boolean;
   log: (m: string) => void;
+  /** Dry run only: enumerations to check generated values against. */
+  enums?: EnumMap;
+  onViolations?: (v: Violation[]) => void;
 }): LabContext {
   const { company } = input;
   const employees: LabContext["employees"] = {};
@@ -118,10 +122,20 @@ function makeCtx(input: {
     rng: new Rng(`h33:${SEED_VERSION}:${company.key}`),
     clock: new SimClock(company.history.asOf),
     id: (family, ...ordinal) => labId(company.key, family, ...ordinal),
-    insert: (table, rows, conflict) =>
-      input.dryRun
-        ? Promise.resolve({ attempted: rows.length, inserted: 0 })
-        : insertBatch(input.sql, table, rows, { conflict }),
+    insert: (table, rows, conflict) => {
+      if (!input.dryRun) return insertBatch(input.sql, table, rows, { conflict });
+      /*
+       * Nothing is written, but every value is still compared with the CHECK
+       * constraints the database would apply. A family that invents a
+       * vocabulary otherwise fails at insert time, eleven families into a
+       * five-company seed, after the slow service phases have already run.
+       */
+      if (input.enums && input.onViolations) {
+        const bad = violationsIn(table, rows, input.enums);
+        if (bad.length) input.onViolations(bad);
+      }
+      return Promise.resolve({ attempted: rows.length, inserted: 0 });
+    },
     handoff: <T>(family: string) => {
       const h = input.handoffs[family];
       // A live seed insists: a missing handoff means a family is about to
@@ -150,6 +164,8 @@ async function main() {
   const families = orderedFamilies(FAMILIES);
 
   try {
+    const enums = MODE === "dry-run" ? await loadEnumConstraints(sql) : undefined;
+    const violations: Array<Violation & { company: string }> = [];
     const before = await dbSizeBytes(sql);
     console.log(
       `database: ${(before / 1048576).toFixed(1)} MB before; ${families.length} families registered`,
@@ -273,7 +289,18 @@ async function main() {
       for (const family of families) {
         if (!family.appliesTo(company)) continue;
         if (onlyFamily && family.key !== onlyFamily) continue;
-        const ctx = makeCtx({ sql, admin, company, orgId, users, handoffs, dryRun, log });
+        const ctx = makeCtx({
+          sql,
+          admin,
+          company,
+          orgId,
+          users,
+          handoffs,
+          dryRun,
+          log,
+          enums,
+          onViolations: (v) => violations.push(...v.map((x) => ({ ...x, company: company.key }))),
+        });
 
         if (verifyOnly) {
           if (!family.verify) continue;
@@ -381,6 +408,26 @@ async function main() {
       console.log(
         `\nDRY RUN: ~${projectedRows.toLocaleString()} rows projected ≈ ${((projectedRows * perRow) / 1048576).toFixed(0)} MB at ~${perRow} B/row incl. indexes; database now ${(before / 1048576).toFixed(0)} MB; ceiling 300 MB.`,
       );
+      /*
+       * A vocabulary the schema would refuse is a seed that dies mid-run, so
+       * the dry run reports it here and exits non-zero rather than letting the
+       * seed discover it one table at a time.
+       */
+      if (violations.length) {
+        const seen = new Set<string>();
+        console.log(`\n${violations.length} value(s) the database would refuse:`);
+        for (const v of violations) {
+          const key = `${v.table}.${v.column}=${v.value}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          console.log(
+            `  ${v.company.padEnd(10)} ${v.table}.${v.column} = "${v.value}" (${v.rows} rows) — allowed: ${v.allowed.join(", ")}`,
+          );
+        }
+        process.exitCode = 1;
+      } else {
+        console.log("every generated value satisfies the schema's own enumerations.");
+      }
       return;
     }
     if (verifyOnly) {

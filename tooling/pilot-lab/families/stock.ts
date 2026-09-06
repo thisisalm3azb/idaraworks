@@ -674,7 +674,10 @@ function buildModel(ctx: LabContext): StockModel & { handoff: StockHandoff } {
     const b = reservable[i]!;
     const qty = Math.max(1, Math.floor(b.onHand * 0.2));
     const dayAgo = rng.int(0, 40);
-    const status = weighted(rng, { open: 60, released: 25, consumed: 15 });
+    // The schema calls a fulfilled reservation `issued`, not `consumed`:
+    // open while it holds stock, released if it was given up, issued once the
+    // stock actually left, expired if it timed out.
+    const status = weighted(rng, { open: 55, released: 22, issued: 15, expired: 8 });
     const rid = nextId("stock_reservation");
     reservations.push({
       id: rid,
