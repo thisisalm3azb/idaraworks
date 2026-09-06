@@ -104,6 +104,13 @@ function fakeCtx(company: Company) {
     id: (family: string, ...ordinal: Array<string | number>) =>
       labId(company.key, family, ...ordinal),
     insert: async () => ({ attempted: 0, inserted: 0 }),
+    // Grouped writes are one transaction live; in memory the tables are
+    // simply written in the order given.
+    insertGroup: async (entries: Array<{ table: string; rows: Row[]; conflict?: string }>) => {
+      const out: Record<string, { attempted: number; inserted: number }> = {};
+      for (const e of entries) out[e.table] = { attempted: e.rows.length, inserted: 0 };
+      return out;
+    },
     handoff: () => {
       throw new Error("no handoff in this unit test");
     },

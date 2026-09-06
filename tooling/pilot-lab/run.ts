@@ -21,6 +21,7 @@ import {
   dbSizeBytes,
   liveRowCounts,
   insertBatch,
+  insertGroup,
   type Sql,
 } from "./db";
 import { COMPANIES, personaEmail } from "./companies";
@@ -135,6 +136,18 @@ function makeCtx(input: {
         if (bad.length) input.onViolations(bad);
       }
       return Promise.resolve({ attempted: rows.length, inserted: 0 });
+    },
+    insertGroup: async (entries) => {
+      if (!input.dryRun) return insertGroup(input.sql, entries);
+      const out: Record<string, { attempted: number; inserted: number }> = {};
+      for (const e of entries) {
+        if (input.enums && input.onViolations) {
+          const bad = violationsIn(e.table, e.rows, input.enums);
+          if (bad.length) input.onViolations(bad);
+        }
+        out[e.table] = { attempted: e.rows.length, inserted: 0 };
+      }
+      return out;
     },
     handoff: <T>(family: string) => {
       const h = input.handoffs[family];

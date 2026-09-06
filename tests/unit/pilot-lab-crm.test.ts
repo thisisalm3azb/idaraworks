@@ -371,6 +371,13 @@ function harness(company: Company): Harness {
       written[table] = [...(written[table] ?? []), ...rows];
       return { attempted: rows.length, inserted: rows.length };
     },
+    // Grouped writes are one transaction live; in memory the tables are
+    // simply written in the order given.
+    insertGroup: async (entries: Array<{ table: string; rows: Row[]; conflict?: string }>) => {
+      const out: Record<string, { attempted: number; inserted: number }> = {};
+      for (const e of entries) out[e.table] = await ctx.insert(e.table, e.rows, e.conflict);
+      return out;
+    },
     handoff: <T>(family: string): T => {
       const h = (handoffs as Record<string, unknown>)[family];
       if (!h) throw new Error(`no handoff from family ${family} (is it a declared dependency?)`);

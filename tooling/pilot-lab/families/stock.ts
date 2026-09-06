@@ -1098,16 +1098,32 @@ export async function seedStock(ctx: LabContext): Promise<FamilyReport> {
   const m = buildModel(ctx);
   const rows = toRows(ctx, m);
   const counts: Record<string, number> = {};
+  /*
+   * A movement and the lots or serials it names have to land in ONE
+   * transaction. `stock_movement_tracking_is_complete` is a DEFERRABLE
+   * constraint trigger: it fires at commit and counts the tracking rows, which
+   * are written after the movement they belong to. Insert the movements in a
+   * statement of their own and that commit happens before a single link row
+   * exists, so the trigger sees none of them and refuses every movement of a
+   * tracked item.
+   */
+  const TOGETHER: readonly StockTable[] = [
+    "stock_movement",
+    "stock_movement_lot",
+    "stock_movement_serial",
+  ];
   for (const table of STOCK_TABLES) {
-    // Balances are the one family member that legitimately refreshes: they are
-    // a projection of the movements, not an event.
-    const conflict =
-      table === "stock_balance" || table === "stock_lot_balance"
-        ? `on conflict do nothing`
-        : "nothing";
-    const r = await ctx.insert(table, rows[table], conflict);
+    if (TOGETHER.includes(table)) continue;
+    const r = await ctx.insert(table, rows[table], "nothing");
     counts[table] = r.attempted;
     ctx.log(`${table}: ${r.attempted} rows`);
+  }
+  const grouped = await ctx.insertGroup(
+    TOGETHER.map((table) => ({ table, rows: rows[table], conflict: "nothing" as const })),
+  );
+  for (const [table, r] of Object.entries(grouped)) {
+    counts[table] = r.attempted;
+    ctx.log(`${table}: ${r.attempted} rows (one transaction with its movements)`);
   }
   return {
     family: "stock",

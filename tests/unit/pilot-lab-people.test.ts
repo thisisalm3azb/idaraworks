@@ -134,6 +134,16 @@ function fakeCtx(company: Company, store: Store, opts: { dryRun?: boolean } = {}
       store.set(table, [...(store.get(table) ?? []), ...rows]);
       return { attempted: rows.length, inserted: rows.length };
     },
+    // Grouped writes are one transaction live; in memory the tables are
+    // simply written in the order given.
+    insertGroup: async (entries: Array<{ table: string; rows: Row[]; conflict?: string }>) => {
+      const out: Record<string, { attempted: number; inserted: number }> = {};
+      for (const e of entries) {
+        out[e.table] = { attempted: e.rows.length, inserted: e.rows.length };
+        store.set(e.table, [...(store.get(e.table) ?? []), ...e.rows]);
+      }
+      return out;
+    },
     handoff: <T>(family: string): T => {
       if (family !== "setup") throw new Error(`no handoff from family ${family}`);
       return setupHandoff as T;

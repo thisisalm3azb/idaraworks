@@ -128,6 +128,18 @@ export type LabContext = {
     rows: Array<Record<string, unknown>>,
     conflict?: "nothing" | string,
   ): Promise<InsertResult>;
+  /**
+   * Insert several tables in ONE transaction, for the deferred constraint
+   * triggers that only see a complete event at commit (a stock movement and
+   * the serials it names, for instance). Order is parents first.
+   */
+  insertGroup(
+    entries: Array<{
+      table: string;
+      rows: Array<Record<string, unknown>>;
+      conflict?: "nothing" | string;
+    }>,
+  ): Promise<Record<string, InsertResult>>;
   /** Handoffs from families this one depends on. */
   handoff<T = Record<string, unknown>>(family: string): T;
   log(message: string): void;

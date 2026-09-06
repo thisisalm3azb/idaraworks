@@ -122,6 +122,13 @@ function fakeCtx(company: Company) {
       store[table] = [...(store[table] ?? []), ...rows.map((r) => ({ ...r }))];
       return { attempted: rows.length, inserted: rows.length };
     },
+    // Grouped writes are one transaction live; in memory the tables are
+    // simply written in the order given.
+    insertGroup: async (entries: Array<{ table: string; rows: Row[]; conflict?: string }>) => {
+      const out: Record<string, { attempted: number; inserted: number }> = {};
+      for (const e of entries) out[e.table] = await ctx.insert(e.table, e.rows, e.conflict);
+      return out;
+    },
     handoff: <T>(family: string) => {
       const v = h[family];
       if (!v) throw new Error(`no handoff from family ${family}`);

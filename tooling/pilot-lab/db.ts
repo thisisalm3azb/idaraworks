@@ -42,7 +42,7 @@ export type InsertResult = { attempted: number; inserted: number };
  * refresh (balances, checkpoints).
  */
 export async function insertBatch(
-  sql: Sql,
+  sql: Pick<Sql, "unsafe">,
   table: string,
   rows: Array<Record<string, unknown>>,
   opts: { conflict?: "nothing" | string; requireOrg?: boolean } = {},
@@ -89,6 +89,42 @@ export async function insertBatch(
     }
   }
   return { attempted: rows.length, inserted };
+}
+
+export type GroupEntry = {
+  table: string;
+  rows: Array<Record<string, unknown>>;
+  conflict?: "nothing" | string;
+};
+
+/**
+ * Insert several tables inside ONE transaction.
+ *
+ * Some of this schema's integrity checks are DEFERRABLE constraint triggers:
+ * they fire at commit, on purpose, because the rows they read are written after
+ * the row they hang off. `stock_movement_tracking_is_complete` counts the
+ * serials a movement names — and a movement inserted in its own statement
+ * commits before its `stock_movement_serial` rows exist, so the trigger sees
+ * none of them and refuses every movement of a tracked item.
+ *
+ * Tables written this way must therefore travel together. The order given is
+ * the order used: parents first, then the children the trigger will count.
+ */
+export async function insertGroup(
+  sql: Sql,
+  entries: GroupEntry[],
+  opts: { requireOrg?: boolean } = {},
+): Promise<Record<string, InsertResult>> {
+  const out: Record<string, InsertResult> = {};
+  await sql.begin(async (tx) => {
+    for (const e of entries) {
+      out[e.table] = await insertBatch(tx as unknown as Pick<Sql, "unsafe">, e.table, e.rows, {
+        conflict: e.conflict,
+        requireOrg: opts.requireOrg,
+      });
+    }
+  });
+  return out;
 }
 
 /** Bytes the whole database occupies right now. */
