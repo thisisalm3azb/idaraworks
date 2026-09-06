@@ -109,6 +109,14 @@ before somebody else looks at the lab, so nothing surprises you.
   verification it made finance and revenue appear missing from the product, and
   they were not. `rm -rf .next` then `npm run lab:open`.
 
+- **One thing is left failing on purpose.** On facilico, one Management Studio
+  scenario sits at `approved` because the product refused to apply it:
+  `date outside scheduling window: 2027-03-17`. It is not drift, and the
+  engine's window is comfortably wide enough on paper, so the cause is not yet
+  established. The check was left failing rather than relaxed, because it is
+  reporting something true. Nothing else depends on it, and the other two
+  scenarios applied normally.
+
 Full detail, with causes: `docs/H33-RECONCILIATION-FINDINGS.md`.
 
 ## 8. Still deliberately off — no action unless you choose

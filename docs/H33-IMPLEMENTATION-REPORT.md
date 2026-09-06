@@ -192,6 +192,50 @@ been written to fix something else. A destructive tool now also refuses when
 the rows it wants to delete are ALL of the rows, because that is the signature
 of a derivation that has drifted from the generator, never of bad data.
 
+**D17 - The lab was dismissing almost no exceptions, and its own check hid
+it.** saudimfg verified 0 dismissed against a target of 3. Two compounding
+causes: age resolves most exceptions, so the pool of open, manager-visible
+rows had fallen to 2 / 1 / 0 across the companies; and the candidate walk then
+took every THIRD of that pool. The check asked only for `>= 1`, so gulfbuild
+passed at 2 of 3 and tradeline at 1 of 7 - the weak floor this phase had
+already written a law about, sitting in its own code. Now met by construction
+(re-open the first few manager-visible exceptions in index order, consuming no
+randomness), every candidate walked, and the target asserted in the family and
+in a unit test that fails on all five companies with the stride reinstated. A
+skipped dismissal now logs the error's message; it logged `.name`, which is
+"Error" for everything, and that is why it stayed invisible.
+
+**D18 - A demoted report kept its inventory deductions.** Two facilico
+material lines were flagged as having deducted stock on reports whose status
+is "returned". The generator gates that flag on submitted-or-reviewed, but the
+top-up guaranteeing every report status appears demotes a submitted report
+without taking the deduction with it - so the diary showed stock moved by a
+report nobody had accepted. The same shape as D10, and only facilico has
+enough reports to reach that top-up.
+
+### Found, reproducible, and NOT explained
+
+**One Studio scenario refuses to apply.** facilico plans three scenario
+applications through the real services; two succeed and the third stops at
+`approved`. Driving `applyScenario` directly returns
+`date outside scheduling window: 2027-03-17`.
+
+What was checked and ruled out: it is **not** drift - every change the
+scenario records still matches the node's current value, which is the
+condition `applyScenario` tests before that point. It is **not** an obviously
+short horizon either: the engine sizes its working-day window as
+`min(max(totalDur * 2 + 260, 400), 15000)` working days from the earliest
+dated input, which for facilico's four plans is 992-1,304 working days,
+roughly four to five years, and every plan's own span (2025-03 to 2027-06)
+sits inside that.
+
+So the refusal is real and reproducible, and the cause is **not established**.
+It is recorded here rather than guessed at, because two diagnoses in this
+phase were published before they were checked and both were wrong. The check
+is left failing rather than relaxed - it is reporting something true. Whether
+this is a product limit worth fixing or lab data worth changing is an open
+question, and the reproduction above is enough to answer it.
+
 ## 4. What the scale-down cost, and what it did not
 
 The first whole-chain dry run projected ~437,000 rows ≈ 500 MB against a 300 MB
