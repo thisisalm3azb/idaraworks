@@ -9,7 +9,8 @@ counted from the database), [H33-SECURITY-AND-ISOLATION-REPORT.md](H33-SECURITY-
 (what keeps it contained), [H33-PERFORMANCE-REPORT.md](H33-PERFORMANCE-REPORT.md)
 (how it behaves at size), [H33-RECONCILIATION-FINDINGS.md](H33-RECONCILIATION-FINDINGS.md)
 (what verification found, and why), [H33-PILOT-LAB.md](H33-PILOT-LAB.md) (how to
-open it), [H33-MANUAL-ACCEPTANCE.md](H33-MANUAL-ACCEPTANCE.md) (what to try).
+open it), [H33-MANUAL-ACCEPTANCE.md](H33-MANUAL-ACCEPTANCE.md) (what to try),
+[H33-ACCESS.md](H33-ACCESS.md) (every test login, and why it is safe).
 
 ---
 

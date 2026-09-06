@@ -15,9 +15,13 @@ npm run lab:open -- tradeline finance     # opens Sadaf Trading as the finance u
 
 That command starts IdaraWorks on your machine against the test project (every
 product surface switched on; AI, country packs and Spanish switched off), mints
-a **one-time sign-in link** for the persona, and opens it in your browser. No
-password exists for any lab login. The link dies on first use; run the command
-again for another.
+a **one-time sign-in link** for the persona, and opens it in your browser. The
+link dies on first use; run the command again for another.
+
+You will never be given a password. Each lab account was created with 24 random
+bytes as its password, discarded unread the moment the account existed — so
+there is nothing to recover, share or rotate. Every login, with what each
+persona is for, is listed in [H33-ACCESS.md](H33-ACCESS.md).
 
 ---
 
