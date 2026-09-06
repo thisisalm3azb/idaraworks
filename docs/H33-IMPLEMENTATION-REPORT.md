@@ -177,6 +177,21 @@ the same group — 61 periods for gulfbuild where 37 are real, 48 overlapping a
 neighbour. Two periods covering the same fortnight make "what was paid for
 September" unanswerable. `hr` now cites setup's months.
 
+**D16 - The repair tool would have deleted every payroll calendar.** Its
+preview reported 122 of about 122 pay periods as ones `setup` did not derive.
+`setup` mints them as `ctx.id(FAMILY, "pay_period", start)`, which is
+`labId(key, "setup", "pay_period", start)`; the repair recomputed
+`labId(key, "pay_period", start)`, one segment short, so every genuine period
+derived a different uuid and looked like an orphan. `--confirm` would have
+deleted the whole calendar of every lab company and the pay runs citing it,
+and `pay_run` is append-only, so nothing but a rebuild would have brought it
+back.
+
+It was caught by running the preview instead of trusting the tool that had
+been written to fix something else. A destructive tool now also refuses when
+the rows it wants to delete are ALL of the rows, because that is the signature
+of a derivation that has drifted from the generator, never of bad data.
+
 ## 4. What the scale-down cost, and what it did not
 
 The first whole-chain dry run projected ~437,000 rows ≈ 500 MB against a 300 MB
