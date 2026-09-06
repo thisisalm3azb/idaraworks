@@ -43,6 +43,7 @@ import { SEED_VERSION } from "./marker";
 
 const [companyKey, familyKey] = process.argv.slice(2);
 const CONFIRM = process.argv.includes("--confirm");
+const DROP_CHECKPOINT = process.argv.includes("--drop-checkpoint");
 const ONLY_TABLES = process.argv
   .find((a) => a.startsWith("--tables="))
   ?.slice(9)
@@ -80,9 +81,15 @@ async function main() {
     if (!orgId) throw new Error(`${company.key} is not provisioned in ${env.ref}`);
 
     const cp = await getCheckpoint(sql, orgId, family.key);
-    if (cp) {
+    if (cp && !DROP_CHECKPOINT) {
+      const dependents = FAMILIES.filter((f) => f.deps.includes(family.key)).map((f) => f.key);
       throw new Error(
-        `${company.key}/${family.key} is checkpointed — it completed. Reset is for a family that failed part way; use the cleanup for a whole company.`,
+        `${company.key}/${family.key} is checkpointed — it completed. Reset is for a family that failed part way.
+` +
+          `To rebuild it deliberately, pass --drop-checkpoint. ` +
+          (dependents.length
+            ? `Check first that these do not consume its handoff: ${dependents.join(", ")}.`
+            : "Nothing declares it as a dependency."),
       );
     }
 
@@ -128,6 +135,14 @@ async function main() {
       if (m!.n !== 1) throw new Error("the organisation does not carry the H33 marker");
       for (const [t] of counts) {
         await tx.unsafe(`delete from public.${t} where org_id = $1`, [orgId] as never[]);
+      }
+      if (cp && DROP_CHECKPOINT) {
+        // The checkpoint says the family ran. Undoing it and leaving the
+        // checkpoint behind would make the seed skip the rebuild.
+        await tx`
+          delete from public.app_settings
+          where org_id = ${orgId} and key = ${`h33.checkpoint.${family.key}`}
+        `;
       }
     });
     console.log(`\ndeleted ${total} rows; ${company.key}/${family.key} can be seeded again`);

@@ -11,7 +11,13 @@
  *   1. A maintenance plan's `last_done_on` and `next_due_on`, left one interval
  *      behind when the service recorded the newest event without advancing the
  *      plan. Recomputed from the plan's own events.
- *   2. A Studio edge citing a `task_dependency` row that is not there. The
+ *   2. The payroll periods hr should never have written. setup owns the pay
+ *      calendar and derives one id per calendar month of the company's
+ *      history; anything else on that calendar came from hr's old thirty-day
+ *      series, which put two overlapping period sets on one pay group. They are
+ *      identified by DERIVATION — recompute setup's ids and delete what is not
+ *      among them — rather than by guessing at their shape.
+ *   3. A Studio edge citing a `task_dependency` row that is not there. The
  *      pointer is nulled; the underlying defect is in the product's `addEdge`,
  *      which materialises the dependency outside its own transaction, and is
  *      reported separately rather than patched here.
@@ -22,6 +28,10 @@
 import { loadLabEnv } from "./guard";
 import { openOwner } from "./db";
 import { MARKER_KEY } from "./marker";
+import { COMPANIES } from "./companies";
+import { findLabOrg } from "./provision";
+import { monthSpans } from "./families/setup";
+import { id as labId } from "./ids";
 
 const CONFIRM = process.argv.includes("--confirm");
 
@@ -45,6 +55,25 @@ async function main() {
         and exists (select 1 from public.asset_maintenance_event e
                     where e.org_id = p.org_id and e.plan_id = p.id)
     `) as unknown as Array<{ n: number }>;
+    /*
+     * Recompute the ids setup derives for this company's pay calendar; every
+     * other period on it is one hr minted and should not exist.
+     */
+    const orphanPeriods: string[] = [];
+    for (const c of COMPANIES) {
+      const org = await findLabOrg(sql, c.key);
+      if (!org) continue;
+      const mine = new Set(
+        monthSpans(c.history.from, c.history.asOf).map((sp) =>
+          labId(c.key, "pay_period", sp.start),
+        ),
+      );
+      const live = (await sql`
+        select id::text as id from public.pay_period where org_id = ${org}
+      `) as unknown as Array<{ id: string }>;
+      for (const r of live) if (!mine.has(r.id)) orphanPeriods.push(r.id);
+    }
+
     const [edges] = (await sql`
       select count(*)::int as n from public.studio_edge e
       where e.org_id = any(${ids}::uuid[]) and e.task_dependency_id is not null
@@ -54,6 +83,7 @@ async function main() {
 
     console.log(`  maintenance plans behind their own newest event: ${plans!.n}`);
     console.log(`  studio edges citing a dependency that is not there: ${edges!.n}`);
+    console.log(`  payroll periods setup did not derive: ${orphanPeriods.length}`);
     if (!CONFIRM) {
       console.log("\npreview only — pass --confirm to apply");
       return;
@@ -83,6 +113,12 @@ async function main() {
         where p.id = latest.plan_id and p.org_id = latest.org_id
           and p.last_done_on is distinct from latest.performed_on
       `;
+      if (orphanPeriods.length) {
+        await tx`
+          delete from public.pay_period
+          where org_id = any(${safe}::uuid[]) and id = any(${orphanPeriods}::uuid[])
+        `;
+      }
       await tx`
         update public.studio_edge e set task_dependency_id = null
         where e.org_id = any(${safe}::uuid[]) and e.task_dependency_id is not null
