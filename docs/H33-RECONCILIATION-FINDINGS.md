@@ -95,6 +95,29 @@ already exists. Overlapping periods are not a cosmetic problem: a pay run names
 the period it covers, and two periods covering the same fortnight make the
 question "what was paid for September" unanswerable.
 
+### A maintenance plan that never learns its own history
+
+Every mismatched plan is stale by exactly one service interval: `last_done_on`
+2025-11-08 against a newest event of 2026-05-07, and so on for eighteen plans.
+
+The product is right and the caller is wrong. `recordMaintenance` updates the
+plan's `last_done_on` and recomputes `next_due_on` — but only when the caller
+passes `advancePlan`, which is a sensible default, because recording a
+historical event should not move a live schedule. The lab records the NEWEST
+event and never asks the plan to advance, so every plan the service touched
+kept the date the bulk insert gave it.
+
+**Fix:** pass `advancePlan: true` in the assets service call. One line, and the
+plans then agree with their own events and due dates.
+
+### One Studio edge cites a dependency that is not there
+
+2 materialised of 8 attempted, 1 of those dangling. The bulk rows set
+`task_dependency_id` to null on purpose and the service phase materialises
+them, so six attempts were refused and one of the two that succeeded points at
+a `task_dependency` row that is absent or soft-removed. Least consequential of
+the six — it degrades one Studio panel — and the only one still to be traced.
+
 ---
 
 ## Order of work
