@@ -184,7 +184,6 @@ async function runFor(company: Company, overrides?: Record<string, Record<string
   return { ctx, plan, report, rows, model: buildFinance(ctx) };
 }
 
-const ts = (v: unknown) => Date.parse(String(v));
 
 describe("the finance family", () => {
   it("is declared correctly and runs last", () => {
