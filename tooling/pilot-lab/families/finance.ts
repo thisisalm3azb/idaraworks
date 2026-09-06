@@ -152,6 +152,8 @@ export type FinanceModel = {
   rows: Record<FinanceTable, Row[]>;
   notes: string[];
   tableCounts: Record<FinanceTable, number>;
+  /** Budgets are born draft and promoted after their lines land. */
+  budgetStates: Array<{ id: string; status: string; approvedAgo: number | null }>;
   /** setup's system-key → gl_account id map; empty when setup installed no chart. */
   accounts: Record<string, string>;
   costCentres: Record<string, string>;
@@ -455,19 +457,31 @@ export function buildFinance(ctx: LabContext): FinanceModel {
   if (currentYear) budgetPlan.push({ year: currentYear, status: "approved", version: 1 });
   if (currentYear) budgetPlan.push({ year: currentYear, status: "draft", version: 2 });
 
+  const budgetStates: FinanceModel["budgetStates"] = [];
   const ccKeysForBudget = Object.keys(costCentres).sort();
   for (const [bi, b] of budgetPlan.entries()) {
     if (!budgetAccounts.length) break;
     const budgetId = ctx.id("budget", b.year[0], b.version);
+    /*
+     * Born draft, whatever it is meant to become. `budget_line_frozen` refuses
+     * to write a line into any budget that is not a draft — approving one is
+     * what freezes its figures — so the status is applied afterwards, by
+     * `promoteBudgets`, once every line is in.
+     */
+    budgetStates.push({
+      id: budgetId,
+      status: b.status,
+      approvedAgo: b.status === "draft" ? null : 300 - bi * 40,
+    });
     push("budget", {
       id: budgetId,
       org_id: orgId,
       fiscal_year_id: b.year[1],
       name: `${b.year[0]} operating budget`,
       version: b.version,
-      status: b.status,
-      approved_by: b.status === "draft" ? null : users.owner,
-      approved_at: b.status === "draft" ? null : ts(300 - bi * 40, 10),
+      status: "draft",
+      approved_by: null,
+      approved_at: null,
       created_by: users.finance,
       created_at: ts(340 - bi * 40, 9),
       updated_at: ts(300 - bi * 40, 10),
@@ -542,6 +556,7 @@ export function buildFinance(ctx: LabContext): FinanceModel {
     rows,
     notes,
     tableCounts,
+    budgetStates,
     accounts,
     costCentres,
   };
@@ -588,6 +603,26 @@ async function writeProgress(ctx: LabContext, p: Progress): Promise<void> {
     values (${ctx.orgId}, ${PROGRESS_KEY}, ${ctx.sql.json(p as never)})
     on conflict (org_id, key) do update set value = excluded.value, updated_at = now()
   `;
+}
+
+/** Apply each budget's real status once its lines are in. One round trip. */
+async function promoteBudgets(ctx: LabContext, m: FinanceModel): Promise<number> {
+  const promote = m.budgetStates.filter((b) => b.status !== "draft");
+  if (!promote.length) return 0;
+  const rows = promote.map((b) => ({
+    id: b.id,
+    status: b.status,
+    approved_at: ctx.clock.tsAgo(b.approvedAgo ?? 0, 10, 0),
+  }));
+  const res = await ctx.sql.unsafe(
+    `update public.budget b
+        set status = v.status, approved_by = $3, approved_at = v.approved_at
+       from json_to_recordset($1::text::json)
+            as v(id uuid, status text, approved_at timestamptz)
+      where b.id = v.id and b.org_id = $2`,
+    [JSON.stringify(rows), ctx.orgId, ctx.users.owner] as never[],
+  );
+  return res.count ?? rows.length;
 }
 
 type Outcome = { counts: Record<string, number>; failures: string[] };
@@ -816,6 +851,8 @@ export async function seedFinance(ctx: LabContext): Promise<FamilyReport> {
   }
   const notes = [...m.notes];
   if (!ctx.dryRun && financeRuntime.live) {
+    const promoted = await promoteBudgets(ctx, m);
+    if (promoted) ctx.log(`budget: ${promoted} promoted out of draft`);
     const svc = await driveFinance(ctx, m);
     for (const [t, n] of Object.entries(svc.counts)) counts[t] = (counts[t] ?? 0) + n;
     ctx.log(

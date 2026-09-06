@@ -347,14 +347,23 @@ for (const company of COMPANIES) {
       expect(new Set(keys).size).toBe(keys.length);
       for (const b of budgets) {
         expect(["draft", "approved", "locked"]).toContain(String(b.status));
-        expect((b.status === "draft") === (b.approved_at === null)).toBe(true);
-        if (b.approved_at !== null)
-          expect(ts(b.approved_at)).toBeGreaterThanOrEqual(ts(b.created_at));
+        expect(b.approved_at, "approval comes after the lines").toBeNull();
+        expect(b.approved_by).toBeNull();
       }
-      // A budget to work against and a draft next to it.
-      const statuses = new Set(budgets.map((b) => String(b.status)));
-      expect(statuses.has("approved")).toBe(true);
-      expect(statuses.has("draft")).toBe(true);
+      /*
+       * Every budget is INSERTED as a draft, whatever it is meant to become:
+       * budget_line_frozen refuses to write a line into a budget that is not a
+       * draft, because approving one is what freezes its figures. The status a
+       * budget ends up with is applied afterwards, so it is the model that
+       * carries the mix, not the inserted rows.
+       */
+      for (const b of budgets) expect(b.status, String(b.name)).toBe("draft");
+      const intended = new Set(r.model.budgetStates.map((x) => x.status));
+      expect(intended.has("approved"), "a budget to work against").toBe(true);
+      expect(intended.has("draft"), "and a draft next to it").toBe(true);
+      expect(intended.has("locked"), "and a closed year").toBe(true);
+      // Whatever they become, they are all promoted from the same starting point.
+      expect(r.model.budgetStates.length).toBe(budgets.length);
 
       const budgetIds = new Set(budgets.map((b) => String(b.id)));
       const perBudget = new Map<string, Set<string>>();
