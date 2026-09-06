@@ -86,6 +86,9 @@ generated from the seed's own manifest.
 | `npm run lab:verify` | Every family's reconciliation checks | no |
 | `npm run lab:perf` | Time the important surfaces with a real browser | no |
 | `npm run test:lab` | The adversarial tenant-isolation sweep | no |
+| `npm run lab:residue-check` | Prove production holds none of it (read-only, production) | no |
+| `npx tsx tooling/pilot-lab/report.ts` | Regenerate the data manifest from the seed's own numbers | no |
+| `npx tsx tooling/pilot-lab/reset-family.ts <co> <family>` | Undo one half-applied family so it can be re-run | test project only |
 | `npm run lab:cleanup-preview` | What a cleanup WOULD delete | no |
 | `npx tsx tooling/pilot-lab/cleanup.ts --confirm=<phrase>` | Delete exactly the five companies | test project only |
 
