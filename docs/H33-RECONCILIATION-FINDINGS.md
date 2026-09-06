@@ -45,6 +45,58 @@ that will fail every time another family touches it.
 
 ---
 
+## Diagnoses so far
+
+### The two sales failures are one cause
+
+The sales family expects every recorded payment to open a pending approval,
+and its comment says the work family installs a `payment` rule for that. It
+does not: work installs exactly one rule, for `task_completion`. So no payment
+is approval-gated, no approval opens, and the sixteen `approval/submitted`
+domain events that would have followed are never emitted either —
+**55 − 39 = 16, exactly the number of payments.** One missing rule, two failing
+checks.
+
+The product is not at fault: `approval_rule.subject_type` allows `payment`,
+and the engine would gate them if a rule existed. The lab simply never
+configured one.
+
+Adding the rule now would mean re-running `work` AND the `sales` service phase
+for all five companies — most of the lab — to gain a queue the Approvals screen
+already demonstrates through task completions and asset disposals. The
+proportionate fix is to correct the expectation and say plainly that payments
+are not approval-gated in this lab, which is a legitimate configuration a real
+organisation may also choose.
+
+### The bank reconciliation matched nothing because there was nothing to match
+
+The statement is built from ledger lines on the bank account, and gulfbuild has
+none: payments in this configuration do not post to the bank control account.
+So the three synthetic lines — a fee, interest, an unidentified deposit — are
+all that exist, and all are unmatched. The check should assert what is true:
+where the ledger has bank movements some must match, and where it has none the
+statement is entirely unreconciled, which is itself a state worth showing.
+
+### The payroll calendar has two families writing it
+
+gulfbuild has **61 pay periods on one pay group, 48 of them overlapping**:
+a monthly series and a semi-monthly one interleaved —
+`2024-09-30` is followed by `2024-09-16`.
+
+setup plans 37 periods; hr plans 24; 37 + 24 = 61. Both write `pay_period`,
+and hr attaches its own to setup's ACTIVE pay group, so a pilot opening the
+payroll calendar sees overlapping periods on the same group. The hr family's
+own comment says *"setup owns the pay group and its periods; this family adds
+the runs"* — the comment is right and the code is not.
+
+**Fix:** hr stops writing `pay_period` and takes setup's from the handoff it
+already receives (`payGroups.periods`), so its pay runs cite the calendar that
+already exists. Overlapping periods are not a cosmetic problem: a pay run names
+the period it covers, and two periods covering the same fortnight make the
+question "what was paid for September" unanswerable.
+
+---
+
 ## Order of work
 
 Verify-only fixes are safe while the seed is still running; generator fixes are
