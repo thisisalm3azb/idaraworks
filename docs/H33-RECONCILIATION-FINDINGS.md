@@ -112,11 +112,19 @@ plans then agree with their own events and due dates.
 
 ### One Studio edge cites a dependency that is not there
 
-2 materialised of 8 attempted, 1 of those dangling. The bulk rows set
-`task_dependency_id` to null on purpose and the service phase materialises
-them, so six attempts were refused and one of the two that succeeded points at
-a `task_dependency` row that is absent or soft-removed. Least consequential of
-the six — it degrades one Studio panel — and the only one still to be traced.
+Traced. Of 1,220 edges, 8 were offered for materialisation and 2 carry a
+`task_dependency_id`. One of those two cites `a1112bf5-…`, which does not
+exist at all — not soft-removed, absent. Both ids are v4 UUIDs, so they came
+from the product's own service rather than the lab's deterministic v5 scheme.
+
+So the lab recorded the id the service returned onto the edge, and the
+dependency it names was never committed: the pointer outlived the row it points
+at. Writing a foreign id optimistically, outside the transaction that creates
+it, is the whole bug.
+
+**Fix:** record `task_dependency_id` only after confirming the row is there —
+read it back, or do both writes in one transaction. Least consequential of the
+six (it degrades one Studio panel) but the most clearly wrong.
 
 ---
 
