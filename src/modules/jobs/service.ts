@@ -1071,6 +1071,7 @@ export {
 } from "./lifecycle";
 export {
   addDependency,
+  addDependencyIn,
   removeDependency,
   getTaskDependencies,
   blockerCountsForJob,

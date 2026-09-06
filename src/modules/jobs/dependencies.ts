@@ -153,7 +153,24 @@ export async function recomputeDownstreamReadinessIn(
   }
 }
 
-export async function addDependency(
+/**
+ * Add a dependency inside the CALLER'S transaction, and return the id of the
+ * row that is actually in the table.
+ *
+ * Two things this exists for, both learned the hard way:
+ *
+ *   1. A caller that records the returned id on a row of its own must commit
+ *      both together. Studio's `addEdge` used to call the `ctx` form from
+ *      inside its own transaction, so the dependency was written in a
+ *      DIFFERENT transaction and a Studio edge could outlive the dependency it
+ *      named.
+ *   2. The insert is `on conflict … do nothing`, so when the dependency
+ *      already exists nothing is written — and returning the freshly minted
+ *      uuid would hand back an id that is not in the table. The existing row's
+ *      id is returned instead.
+ */
+export async function addDependencyIn(
+  tx: TenantTx,
   ctx: Ctx,
   archetype: RoleArchetype,
   input: unknown,
@@ -161,17 +178,17 @@ export async function addDependency(
   assertCan(archetype, "tasks.manage");
   const data = DependencyInput.parse(input);
   const id = randomUUID();
-  await command(
-    ctx,
+  return { id: await insertDependencyIn(tx, ctx, data, id) };
+}
+
+async function insertDependencyIn(
+  tx: TenantTx,
+  ctx: Ctx,
+  data: z.infer<typeof DependencyInput>,
+  id: string,
+): Promise<string> {
+  {
     {
-      audit: {
-        action: "task.dependency_add",
-        entityType: "task",
-        entityId: data.taskId,
-        summary: "Added a dependency",
-      },
-    },
-    async (tx) => {
       const rows = (await tx.execute(sql`
         select id::text as id, job_id::text as job_id, title from public.task
         where org_id = ${ctx.orgId} and id = any(${uuidList([data.taskId, data.dependsOnTaskId])})
@@ -188,13 +205,29 @@ export async function addDependency(
       if (await wouldCycle(tx, ctx, data.taskId, data.dependsOnTaskId)) {
         throw new DependencyCycleError();
       }
-      await tx.execute(sql`
+      const inserted = (await tx.execute(sql`
         insert into public.task_dependency
           (id, org_id, task_id, depends_on_task_id, kind, lag_days, created_by)
         values (${id}, ${ctx.orgId}, ${data.taskId}, ${data.dependsOnTaskId}, ${data.kind},
                 ${data.lagDays}, ${ctx.userId})
         on conflict (org_id, task_id, depends_on_task_id) where removed_at is null do nothing
-      `);
+        returning id::text as id
+      `)) as unknown as Array<{ id: string }>;
+      /*
+       * Nothing inserted means the dependency was already there. Returning the
+       * uuid we minted would name a row that does not exist, which is exactly
+       * how a Studio edge came to cite one.
+       */
+      let actual = inserted[0]?.id ?? null;
+      if (!actual) {
+        const existing = (await tx.execute(sql`
+          select id::text as id from public.task_dependency
+          where org_id = ${ctx.orgId} and task_id = ${data.taskId}
+            and depends_on_task_id = ${data.dependsOnTaskId} and removed_at is null
+        `)) as unknown as Array<{ id: string }>;
+        actual = existing[0]?.id ?? null;
+      }
+      if (!actual) throw new Error("the dependency was neither inserted nor found");
       // The new edge may have just blocked a task that called itself ready.
       const blockers = await countUnfinishedBlockersIn(tx, ctx, data.taskId);
       if (blockers > 0) {
@@ -203,6 +236,33 @@ export async function addDependency(
           where org_id = ${ctx.orgId} and id = ${data.taskId} and status = 'ready'
         `);
       }
+      return actual;
+    }
+  }
+}
+
+/** The same thing in a transaction of its own, for callers that have none. */
+export async function addDependency(
+  ctx: Ctx,
+  archetype: RoleArchetype,
+  input: unknown,
+): Promise<{ id: string }> {
+  assertCan(archetype, "tasks.manage");
+  const data = DependencyInput.parse(input);
+  const minted = randomUUID();
+  let id: string = minted;
+  await command(
+    ctx,
+    {
+      audit: {
+        action: "task.dependency_add",
+        entityType: "task",
+        entityId: data.taskId,
+        summary: "Added a dependency",
+      },
+    },
+    async (tx) => {
+      id = await insertDependencyIn(tx, ctx, data, minted);
     },
   );
   return { id };

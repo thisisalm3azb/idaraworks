@@ -257,6 +257,92 @@ describe("one living model", () => {
   );
 
   it(
+    "a materialised edge never outlives the dependency it names",
+    { timeout: 300_000 },
+    async () => {
+      /*
+       * H33 found four Studio edges citing a task_dependency row that did not
+       * exist. Two causes, both here:
+       *
+       *   1. addEdge materialised the dependency by calling the ctx form from
+       *      inside its own transaction, so the dependency was written in a
+       *      DIFFERENT transaction and the two could not fail together.
+       *   2. The insert is "on conflict do nothing", and the id returned was
+       *      the freshly minted uuid rather than the row's — so asking twice
+       *      for the same dependency handed back an id that was never written.
+       *
+       * The second is the one that bites without any transaction trouble at
+       * all, so it is what this test drives: materialise the same pair twice.
+       */
+      const t1 = await createTask(A(), "manager", { jobId, title: `dup-a-${run}` });
+      const t2 = await createTask(A(), "manager", { jobId, title: `dup-b-${run}` });
+      const n1 = await addNode(A(), "manager", {
+        planId,
+        nodeType: "task",
+        title: "dup source",
+        recordType: "task",
+        recordId: t1.id,
+      });
+      const n2 = await addNode(A(), "manager", {
+        planId,
+        nodeType: "task",
+        title: "dup target",
+        recordType: "task",
+        recordId: t2.id,
+      });
+      const first = await addEdge(A(), "manager", {
+        planId,
+        sourceNodeId: n1.id,
+        targetNodeId: n2.id,
+        edgeType: "dependency",
+        depKind: "finish_to_start",
+        lagDays: 0,
+      });
+      // The same dependency again, through a second edge.
+      const n3 = await addNode(A(), "manager", {
+        planId,
+        nodeType: "task",
+        title: "dup source again",
+        recordType: "task",
+        recordId: t1.id,
+      });
+      const n4 = await addNode(A(), "manager", {
+        planId,
+        nodeType: "task",
+        title: "dup target again",
+        recordType: "task",
+        recordId: t2.id,
+      });
+      const second = await addEdge(A(), "manager", {
+        planId,
+        sourceNodeId: n3.id,
+        targetNodeId: n4.id,
+        edgeType: "dependency",
+        depKind: "finish_to_start",
+        lagDays: 0,
+      });
+
+      const dangling = (await owner`
+        select count(*)::int as n from public.studio_edge e
+        where e.org_id = ${orgA} and e.id in (${first.id}, ${second.id})
+          and e.task_dependency_id is not null
+          and not exists (
+            select 1 from public.task_dependency d
+            where d.id = e.task_dependency_id and d.org_id = e.org_id)
+      `) as unknown as Array<{ n: number }>;
+      expect(dangling[0]!.n, "an edge citing a dependency that is not there").toBe(0);
+
+      // And both edges name the SAME dependency, because there is only one.
+      const named = (await owner`
+        select distinct task_dependency_id::text as id from public.studio_edge
+        where org_id = ${orgA} and id in (${first.id}, ${second.id})
+          and task_dependency_id is not null
+      `) as unknown as Array<{ id: string }>;
+      expect(named.length, "one pair of tasks, one dependency").toBe(1);
+    },
+  );
+
+  it(
     "drift repair: a journal_entry approval rule is creatable again",
     { timeout: 300_000 },
     async () => {

@@ -18,7 +18,7 @@ import type { RoleArchetype } from "@/platform/registries";
 import { allocateReference, formatRef } from "@/platform/reference/sequence";
 import { requireCapability } from "@/platform/entitlements";
 import {
-  addDependency,
+  addDependencyIn,
   removeDependency,
   createTask,
   updateTask,
@@ -679,7 +679,13 @@ export async function addEdge(
         // Canonical materialization: target DEPENDS ON source (source→target
         // is the flow of time). Cycle detection lives in the jobs service.
         assertCan(archetype, "studio.schedule");
-        const dep = await addDependency(ctx, archetype, {
+        /*
+         * In THIS transaction. The edge below records the dependency's id, so
+         * the two have to commit or fail together — calling the `ctx` form
+         * from inside here wrote the dependency in a transaction of its own,
+         * and an edge could end up naming a row that was never committed.
+         */
+        const dep = await addDependencyIn(tx, ctx, archetype, {
           taskId: target.record_id!,
           dependsOnTaskId: source.record_id!,
           kind: input.depKind,
@@ -842,19 +848,21 @@ export async function convertNode(
     for (const e of edges) {
       if (e.s_type === "task" && e.t_type === "task") {
         try {
-          const dep = await addDependency(ctx, archetype, {
-            taskId: e.t_rec as string,
-            dependsOnTaskId: e.s_rec as string,
-            kind: (e.dep_kind as string) ?? "finish_to_start",
-            lagDays: Number(e.lag_days ?? 0),
-            allowCrossJob: true,
-          });
-          await withCtx(ctx, (tx) =>
-            tx.execute(sql`
+          // One transaction for the pair: the edge must never name a
+          // dependency that did not commit with it.
+          await withCtx(ctx, async (tx) => {
+            const dep = await addDependencyIn(tx, ctx, archetype, {
+              taskId: e.t_rec as string,
+              dependsOnTaskId: e.s_rec as string,
+              kind: (e.dep_kind as string) ?? "finish_to_start",
+              lagDays: Number(e.lag_days ?? 0),
+              allowCrossJob: true,
+            });
+            await tx.execute(sql`
               update public.studio_edge set task_dependency_id = ${dep.id}
               where org_id = ${ctx.orgId} and id = ${e.id as string}
-            `),
-          );
+            `);
+          });
         } catch {
           // A cycle or duplicate is reported by the edge staying draft; the
           // resolve layer marks it "not materialized" rather than hiding it.
@@ -1178,7 +1186,8 @@ export async function updateEdge(
       if (changesLogic && e.task_dependency_id && e.s_type === "task" && e.t_type === "task") {
         assertCan(archetype, "studio.schedule");
         await removeDependency(ctx, archetype, e.task_dependency_id);
-        const dep = await addDependency(ctx, archetype, {
+        // Same transaction as the edge update below, for the same reason.
+        const dep = await addDependencyIn(tx, ctx, archetype, {
           taskId: e.t_id!,
           dependsOnTaskId: e.s_id!,
           kind: depKind ?? "finish_to_start",
