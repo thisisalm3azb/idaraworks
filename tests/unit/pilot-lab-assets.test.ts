@@ -392,6 +392,46 @@ for (const company of active) {
       expect(new Set(refs).size).toBe(refs.length);
     });
 
+    it("dates a plan's last service from its newest event, not its oldest", async () => {
+      /*
+       * The occurrence loop counts DOWN in days-ago from registration toward
+       * today, so its first entry is the OLDEST. A comment claiming "latest
+       * first" made last_done_on take occ[0], and every plan with more than one
+       * service claimed its first as its last; next_due_on inherited it.
+       */
+      const r = await runFor(company);
+      const newest = new Map<string, string>();
+      for (const e of r.rows("asset_maintenance_event")) {
+        if (e.plan_id === null) continue;
+        const k = String(e.plan_id);
+        const d = String(e.performed_on);
+        if (!newest.has(k) || d > newest.get(k)!) newest.set(k, d);
+      }
+
+      let multi = 0;
+      const seen = new Map<string, number>();
+      for (const e of r.rows("asset_maintenance_event")) {
+        if (e.plan_id === null) continue;
+        const k = String(e.plan_id);
+        seen.set(k, (seen.get(k) ?? 0) + 1);
+      }
+      for (const n of seen.values()) if (n > 1) multi++;
+
+      for (const plan of r.rows("asset_maintenance_plan")) {
+        const max = newest.get(String(plan.id));
+        if (max === undefined) continue;
+        expect(String(plan.last_done_on), `plan ${String(plan.id)} last service`).toBe(max);
+        if (plan.next_due_on !== null)
+          expect(String(plan.next_due_on) > max, `plan ${String(plan.id)} next due`).toBe(true);
+      }
+
+      /*
+       * And the test is not vacuous: with one event per plan, taking either end
+       * of the list gives the same answer and the bug is invisible.
+       */
+      expect(multi, "plans carrying more than one event").toBeGreaterThan(0);
+    });
+
     it("keeps custody, inspection and maintenance rows attached to real assets", async () => {
       const r = await runFor(company);
       const assetIds = new Set(r.rows("asset").map((a) => String(a.id)));
