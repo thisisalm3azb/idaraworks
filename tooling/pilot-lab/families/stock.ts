@@ -1016,7 +1016,18 @@ function toRows(ctx: LabContext, m: StockModel): Record<StockTable, Row[]> {
       reason: mv.reason,
       note: mv.note,
       actor_user_id: by,
-      created_at: mv.effectiveAt,
+      /*
+       * created_at is deliberately LEFT OUT so the column default applies.
+       *
+       * A movement carries three times: effective_at is when the stock moved,
+       * recorded_at is when somebody said so, and created_at is when the row
+       * itself was written — which is now, whatever the other two say.
+       * Backdating it is not just untrue: the tracking triggers refuse to
+       * attach lots or serials to a movement whose row predates the current
+       * transaction, on the grounds that a posted movement cannot have its
+       * units changed afterwards. Omitting the key omits the column from the
+       * INSERT, so the table default fills it.
+       */
     });
     if (mv.lotId)
       rows.stock_movement_lot.push({

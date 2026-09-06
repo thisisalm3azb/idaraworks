@@ -378,7 +378,15 @@ for (const company of stocked) {
       const asOf = `${company.history.asOf}T23:59:59.999Z`;
       for (const m of r.rows("stock_movement")) {
         expect(String(m.effective_at) <= asOf, `effective_at ${m.effective_at}`).toBe(true);
-        expect(String(m.created_at) <= asOf).toBe(true);
+        expect(String(m.recorded_at) <= asOf, `recorded_at ${m.recorded_at}`).toBe(true);
+        /*
+         * created_at is NOT asserted, and is not written: the row really was
+         * created now, whatever date the stock moved on, and the tracking
+         * triggers refuse to attach units to a movement whose row predates the
+         * transaction. The business dates above are the ones that must stay in
+         * the past.
+         */
+        expect(m.created_at, "created_at is left to the database").toBeUndefined();
       }
     });
 
