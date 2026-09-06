@@ -324,6 +324,14 @@ function buildModel(ctx: LabContext): StockModel & { handoff: StockHandoff } {
    */
   const isSerial = (itemId: string) =>
     company.profile.enables.serials && itemById.get(itemId)?.tracking === "serial";
+  const isLot = (itemId: string) => lots && itemById.get(itemId)?.tracking === "lot";
+  /*
+   * Tracked stock moves only on receipt in this lab. Every other movement of a
+   * lot- or serial-tracked item would have to name the exact units leaving,
+   * and `stock_movement_tracking_is_complete` counts them at commit — so the
+   * pool only ever grows, and no movement can be short of what it must name.
+   */
+  const isTracked = (itemId: string) => isSerial(itemId) || isLot(itemId);
   const movementSerials: StockModel["movementSerials"] = [];
 
   function post(m: MovementM): void {
@@ -416,7 +424,13 @@ function buildModel(ctx: LabContext): StockModel & { handoff: StockHandoff } {
     if (!item) continue;
 
     let lotId: string | null = null;
-    if (lots && rng.chance(0.45)) {
+    /*
+     * A lot is not a flourish sprinkled on some receipts: it is what a
+     * lot-tracked item IS. The trigger refuses a lot on an untracked item and
+     * refuses a tracked movement that names none, so this follows the
+     * catalogue rather than a coin flip.
+     */
+    if (isLot(rl.itemId)) {
       const lot: LotM = {
         id: nextId("stock_lot"),
         itemId: rl.itemId,
@@ -488,9 +502,7 @@ function buildModel(ctx: LabContext): StockModel & { handoff: StockHandoff } {
       : (raw as { lineId: string; itemId: string; qty: number; reportDate: string });
     const item = itemById.get(line.itemId);
     if (!item || !(line.qty > 0)) continue;
-    // Serialised stock is received and held in this lab; issuing it would mean
-    // naming each unit as it leaves, which nothing here has to demonstrate.
-    if (isSerial(line.itemId)) continue;
+    if (isTracked(line.itemId)) continue;
     // Issue from wherever the item actually is; never from an empty shelf.
     const holding = [...balances.values()].find(
       (b) => b.itemId === line.itemId && b.onHand >= line.qty,
@@ -532,7 +544,7 @@ function buildModel(ctx: LabContext): StockModel & { handoff: StockHandoff } {
       const from = whOf(whKeys[t % whKeys.length]!);
       const to = whOf(whKeys[(t + 1) % whKeys.length]!);
       const movable = [...balances.values()].filter(
-        (b) => b.warehouseId === from.id && b.onHand >= 2,
+        (b) => b.warehouseId === from.id && b.onHand >= 2 && !isTracked(b.itemId),
       );
       if (movable.length === 0) continue;
       const src = movable[rng.int(0, movable.length - 1)]!;
@@ -618,7 +630,7 @@ function buildModel(ctx: LabContext): StockModel & { handoff: StockHandoff } {
 
   // ── 4. Counts, and the corrections they produce ───────────────────────────
   const counts: StockModel["counts"] = [];
-  const countable = [...balances.values()].filter((b) => b.onHand > 0);
+  const countable = [...balances.values()].filter((b) => b.onHand > 0 && !isTracked(b.itemId));
   const countRounds = Math.min(8, Math.max(2, Math.round(countable.length / 300)));
   for (let c = 0; c < countRounds && countable.length > 0; c++) {
     const dayAgo = rng.int(5, Math.max(6, Math.floor(horizon / 2)));
@@ -696,7 +708,7 @@ function buildModel(ctx: LabContext): StockModel & { handoff: StockHandoff } {
 
   // ── 5. Reservations: promised, not moved ─────────────────────────────────
   const reservations: StockModel["reservations"] = [];
-  const reservable = [...balances.values()].filter((b) => b.onHand >= 3);
+  const reservable = [...balances.values()].filter((b) => b.onHand >= 3 && !isTracked(b.itemId));
   for (let i = 0; i < Math.min(30, reservable.length); i++) {
     const b = reservable[i]!;
     const qty = Math.max(1, Math.floor(b.onHand * 0.2));
