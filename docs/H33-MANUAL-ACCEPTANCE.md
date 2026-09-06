@@ -98,7 +98,7 @@ A, then:
 | --- | --- | --- |
 | `tradeline` owner | Items: search an Arabic name; filter low stock; sort by price; page to the end | Whole-dataset results; low-stock filter shows items under minimum |
 | `facilico` manager | Jobs: filter by status, by customer, this week; open page 20+ | Consistent counts; no page beyond the end; fast enough |
-| `consult` manager | Opportunities: 1,200+; filter won/lost/at-risk; activities per deal | Totals per stage match the pipeline page |
+| `tradeline` manager | Opportunities: 1,200+ (the volume company); filter won/lost/at-risk; activities per deal | Totals per stage match the pipeline page |
 
 ## C. The multi-day programme
 

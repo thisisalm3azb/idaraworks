@@ -253,8 +253,18 @@ for (const company of paid) {
       for (const rev of reversals) {
         const target = byId.get(rev.reverses_run_id as string)!;
         expect(target, "a reversal names a real run").toBeTruthy();
-        expect(num(rev.net_total_minor)).toBe(-num(target.net_total_minor));
-        expect(num(rev.gross_total_minor)).toBe(-num(target.gross_total_minor));
+        /*
+         * The amounts MATCH, they are not negated. Payroll keeps every figure
+         * non-negative — gross, deductions and employer cost, on the run and
+         * on every line, with net fixed at gross minus deductions — so the
+         * sign lives in run_kind and reverses_run_id, not in the money. A
+         * negative payslip is not a thing payroll produces.
+         */
+        expect(num(rev.gross_total_minor)).toBe(num(target.gross_total_minor));
+        expect(num(rev.net_total_minor)).toBe(num(target.net_total_minor));
+        expect(num(rev.employer_total_minor)).toBeGreaterThanOrEqual(0);
+        expect(rev.reverses_run_id).toBe(target.id);
+        expect(target.run_kind).not.toBe("reversal");
       }
     });
 

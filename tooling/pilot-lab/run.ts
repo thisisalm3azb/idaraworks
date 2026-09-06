@@ -439,7 +439,9 @@ async function main() {
         }
         process.exitCode = 1;
       } else {
-        console.log("every generated value satisfies the schema's own enumerations.");
+        console.log(
+          "every generated value satisfies the schema: enumerations, NOT NULL columns and sign floors.",
+        );
       }
       return;
     }

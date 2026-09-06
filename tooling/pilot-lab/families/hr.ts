@@ -581,19 +581,27 @@ function buildModel(ctx: LabContext): HrModel & { handoff: HrHandoff } {
         runKind: "reversal",
         status: "finalized",
         reversesRunId: target.id,
-        grossTotal: -target.grossTotal,
-        deductionTotal: -target.deductionTotal,
-        employerTotal: -target.employerTotal,
-        netTotal: -target.netTotal,
+        /*
+         * A reversal carries the SAME amounts, not negated ones. The schema
+         * keeps every payroll figure non-negative — gross, deductions and
+         * employer cost on the run and on every line, with net fixed at gross
+         * minus deductions — because the sign lives in `run_kind` and
+         * `reverses_run_id`, not in the money. A negative payslip is not a
+         * thing payroll produces.
+         */
+        grossTotal: target.grossTotal,
+        deductionTotal: target.deductionTotal,
+        employerTotal: target.employerTotal,
+        netTotal: target.netTotal,
         finalizedAt: clock.tsAgo(Math.max(0, target.dayAgo - 1), 12, 0),
         dayAgo: Math.max(0, target.dayAgo - 1),
         lines: target.lines.map((l) => ({
           id: nextId("pay_run_line"),
           employeeId: l.employeeId,
-          gross: -l.gross,
-          deduction: -l.deduction,
-          employer: -l.employer,
-          net: -l.net,
+          gross: l.gross,
+          deduction: l.deduction,
+          employer: l.employer,
+          net: l.net,
           payslipId: null,
           slipNo: null,
         })),
