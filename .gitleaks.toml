@@ -10,5 +10,18 @@
 useDefault = true
 
 [allowlist]
-description = "Template/config registry keys (lowercase slug + _v<N> version suffix) are identifiers, not secrets"
-regexes = ['''key: "[a-z0-9_]+_v[0-9]+"''']
+# regexTarget = "match" is load-bearing. Gitleaks matches allowlist regexes
+# against the SECRET by default — the bare value, e.g. agriculture_v1 — so a
+# pattern written as key: "..." can never match and the allowlist is silently
+# inert. It was: this file has carried a dead allowlist since it was written,
+# and the entries below only started mattering when a push touched a file that
+# contained one.
+regexTarget = "match"
+description = "Config/registry identifiers that trip the generic-api-key entropy heuristic. Both shapes are all-lowercase slugs — a real credential (mixed case, base64, hex, random) cannot match either."
+regexes = [
+  # Template registry keys: key: "agriculture_v1", templateKey: "agriculture_v1"
+  '''[a-zA-Z]*[kK]ey: "[a-z0-9_]+_v[0-9]+"''',
+  # Folder/path identifiers: key: "contracts/supplier" — a lowercase slug with at
+  # least one slash, used for document-folder trees and similar registries.
+  '''[a-zA-Z]*[kK]ey: "[a-z][a-z0-9_]*(/[a-z0-9_]+)+"''',
+]
