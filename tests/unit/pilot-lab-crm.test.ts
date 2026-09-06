@@ -1011,18 +1011,23 @@ describe.each(RUNS.map((r) => [r.company.key, r] as const))("%s", (_key, run) =>
 describe("volume where the profiles ask for it", () => {
   const by = (key: string) => RUNS.find((r) => r.company.key === key)!;
 
-  it("consult and tradeline cross the 1,205-row pagination mark on opportunities and leads", () => {
-    for (const key of ["consult", "tradeline"]) {
-      expect(by(key).plan.opportunity, `${key} opportunities`).toBeGreaterThan(1205);
-      expect(by(key).plan.lead, `${key} leads`).toBeGreaterThan(1205);
-      expect(by(key).h.written.opportunity!.length, key).toBeGreaterThan(1205);
-    }
+  it("tradeline crosses the 1,205-row pagination mark on opportunities and leads", () => {
+    // One company past the boundary is the law; every company past it is what
+    // put this family at 55,000 rows before the lab was scaled to its ceiling.
+    const key = "tradeline";
+    expect(by(key).plan.opportunity, "opportunities").toBeGreaterThan(1205);
+    expect(by(key).plan.lead, "leads").toBeGreaterThan(1205);
+    expect(by(key).h.written.opportunity!.length, key).toBeGreaterThan(1205);
+    for (const other of ["gulfbuild", "saudimfg", "consult", "facilico"])
+      expect(by(other).plan.opportunity, other).toBeGreaterThan(100);
   });
 
-  it("consult alone carries more than 10,000 sales activities, and the five together far more", () => {
-    expect(by("consult").plan.sales_activity).toBeGreaterThan(10_000);
+  it("the activity stream is deep enough to page through", () => {
+    // Every opportunity carries a handful of touches; tradeline's book alone
+    // takes the stream past the pagination boundary.
+    expect(by("tradeline").plan.sales_activity).toBeGreaterThan(1205);
     const total = RUNS.reduce((s, r) => s + r.plan.sales_activity!, 0);
-    expect(total).toBeGreaterThan(20_000);
+    expect(total).toBeGreaterThan(4_000);
   });
 
   it("every company has the same governed depth: snapshots, scenarios, automations, territories, one merge", () => {

@@ -285,7 +285,12 @@ function buildModel(ctx: LabContext): HrModel & { handoff: HrHandoff } {
   // ── Attendance: the last N working days for every active employee ─────────
   // Bounded deliberately: a full history for a large workforce is tens of
   // thousands of rows on its own and buys nothing the last quarter does not.
-  const attendanceDays = Math.min(120, Math.max(60, Math.floor(horizon / 8)));
+  /*
+   * Ten or eleven weeks of attendance per employee. Two years of it read the
+   * same on screen and cost the lab tens of thousands of rows it does not have
+   * to spare; the timesheet still paginates, and every status still appears.
+   */
+  const attendanceDays = Math.min(60, Math.max(40, Math.floor(horizon / 15)));
   const attendance: HrModel["attendance"] = [];
   const events: HrModel["events"] = [];
   for (const [ei, employeeId] of employees.entries()) {

@@ -288,7 +288,9 @@ for (const company of COMPANIES) {
         expect(r.report.counts[t], t).toBe(r.plan[t]);
       }
       const total = Object.values(r.plan).reduce((a, b) => a + b, 0);
-      expect(total).toBeGreaterThan(10_000);
+      // Substantial, but scaled: the lab as a whole plans ~200,000 rows
+      // against a 300 MB ceiling, and this family is the largest share of it.
+      expect(total).toBeGreaterThan(3_000);
       expect(r.report.notes?.join(" ")).toMatch(/switched off/);
     });
 
@@ -898,12 +900,11 @@ for (const company of COMPANIES) {
 }
 
 describe("pagination and budget across the five companies", () => {
-  it("facilico crosses 1,205 jobs and at least three companies cross 1,205 tasks", async () => {
+  it("facilico carries the paginated job book, and the rest stay substantial", async () => {
     const runs = await Promise.all(COMPANIES.map((c) => runFor(c)));
     const facilico = runs[COMPANIES.findIndex((c) => c.key === "facilico")]!;
     expect(facilico.plan.job).toBeGreaterThan(PAGINATION_THRESHOLD);
-    const overTasks = runs.filter((r) => r.plan.task! > PAGINATION_THRESHOLD);
-    expect(overTasks.length).toBeGreaterThanOrEqual(3);
+    expect(facilico.plan.task).toBeGreaterThan(PAGINATION_THRESHOLD);
     /*
      * Only facilico is required past the pagination threshold on jobs. An
      * earlier profile put EVERY company past it, and the arithmetic of that
@@ -912,7 +913,7 @@ describe("pagination and budget across the five companies", () => {
      * WHOLE lab. The rule is one company past the boundary on each paginated
      * surface; the others stay substantial.
      */
-    for (const r of runs) expect(r.plan.job).toBeGreaterThan(400);
+    for (const r of runs) expect(r.plan.job).toBeGreaterThan(150);
   });
 
   it("the family's total stays inside its share of the 150k-row budget and reports per-company totals", async () => {
@@ -925,8 +926,8 @@ describe("pagination and budget across the five companies", () => {
       grand += total;
     }
     console.log(`work family planned rows per company: ${JSON.stringify(totals)} total=${grand}`);
-    expect(grand).toBeLessThan(110_000);
-    expect(grand).toBeGreaterThan(50_000);
+    expect(grand).toBeLessThan(70_000);
+    expect(grand).toBeGreaterThan(25_000);
     for (const t of EXCLUSIVE_TABLES) expect(WORK_TABLES).toContain(t);
   });
 });

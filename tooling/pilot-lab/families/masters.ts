@@ -167,7 +167,17 @@ export function layoutFor(company: Company): MastersLayout {
 
   const items = p.items;
   const bomEnabled = p.enables.bom;
-  const bomParents = bomEnabled ? clamp(Math.round(items * 0.02), 8, 80) : 0;
+  /*
+   * At least twenty manufactured parents. The version mix below is chosen by
+   * `parent % 20`, so a company with fewer than twenty of them keeps only the
+   * first branch — every recipe active, none draft, none archived — and the
+   * Bills of Material screen loses two thirds of what it exists to show.
+   * Thirty-six, not twenty: the draft recipes the activation sample needs sit
+   * at ordinals 15-17 of each block of twenty, and a three-level recipe needs a
+   * parent that is both a multiple of five past thirteen and lands on an active
+   * kind. Both quotas are only met once the block repeats.
+   */
+  const bomParents = bomEnabled ? clamp(Math.round(items * 0.02), 36, 80) : 0;
   const subAssemblies = bomEnabled ? Math.max(2, Math.floor(bomParents * 0.25)) : 0;
   const itemKind = range(items).map((i) => itemKindOf(i, bomParents));
   const itemActive = range(items).map((i) => itemActiveOf(i, itemKind[i]!));

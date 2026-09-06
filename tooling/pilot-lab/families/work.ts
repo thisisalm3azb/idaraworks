@@ -1705,7 +1705,8 @@ function build(
           j.stages.every((x) => x.status === "not_started") &&
           j.tasks.every((t) => t.status === "pending")
         );
-      if (want === "done") return j.tasks.every((t) => t.status === "completed" || t.status === "cancelled");
+      if (want === "done")
+        return j.tasks.every((t) => t.status === "completed" || t.status === "cancelled");
       return true;
     };
     const pool = jobs.filter((j) => j.category === "active" && !j.archived);
@@ -1893,6 +1894,33 @@ function build(
    * cannot show a cancelled week is a plan board with a hole in it. A revision
    * needs a partner, so filling `revised` mints the revision too.
    */
+  /*
+   * Every daily-report status, at any scale. A report is drafted, submitted,
+   * then reviewed or returned; on a smaller company the drafts all happened to
+   * be submitted, and a site diary that cannot show an unsent draft is missing
+   * the state a foreman sees most often. Walk in index order and demote the
+   * newest submitted report on open work.
+   */
+  const reportStatuses = new Set(jobs.flatMap((j) => j.reports.map((r) => r.status)));
+  for (const want of REPORT_STATUSES) {
+    if (reportStatuses.has(want)) continue;
+    const candidates = jobs
+      .filter((j) => j.category !== "draft" && !j.archived)
+      .flatMap((j) => j.reports.map((r) => ({ j, r })))
+      .sort((a, b) => (a.r.reportDate < b.r.reportDate ? 1 : -1));
+    const found = candidates.find(({ r }) => r.status === "submitted") ?? candidates[0];
+    if (!found) break;
+    const r = found.r;
+    r.status = want;
+    r.submittedAt = want === "draft" ? null : tsOn(r.reportDate, 17);
+    r.reviewedBy = want === "reviewed" ? found.j.managerUser : null;
+    r.reviewedAt = want === "reviewed" ? tsOn(r.reportDate, 18) : null;
+    r.returnedBy = want === "returned" ? found.j.managerUser : null;
+    r.returnedAt = want === "returned" ? tsOn(r.reportDate, 18) : null;
+    r.returnReason = want === "returned" ? "Quantities do not match the site measure" : null;
+    reportStatuses.add(want);
+  }
+
   const planStatuses = new Set(weekPlans.map((w) => w.status));
   const drafts = () =>
     weekPlans.filter(

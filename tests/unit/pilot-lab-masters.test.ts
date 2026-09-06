@@ -685,14 +685,23 @@ describe("pagination thresholds the profiles promise", () => {
     const company = COMPANIES.find((c) => c.key === key)!;
     return masters.plan(fakeCtx(company).ctx).expected;
   };
-  it("tradeline crosses 1,205 customers and 3,000 items", () => {
+  /*
+   * The law is ONE company past the boundary on each paginated surface, not
+   * every company: five catalogues of three thousand items each is how the
+   * lab first planned itself past 400,000 rows and half a gigabyte. tradeline
+   * is the volume company; the rest stay substantial without paying for it.
+   */
+  it("tradeline carries the paginated catalogue and customer book", () => {
     const p = plan("tradeline");
     expect(p.customer).toBeGreaterThan(1205);
-    expect(p.item).toBeGreaterThan(3000);
+    expect(p.item).toBeGreaterThan(1205);
   });
-  it("gulfbuild and saudimfg cross 1,205 items", () => {
-    expect(plan("gulfbuild").item).toBeGreaterThan(1205);
-    expect(plan("saudimfg").item).toBeGreaterThan(1205);
+  it("the other companies stay substantial without crossing it", () => {
+    for (const key of ["gulfbuild", "saudimfg", "consult", "facilico"]) {
+      const p = plan(key);
+      expect(p.item, key).toBeGreaterThan(100);
+      expect(p.customer, key).toBeGreaterThan(100);
+    }
   });
   it("only the Saudi manufacturer carries bills of material", () => {
     for (const c of COMPANIES) {
