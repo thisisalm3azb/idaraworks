@@ -80,18 +80,47 @@ type SetupHandoff = {
   units: Record<string, { id: string; dimension: string; factorToBase: number; isBase: boolean }>;
 };
 type MastersHandoff = {
-  items: Array<{
-    id: string;
-    unit: string;
-    unitId: string;
-    cost: number;
-    category: string;
-    type?: string;
-    tracking?: string;
-  }>;
+  items:
+    | Record<string, Omit<ItemRef, "id">>
+    | Array<{
+        id: string;
+        unit: string;
+        unitId: string;
+        cost: number;
+        category: string;
+        type?: string;
+        tracking?: string;
+      }>;
   lowStockCandidateItemIds: string[];
   zeroStockItemIds: string[];
 };
+
+/**
+ * masters hands items over as a MAP keyed by item id (`items: Record<string,
+ * ItemHandoff>`), not as a list. Reading it as an array is what a dry run
+ * across the whole chain caught: `.filter` on an object throws, and the
+ * family that follows would have died at seed time. Accept either shape.
+ */
+type ItemRef = {
+  id: string;
+  unit: string;
+  unitId: string;
+  cost: number;
+  category: string;
+  type?: string;
+  tracking?: string;
+};
+function itemsOf(masters: MastersHandoff): ItemRef[] {
+  const v = masters.items as unknown;
+  if (Array.isArray(v)) return v as ItemRef[];
+  if (v && typeof v === "object")
+    return Object.entries(v as Record<string, Omit<ItemRef, "id">>).map(([id, rest]) => ({
+      id,
+      ...rest,
+    }));
+  return [];
+}
+
 type SupplyHandoff = {
   receiptLines: Array<{
     grnLineId: string;
@@ -264,7 +293,7 @@ function buildModel(ctx: LabContext): StockModel & { handoff: StockHandoff } {
 
   const whKeys = Object.keys(setup.warehouses);
   const whOf = (k: string) => setup.warehouses[k] ?? setup.warehouses[whKeys[0]!]!;
-  const itemById = new Map(masters.items.map((i) => [i.id, i]));
+  const itemById = new Map(itemsOf(masters).map((i) => [i.id, i]));
   const unitIdOf = (itemId: string) => itemById.get(itemId)?.unitId ?? "";
 
   const movements: MovementM[] = [];

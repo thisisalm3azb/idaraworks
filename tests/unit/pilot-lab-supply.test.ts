@@ -77,7 +77,13 @@ function mastersHandoff(company: Company): Record<string, unknown> {
       labId(company.key, "supplier", i),
     ),
     itemIds: items.map((i) => i.id),
-    items,
+    /*
+     * masters hands items over as a MAP keyed by item id, not a list. This
+     * fixture used to pass a list, which is why the unit tests were green
+     * while a whole-chain dry run threw "masters.items.filter is not a
+     * function". Mirroring the real contract here is what keeps that fixed.
+     */
+    items: Object.fromEntries(items.map(({ id, ...rest }) => [id, rest])),
   };
 }
 

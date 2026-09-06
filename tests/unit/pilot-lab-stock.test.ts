@@ -101,7 +101,9 @@ function supplyHandoff(company: Company): Record<string, unknown> {
 function mastersHandoff(company: Company): Record<string, unknown> {
   const its = items(company);
   return {
-    items: its,
+    // Keyed by item id, exactly as the masters family hands it over. A list
+    // here would hide the shape mismatch a whole-chain dry run caught.
+    items: Object.fromEntries(its.map(({ id, ...rest }) => [id, rest])),
     lowStockCandidateItemIds: its.slice(0, 3).map((i) => i.id),
     zeroStockItemIds: its.slice(3, 6).map((i) => i.id),
   };

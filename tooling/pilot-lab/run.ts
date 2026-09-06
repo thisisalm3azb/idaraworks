@@ -41,7 +41,7 @@ import { Rng } from "../simulation/rng";
 import { SimClock } from "../simulation/dates";
 import { id as labId } from "./ids";
 import { SEED_VERSION, EMAIL_DOMAIN } from "./marker";
-import type { Company, Family, FamilyReport, LabContext, PersonaKey } from "./types";
+import type { Company, Family, FamilyPlan, FamilyReport, LabContext, PersonaKey } from "./types";
 import type { Ctx } from "@/platform/tenancy";
 import { closeAppDb } from "@/platform/tenancy";
 
@@ -124,8 +124,15 @@ function makeCtx(input: {
         : insertBatch(input.sql, table, rows, { conflict }),
     handoff: <T>(family: string) => {
       const h = input.handoffs[family];
-      if (!h) throw new Error(`no handoff from family ${family} (is it a declared dependency?)`);
-      return h as T;
+      // A live seed insists: a missing handoff means a family is about to
+      // build against nothing, and silently writing fewer rows is exactly the
+      // failure this lab must not have. A dry run is only an estimate, and a
+      // family whose build could not complete offline (one that reads
+      // installed presets, say) should cost the estimate that family's
+      // detail, not the whole run.
+      if (!h && !input.dryRun)
+        throw new Error(`no handoff from family ${family} (is it a declared dependency?)`);
+      return (h ?? {}) as T;
     },
     log: input.log,
     dryRun: input.dryRun,
@@ -298,7 +305,18 @@ async function main() {
           continue;
         }
 
-        const plan = family.plan(ctx);
+        let plan: FamilyPlan;
+        try {
+          plan = family.plan(ctx);
+        } catch (e) {
+          if (!dryRun) throw e;
+          log(
+            `${family.key.padEnd(18)} could not be estimated: ${
+              e instanceof Error ? e.message : String(e)
+            }`,
+          );
+          continue;
+        }
         recordPlan(cm, plan);
         const planned = Object.values(plan.expected).reduce((a, b) => a + b, 0);
         projectedRows += planned;
@@ -311,6 +329,26 @@ async function main() {
               .map(([t, n]) => `${t}=${n}`)
               .join(" ")}`,
           );
+          /*
+           * A dry run still has to BUILD each family, because the next one
+           * plans against its handoff — the ids of the warehouses, jobs and
+           * invoices it would create. `insert` is a no-op while dryRun is set
+           * and every family skips its service calls, so this writes nothing;
+           * it exists so that the estimate covers all fifteen rather than
+           * stopping at the first family with a dependency. A build that
+           * throws is reported and the run continues: an estimate is not a
+           * gate, and the families that follow simply lose that handoff.
+           */
+          try {
+            const report = await family.seed(ctx);
+            if (report.handoff) handoffs[family.key] = report.handoff;
+          } catch (e) {
+            log(
+              `${family.key.padEnd(18)} could not build for the estimate: ${
+                e instanceof Error ? e.message : String(e)
+              }`,
+            );
+          }
           continue;
         }
 

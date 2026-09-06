@@ -86,16 +86,45 @@ const DISPOSITIONS = ["return_to_supplier", "scrap", "replace"] as const;
 type MastersHandoff = {
   supplierIds: string[];
   itemIds: string[];
-  items: Array<{
-    id: string;
-    unit: string;
-    unitId: string;
-    cost: number;
-    category: string;
-    type?: string;
-    tracking?: string;
-  }>;
+  items:
+    | Record<string, Omit<ItemRef, "id">>
+    | Array<{
+        id: string;
+        unit: string;
+        unitId: string;
+        cost: number;
+        category: string;
+        type?: string;
+        tracking?: string;
+      }>;
 };
+
+/**
+ * masters hands items over as a MAP keyed by item id (`items: Record<string,
+ * ItemHandoff>`), not as a list. Reading it as an array is what a dry run
+ * across the whole chain caught: `.filter` on an object throws, and the
+ * family that follows would have died at seed time. Accept either shape.
+ */
+type ItemRef = {
+  id: string;
+  unit: string;
+  unitId: string;
+  cost: number;
+  category: string;
+  type?: string;
+  tracking?: string;
+};
+function itemsOf(masters: MastersHandoff): ItemRef[] {
+  const v = masters.items as unknown;
+  if (Array.isArray(v)) return v as ItemRef[];
+  if (v && typeof v === "object")
+    return Object.entries(v as Record<string, Omit<ItemRef, "id">>).map(([id, rest]) => ({
+      id,
+      ...rest,
+    }));
+  return [];
+}
+
 type SetupHandoff = {
   warehouses: Record<string, { id: string; receivingLocationId: string }>;
 };
@@ -255,8 +284,9 @@ function buildModel(ctx: LabContext): SupplyModel & { handoff: SupplyHandoff } {
   const asOf = clock.asOf;
 
   const warehouseKeys = Object.keys(setup.warehouses);
-  const stockItems = masters.items.filter((i) => (i.type ?? "inventory") !== "service");
-  const buyable = stockItems.length > 0 ? stockItems : masters.items;
+  const allItems = itemsOf(masters);
+  const stockItems = allItems.filter((i) => (i.type ?? "inventory") !== "service");
+  const buyable = stockItems.length > 0 ? stockItems : allItems;
   const suppliers = masters.supplierIds;
   const jobs = work.activeJobIds.length > 0 ? work.activeJobIds : work.jobIds;
 
@@ -457,7 +487,7 @@ function buildModel(ctx: LabContext): SupplyModel & { handoff: SupplyHandoff } {
   for (let i = 0; i < Math.min(s.supplierReturns, damagedLines.length); i++) {
     const src = damagedLines[i]!;
     const poLine = src.po.lines.find((l) => l.id === src.line.poLineId)!;
-    const item = masters.items.find((x) => x.id === poLine.itemId);
+    const item = allItems.find((x) => x.id === poLine.itemId);
     returns.push({
       id: ctx.id("supplier_return", i),
       reference: `SR-${String(1000 + i)}`,
