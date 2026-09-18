@@ -25,6 +25,7 @@
  * them and never writes them.
  */
 import type { Check, Family, FamilyPlan, FamilyReport, LabContext } from "../types";
+import { brandNow } from "../brand";
 
 type Row = Record<string, unknown>;
 
@@ -429,7 +430,7 @@ export function countryRows(ctx: LabContext, m: CountryModel): Record<CountryTab
       activated_at: null,
       activated_by: null,
       stopped: true,
-      stop_reason: "No credential configured; submission is unavailable in the Pilot Lab",
+      stop_reason: `No credential configured; submission is unavailable (${brandNow().fixtureShort})`,
       last_health_at: null,
       last_health: null,
       created_at: clock.tsAgo(200, 9, 0),
@@ -524,7 +525,7 @@ export function countryRows(ctx: LabContext, m: CountryModel): Record<CountryTab
       org_id: org,
       provider_key: p.providerKey,
       lawful_basis: "Not applicable — no provider is configured",
-      processor_agreement_ref: "None — no AI processor is engaged (Pilot Lab)",
+      processor_agreement_ref: `None — no AI processor is engaged (${brandNow().fixtureShort})`,
       transfer_mechanism: "None — no personal data leaves the processing region",
       retention_note: "Not applicable",
       minimisation_confirmed: false,

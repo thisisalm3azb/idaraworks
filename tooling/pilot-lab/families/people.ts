@@ -35,7 +35,7 @@ import type {
   LabContext,
   PersonaKey,
 } from "../types";
-import { personaEmail } from "../companies";
+import { brandNow, personaEmailFor } from "../brand";
 import type { SetupHandoff } from "./setup";
 import {
   LAST_EN,
@@ -127,6 +127,15 @@ const CORE_POSITIONS: PositionRef[] = [
 
 const COMPANY_POSITIONS: Record<CompanyKey, PositionRef[]> = {
   gulfbuild: [
+    { key: "project_manager", dept: "PRJ", en: "Project Manager", tier: "head" },
+    { key: "site_engineer", dept: "SITE", en: "Site Engineer", tier: "pro" },
+    { key: "foreman", dept: "SITE", en: "Foreman", tier: "skilled" },
+    { key: "skilled_labourer", dept: "SITE", en: "Skilled Labourer", tier: "labour" },
+    { key: "mep_technician", dept: "MEP", en: "MEP Technician", tier: "skilled" },
+    { key: "safety_officer", dept: "QHSE", en: "Safety Officer", tier: "pro" },
+    { key: "quantity_surveyor", dept: "EST", en: "Quantity Surveyor", tier: "pro" },
+  ],
+  rimal: [
     { key: "project_manager", dept: "PRJ", en: "Project Manager", tier: "head" },
     { key: "site_engineer", dept: "SITE", en: "Site Engineer", tier: "pro" },
     { key: "foreman", dept: "SITE", en: "Foreman", tier: "skilled" },
@@ -259,6 +268,62 @@ const OFFICE_SKILLS: Staffing["skills"] = [
 ];
 
 const STAFFING: Record<CompanyKey, Staffing> = {
+  rimal: {
+    departments: [
+      ...core({ mgmt: 1, fin: 6, hr: 5, comm: 4, supply: 9 }),
+      { code: "PRJ", weight: 6, head: "project_manager", staff: ["project_manager"], field: false },
+      {
+        code: "SITE",
+        weight: 46,
+        head: "site_engineer",
+        staff: [
+          "foreman",
+          "skilled_labourer",
+          "skilled_labourer",
+          "skilled_labourer",
+          "site_engineer",
+        ],
+        field: true,
+        teams: ["civil_a", "civil_b", "finishing", "plant"],
+      },
+      {
+        code: "MEP",
+        weight: 13,
+        head: "mep_technician",
+        staff: ["mep_technician"],
+        field: true,
+        teams: ["mep"],
+      },
+      { code: "QHSE", weight: 5, head: "safety_officer", staff: ["safety_officer"], field: false },
+      {
+        code: "EST",
+        weight: 5,
+        head: "quantity_surveyor",
+        staff: ["quantity_surveyor"],
+        field: false,
+      },
+    ],
+    personas: seats({
+      field: { dept: "MEP", position: "mep_technician", team: "mep" },
+      restricted: { dept: "SITE", position: "foreman", team: "civil_a" },
+    }),
+    teams: ["civil_a", "civil_b", "mep", "finishing", "plant"],
+    officeLocation: "hq",
+    siteLocations: ["site_creek", "site_shj", "yard"],
+    shifts: { office: "day", site: "morning", override: "evening" },
+    skills: [
+      ["formwork", "Formwork", "أعمال القوالب", "trade"],
+      ["steel-fixing", "Steel fixing", "تركيب حديد التسليح", "trade"],
+      ["masonry", "Masonry", "البناء بالطابوق", "trade"],
+      ["scaffolding-cert", "Scaffolding (certified)", "السقالات (معتمد)", "trade"],
+      ["crane-operation", "Crane operation", "تشغيل الرافعات", "trade"],
+      ["electrical-install", "Electrical installation", "التمديدات الكهربائية", "trade"],
+      ["first-aid", "First aid", "الإسعافات الأولية", "trade"],
+      ["autocad", "AutoCAD", "أوتوكاد", "office"],
+      ["quantity-surveying", "Quantity surveying", "مسح الكميات", "office"],
+      ...OFFICE_SKILLS,
+    ],
+  },
   gulfbuild: {
     departments: [
       ...core({ mgmt: 1, fin: 6, hr: 5, comm: 4, supply: 8 }),
@@ -1304,7 +1369,9 @@ export function buildPeoplePlan(ctx: LabContext): PeoplePlan {
           : pick(rng, S.siteLocations);
     const legalName = rng.chance(0.3) ? `${e.name.en} ${pick(rng, LAST_EN)}` : e.name.en;
     const emergency = personName(rng, e.i + 1000);
-    const emailAddr = e.persona ? personaEmail(company.key, e.persona) : email(e.name.en, e.i);
+    const emailAddr = e.persona
+      ? personaEmailFor(brandNow(), company.key, e.persona)
+      : email(e.name.en, e.i);
 
     employee.push({
       id: e.id,
@@ -1469,7 +1536,7 @@ export function buildPeoplePlan(ctx: LabContext): PeoplePlan {
         "created",
         "created",
         e.hireAgo,
-        { employee_no: `EMP-${1001 + e.i}`, source: "h33" },
+        { employee_no: `EMP-${1001 + e.i}`, source: brandNow().idPrefix },
         by,
       ),
     );

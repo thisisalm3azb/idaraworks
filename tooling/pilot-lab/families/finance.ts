@@ -31,6 +31,7 @@
  * `locked` at most, and no authority is contacted.
  */
 import { createHash } from "node:crypto";
+import { brandNow } from "../brand";
 import { CHART_TEMPLATE } from "@/modules/finance/chart";
 import type { Check, Family, FamilyPlan, FamilyReport, LabContext } from "../types";
 
@@ -51,7 +52,7 @@ export const FINANCE_SERVICE_TABLES = [
   "tax_return",
 ] as const;
 
-const PROGRESS_KEY = "h33.finance.service";
+const progressKey = () => `${brandNow().settingPrefix}finance.service`;
 
 /**
  * Switches the service-driven half on. The orchestrator leaves it alone; the
@@ -593,14 +594,14 @@ const emptyProgress = (): Progress => ({
 
 async function readProgress(ctx: LabContext): Promise<Progress> {
   const rows = (await ctx.sql`
-    select value from public.app_settings where org_id = ${ctx.orgId} and key = ${PROGRESS_KEY}
+    select value from public.app_settings where org_id = ${ctx.orgId} and key = ${progressKey()}
   `) as unknown as Array<{ value: Progress }>;
   return rows[0]?.value ? { ...emptyProgress(), ...rows[0].value } : emptyProgress();
 }
 async function writeProgress(ctx: LabContext, p: Progress): Promise<void> {
   await ctx.sql`
     insert into public.app_settings (org_id, key, value)
-    values (${ctx.orgId}, ${PROGRESS_KEY}, ${ctx.sql.json(p as never)})
+    values (${ctx.orgId}, ${progressKey()}, ${ctx.sql.json(p as never)})
     on conflict (org_id, key) do update set value = excluded.value, updated_at = now()
   `;
 }

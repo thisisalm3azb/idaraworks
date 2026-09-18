@@ -10,6 +10,7 @@
  * A spec that fails any of these would abort a company halfway through seeding.
  */
 import { describe, expect, it, vi } from "vitest";
+import { H33_BRAND } from "../../tooling/pilot-lab/brand";
 
 vi.setConfig({ testTimeout: 120_000, hookTimeout: 120_000 });
 
@@ -129,6 +130,7 @@ function fakeCtx(company: Company, overrides: Record<string, Record<string, unkn
     throw new Error("the unit test has no database");
   };
   const ctx: LabContext = {
+    brand: H33_BRAND,
     sql: noDb as unknown as LabContext["sql"],
     admin: {} as unknown as LabContext["admin"],
     company,

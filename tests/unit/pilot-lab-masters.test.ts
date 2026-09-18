@@ -8,6 +8,7 @@
  * against an in-memory `insert`, for every one of the five companies.
  */
 import { describe, expect, it, vi } from "vitest";
+import { H33_BRAND } from "../../tooling/pilot-lab/brand";
 
 /*
  * These build a whole company in memory — tens of thousands of rows for the
@@ -126,6 +127,7 @@ function fakeCtx(
     throw new Error("the unit test has no database");
   };
   const ctx: LabContext = {
+    brand: H33_BRAND,
     sql: noDb as unknown as LabContext["sql"],
     admin: {} as unknown as LabContext["admin"],
     company,

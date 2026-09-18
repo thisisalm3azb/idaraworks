@@ -11,6 +11,7 @@
  * identifiers) hold in the rows themselves.
  */
 import { readFileSync } from "node:fs";
+import { H33_BRAND } from "../../tooling/pilot-lab/brand";
 import { describe, expect, it, vi } from "vitest";
 
 /*
@@ -99,6 +100,7 @@ function fakeCtx(company: Company, store: Store, opts: { dryRun?: boolean } = {}
   const id: LabContext["id"] = (family, ...ordinal) => labId(company.key, family, ...ordinal);
   const setupHandoff = fakeSetupHandoff(company, id);
   return {
+    brand: H33_BRAND,
     sql: null as unknown as LabContext["sql"],
     admin: null as unknown as LabContext["admin"],
     company,

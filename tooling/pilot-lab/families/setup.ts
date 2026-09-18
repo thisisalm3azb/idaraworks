@@ -23,6 +23,7 @@
  * fakes a terminal state.
  */
 import { CHART_TEMPLATE, CHART_TEMPLATE_VERSION } from "@/modules/finance/chart";
+import { brandNow } from "../brand";
 import type {
   Check,
   Company,
@@ -169,6 +170,15 @@ const COMPANY_DEPARTMENTS: Record<CompanyKey, DeptSpec[]> = {
     { code: "STORE", parent: "SUPPLY", en: "Central Stores", ar: "المخازن المركزية" },
     { code: "EST", parent: "COMM", en: "Estimation & Tendering", ar: "التقدير والعطاءات" },
   ],
+  rimal: [
+    { code: "PRJ", parent: "OPS", en: "Projects", ar: "المشاريع" },
+    { code: "SITE", parent: "OPS", en: "Site Operations", ar: "عمليات الموقع" },
+    { code: "MEP", parent: "OPS", en: "MEP Works", ar: "الأعمال الكهروميكانيكية" },
+    { code: "QHSE", parent: "OPS", en: "QHSE", ar: "الجودة والصحة والسلامة والبيئة" },
+    { code: "PLANT", parent: "SUPPLY", en: "Plant & Equipment", ar: "المعدات والآليات" },
+    { code: "STORE", parent: "SUPPLY", en: "Central Stores", ar: "المخازن المركزية" },
+    { code: "EST", parent: "COMM", en: "Estimation & Tendering", ar: "التقدير والعطاءات" },
+  ],
   tradeline: [
     { code: "WH", parent: "SUPPLY", en: "Warehousing", ar: "المستودعات" },
     { code: "LOG", parent: "SUPPLY", en: "Logistics & Fleet", ar: "الخدمات اللوجستية والأسطول" },
@@ -245,6 +255,27 @@ const CORE_POSITIONS: PosSpec[] = [
 
 const COMPANY_POSITIONS: Record<CompanyKey, PosSpec[]> = {
   gulfbuild: [
+    { key: "project_manager", dept: "PRJ", en: "Project Manager", ar: "مدير مشروع", grade: "G2" },
+    { key: "site_engineer", dept: "SITE", en: "Site Engineer", ar: "مهندس موقع", grade: "G3" },
+    { key: "foreman", dept: "SITE", en: "Foreman", ar: "مراقب عمال", grade: "G5" },
+    { key: "skilled_labourer", dept: "SITE", en: "Skilled Labourer", ar: "عامل ماهر", grade: "G6" },
+    {
+      key: "mep_technician",
+      dept: "MEP",
+      en: "MEP Technician",
+      ar: "فني كهروميكانيك",
+      grade: "G5",
+    },
+    { key: "safety_officer", dept: "QHSE", en: "Safety Officer", ar: "مسؤول السلامة", grade: "G4" },
+    {
+      key: "quantity_surveyor",
+      dept: "EST",
+      en: "Quantity Surveyor",
+      ar: "مسّاح كميات",
+      grade: "G3",
+    },
+  ],
+  rimal: [
     { key: "project_manager", dept: "PRJ", en: "Project Manager", ar: "مدير مشروع", grade: "G2" },
     { key: "site_engineer", dept: "SITE", en: "Site Engineer", ar: "مهندس موقع", grade: "G3" },
     { key: "foreman", dept: "SITE", en: "Foreman", ar: "مراقب عمال", grade: "G5" },
@@ -390,6 +421,13 @@ const COMPANY_TEAMS: Record<CompanyKey, TeamSpec[]> = {
     { key: "finishing", name: "Finishing Crew", kind: "trade" },
     { key: "plant", name: "Plant Operators", kind: "trade" },
   ],
+  rimal: [
+    { key: "civil_a", name: "Civil Crew A", kind: "trade" },
+    { key: "civil_b", name: "Civil Crew B", kind: "trade" },
+    { key: "mep", name: "MEP Crew", kind: "trade" },
+    { key: "finishing", name: "Finishing Crew", kind: "trade" },
+    { key: "plant", name: "Plant Operators", kind: "trade" },
+  ],
   tradeline: [
     { key: "picking", name: "Picking Line", kind: "line" },
     { key: "packing", name: "Packing Line", kind: "line" },
@@ -424,6 +462,27 @@ const LEGACY_TEAM: TeamSpec = {
 };
 
 const COMPANY_LOCATIONS: Record<CompanyKey, LocSpec[]> = {
+  rimal: [
+    {
+      key: "hq",
+      en: "Head Office — Dubai Investments Park",
+      ar: "المكتب الرئيسي — مجمع دبي للاستثمار",
+      city: "Dubai",
+    },
+    {
+      key: "site_creek",
+      en: "Site Office — Dubai Creek Harbour",
+      ar: "مكتب الموقع — مرسى خور دبي",
+      city: "Dubai",
+    },
+    {
+      key: "site_shj",
+      en: "Site Office — Sharjah Aljada",
+      ar: "مكتب الموقع — الجادة الشارقة",
+      city: "Sharjah",
+    },
+    { key: "yard", en: "Plant Yard — Jebel Ali", ar: "ساحة المعدات — جبل علي", city: "Dubai" },
+  ],
   gulfbuild: [
     { key: "hq", en: "Head Office — Abu Dhabi", ar: "المكتب الرئيسي — أبوظبي", city: "Abu Dhabi" },
     {
@@ -539,6 +598,7 @@ const SHIFTS: Record<string, ShiftSpec> = {
 };
 const COMPANY_SHIFTS: Record<CompanyKey, string[]> = {
   gulfbuild: ["day", "morning", "evening", "split_retired"],
+  rimal: ["day", "morning", "evening", "split_retired"],
   tradeline: ["office", "morning", "evening"],
   saudimfg: ["morning", "evening", "night", "ramadan"],
   consult: ["office"],
@@ -546,6 +606,38 @@ const COMPANY_SHIFTS: Record<CompanyKey, string[]> = {
 };
 
 const COMPANY_WAREHOUSES: Record<CompanyKey, WhSpec[]> = {
+  rimal: [
+    {
+      code: "MAIN",
+      en: "Central Stores — Jebel Ali Yard",
+      ar: "المخازن المركزية — ساحة جبل علي",
+      city: "Dubai",
+      zones: [
+        { code: "A", en: "Rack A — consumables", ar: "الرف أ — مستهلكات", bins: 6 },
+        { code: "B", en: "Rack B — MEP materials", ar: "الرف ب — مواد كهروميكانيكية", bins: 6 },
+        {
+          code: "C",
+          en: "Rack C — serialised plant & tools",
+          ar: "الرف ج — معدات وعدد مرقّمة",
+          bins: 4,
+        },
+      ],
+    },
+    {
+      code: "SITE-DCH",
+      en: "Site Store — Dubai Creek Harbour",
+      ar: "مخزن الموقع — مرسى خور دبي",
+      city: "Dubai",
+      zones: [{ code: "S", en: "Site laydown", ar: "منطقة التخزين بالموقع", bins: 4 }],
+    },
+    {
+      code: "SITE-SHJ",
+      en: "Site Store — Sharjah Aljada",
+      ar: "مخزن الموقع — الجادة الشارقة",
+      city: "Sharjah",
+      zones: [{ code: "S", en: "Site laydown", ar: "منطقة التخزين بالموقع", bins: 4 }],
+    },
+  ],
   gulfbuild: [
     {
       code: "MAIN",
@@ -745,6 +837,18 @@ const COMPANY_ASSET_CATEGORIES: Record<CompanyKey, CatSpec[]> = {
     },
     { code: "PLANT-GEN", parent: "PLANT", en: "Generators", ar: "مولدات", life: 96, residual: 5 },
   ],
+  rimal: [
+    { code: "PLANT", en: "Plant & machinery", ar: "المعدات والآليات", life: 120, residual: 5 },
+    {
+      code: "PLANT-EXC",
+      parent: "PLANT",
+      en: "Excavators & loaders",
+      ar: "حفارات ولوادر",
+      life: 120,
+      residual: 10,
+    },
+    { code: "PLANT-GEN", parent: "PLANT", en: "Generators", ar: "مولدات", life: 96, residual: 5 },
+  ],
   tradeline: [
     {
       code: "MHE",
@@ -911,6 +1015,7 @@ const EXPANSION_PIPELINE: PipelineSpec = {
 };
 const COMPANY_PIPELINES: Record<CompanyKey, PipelineSpec[]> = {
   gulfbuild: [],
+  rimal: [],
   tradeline: [EXPANSION_PIPELINE],
   saudimfg: [],
   consult: [RENEWALS_PIPELINE],
@@ -919,6 +1024,10 @@ const COMPANY_PIPELINES: Record<CompanyKey, PipelineSpec[]> = {
 
 const OPS_FOLDERS: Record<CompanyKey, FolderSpec[]> = {
   gulfbuild: [
+    { key: "ops/site_reports", en: "Site reports", ar: "تقارير الموقع" },
+    { key: "ops/method_statements", en: "Method statements", ar: "بيانات طرق التنفيذ" },
+  ],
+  rimal: [
     { key: "ops/site_reports", en: "Site reports", ar: "تقارير الموقع" },
     { key: "ops/method_statements", en: "Method statements", ar: "بيانات طرق التنفيذ" },
   ],
@@ -1164,6 +1273,7 @@ function bankAccounts(company: Company): BankSpec[] {
 }
 
 const VAT_EMIRATE: Record<CompanyKey, string> = {
+  rimal: "DXB",
   gulfbuild: "AUH",
   tradeline: "DXB",
   saudimfg: "—",
@@ -1860,7 +1970,7 @@ export function planSetup(ctx: LabContext): SetupBlueprint {
       org_id: orgId,
       accent_color: company.brandColor,
       display_name: company.nameEn,
-      footer_details: `${company.legalNameEn} · ${company.nameAr} · Fictional pilot company — no real business, TRN or bank details`,
+      footer_details: `${company.legalNameEn} · ${company.nameAr} · ${brandNow().fixtureLabel}`,
     },
   ];
   conflict.org_branding =
@@ -1873,7 +1983,7 @@ export function planSetup(ctx: LabContext): SetupBlueprint {
       org_id: orgId,
       app_name: `${company.nameEn} Ops`.slice(0, 60),
       app_short_name: shortName,
-      app_description: `Internal operations app for ${company.nameEn} — a fictional H33 pilot company.`,
+      app_description: `Internal operations app for ${company.nameEn} — a fictional ${brandNow().fixtureShort.toLowerCase()} company.`,
       brand_color: company.brandColor,
       background_color: "#ffffff",
       default_locale: company.languages[0] ?? "en",
@@ -2061,7 +2171,7 @@ async function runServices(
         await ledger.setPeriodStatus(owner, ownerArch, {
           periodId: p.id,
           status: target,
-          reason: "H33 pilot lab fiscal calendar plan",
+          reason: `${brandNow().fixtureShort} fiscal calendar plan`,
         });
         moved++;
       }

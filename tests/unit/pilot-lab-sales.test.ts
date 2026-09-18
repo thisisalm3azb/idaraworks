@@ -12,6 +12,7 @@
  * account.
  */
 import { describe, expect, it, vi } from "vitest";
+import { H33_BRAND } from "../../tooling/pilot-lab/brand";
 
 vi.setConfig({ testTimeout: 120_000, hookTimeout: 120_000 });
 
@@ -94,6 +95,7 @@ function fakeCtx(company: Company) {
     throw new Error("the unit test has no database");
   };
   const ctx: LabContext = {
+    brand: H33_BRAND,
     sql: noDb as unknown as LabContext["sql"],
     admin: {} as unknown as LabContext["admin"],
     company,

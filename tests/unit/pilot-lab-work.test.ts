@@ -13,6 +13,7 @@
  * and a database, and they are exercised by the lab's verify mode instead.
  */
 import { describe, expect, it, vi } from "vitest";
+import { H33_BRAND } from "../../tooling/pilot-lab/brand";
 
 /*
  * These build a whole company in memory — tens of thousands of rows for the
@@ -168,6 +169,7 @@ function fakeCtx(company: Company, dryRun = false): Fake {
     },
   });
   fake.ctx = {
+    brand: H33_BRAND,
     sql,
     admin: {} as LabContext["admin"],
     company,

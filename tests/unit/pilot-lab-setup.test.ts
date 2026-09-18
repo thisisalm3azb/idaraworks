@@ -11,6 +11,7 @@
  * companies. Any attempt to touch a database fails the test.
  */
 import { describe, expect, it, vi } from "vitest";
+import { H33_BRAND } from "../../tooling/pilot-lab/brand";
 
 /*
  * These build a whole company in memory — tens of thousands of rows for the
@@ -73,6 +74,7 @@ function fakeCtx(company: Company, opts: { dryRun?: boolean } = {}) {
   };
   const sql = Object.assign(() => refuse("sql"), { unsafe: () => refuse("sql.unsafe") });
   const ctx: LabContext = {
+    brand: H33_BRAND,
     sql: sql as unknown as LabContext["sql"],
     admin: new Proxy({}, { get: () => refuse("admin") }) as LabContext["admin"],
     company,

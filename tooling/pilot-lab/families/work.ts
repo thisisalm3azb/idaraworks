@@ -43,6 +43,7 @@
  * its full stage snapshot (5–7 rows), which is the family's dominant cost.
  */
 import type { Rng } from "../../simulation/rng";
+import { brandNow } from "../brand";
 import type { SimClock } from "../../simulation/dates";
 import type {
   Check,
@@ -1329,7 +1330,7 @@ function build(
         returnedBy: status === "returned" ? managerUser : null,
         returnedAt,
         returnReason: status === "returned" ? bi(rng, RETURN_REASONS, rl) : null,
-        idem: `h33-${company.key}-report-${i}-${r}`,
+        idem: `${brandNow().idPrefix}-${company.key}-report-${i}-${r}`,
         createdAt: tsOn(reportDate, 16, rng.int(0, 59)),
         work,
         labour,

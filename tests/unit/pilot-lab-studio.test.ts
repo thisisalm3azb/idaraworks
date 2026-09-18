@@ -10,6 +10,7 @@
  * indexes and the product's own vocabularies enforce.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { H33_BRAND } from "../../tooling/pilot-lab/brand";
 import { describe, expect, it, vi } from "vitest";
 
 /*
@@ -130,6 +131,7 @@ function fakeContext(
     throw new Error("unit test: there is no database here");
   };
   const ctx: LabContext = {
+    brand: H33_BRAND,
     sql: refuse as unknown as Sql,
     admin: {} as unknown as SupabaseClient,
     company,

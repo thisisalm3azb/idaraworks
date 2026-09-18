@@ -9,6 +9,7 @@
  * cross-links and their arithmetic — is checked here for all five companies.
  */
 import { describe, expect, it, vi } from "vitest";
+import { H33_BRAND } from "../../tooling/pilot-lab/brand";
 
 /*
  * These build a whole company in memory — tens of thousands of rows for the
@@ -337,6 +338,7 @@ function harness(company: Company): Harness {
   }) as unknown as Sql;
 
   const ctx: LabContext = {
+    brand: H33_BRAND,
     sql,
     admin: {} as LabContext["admin"],
     company,

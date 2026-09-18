@@ -34,7 +34,7 @@
  */
 import { createHash } from "node:crypto";
 import { computeTotals } from "../../simulation/money";
-import { SEED_VERSION } from "../marker";
+import { brandNow } from "../brand";
 import type { Check, Company, Family, FamilyPlan, FamilyReport, LabContext } from "../types";
 import {
   companyName,
@@ -461,7 +461,9 @@ function doBuild(ctx: LabContext): SalesBuild {
   const uid = (key: string, ...ordinal: Array<string | number>) => ctx.id(FAMILY, key, ...ordinal);
   const hash = (key: string, n: number) =>
     createHash("sha256")
-      .update(`h33:${SEED_VERSION}:${company.key}:${FAMILY}:${key}:${n}`)
+      .update(
+        `${brandNow().idPrefix}:${brandNow().seedVersion}:${company.key}:${FAMILY}:${key}:${n}`,
+      )
       .digest("hex");
   const notes: string[] = [];
 
@@ -1218,7 +1220,7 @@ export function expectedCounts(ctx: LabContext): Record<string, number> {
 
 const SEQ_CONFLICT =
   "on conflict (org_id, scope_key) do update set next_value = greatest(reference_sequence.next_value, excluded.next_value)";
-const PROGRESS_KEY = "h33.sales.service";
+const progressKey = () => `${brandNow().settingPrefix}sales.service`;
 
 type Progress = {
   invoices: Record<string, string>;
@@ -1237,14 +1239,14 @@ const emptyProgress = (): Progress => ({
 
 async function readProgress(ctx: LabContext): Promise<Progress> {
   const rows = (await ctx.sql`
-    select value from public.app_settings where org_id = ${ctx.orgId} and key = ${PROGRESS_KEY}
+    select value from public.app_settings where org_id = ${ctx.orgId} and key = ${progressKey()}
   `) as unknown as Array<{ value: Progress }>;
   return rows[0]?.value ? { ...emptyProgress(), ...rows[0].value } : emptyProgress();
 }
 async function writeProgress(ctx: LabContext, p: Progress): Promise<void> {
   await ctx.sql`
     insert into public.app_settings (org_id, key, value)
-    values (${ctx.orgId}, ${PROGRESS_KEY}, ${ctx.sql.json(p as never)})
+    values (${ctx.orgId}, ${progressKey()}, ${ctx.sql.json(p as never)})
     on conflict (org_id, key) do update set value = excluded.value, updated_at = now()
   `;
 }
@@ -1357,7 +1359,7 @@ async function driveServices(ctx: LabContext, b: SalesBuild): Promise<ServiceOut
           paymentDate: clock.dayAgo(0),
           amountMinor: s.payFraction === 1 ? total : Math.max(1, Math.round(total * s.payFraction)),
           currency: company.currency,
-          idempotencyKey: `h33:${SEED_VERSION}:${company.key}:${FAMILY}:svc-pay:${s.k}`,
+          idempotencyKey: `${brandNow().idPrefix}:${brandNow().seedVersion}:${company.key}:${FAMILY}:svc-pay:${s.k}`,
         });
         p.payments[key] = r.id;
         await writeProgress(ctx, p);

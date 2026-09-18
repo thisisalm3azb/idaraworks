@@ -22,6 +22,7 @@
  * second run inserts nothing (ON CONFLICT DO NOTHING).
  */
 import { deflateSync } from "node:zlib";
+import { brandNow } from "../brand";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
   Check,
@@ -1489,7 +1490,12 @@ export function buildMisc(ctx: LabContext, t: MiscTargets): MiscBuild {
         rng.int(20, 235),
         rng.int(20, 235),
       ]);
-      body = tinyPng(w, h, stripes, `H33 pilot lab fixture ${company.key} file ${i} ${label}`);
+      body = tinyPng(
+        w,
+        h,
+        stripes,
+        `${brandNow().fixtureShort} fixture ${company.key} file ${i} ${label}`,
+      );
       mime = "image/png";
       name =
         spec.cls === "job_media" ? `site-photo-${label}-${i + 1}.png` : `receipt-scan-${label}.png`;
@@ -1497,7 +1503,7 @@ export function buildMisc(ctx: LabContext, t: MiscTargets): MiscBuild {
       variants = { main: v, medium: v, thumb: v };
     } else {
       body = tinyPdf([
-        "IdaraWorks - H33 Pilot Lab fixture (fictional)",
+        `IdaraWorks - ${brandNow().fixtureShort} fixture (fictional)`,
         company.legalNameEn,
         `Reference: ${target.label}`,
         `File ${i + 1} of ${fileSpecs.length} - ${spec.cls}`,

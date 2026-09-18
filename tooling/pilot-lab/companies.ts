@@ -21,7 +21,7 @@ export function personaEmail(company: string, persona: PersonaKey): string {
 }
 
 /** The nine personas, with role mapping and what each is for. */
-function personas(
+export function personas(
   names: Record<PersonaKey, [string, string]>,
   locale: "en" | "ar" = "en",
 ): Persona[] {
@@ -65,7 +65,7 @@ function personas(
   ];
 }
 
-const baseProfile: VolumeProfile = {
+export const baseProfile: VolumeProfile = {
   customers: 300,
   suppliers: 150,
   items: 900,

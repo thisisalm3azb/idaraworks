@@ -22,6 +22,7 @@
  * form links carry token hashes of ids rather than usable tokens.
  */
 import { createHash } from "node:crypto";
+import { brandNow } from "../brand";
 import {
   contentHash,
   eventHash,
@@ -340,7 +341,7 @@ function templateBody(spec: TemplateSpec, company: Company): Body {
     type: "note",
     tone: "info",
     text: {
-      en: "Pilot Lab document. Every party, address and amount in it is fictional.",
+      en: `${brandNow().fixtureShort} document. Every party, address and amount in it is fictional.`,
       ar: "وثيقة مختبر تجريبي. جميع الأطراف والعناوين والمبالغ الواردة فيها خيالية.",
     },
   });
@@ -529,7 +530,7 @@ export function buildDocstudio(ctx: LabContext): DocstudioModel {
       name_en: spec.en,
       name_ar: spec.ar,
       category: spec.category,
-      description: `${spec.en} used across the business. Fictional content for the Pilot Lab.`,
+      description: `${spec.en} used across the business. Fictional content — ${brandNow().fixtureShort}.`,
       status: "published",
       current_version: spec.versions,
       builtin_key: null,
@@ -1007,7 +1008,7 @@ export function buildDocstudio(ctx: LabContext): DocstudioModel {
         provider: "native",
         mode: "sequential",
         status: complete ? "completed" : "in_progress",
-        message: "Please review and sign. This is a Pilot Lab document.",
+        message: `Please review and sign. This is a ${brandNow().fixtureShort} document.`,
         // A room still waiting on a signature has time left on it; a finished
         // one is allowed to have run out. Both satisfy expires_at > created_at.
         expires_at: complete ? ts(Math.max(0, createdAgo - 30), 12) : ts(-30, 12),
@@ -1036,12 +1037,12 @@ export function buildDocstudio(ctx: LabContext): DocstudioModel {
           name: isMember
             ? (company.personas.find((p) => p.key === "owner")?.fullName ?? "Owner")
             : `${d.counterpartyLabel ?? "Counterparty"} signatory`,
-          email: isMember ? null : `signer.${d.reference.toLowerCase()}@pilot-lab.invalid`,
+          email: isMember ? null : `signer.${d.reference.toLowerCase()}@${brandNow().emailDomain}`,
           title: isMember ? "Managing Director" : "Authorised signatory",
           status: signed ? "signed" : "invited",
           // A hash of the id, not a usable token: nothing here can be signed
           // from outside, and the column is globally unique.
-          token_hash: sha(`h33:signer:${signerId}`),
+          token_hash: sha(`${brandNow().idPrefix}:signer:${signerId}`),
           token_expires_at: signed ? ts(Math.max(0, createdAgo - 30), 12) : ts(-30, 12),
           invited_at: ts(createdAgo, 12),
           delivery: isMember ? "in_app" : "link",
@@ -1052,7 +1053,7 @@ export function buildDocstudio(ctx: LabContext): DocstudioModel {
           signature_kind: signed ? "typed" : null,
           signature_data: signed ? (isMember ? "Owner" : "Counterparty signatory") : null,
           evidence: signed ? { method: "typed", channel: isMember ? "in_app" : "link" } : null,
-          evidence_hash: signed ? sha(`h33:evidence:${signerId}`) : null,
+          evidence_hash: signed ? sha(`${brandNow().idPrefix}:evidence:${signerId}`) : null,
           reminder_count: signed ? 0 : 1,
           last_reminded_at: signed ? null : ts(Math.max(1, createdAgo - 5), 9),
           revoked_at: null,
@@ -1186,7 +1187,7 @@ export function buildDocstudio(ctx: LabContext): DocstudioModel {
         document_id: d.id,
         snapshot_id: d.snapshotId,
         label: "Site gate — visitor request",
-        token_hash: sha(`h33:formlink:${linkId}`),
+        token_hash: sha(`${brandNow().idPrefix}:formlink:${linkId}`),
         // Still live, so the share screen has a working link to show.
         expires_at: ts(-90, 12),
         max_uses: 100,
@@ -1212,7 +1213,7 @@ export function buildDocstudio(ctx: LabContext): DocstudioModel {
             induction_done: true,
           },
           submitter_name: `Visitor ${si + 1}`,
-          submitter_email: `visitor${si + 1}.${d.reference.toLowerCase()}@pilot-lab.invalid`,
+          submitter_email: `visitor${si + 1}.${d.reference.toLowerCase()}@${brandNow().emailDomain}`,
           submitted_at: ts(Math.max(1, createdAgo - 30 - si), 8),
           ip: null,
           user_agent: null,
@@ -1414,7 +1415,7 @@ export const docstudio: Family = {
     await violators(
       "every external signer address is .invalid",
       `select count(*)::int as n from public.doc_signer
-       where org_id = $1 and email is not null and email not like '%@pilot-lab.invalid'`,
+       where org_id = $1 and email is not null and email not like '%@${brandNow().emailDomain}'`,
     );
     await violators(
       "a frozen revision carries its content hash",

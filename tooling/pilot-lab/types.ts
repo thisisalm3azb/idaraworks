@@ -8,13 +8,14 @@
  * capacity stop and progress; a family owns nothing but its own rows.
  */
 import type { Ctx } from "@/platform/tenancy";
+import type { Brand } from "./brand";
 import type { RoleArchetype } from "@/platform/registries";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Rng } from "../simulation/rng";
 import type { SimClock } from "../simulation/dates";
 import type { Sql, InsertResult } from "./db";
 
-export type CompanyKey = "gulfbuild" | "tradeline" | "saudimfg" | "consult" | "facilico";
+export type CompanyKey = "gulfbuild" | "tradeline" | "saudimfg" | "consult" | "facilico" | "rimal";
 
 export type PersonaKey =
   | "owner"
@@ -107,6 +108,12 @@ export type FamilyPlan = { family: string; expected: Record<string, number> };
 export type Check = { name: string; ok: boolean; detail?: string };
 
 export type LabContext = {
+  /**
+   * Which marker, id namespace, login domain and wording this run writes under.
+   * Absent for the H33 lab (whose orchestrator is unchanged); a family reads
+   * `ctx.brand ?? H33_BRAND`. The demo importer always sets it.
+   */
+  brand?: Brand;
   sql: Sql;
   admin: SupabaseClient;
   company: Company;
