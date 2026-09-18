@@ -27,8 +27,14 @@ export const DEMO_BRAND: Brand = {
   fixtureShort: "Demo",
 };
 
-/** Local state directory (checkpoint mirror, manifest, perf runs). Gitignored. */
-export const LOCAL_DIR = ".demo-showcase";
+/**
+ * Local state directory (checkpoint mirror, manifest, perf runs). Gitignored,
+ * and per environment, so a TEST validation and a production run never read
+ * each other's state. Resolved from `--env=` the same way run.ts and cleanup.ts
+ * read it.
+ */
+const envArg = process.argv.find((a) => a.startsWith("--env="))?.slice(6) ?? "test";
+export const LOCAL_DIR = `.demo-showcase/${envArg}`;
 
 /**
  * Absolute database ceiling checked after every family. Production sits at
