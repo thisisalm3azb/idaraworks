@@ -19,6 +19,24 @@ import { HrError } from "./people";
 
 // ── types and policies ───────────────────────────────────────────────────────
 
+/**
+ * The stable key for a leave type, derived from its English name so the
+ * screen never asks a manager for an identifier (D2): lower case, one
+ * underscore per run of anything that is not a letter or digit, starting
+ * with a letter, at most 40 characters — the shape the service accepts.
+ */
+export function leaveTypeKeyFrom(labelEn: string): string {
+  const slug = labelEn
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 40)
+    .replace(/_+$/g, "");
+  if (!slug) return "leave_type";
+  const keyed = /^[a-z]/.test(slug) && slug.length >= 2 ? slug : `leave_${slug}`;
+  return keyed.slice(0, 40).replace(/_+$/g, "");
+}
+
 export async function createLeaveType(
   ctx: Ctx,
   archetype: RoleArchetype,

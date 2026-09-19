@@ -6,7 +6,12 @@ import { can } from "@/platform/authz";
 import { hrSurfacesEnabled } from "@/platform/flags";
 import { formatDate } from "@/platform/format";
 import { leaveBalances, listLeaveRequests, listLeaveTypes, myEmployee } from "@/modules/hr/service";
-import { requestLeaveAction, cancelLeaveAction, requestOvertimeAction } from "./actions";
+import {
+  requestLeaveAction,
+  cancelLeaveAction,
+  requestOvertimeAction,
+  createLeaveTypeAction,
+} from "./actions";
 
 const STATUS_TONE: Record<string, "success" | "warning" | "danger" | "info"> = {
   approved: "success",
@@ -42,9 +47,11 @@ export default async function LeavePage({
         (r) => r.employeeId !== me?.id,
       )
     : [];
+  const managesTypes = can(resolved.archetype, "employees.manage");
   const requestLeave = requestLeaveAction.bind(null, orgId);
   const cancelLeave = cancelLeaveAction.bind(null, orgId);
   const requestOt = requestOvertimeAction.bind(null, orgId);
+  const createType = createLeaveTypeAction.bind(null, orgId);
   const typeLabel = (key: string) => {
     const ty = types.find((x) => x.key === key);
     return ty ? (locale === "ar" ? ty.labelAr : ty.labelEn) : key;
@@ -54,13 +61,27 @@ export default async function LeavePage({
     <div className="flex flex-col gap-4">
       <h1 className="text-lg font-semibold text-ink">{t("hr.leave.title")}</h1>
       {sp.ok ? (
-        <p className="rounded-md bg-success-soft px-3 py-2 text-sm text-success">
-          {t(sp.ok === "cancelled" ? "hr.leave.cancelled" : "hr.leave.submitted")}
+        <p className="rounded-md bg-success-soft px-3 py-2 text-sm text-success" role="status">
+          {t(
+            sp.ok === "cancelled"
+              ? "hr.leave.cancelled"
+              : sp.ok === "type_created"
+                ? "hr.leave.types.created"
+                : "hr.leave.submitted",
+          )}
         </p>
       ) : null}
       {sp.error ? (
-        <p className="rounded-md bg-danger-soft px-3 py-2 text-sm text-danger">
-          {t(sp.error === "not_employee" ? "hr.not_employee" : "common.error")}
+        <p className="rounded-md bg-danger-soft px-3 py-2 text-sm text-danger" role="alert">
+          {t(
+            sp.error === "not_employee"
+              ? "hr.not_employee"
+              : sp.error === "type_exists"
+                ? "hr.leave.types.error_exists"
+                : sp.error === "type_invalid"
+                  ? "hr.leave.types.error_invalid"
+                  : "common.error",
+          )}
         </p>
       ) : null}
       {!me ? <EmptyState title={t("hr.not_employee")} /> : null}
@@ -88,7 +109,23 @@ export default async function LeavePage({
         </Card>
       ) : null}
 
-      {me ? (
+      {me && types.length === 0 ? (
+        <Card>
+          <h2 className="mb-2 text-sm font-semibold text-ink">{t("hr.leave.request_new")}</h2>
+          <p className="text-sm text-ink-secondary" role="status">
+            {t("hr.leave.no_types")}{" "}
+            {managesTypes ? (
+              <a href="#leave-types" className="text-brand hover:underline">
+                {t("hr.leave.no_types_manager")}
+              </a>
+            ) : (
+              t("hr.leave.no_types_employee")
+            )}
+          </p>
+        </Card>
+      ) : null}
+
+      {me && types.length > 0 ? (
         <Card>
           <h2 className="mb-2 text-sm font-semibold text-ink">{t("hr.leave.request_new")}</h2>
           <form action={requestLeave} className="flex flex-col gap-2">
@@ -222,6 +259,84 @@ export default async function LeavePage({
             </label>
             <Button type="submit" variant="secondary">
               {t("hr.leave.submit")}
+            </Button>
+          </form>
+        </Card>
+      ) : null}
+
+      {managesTypes ? (
+        <Card id="leave-types" className="scroll-mt-20">
+          <h2 className="mb-1 text-sm font-semibold text-ink">{t("hr.leave.types.title")}</h2>
+          <p className="mb-3 text-xs text-ink-muted">{t("hr.leave.types.intro")}</p>
+          {types.length === 0 ? (
+            <p className="mb-3 text-sm text-ink-secondary">{t("hr.leave.types.empty")}</p>
+          ) : (
+            <ul className="mb-3 divide-y divide-line">
+              {types.map((ty) => (
+                <li key={ty.id} className="flex items-center justify-between gap-2 py-2 text-sm">
+                  <span className="text-ink">
+                    {ty.labelEn} · <span dir="rtl">{ty.labelAr}</span>
+                  </span>
+                  <span className="flex gap-2">
+                    <Badge tone={ty.paid ? "success" : "neutral"}>
+                      {ty.paid ? t("hr.leave.types.paid") : t("hr.leave.types.unpaid")}
+                    </Badge>
+                    {ty.allowHalfDay ? (
+                      <Badge tone="info">{t("hr.leave.types.allow_half_day")}</Badge>
+                    ) : null}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+          <form action={createType} className="flex flex-col gap-2">
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <label className="flex-1 text-xs text-ink-muted">
+                {t("hr.leave.types.label_en")}
+                <input
+                  name="label_en"
+                  required
+                  maxLength={80}
+                  className="mt-1 min-h-11 w-full rounded-md border border-line-strong bg-card px-3 text-base text-ink"
+                />
+              </label>
+              <label className="flex-1 text-xs text-ink-muted">
+                {t("hr.leave.types.label_ar")}
+                <input
+                  name="label_ar"
+                  required
+                  dir="rtl"
+                  maxLength={80}
+                  className="mt-1 min-h-11 w-full rounded-md border border-line-strong bg-card px-3 text-base text-ink"
+                />
+              </label>
+            </div>
+            <label className="text-xs text-ink-muted">
+              {t("hr.leave.types.count_basis")}
+              <select
+                name="count_basis"
+                className="mt-1 min-h-11 w-full rounded-md border border-line-strong bg-card px-3 text-base text-ink"
+              >
+                <option value="working_days">{t("hr.leave.types.working_days")}</option>
+                <option value="calendar_days">{t("hr.leave.types.calendar_days")}</option>
+              </select>
+            </label>
+            <div className="flex flex-wrap gap-4 text-sm text-ink">
+              <label className="inline-flex min-h-11 items-center gap-2">
+                <input type="checkbox" name="paid" defaultChecked className="size-5" />
+                {t("hr.leave.types.paid")}
+              </label>
+              <label className="inline-flex min-h-11 items-center gap-2">
+                <input type="checkbox" name="allow_half_day" defaultChecked className="size-5" />
+                {t("hr.leave.types.allow_half_day")}
+              </label>
+              <label className="inline-flex min-h-11 items-center gap-2">
+                <input type="checkbox" name="requires_attachment" className="size-5" />
+                {t("hr.leave.types.requires_attachment")}
+              </label>
+            </div>
+            <Button type="submit" variant="secondary">
+              {t("hr.leave.types.add")}
             </Button>
           </form>
         </Card>

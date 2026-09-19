@@ -3,12 +3,55 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { resolveCtxForAction } from "@/platform/auth/resolve";
+import { can } from "@/platform/authz";
 import {
   submitLeaveRequest,
   cancelLeaveRequest,
   submitOvertimeRequest,
   myEmployee,
+  createLeaveType,
+  leaveTypeKeyFrom,
 } from "@/modules/hr/service";
+
+/**
+ * Define a leave type for this company (D2). Permission-controlled by the
+ * same `employees.manage` the service asserts; nothing is created for a
+ * company that does not do this itself, and entitlements stay a separate,
+ * explicit policy — this form only names the kind of leave.
+ */
+export async function createLeaveTypeAction(orgId: string, formData: FormData): Promise<void> {
+  const resolved = await resolveCtxForAction(orgId);
+  if (resolved === "mfa_required") redirect("/mfa");
+  if (typeof resolved === "string") redirect("/");
+  const base = `/o/${orgId}/leave`;
+  if (!can(resolved.archetype, "employees.manage")) redirect(base);
+  const labelEn = String(formData.get("label_en") ?? "").trim();
+  const labelAr = String(formData.get("label_ar") ?? "").trim();
+  if (!labelEn || !labelAr) redirect(`${base}?error=type_invalid#leave-types`);
+  try {
+    await createLeaveType(resolved.ctx, resolved.archetype, {
+      key: leaveTypeKeyFrom(labelEn),
+      labelEn,
+      labelAr,
+      paid: formData.get("paid") === "on",
+      requiresAttachment: formData.get("requires_attachment") === "on",
+      countBasis:
+        formData.get("count_basis") === "calendar_days" ? "calendar_days" : "working_days",
+      allowHalfDay: formData.get("allow_half_day") === "on",
+    });
+  } catch (err) {
+    if ((err as { digest?: string }).digest?.startsWith("NEXT_REDIRECT")) throw err;
+    const message = err instanceof Error ? err.message : String(err);
+    const code = /leave_type_key_uq|duplicate key/i.test(message)
+      ? "type_exists"
+      : /ZodError|invalid|regex|too_small|too_big/i.test(`${(err as Error).name} ${message}`)
+        ? "type_invalid"
+        : "failed";
+    redirect(`${base}?error=${code}#leave-types`);
+  }
+  revalidatePath(base);
+  redirect(`${base}?ok=type_created#leave-types`);
+}
 
 /** Self-service: the employee id always resolves from the LOGIN, never a form
  *  field — a crafted request cannot file leave for someone else this way. */
