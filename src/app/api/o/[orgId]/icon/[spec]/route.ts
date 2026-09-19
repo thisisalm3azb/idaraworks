@@ -19,7 +19,7 @@
  */
 import { NextResponse } from "next/server";
 import { brandedCompanyAppsEnabled } from "@/platform/flags";
-import { publicAppIdentity } from "@/modules/companyapp/service";
+import { publicAppIcon, publicAppIdentity } from "@/modules/companyapp/service";
 import { ICON_SIZES, generateIconSet, type IconSize } from "@/platform/tenanthost/icon";
 import { logger } from "@/platform/logger";
 import { solidPng } from "@/platform/tenanthost/png";
@@ -58,6 +58,11 @@ export async function GET(
 
   const identity = await publicAppIdentity(orgId);
   if (!identity) return NextResponse.json({ error: "not_found" }, { status: 404 });
+
+  // Item 10: an icon rendered from the company's uploaded logo, kept in the
+  // database at upload time (never a storage read on an anonymous request).
+  const stored = await publicAppIcon(orgId, size, maskable).catch(() => null);
+  if (stored) return png(stored.png, stored.updatedAt);
 
   try {
     /*
@@ -101,7 +106,7 @@ export async function GET(
 }
 
 /** One place decides the icon headers, so the fallback cannot differ. */
-function png(body: Buffer): NextResponse {
+function png(body: Buffer, updatedAt?: string): NextResponse {
   return new NextResponse(new Uint8Array(body), {
     headers: {
       "content-type": "image/png",
@@ -112,6 +117,7 @@ function png(body: Buffer): NextResponse {
        * same morning it is made.
        */
       "cache-control": "private, max-age=3600",
+      ...(updatedAt ? { etag: `"${Buffer.from(updatedAt).toString("base64url")}"` } : {}),
       "x-robots-tag": "noindex, nofollow",
       "content-disposition": "inline",
     },

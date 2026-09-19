@@ -18,6 +18,7 @@
  * storage.objects) or embedded as a data URI at document render time.
  */
 import { randomUUID } from "node:crypto";
+import { clearAppIcons, refreshAppIconsFromLogo } from "@/modules/companyapp/service";
 import { cache } from "react";
 import { z } from "zod";
 import { sql, withCtx, objectStore, type Ctx } from "@/platform/tenancy";
@@ -288,6 +289,9 @@ export async function uploadLogo(
       `);
     },
   );
+  // The installed app's icons are derived from this logo (item 10). Rendering
+  // happens after the upload is committed and never fails it.
+  await refreshAppIconsFromLogo(ctx, processed.main.buffer);
   return { fileId };
 }
 
@@ -312,6 +316,7 @@ export async function removeLogo(ctx: Ctx, archetype: RoleArchetype): Promise<vo
       `);
     },
   );
+  await clearAppIcons(ctx).catch(() => undefined);
 }
 
 // ── gated display reads (never throw on a missing capability) ────────────────

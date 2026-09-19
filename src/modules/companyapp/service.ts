@@ -17,6 +17,8 @@ import {
   type ColorDecision,
 } from "@/platform/tenanthost/contrast";
 import { truncateGraphemes } from "@/platform/tenanthost/text";
+import { refreshAppIconsFromStoredSource } from "./icons";
+export { publicAppIcon, refreshAppIconsFromLogo, clearAppIcons } from "./icons";
 
 // The pre-authentication reads live in public.ts; the app layer reaches them
 // through this barrel like everything else (BUILD_BIBLE 3.3).
@@ -422,6 +424,8 @@ export async function saveAppBrand(
       `);
     },
   );
+  // Brand colours feed the maskable icon background: re-render from the stored logo.
+  await refreshAppIconsFromStoredSource(ctx).catch(() => undefined);
 }
 
 /** Whether this caller may change the company app at all. */

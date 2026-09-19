@@ -1,11 +1,12 @@
 import { notFound, redirect } from "next/navigation";
-import { Badge, Button, Card, CardHeader, Field, Icon } from "@/platform/ui";
+import { Badge, Card, CardHeader, Field, Icon, SubmitButton } from "@/platform/ui";
 import { getT, getServerLocale } from "@/platform/i18n/server";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { can } from "@/platform/authz";
 import { brandedCompanyAppsEnabled } from "@/platform/flags";
 import {
   getAppIdentity,
+  publicAppIcon,
   listHosts,
   suggestSlug,
   canManageCompanyApp,
@@ -53,6 +54,9 @@ export default async function CompanyAppSettingsPage({
     getAppIdentity(resolved.ctx),
     listHosts(resolved.ctx, resolved.archetype),
   ]);
+  // Item 10: the icon rendered from the uploaded logo, when one exists.
+  const storedIcon = await publicAppIcon(orgId, 192, true).catch(() => null);
+  const iconVersion = storedIcon ? Date.parse(storedIcon.updatedAt) : 0;
 
   const liveHost = hosts.find((h) => h.status === "active");
   const pendingHost = hosts.find((h) => h.status === "pending");
@@ -95,6 +99,7 @@ export default async function CompanyAppSettingsPage({
         <CardHeader title={t("app.preview")} />
         <p className="mb-3 text-sm text-ink-secondary">{t("app.preview_hint")}</p>
         <AppIconPreview
+          maskableUrl={storedIcon ? `/api/o/${orgId}/icon/192-maskable.png?v=${iconVersion}` : null}
           name={identity.name}
           shortName={identity.shortName}
           brandColor={identity.brand.value}
@@ -102,6 +107,10 @@ export default async function CompanyAppSettingsPage({
           background={identity.background.value}
           dir={identity.dir}
         />
+        <p className="mt-3 text-sm text-ink-secondary">
+          {storedIcon ? t("app.icon.from_logo") : t("app.icon.generated")}
+        </p>
+        <p className="mt-1 text-xs text-ink-muted">{t("app.icon.existing_installs")}</p>
         {identity.warnings.length > 0 ? (
           <ul className="mt-3 flex flex-col gap-1.5">
             {identity.warnings.map((w) => (
@@ -172,9 +181,9 @@ export default async function CompanyAppSettingsPage({
               dir="ltr"
             />
             <p className="text-sm text-ink-muted">{t("app.host.move_warning")}</p>
-            <Button type="submit" className="min-h-11 w-fit">
+            <SubmitButton className="min-h-11 w-fit" pendingLabel={t("common.working")}>
               {t("app.slug_claim")}
-            </Button>
+            </SubmitButton>
           </form>
         ) : null}
       </Card>
@@ -236,9 +245,9 @@ export default async function CompanyAppSettingsPage({
                 </select>
               </label>
             </div>
-            <Button type="submit" className="min-h-11 w-fit">
+            <SubmitButton className="min-h-11 w-fit" pendingLabel={t("common.saving")}>
               {t("app.save")}
-            </Button>
+            </SubmitButton>
           </form>
         </Card>
       ) : null}
@@ -255,9 +264,13 @@ export default async function CompanyAppSettingsPage({
             className="mt-3 flex flex-col gap-3"
           >
             <Field name="domain" label="app.company.com" dir="ltr" maxLength={253} />
-            <Button type="submit" variant="secondary" className="min-h-11 w-fit">
+            <SubmitButton
+              variant="secondary"
+              className="min-h-11 w-fit"
+              pendingLabel={t("common.working")}
+            >
               {t("app.domain.custom_title")}
-            </Button>
+            </SubmitButton>
           </form>
         ) : null}
       </Card>

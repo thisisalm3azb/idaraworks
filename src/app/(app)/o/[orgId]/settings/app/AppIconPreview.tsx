@@ -19,6 +19,7 @@ export function AppIconPreview({
   foreground,
   background,
   dir,
+  maskableUrl = null,
 }: {
   name: string;
   shortName: string;
@@ -26,6 +27,8 @@ export function AppIconPreview({
   foreground: string;
   background: string;
   dir: "ltr" | "rtl";
+  /** The maskable icon rendered from the uploaded logo, when one exists (item 10). */
+  maskableUrl?: string | null;
 }) {
   const initials = initialsFor(name);
   return (
@@ -38,14 +41,19 @@ export function AppIconPreview({
           role="img"
           aria-label={name}
         >
-          <span
-            className="text-2xl font-semibold"
-            style={{ color: foreground }}
-            aria-hidden
-            dir={dir}
-          >
-            {initials}
-          </span>
+          {maskableUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element -- the icon route renders the PNG
+            <img src={maskableUrl} alt="" className="h-20 w-20 rounded-[22%] object-cover" />
+          ) : (
+            <span
+              className="text-2xl font-semibold"
+              style={{ color: foreground }}
+              aria-hidden
+              dir={dir}
+            >
+              {initials}
+            </span>
+          )}
           {/* The 80% circle a launcher may crop to. */}
           <span
             aria-hidden
