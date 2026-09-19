@@ -29,7 +29,9 @@ export type ObligationsDict = {
   weekdays: string[];
 };
 
-export function obligationsDict(t: (k: string) => string): ObligationsDict {
+export function obligationsDict(
+  t: (k: string, vars?: Record<string, string | number>) => string,
+): ObligationsDict {
   const k = (x: string) => t(`docstudio.ob.${x}`);
   const rec = (prefix: string, keys: string[]) =>
     Object.fromEntries(keys.map((x) => [x, k(`${prefix}.${x}`)]));
@@ -84,8 +86,9 @@ export function obligationsDict(t: (k: string) => string): ObligationsDict {
     confirm: t("docstudio.ws.confirm"),
     cancel: t("docstudio.cancel"),
     close: t("docstudio.ws.close"),
-    daysLeft: k("days_left"),
-    daysOver: k("days_over"),
+    // The board substitutes the day count per card; keep the placeholder intact (D6).
+    daysLeft: t("docstudio.ob.days_left", { n: "{n}" }),
+    daysOver: t("docstudio.ob.days_over", { n: "{n}" }),
     today: k("today"),
     months: k("months").split("|"),
     weekdays: k("weekdays").split("|"),

@@ -50,7 +50,7 @@ export default async function DocumentsPage({
     mySteps: t("docstudio.attn.my_steps"),
     awaitingSignature: t("docstudio.attn.awaiting_signature"),
     submissions: t("docstudio.attn.submissions"),
-    daysLeft: t("docstudio.attn.days_left"),
+    daysLeft: t("docstudio.attn.days_left", { n: "{n}" }),
     nothing: t("docstudio.attn.nothing"),
     open: t("docstudio.attn.open"),
   };

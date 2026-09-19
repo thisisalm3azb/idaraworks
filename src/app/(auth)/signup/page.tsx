@@ -93,7 +93,9 @@ export default async function SignupPage({
                   confirm_spam: t("auth.gateway.confirm_spam"),
                   confirm_expired: t("auth.gateway.confirm_expired"),
                   resend: t("auth.gateway.resend"),
-                  resend_cooldown: t("auth.gateway.resend_cooldown"),
+                  // The client substitutes the live countdown itself; hand it the placeholder
+                  // intact rather than formatting a template with no value (D6).
+                  resend_cooldown: t("auth.gateway.resend_cooldown", { s: "{s}" }),
                   resend_sent: t("auth.gateway.resend_sent"),
                   resend_rate: t("auth.gateway.resend_rate"),
                   change_email: t("auth.gateway.change_email"),
