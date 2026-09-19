@@ -1145,3 +1145,20 @@ export {
   unallocateTask,
   type AllocationRow,
 } from "./allocations";
+export {
+  addStage,
+  createPreset,
+  installedTemplateKey,
+  listPresets,
+  moveStage,
+  normaliseWeights,
+  PresetError,
+  readStageTemplate,
+  removeStage,
+  restorePreset,
+  retirePreset,
+  stageKeyFrom,
+  updatePreset,
+  updateStage,
+  type PresetView,
+} from "./presets";

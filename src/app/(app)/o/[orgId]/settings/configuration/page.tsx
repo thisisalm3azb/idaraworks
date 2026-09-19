@@ -1,12 +1,12 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Badge, Button, Card, CardHeader, EmptyState, Field } from "@/platform/ui";
+import { Badge, Card, CardHeader, EmptyState, Field, SubmitButton } from "@/platform/ui";
 import { getT, getServerLocale } from "@/platform/i18n/server";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { can } from "@/platform/authz";
 import { TERM_KEYS } from "@/platform/registries";
 import { diffConfig, getInstalledTemplate, listConfigRevisions } from "@/platform/config";
-import { loadOrgTerminology, resolveTerm } from "@/platform/terminology";
+import { loadOrgTerminology, resolveTerm, term } from "@/platform/terminology";
 import { formatDateTime } from "@/platform/format";
 import { saveTermAction, undoRevisionAction } from "./actions";
 
@@ -23,6 +23,11 @@ export default async function ConfigurationPage({
   if (typeof resolved === "string") redirect("/");
   if (!can(resolved.archetype, "config.view")) redirect(`/o/${orgId}`);
   const t = await getT();
+  const jobT = term(
+    "job",
+    await loadOrgTerminology(resolved.ctx, await getServerLocale()),
+    "singular",
+  );
   const locale = await getServerLocale();
   const terms = await loadOrgTerminology(resolved.ctx, locale);
 
@@ -72,6 +77,17 @@ export default async function ConfigurationPage({
             </Link>
           </div>
         )}
+      </Card>
+
+      <Card>
+        <CardHeader title={t("nav.work_templates")} />
+        <p className="mb-2 text-sm text-ink-secondary">{t("work.intro", { job: jobT })}</p>
+        <Link
+          href={`/o/${orgId}/settings/work-templates`}
+          className="inline-flex min-h-11 items-center rounded-md border border-line-strong bg-card px-4 text-sm font-medium text-ink hover:bg-sunken"
+        >
+          {t("nav.work_templates")} →
+        </Link>
       </Card>
 
       <Card>
@@ -138,7 +154,7 @@ export default async function ConfigurationPage({
               <option value="f">f</option>
             </select>
           </div>
-          <Button type="submit">{t("config.terms.save")}</Button>
+          <SubmitButton pendingLabel={t("common.saving")}>{t("config.terms.save")}</SubmitButton>
         </form>
       </Card>
 
@@ -162,9 +178,9 @@ export default async function ConfigurationPage({
                     </div>
                     <form action={undo}>
                       <input type="hidden" name="revision_id" value={r.id} />
-                      <Button type="submit" variant="ghost">
+                      <SubmitButton variant="ghost" pendingLabel={t("common.working")}>
                         {t("config.revisions.undo")}
-                      </Button>
+                      </SubmitButton>
                     </form>
                   </div>
                   {entries.length > 0 ? (
