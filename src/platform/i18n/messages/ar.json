@@ -3596,6 +3596,8 @@
   "people.hr.visa_expiry": "انتهاء الإقامة",
   "people.team": "الفريق",
   "people.teams.title": "الفرق",
+  "people.terms.effective_from": "ساري من",
+  "people.terms.effective_hint": "تدفع الرواتب المبلغ الساري في آخر يوم من كل فترة.",
   "people.terms.hourly": "التكلفة بالساعة (بالوحدات الصغرى)",
   "people.terms.ot": "معدل العمل الإضافي",
   "people.terms.salary": "الراتب الشهري (بالوحدات الصغرى)",

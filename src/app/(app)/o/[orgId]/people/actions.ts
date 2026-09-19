@@ -7,9 +7,9 @@ import {
   createEmployee,
   createTeam,
   setEmployeeHr,
-  setEmployeeTerms,
   updateEmployee,
 } from "@/modules/masters/service";
+import { recordCompensationChange } from "@/modules/hr/service";
 
 async function resolveOr(orgId: string) {
   const resolved = await resolveCtxForAction(orgId);
@@ -76,10 +76,16 @@ export async function setTermsAction(orgId: string, formData: FormData): Promise
   const base = `/o/${orgId}/people/${id}`;
   try {
     const hourlyRaw = String(formData.get("hourly_cost_minor") ?? "").trim();
-    await setEmployeeTerms(resolved.ctx, resolved.archetype, id, {
+    const effectiveRaw = String(formData.get("effective_date") ?? "").trim();
+    // Pay is an append-only history that payroll reads by effective date; the
+    // costing projection (employee_terms) is refreshed in the same transaction.
+    // Saving only the projection left payroll with nothing to pay (QA, 2026-09).
+    await recordCompensationChange(resolved.ctx, resolved.archetype, id, {
+      effectiveDate: effectiveRaw || new Date().toISOString().slice(0, 10),
       salaryMinor: Number(formData.get("salary_minor") ?? 0),
       hourlyCostMinor: hourlyRaw ? Number(hourlyRaw) : undefined,
       otRate: Number(formData.get("ot_rate") ?? 1.25),
+      reason: "adjustment",
     });
   } catch (err) {
     if ((err as { digest?: string }).digest?.startsWith("NEXT_REDIRECT")) throw err;

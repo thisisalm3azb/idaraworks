@@ -3596,6 +3596,8 @@
   "people.hr.visa_expiry": "Visa expiry",
   "people.team": "Team",
   "people.teams.title": "Teams",
+  "people.terms.effective_from": "Effective from",
+  "people.terms.effective_hint": "Payroll pays the amount in effect on the last day of each period.",
   "people.terms.hourly": "Hourly cost (minor units)",
   "people.terms.ot": "Overtime rate",
   "people.terms.salary": "Monthly salary (minor units)",

@@ -33,6 +33,7 @@ export default async function EmployeePage({
 
   const update = updateEmployeeAction.bind(null, orgId);
   const saveTerms = setTermsAction.bind(null, orgId);
+  const today = new Date().toISOString().slice(0, 10);
   const saveHr = setHrAction.bind(null, orgId);
 
   return (
@@ -90,6 +91,14 @@ export default async function EmployeePage({
           <CardHeader title={t("people.terms.title")} />
           <form action={saveTerms} className="flex flex-col gap-4">
             <input type="hidden" name="employee_id" value={employeeId} />
+            <Field
+              label={t("people.terms.effective_from")}
+              name="effective_date"
+              type="date"
+              defaultValue={today}
+              hint={t("people.terms.effective_hint")}
+              required
+            />
             <Field
               label={t("people.terms.salary")}
               name="salary_minor"

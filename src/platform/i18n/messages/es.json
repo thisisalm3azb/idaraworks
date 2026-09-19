@@ -3596,6 +3596,8 @@
   "people.hr.visa_expiry": "Caducidad del visado",
   "people.team": "Equipo",
   "people.teams.title": "Equipos",
+  "people.terms.effective_from": "Vigente desde",
+  "people.terms.effective_hint": "La nómina paga el importe vigente el último día de cada periodo.",
   "people.terms.hourly": "Coste por hora (unidades menores)",
   "people.terms.ot": "Tarifa de horas extra",
   "people.terms.salary": "Salario mensual (unidades menores)",
