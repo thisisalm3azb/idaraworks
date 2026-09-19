@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { Badge, Button, Card, CardHeader } from "@/platform/ui";
+import { Badge, Card, CardHeader, SubmitButton } from "@/platform/ui";
 import { getT, getServerLocale } from "@/platform/i18n/server";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { can } from "@/platform/authz";
@@ -143,9 +143,9 @@ export default async function ReportDetailPage({
           <CardHeader title={t("reports.review.title")} />
           <form action={review} className="mb-3">
             <input type="hidden" name="report_id" value={report.id} />
-            <Button type="submit" size="lg" className="w-full">
+            <SubmitButton size="lg" className="w-full" pendingLabel={t("common.working")}>
               {t("reports.review.approve")}
-            </Button>
+            </SubmitButton>
           </form>
           <form action={returnAction} className="flex flex-col gap-2">
             <input type="hidden" name="report_id" value={report.id} />
@@ -156,9 +156,9 @@ export default async function ReportDetailPage({
               placeholder={t("reports.review.return_reason")}
               className="min-h-11 w-full rounded-md border border-line-strong bg-card px-3 text-base text-ink"
             />
-            <Button type="submit" variant="secondary">
+            <SubmitButton variant="secondary" pendingLabel={t("common.working")}>
               {t("reports.review.return")}
-            </Button>
+            </SubmitButton>
           </form>
         </Card>
       ) : null}

@@ -48,5 +48,5 @@ export async function updateIssueStatusAction(orgId: string, formData: FormData)
     redirect(`${base}?error=${err instanceof ForbiddenError ? "forbidden" : "failed"}`);
   }
   revalidatePath(base);
-  redirect(base);
+  redirect(`${base}?ok=created`);
 }

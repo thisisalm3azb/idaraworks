@@ -124,6 +124,7 @@ export default async function NewDocumentPage({
             folder: t("docstudio.field.folder"),
             noFolder: t("docstudio.field.no_folder"),
             create: t("docstudio.create"),
+            creating: t("common.creating"),
             kinds: {
               customer: t("docstudio.counterparty.customer"),
               supplier: t("docstudio.counterparty.supplier"),

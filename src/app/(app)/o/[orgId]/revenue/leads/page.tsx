@@ -1,7 +1,7 @@
 import { revenueStudioEnabled } from "@/platform/flags";
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { Badge, Button, Card, EmptyState, Pager } from "@/platform/ui";
+import { Badge, Card, EmptyState, Pager, SubmitButton } from "@/platform/ui";
 import { can } from "@/platform/authz";
 import { formatDate, formatMoney } from "@/platform/format";
 import type { CurrencyCode } from "@/platform/registries";
@@ -222,7 +222,9 @@ export default async function LeadsPage({
                 ))}
               </fieldset>
               <div className="sm:col-span-2 lg:col-span-3">
-                <Button type="submit">{t("revenue.leads.capture_submit")}</Button>
+                <SubmitButton pendingLabel={t("common.submitting")}>
+                  {t("revenue.leads.capture_submit")}
+                </SubmitButton>
               </div>
             </form>
           </details>
@@ -278,7 +280,7 @@ export default async function LeadsPage({
             <input name="q" defaultValue={sp.q ?? ""} className={input} />
           </label>
           <div className="flex items-end gap-2">
-            <Button type="submit">{t("common.apply")}</Button>
+            <SubmitButton pendingLabel={t("common.working")}>{t("common.apply")}</SubmitButton>
             <Link
               href={`/o/${orgId}/revenue/leads`}
               className="text-sm text-ink-secondary hover:underline"
@@ -369,12 +371,21 @@ export default async function LeadsPage({
                         <input type="hidden" name="id" value={l.id} />
                         <p className="text-sm text-ink">{t("revenue.quarantine.review_hint")}</p>
                         <div className="flex gap-2">
-                          <Button type="submit" name="decision" value="trust">
+                          <SubmitButton
+                            name="decision"
+                            value="trust"
+                            pendingLabel={t("common.working")}
+                          >
                             {t("revenue.quarantine.trust")}
-                          </Button>
-                          <Button type="submit" name="decision" value="spam" variant="danger">
+                          </SubmitButton>
+                          <SubmitButton
+                            name="decision"
+                            value="spam"
+                            variant="danger"
+                            pendingLabel={t("common.working")}
+                          >
                             {t("revenue.quarantine.spam")}
-                          </Button>
+                          </SubmitButton>
                         </div>
                       </form>
                     ) : null}
@@ -443,9 +454,9 @@ export default async function LeadsPage({
                           className={input}
                         />
                       </label>
-                      <Button type="submit" variant="secondary">
+                      <SubmitButton variant="secondary" pendingLabel={t("common.saving")}>
                         {t("common.save")}
-                      </Button>
+                      </SubmitButton>
                     </form>
 
                     <form
@@ -527,9 +538,12 @@ export default async function LeadsPage({
                           </label>
                         </div>
                       ) : null}
-                      <Button type="submit" disabled={l.quarantine === "quarantined"}>
+                      <SubmitButton
+                        disabled={l.quarantine === "quarantined"}
+                        pendingLabel={t("common.submitting")}
+                      >
                         {t("revenue.leads.convert_submit")}
-                      </Button>
+                      </SubmitButton>
                     </form>
 
                     <form
@@ -554,9 +568,9 @@ export default async function LeadsPage({
                         {t("common.notes")}
                         <input name="note" maxLength={1000} className={input} />
                       </label>
-                      <Button type="submit" variant="secondary">
+                      <SubmitButton variant="secondary" pendingLabel={t("common.submitting")}>
                         {t("revenue.leads.disqualify_submit")}
-                      </Button>
+                      </SubmitButton>
                     </form>
                   </div>
                 ) : null}

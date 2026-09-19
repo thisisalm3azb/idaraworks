@@ -62,7 +62,7 @@ export async function saveTermAction(orgId: string, formData: FormData): Promise
   }
   revalidatePath(base);
   revalidatePath(`/o/${orgId}`, "layout"); // nav labels change with terms
-  redirect(base);
+  redirect(`${base}?ok=saved`);
 }
 
 export async function undoRevisionAction(orgId: string, formData: FormData): Promise<void> {
@@ -76,5 +76,5 @@ export async function undoRevisionAction(orgId: string, formData: FormData): Pro
   }
   revalidatePath(base);
   revalidatePath(`/o/${orgId}`, "layout");
-  redirect(base);
+  redirect(`${base}?ok=applied`);
 }

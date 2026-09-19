@@ -32,7 +32,7 @@ export async function createEmployeeAction(orgId: string, formData: FormData): P
     redirect(`${base}?error=create_failed`);
   }
   revalidatePath(base);
-  redirect(base);
+  redirect(`${base}?ok=created`);
 }
 
 export async function createTeamAction(orgId: string, formData: FormData): Promise<void> {
@@ -48,7 +48,7 @@ export async function createTeamAction(orgId: string, formData: FormData): Promi
     redirect(`${base}?error=create_failed`);
   }
   revalidatePath(base);
-  redirect(base);
+  redirect(`${base}?ok=created`);
 }
 
 export async function updateEmployeeAction(orgId: string, formData: FormData): Promise<void> {
@@ -67,7 +67,7 @@ export async function updateEmployeeAction(orgId: string, formData: FormData): P
     redirect(`${base}?error=update_failed`);
   }
   revalidatePath(base);
-  redirect(base);
+  redirect(`${base}?ok=saved`);
 }
 
 export async function setTermsAction(orgId: string, formData: FormData): Promise<void> {
@@ -92,7 +92,7 @@ export async function setTermsAction(orgId: string, formData: FormData): Promise
     redirect(`${base}?error=terms_failed`);
   }
   revalidatePath(base);
-  redirect(base);
+  redirect(`${base}?ok=saved`);
 }
 
 export async function setHrAction(orgId: string, formData: FormData): Promise<void> {
@@ -113,5 +113,5 @@ export async function setHrAction(orgId: string, formData: FormData): Promise<vo
     redirect(`${base}?error=hr_failed`);
   }
   revalidatePath(base);
-  redirect(base);
+  redirect(`${base}?ok=saved`);
 }

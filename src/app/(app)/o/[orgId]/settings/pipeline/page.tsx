@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { Badge, Button, Card, CardHeader, Field } from "@/platform/ui";
+import { Badge, Card, CardHeader, Field, SubmitButton } from "@/platform/ui";
 import { getT, getServerLocale } from "@/platform/i18n/server";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { can } from "@/platform/authz";
@@ -115,9 +115,9 @@ export default async function PipelineSettingsPage({
                 defaultValue={String(s.sort)}
               />
             </div>
-            <Button type="submit" variant="secondary">
+            <SubmitButton variant="secondary" pendingLabel={t("common.saving")}>
               {t("common.save")}
-            </Button>
+            </SubmitButton>
           </form>
           {s.category === "open" && s.active ? (
             <form
@@ -142,9 +142,9 @@ export default async function PipelineSettingsPage({
                   </select>
                 </label>
               ) : null}
-              <Button type="submit" variant="ghost">
+              <SubmitButton variant="ghost" pendingLabel={t("common.working")}>
                 {t("pipeline.deactivate")}
-              </Button>
+              </SubmitButton>
             </form>
           ) : null}
         </Card>

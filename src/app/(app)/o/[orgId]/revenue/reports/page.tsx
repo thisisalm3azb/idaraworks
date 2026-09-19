@@ -1,7 +1,7 @@
 import { revenueStudioEnabled } from "@/platform/flags";
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { Badge, Button, Card, CardHeader } from "@/platform/ui";
+import { Badge, Card, CardHeader, SubmitButton } from "@/platform/ui";
 import { can } from "@/platform/authz";
 import { formatMoney } from "@/platform/format";
 import type { CurrencyCode } from "@/platform/registries";
@@ -81,9 +81,9 @@ export default async function ReportsPage({
             {t("common.to")}
             <input name="to" type="date" defaultValue={to} className={input} dir="ltr" />
           </label>
-          <Button type="submit" variant="secondary">
+          <SubmitButton variant="secondary" pendingLabel={t("common.working")}>
             {t("common.apply")}
-          </Button>
+          </SubmitButton>
           <span className="ms-auto flex flex-wrap gap-2 text-sm">
             <a
               href={`/api/o/${orgId}/revenue/report?${qs}&format=pdf`}

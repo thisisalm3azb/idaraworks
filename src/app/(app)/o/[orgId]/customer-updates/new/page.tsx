@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { Badge, Button, Card, CardHeader } from "@/platform/ui";
+import { Card, CardHeader, SubmitButton } from "@/platform/ui";
 import { getT } from "@/platform/i18n/server";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { can } from "@/platform/authz";
@@ -15,13 +15,10 @@ const input =
 
 export default async function NewCustomerUpdatePage({
   params,
-  searchParams,
 }: {
   params: Promise<{ orgId: string }>;
-  searchParams: Promise<{ error?: string }>;
 }) {
   const { orgId } = await params;
-  const sp = await searchParams;
   const resolved = await resolveCtx(orgId);
   if (typeof resolved === "string") redirect("/");
   if (!can(resolved.archetype, "customer_updates.draft")) redirect(`/o/${orgId}/customer-updates`);
@@ -36,7 +33,6 @@ export default async function NewCustomerUpdatePage({
   return (
     <div className="mx-auto flex w-full max-w-md flex-col gap-4">
       <h1 className="text-lg font-semibold text-ink">{t("customer_updates.new")}</h1>
-      {sp.error ? <Badge tone="danger">{t("common.error")}</Badge> : null}
       <Card>
         <CardHeader title={t("customer_updates.form.title")} />
         <form action={createDraftAction.bind(null, orgId)} className="flex flex-col gap-3">
@@ -78,7 +74,9 @@ export default async function NewCustomerUpdatePage({
             <textarea name="body" required maxLength={4000} rows={5} className={input} />
           </label>
           <p className="text-xs text-ink-muted">{t("customer_updates.form.safe_note")}</p>
-          <Button type="submit">{t("customer_updates.form.submit")}</Button>
+          <SubmitButton pendingLabel={t("common.submitting")}>
+            {t("customer_updates.form.submit")}
+          </SubmitButton>
         </form>
       </Card>
     </div>

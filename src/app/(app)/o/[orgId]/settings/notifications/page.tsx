@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { Button, Card } from "@/platform/ui";
+import { Card, SubmitButton } from "@/platform/ui";
 import { getT } from "@/platform/i18n/server";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { getMyNotificationPreferences } from "@/platform/notifications";
@@ -55,7 +55,7 @@ export default async function NotificationPrefsPage({
             </div>
           </Card>
         ))}
-        <Button type="submit">{t("common.save")}</Button>
+        <SubmitButton pendingLabel={t("common.saving")}>{t("common.save")}</SubmitButton>
       </form>
     </div>
   );

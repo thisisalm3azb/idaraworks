@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Badge, Button, Card, EmptyState } from "@/platform/ui";
+import { Badge, Card, EmptyState, SubmitButton } from "@/platform/ui";
 import { getT, getServerLocale } from "@/platform/i18n/server";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { can } from "@/platform/authz";
@@ -54,11 +54,6 @@ export default async function ApprovalsPage({
           {t("approvals.decided_notice")}
         </p>
       ) : null}
-      {sp.error ? (
-        <p className="rounded-md bg-danger-soft px-3 py-2 text-sm text-danger">
-          {t("common.error")}
-        </p>
-      ) : null}
       {inbox.length === 0 ? (
         <EmptyState title={t("approvals.inbox_empty")} />
       ) : (
@@ -90,18 +85,23 @@ export default async function ApprovalsPage({
                     className="min-h-11 w-full rounded-md border border-line-strong bg-card px-3 text-base text-ink"
                   />
                   <div className="flex gap-2">
-                    <Button type="submit" name="decision" value="approved" className="flex-1">
+                    <SubmitButton
+                      name="decision"
+                      value="approved"
+                      className="flex-1"
+                      pendingLabel={t("common.working")}
+                    >
                       {t("approvals.approve")}
-                    </Button>
-                    <Button
-                      type="submit"
+                    </SubmitButton>
+                    <SubmitButton
                       name="decision"
                       value="rejected"
                       variant="danger"
                       className="flex-1"
+                      pendingLabel={t("common.working")}
                     >
                       {t("approvals.reject")}
-                    </Button>
+                    </SubmitButton>
                   </div>
                 </form>
                 {SUBJECT_PATH[a.subjectType] ? (

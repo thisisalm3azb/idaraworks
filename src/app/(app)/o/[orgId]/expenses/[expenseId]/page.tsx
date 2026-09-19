@@ -1,5 +1,5 @@
 import { notFound, redirect } from "next/navigation";
-import { Badge, Button, Card, CardHeader } from "@/platform/ui";
+import { Badge, Card, CardHeader, SubmitButton } from "@/platform/ui";
 import { getT } from "@/platform/i18n/server";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { can } from "@/platform/authz";
@@ -40,7 +40,6 @@ export default async function ExpenseDetailPage({
         {e.voided ? <Badge tone="danger">{t("expenses.voided")}</Badge> : null}
       </div>
       {sp.ok === "voided" ? <Badge tone="success">{t("expenses.void_ok")}</Badge> : null}
-      {sp.error ? <Badge tone="danger">{t("common.error")}</Badge> : null}
       <Card>
         <CardHeader title={t("expenses.detail.title")} />
         {row(t("expenses.form.category"), e.categoryKey)}
@@ -64,9 +63,9 @@ export default async function ExpenseDetailPage({
               placeholder={t("expenses.void.reason_placeholder")}
               className="min-h-11 rounded-md border border-line bg-card px-3 py-2 text-sm text-ink"
             />
-            <Button type="submit" variant="danger">
+            <SubmitButton variant="danger" pendingLabel={t("common.submitting")}>
               {t("expenses.void.submit")}
-            </Button>
+            </SubmitButton>
           </form>
         </Card>
       ) : null}

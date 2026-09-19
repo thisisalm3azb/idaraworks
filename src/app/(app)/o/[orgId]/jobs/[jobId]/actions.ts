@@ -65,7 +65,7 @@ function jobAction(
       redirect(`${base}&error=${workErrorSlug(err)}`);
     }
     revalidatePath(`/o/${orgId}/jobs/${jobId}`);
-    redirect(base);
+    redirect(`${base}?ok=saved`);
   };
 }
 

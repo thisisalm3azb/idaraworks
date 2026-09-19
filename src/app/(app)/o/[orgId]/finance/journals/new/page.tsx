@@ -1,5 +1,5 @@
 import { notFound, redirect } from "next/navigation";
-import { Button, Card } from "@/platform/ui";
+import { Card, SubmitButton } from "@/platform/ui";
 import { getT, getServerLocale } from "@/platform/i18n/server";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { can } from "@/platform/authz";
@@ -89,7 +89,9 @@ export default async function NewJournalPage({
               </div>
             ))}
           </div>
-          <Button type="submit">{t("finance.journals.save_draft")}</Button>
+          <SubmitButton pendingLabel={t("common.saving")}>
+            {t("finance.journals.save_draft")}
+          </SubmitButton>
         </form>
       </Card>
     </div>

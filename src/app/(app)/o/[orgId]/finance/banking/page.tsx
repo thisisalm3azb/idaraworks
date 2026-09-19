@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { Badge, Button, Card, EmptyState } from "@/platform/ui";
+import { Badge, Card, EmptyState, SubmitButton } from "@/platform/ui";
 import { getT, getServerLocale } from "@/platform/i18n/server";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { can } from "@/platform/authz";
@@ -118,7 +118,9 @@ export default async function BankingPage({
               <input name="bank_name" maxLength={120} className={input} />
             </label>
             <div className="sm:col-span-4">
-              <Button type="submit">{t("finance.banking.new_account")}</Button>
+              <SubmitButton pendingLabel={t("common.creating")}>
+                {t("finance.banking.new_account")}
+              </SubmitButton>
             </div>
           </form>
         </Card>
@@ -204,7 +206,9 @@ export default async function BankingPage({
               <input name="memo" maxLength={500} className={input} />
             </label>
             <div className="sm:col-span-3">
-              <Button type="submit">{t("finance.banking.record")}</Button>
+              <SubmitButton pendingLabel={t("common.working")}>
+                {t("finance.banking.record")}
+              </SubmitButton>
             </div>
           </form>
         </Card>
@@ -299,9 +303,9 @@ export default async function BankingPage({
               />
             </label>
             <div className="sm:col-span-3">
-              <Button type="submit" variant="secondary">
+              <SubmitButton variant="secondary" pendingLabel={t("common.working")}>
                 {t("finance.banking.start_recon")}
-              </Button>
+              </SubmitButton>
             </div>
           </form>
           {recons.length === 0 ? null : (

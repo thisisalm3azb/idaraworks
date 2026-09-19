@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { Badge, Button, Card, CardHeader, EmptyState, FilterBar } from "@/platform/ui";
+import { Badge, Card, CardHeader, EmptyState, FilterBar, SubmitButton } from "@/platform/ui";
 import { getT } from "@/platform/i18n/server";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { can } from "@/platform/authz";
@@ -89,7 +89,7 @@ export default async function IssuesPage({
             <input type="checkbox" name="is_blocker" className="size-5" />
             {t("issues.field.blocker")}
           </label>
-          <Button type="submit">{t("issues.raise")}</Button>
+          <SubmitButton pendingLabel={t("common.working")}>{t("issues.raise")}</SubmitButton>
         </form>
       </Card>
 
@@ -124,18 +124,22 @@ export default async function IssuesPage({
                     <form action={setStatus}>
                       <input type="hidden" name="issue_id" value={i.id} />
                       <input type="hidden" name="status" value="resolved" />
-                      <Button type="submit" variant="secondary" size="md">
+                      <SubmitButton
+                        variant="secondary"
+                        size="md"
+                        pendingLabel={t("common.working")}
+                      >
                         {t("issues.resolve")}
-                      </Button>
+                      </SubmitButton>
                     </form>
                   ) : null}
                   {canResolve && (i.status === "resolved" || i.status === "closed") ? (
                     <form action={setStatus}>
                       <input type="hidden" name="issue_id" value={i.id} />
                       <input type="hidden" name="status" value="open" />
-                      <Button type="submit" variant="ghost" size="md">
+                      <SubmitButton variant="ghost" size="md" pendingLabel={t("common.working")}>
                         {t("issues.reopen")}
-                      </Button>
+                      </SubmitButton>
                     </form>
                   ) : null}
                 </div>

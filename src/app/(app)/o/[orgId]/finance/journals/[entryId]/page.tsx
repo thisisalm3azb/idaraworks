@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { Badge, Button, Card } from "@/platform/ui";
+import { Badge, Card, SubmitButton } from "@/platform/ui";
 import { getT, getServerLocale } from "@/platform/i18n/server";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { can } from "@/platform/authz";
@@ -136,14 +136,16 @@ export default async function JournalDetailPage({
             <form action={step}>
               <input type="hidden" name="entry_id" value={entryId} />
               <input type="hidden" name="step" value="post" />
-              <Button type="submit">{t("finance.journals.post")}</Button>
+              <SubmitButton pendingLabel={t("common.working")}>
+                {t("finance.journals.post")}
+              </SubmitButton>
             </form>
             <form action={step}>
               <input type="hidden" name="entry_id" value={entryId} />
               <input type="hidden" name="step" value="cancel" />
-              <Button type="submit" variant="secondary">
+              <SubmitButton variant="secondary" pendingLabel={t("common.working")}>
                 {t("finance.journals.cancel")}
-              </Button>
+              </SubmitButton>
             </form>
           </div>
         </Card>
@@ -175,9 +177,9 @@ export default async function JournalDetailPage({
                 className="mt-1 min-h-11 w-full rounded-md border border-line-strong bg-card px-3 text-base text-ink"
               />
             </label>
-            <Button type="submit" variant="secondary">
+            <SubmitButton variant="secondary" pendingLabel={t("common.working")}>
               {t("finance.journals.reverse")}
-            </Button>
+            </SubmitButton>
           </form>
         </Card>
       ) : null}

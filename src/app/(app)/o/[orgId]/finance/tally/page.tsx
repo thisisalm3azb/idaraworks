@@ -1,5 +1,5 @@
 import { notFound, redirect } from "next/navigation";
-import { Badge, Button, Card } from "@/platform/ui";
+import { Badge, Card, SubmitButton } from "@/platform/ui";
 import { getT, getServerLocale } from "@/platform/i18n/server";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { can } from "@/platform/authz";
@@ -95,7 +95,9 @@ export default async function TallyImportPage({
               className="mt-1 block min-h-11 text-sm text-ink"
             />
           </label>
-          <Button type="submit">{t("finance.tally.inspect")}</Button>
+          <SubmitButton pendingLabel={t("common.working")}>
+            {t("finance.tally.inspect")}
+          </SubmitButton>
         </form>
       </Card>
 
@@ -158,23 +160,25 @@ export default async function TallyImportPage({
               </div>
             ))}
             <div className="flex flex-wrap gap-2">
-              <Button type="submit" variant="secondary">
+              <SubmitButton variant="secondary" pendingLabel={t("common.saving")}>
                 {t("finance.tally.save_mapping")}
-              </Button>
+              </SubmitButton>
             </div>
           </form>
           {detail.format !== "tally_xml_masters" ? (
             <div className="mt-3 flex flex-wrap gap-2">
               <form action={dryRun}>
                 <input type="hidden" name="import_id" value={detail.id} />
-                <Button type="submit" variant="secondary">
+                <SubmitButton variant="secondary" pendingLabel={t("common.working")}>
                   {t("finance.tally.dry_run")}
-                </Button>
+                </SubmitButton>
               </form>
               {detail.status === "validated" ? (
                 <form action={approve}>
                   <input type="hidden" name="import_id" value={detail.id} />
-                  <Button type="submit">{t("finance.tally.approve")}</Button>
+                  <SubmitButton pendingLabel={t("common.working")}>
+                    {t("finance.tally.approve")}
+                  </SubmitButton>
                 </form>
               ) : null}
             </div>

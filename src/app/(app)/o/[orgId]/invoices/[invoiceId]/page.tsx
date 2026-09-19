@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { Badge, Button, Card, CardHeader } from "@/platform/ui";
+import { Badge, Card, CardHeader, SubmitButton } from "@/platform/ui";
 import { getT } from "@/platform/i18n/server";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { can } from "@/platform/authz";
@@ -55,7 +55,6 @@ export default async function InvoiceDetailPage({
         <Badge tone="info">{t(`invoices.status.${inv.status}`)}</Badge>
       </div>
       {sp.ok ? <Badge tone="success">{t("common.saved")}</Badge> : null}
-      {sp.error ? <Badge tone="danger">{t("common.error")}</Badge> : null}
       <Card>
         {inv.customerId && can(resolved.archetype, "customers.view") ? (
           <p className="mb-2 text-sm">
@@ -95,9 +94,9 @@ export default async function InvoiceDetailPage({
             <>
               <form action={issueInvoiceAction.bind(null, orgId)}>
                 <input type="hidden" name="invoice_id" value={inv.id} />
-                <Button type="submit" variant="primary">
+                <SubmitButton variant="primary" pendingLabel={t("common.working")}>
                   {t("invoices.action.issue")}
-                </Button>
+                </SubmitButton>
               </form>
               <form action={voidInvoiceAction.bind(null, orgId)} className="flex gap-2">
                 <input type="hidden" name="invoice_id" value={inv.id} />
@@ -107,9 +106,9 @@ export default async function InvoiceDetailPage({
                   placeholder={t("invoices.action.void_reason")}
                   className="min-h-11 flex-1 rounded-md border border-line bg-card px-3 text-sm"
                 />
-                <Button type="submit" variant="danger">
+                <SubmitButton variant="danger" pendingLabel={t("common.working")}>
                   {t("invoices.action.void")}
-                </Button>
+                </SubmitButton>
               </form>
             </>
           ) : null}
@@ -117,7 +116,9 @@ export default async function InvoiceDetailPage({
             <>
               <form action={submitEInvoiceAction.bind(null, orgId)}>
                 <input type="hidden" name="invoice_id" value={inv.id} />
-                <Button type="submit">{t("invoices.action.einvoice")}</Button>
+                <SubmitButton pendingLabel={t("common.working")}>
+                  {t("invoices.action.einvoice")}
+                </SubmitButton>
               </form>
               <form action={creditNoteAction.bind(null, orgId)} className="flex gap-2">
                 <input type="hidden" name="invoice_id" value={inv.id} />
@@ -127,9 +128,9 @@ export default async function InvoiceDetailPage({
                   placeholder={t("invoices.action.credit_reason")}
                   className="min-h-11 flex-1 rounded-md border border-line bg-card px-3 text-sm"
                 />
-                <Button type="submit" variant="danger">
+                <SubmitButton variant="danger" pendingLabel={t("common.working")}>
                   {t("invoices.action.credit_note")}
-                </Button>
+                </SubmitButton>
               </form>
             </>
           ) : null}

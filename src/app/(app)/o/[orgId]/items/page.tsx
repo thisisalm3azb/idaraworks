@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { Badge, Button, Card, CardHeader, EmptyState, Field, Pager } from "@/platform/ui";
+import { Badge, Card, CardHeader, EmptyState, Field, Pager, SubmitButton } from "@/platform/ui";
 import { getT, getServerLocale } from "@/platform/i18n/server";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { can } from "@/platform/authz";
@@ -175,7 +175,7 @@ export default async function ItemsPage({
                 autoFocus={invalid === "sellingPriceMinor" || undefined}
               />
             ) : null}
-            <Button type="submit">{t("common.add")}</Button>
+            <SubmitButton pendingLabel={t("common.creating")}>{t("common.add")}</SubmitButton>
           </form>
         </Card>
       ) : null}

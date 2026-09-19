@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Badge, Button, Card, CardHeader } from "@/platform/ui";
+import { Badge, Card, CardHeader, SubmitButton } from "@/platform/ui";
 import { getT, getServerLocale } from "@/platform/i18n/server";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { can } from "@/platform/authz";
@@ -277,9 +277,9 @@ export default async function SalesPage({
                   {canManage ? (
                     <form action={done}>
                       <input type="hidden" name="activity_id" value={a.id} />
-                      <Button type="submit" variant="ghost">
+                      <SubmitButton variant="ghost" pendingLabel={t("common.working")}>
                         {t("sales.activity.mark_done")}
-                      </Button>
+                      </SubmitButton>
                     </form>
                   ) : null}
                 </li>

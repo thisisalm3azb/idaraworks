@@ -133,7 +133,13 @@ export function CustomerEditForm({
       />
       <Field label={dict.notes} name="notes" maxLength={2000} defaultValue={initial.notes ?? ""} />
       <div className="flex flex-wrap gap-2">
-        <Button type="submit" disabled={pending}>
+        <Button type="submit" disabled={pending} aria-busy={pending || undefined}>
+          {pending ? (
+            <span
+              aria-hidden
+              className="size-4 shrink-0 animate-spin rounded-full border-2 border-current border-t-transparent"
+            />
+          ) : null}
           {dict.save}
         </Button>
         <Button

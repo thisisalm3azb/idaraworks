@@ -1,7 +1,7 @@
 import { revenueStudioEnabled } from "@/platform/flags";
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { Badge, Button, Card, CardHeader, EmptyState, Pager } from "@/platform/ui";
+import { Badge, Card, CardHeader, EmptyState, Pager, SubmitButton } from "@/platform/ui";
 import { can } from "@/platform/authz";
 import { formatDate } from "@/platform/format";
 import { listMembers } from "@/platform/auth/identity";
@@ -130,7 +130,7 @@ export default async function SuccessPage({
             </label>
           ) : null}
           <div className="flex items-end gap-2">
-            <Button type="submit">{t("common.apply")}</Button>
+            <SubmitButton pendingLabel={t("common.working")}>{t("common.apply")}</SubmitButton>
             <Link
               href={`/o/${orgId}/revenue/success`}
               className="text-sm text-ink-secondary hover:underline"

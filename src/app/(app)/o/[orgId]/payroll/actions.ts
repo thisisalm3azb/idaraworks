@@ -28,7 +28,7 @@ export async function createPayGroupAction(orgId: string, formData: FormData): P
     redirect(`${base}?error=failed`);
   }
   revalidatePath(base);
-  redirect(base);
+  redirect(`${base}?ok=created`);
 }
 
 export async function createPayRunAction(orgId: string, formData: FormData): Promise<void> {

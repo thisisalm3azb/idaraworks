@@ -1,5 +1,5 @@
 import { notFound, redirect } from "next/navigation";
-import { Badge, Button, Card } from "@/platform/ui";
+import { Badge, Card, SubmitButton } from "@/platform/ui";
 import { getT, getServerLocale } from "@/platform/i18n/server";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { can } from "@/platform/authz";
@@ -88,7 +88,9 @@ export default async function TaxPage({
                   <input name="period_end" type="date" required className={input} dir="ltr" />
                 </label>
               </div>
-              <Button type="submit">{t("finance.tax.prepare_vat")}</Button>
+              <SubmitButton pendingLabel={t("common.working")}>
+                {t("finance.tax.prepare_vat")}
+              </SubmitButton>
             </form>
           ) : (
             <p className="text-sm text-ink-muted">{t("finance.tax.pack_missing")}</p>
@@ -110,7 +112,9 @@ export default async function TaxPage({
                 <input name="period_end" type="date" required className={input} dir="ltr" />
               </label>
             </div>
-            <Button type="submit">{t("finance.tax.prepare_ct")}</Button>
+            <SubmitButton pendingLabel={t("common.working")}>
+              {t("finance.tax.prepare_ct")}
+            </SubmitButton>
           </form>
         </Card>
       </div>
@@ -166,9 +170,9 @@ export default async function TaxPage({
               <input name="evidence" maxLength={300} className={input} />
             </label>
             <div className="sm:col-span-3">
-              <Button type="submit" variant="secondary">
+              <SubmitButton variant="secondary" pendingLabel={t("common.working")}>
                 {t("finance.tax.ct_adjustment")}
-              </Button>
+              </SubmitButton>
             </div>
           </form>
         </Card>
@@ -208,27 +212,27 @@ export default async function TaxPage({
                     <form action={stepReturn}>
                       <input type="hidden" name="return_id" value={r.id} />
                       <input type="hidden" name="step" value="under_review" />
-                      <Button type="submit" variant="secondary">
+                      <SubmitButton variant="secondary" pendingLabel={t("common.working")}>
                         {t("finance.tax.to_review")}
-                      </Button>
+                      </SubmitButton>
                     </form>
                   ) : null}
                   {reviews && r.status === "under_review" ? (
                     <form action={stepReturn}>
                       <input type="hidden" name="return_id" value={r.id} />
                       <input type="hidden" name="step" value="locked" />
-                      <Button type="submit" variant="secondary">
+                      <SubmitButton variant="secondary" pendingLabel={t("common.working")}>
                         {t("finance.tax.lock")}
-                      </Button>
+                      </SubmitButton>
                     </form>
                   ) : null}
                   {reviews && r.status === "locked" && r.taxType === "vat" ? (
                     <form action={stepReturn}>
                       <input type="hidden" name="return_id" value={r.id} />
                       <input type="hidden" name="step" value="amend" />
-                      <Button type="submit" variant="secondary">
+                      <SubmitButton variant="secondary" pendingLabel={t("common.working")}>
                         {t("finance.tax.amend")}
-                      </Button>
+                      </SubmitButton>
                     </form>
                   ) : null}
                 </span>

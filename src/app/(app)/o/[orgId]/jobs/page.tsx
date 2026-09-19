@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { Badge, Button, Card, CardHeader, Field, FilterBar } from "@/platform/ui";
+import { Badge, Card, CardHeader, Field, FilterBar, SubmitButton } from "@/platform/ui";
 import { getT, getServerLocale } from "@/platform/i18n/server";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { loadOrgTerminology, term } from "@/platform/terminology";
@@ -210,9 +210,9 @@ export default async function JobsPage({
           <div className="min-w-48 flex-1">
             <Field label={t("common.search")} name="q" defaultValue={w.q ?? ""} maxLength={120} />
           </div>
-          <Button type="submit" variant="secondary">
+          <SubmitButton variant="secondary" pendingLabel={t("common.working")}>
             {t("common.search")}
-          </Button>
+          </SubmitButton>
         </form>
         <div className="mt-3 flex flex-wrap gap-2" role="group" aria-label={t("work.filter.label")}>
           {(["list", "board", "schedule"] as const).map((v) => (
@@ -384,7 +384,9 @@ export default async function JobsPage({
                 </select>
               </div>
             ) : null}
-            <Button type="submit">{t("jobs.new.cta", { job: jobTerm })}</Button>
+            <SubmitButton pendingLabel={t("common.creating")}>
+              {t("jobs.new.cta", { job: jobTerm })}
+            </SubmitButton>
           </form>
         </Card>
       ) : null}

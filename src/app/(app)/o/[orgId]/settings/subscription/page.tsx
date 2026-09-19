@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
-import { Badge, Button, Card, CardHeader } from "@/platform/ui";
+import { Badge, Card, CardHeader, SubmitButton } from "@/platform/ui";
 import { SubscriptionSelector } from "@/platform/ui/subscription";
 import { getT, getServerLocale } from "@/platform/i18n/server";
 import { resolveCtx } from "@/platform/auth/resolve";
@@ -471,9 +471,9 @@ export default async function SubscriptionPage({
                         >
                           <form action={selectBundleWithOrg}>
                             <input type="hidden" name="bundle" value={b.key} />
-                            <Button type="submit" variant="secondary">
+                            <SubmitButton variant="secondary" pendingLabel={t("common.working")}>
                               {t("subscription.confirm.apply")}
-                            </Button>
+                            </SubmitButton>
                           </form>
                         </ConfirmAction>
                       ) : null}
@@ -485,9 +485,9 @@ export default async function SubscriptionPage({
                         >
                           <form action={removeBundleWithOrg}>
                             <input type="hidden" name="bundle" value={b.key} />
-                            <Button type="submit" variant="danger">
+                            <SubmitButton variant="danger" pendingLabel={t("common.working")}>
                               {t("subscription.confirm.apply")}
-                            </Button>
+                            </SubmitButton>
                           </form>
                         </ConfirmAction>
                       ) : null}
@@ -547,9 +547,9 @@ export default async function SubscriptionPage({
             danger
           >
             <form action={cancelWithOrg}>
-              <Button type="submit" variant="danger">
+              <SubmitButton variant="danger" pendingLabel={t("common.working")}>
                 {t("subscription.confirm.cancel_apply")}
-              </Button>
+              </SubmitButton>
             </form>
           </ConfirmAction>
         </Card>

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { Badge, Button, Card, EmptyState } from "@/platform/ui";
+import { Badge, Card, EmptyState, SubmitButton } from "@/platform/ui";
 import { getT, getServerLocale } from "@/platform/i18n/server";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { can } from "@/platform/authz";
@@ -19,16 +19,9 @@ const STATUS_TONE: Record<string, "success" | "warning" | "danger" | "info"> = {
   cancelled: "danger",
 };
 
-export default async function PayrollPage({
-  params,
-  searchParams,
-}: {
-  params: Promise<{ orgId: string }>;
-  searchParams: Promise<{ error?: string }>;
-}) {
+export default async function PayrollPage({ params }: { params: Promise<{ orgId: string }> }) {
   if (!hrSurfacesEnabled()) notFound();
   const { orgId } = await params;
-  const sp = await searchParams;
   const resolved = await resolveCtx(orgId);
   if (typeof resolved === "string") redirect("/");
   if (!can(resolved.archetype, "payroll.view")) notFound();
@@ -44,11 +37,6 @@ export default async function PayrollPage({
   return (
     <div className="flex flex-col gap-4">
       <h1 className="text-lg font-semibold text-ink">{t("hr.payroll.title")}</h1>
-      {sp.error ? (
-        <p className="rounded-md bg-danger-soft px-3 py-2 text-sm text-danger">
-          {t("common.error")}
-        </p>
-      ) : null}
 
       {manages && groups.length === 0 ? (
         <Card>
@@ -77,7 +65,9 @@ export default async function PayrollPage({
                 ))}
               </select>
             </label>
-            <Button type="submit">{t("hr.payroll.new_group")}</Button>
+            <SubmitButton pendingLabel={t("common.creating")}>
+              {t("hr.payroll.new_group")}
+            </SubmitButton>
           </form>
         </Card>
       ) : null}
@@ -129,7 +119,9 @@ export default async function PayrollPage({
                 <option value="off_cycle">{t("hr.payroll.kind_off_cycle")}</option>
               </select>
             </label>
-            <Button type="submit">{t("hr.payroll.new_run")}</Button>
+            <SubmitButton pendingLabel={t("common.creating")}>
+              {t("hr.payroll.new_run")}
+            </SubmitButton>
           </form>
         </Card>
       ) : null}

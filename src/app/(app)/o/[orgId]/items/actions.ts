@@ -35,5 +35,5 @@ export async function createItemAction(orgId: string, formData: FormData): Promi
     return failMasterDataAction(err, { ctx: resolved.ctx, base, entity: "item", values });
   }
   revalidatePath(base);
-  redirect(base);
+  redirect(`${base}?ok=created`);
 }

@@ -1,6 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
-import { Badge, Button, Card } from "@/platform/ui";
+import { Badge, Card, SubmitButton } from "@/platform/ui";
 import { ACTIVE_AGENT_IDS, AGENT_DEFS } from "@/platform/agents/registry";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { can } from "@/platform/authz";
@@ -137,7 +137,9 @@ export default async function AgentBuilderPage({
             </select>
           </label>
           <div className="sm:col-span-2">
-            <Button type="submit">{t("idara.builder.create")}</Button>
+            <SubmitButton pendingLabel={t("common.creating")}>
+              {t("idara.builder.create")}
+            </SubmitButton>
           </div>
         </form>
       </Card>
@@ -190,12 +192,14 @@ export default async function AgentBuilderPage({
             </p>
             <span className="flex items-center gap-2">
               <form action={publishAgentAction.bind(null, orgId, selected.id)}>
-                <Button type="submit">{t("idara.builder.publish")}</Button>
+                <SubmitButton pendingLabel={t("common.working")}>
+                  {t("idara.builder.publish")}
+                </SubmitButton>
               </form>
               <form action={retireAgentAction.bind(null, orgId, selected.id)}>
-                <Button type="submit" variant="secondary">
+                <SubmitButton variant="secondary" pendingLabel={t("common.working")}>
                   {t("idara.builder.retire")}
-                </Button>
+                </SubmitButton>
               </form>
             </span>
           </div>
@@ -300,7 +304,7 @@ export default async function AgentBuilderPage({
                 {t("idara.builder.eval_required")}
               </label>
             </div>
-            <Button type="submit">{t("common.save")}</Button>
+            <SubmitButton pendingLabel={t("common.saving")}>{t("common.save")}</SubmitButton>
           </form>
 
           <div className="mt-4 border-t border-line pt-3">
@@ -327,9 +331,9 @@ export default async function AgentBuilderPage({
                       <Badge tone="success">{t("idara.builder.current")}</Badge>
                     ) : (
                       <form action={rollbackAgentAction.bind(null, orgId, selected.id, v.version)}>
-                        <Button type="submit" variant="secondary">
+                        <SubmitButton variant="secondary" pendingLabel={t("common.working")}>
                           {t("idara.builder.rollback")}
-                        </Button>
+                        </SubmitButton>
                       </form>
                     )}
                   </li>

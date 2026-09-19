@@ -1,5 +1,5 @@
 import { notFound, redirect } from "next/navigation";
-import { Badge, Button, Card, CardHeader, EmptyState, Field, Icon } from "@/platform/ui";
+import { Badge, Card, CardHeader, EmptyState, Field, Icon, SubmitButton } from "@/platform/ui";
 import { getT, getServerLocale } from "@/platform/i18n/server";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { can } from "@/platform/authz";
@@ -155,9 +155,13 @@ export default async function WarehousesPage({
                 ) : mayManage && l.canHoldStock && l.active ? (
                   <form action={setDefaultReceivingAction.bind(null, orgId)} className="ms-auto">
                     <input type="hidden" name="location_id" value={l.id} />
-                    <Button type="submit" variant="secondary" className="min-h-11">
+                    <SubmitButton
+                      variant="secondary"
+                      className="min-h-11"
+                      pendingLabel={t("common.working")}
+                    >
                       {t("stock.setup.make_default")}
-                    </Button>
+                    </SubmitButton>
                   </form>
                 ) : null}
               </li>
@@ -204,9 +208,9 @@ export default async function WarehousesPage({
                   <input type="checkbox" name="can_hold_stock" defaultChecked className="h-5 w-5" />
                   {t("stock.setup.holds_stock")}
                 </label>
-                <Button type="submit" className="min-h-11">
+                <SubmitButton className="min-h-11" pendingLabel={t("common.creating")}>
                   {t("stock.setup.add_location")}
-                </Button>
+                </SubmitButton>
               </form>
             </details>
           ) : null}
@@ -252,9 +256,9 @@ export default async function WarehousesPage({
                 {t("stock.setup.apply_base_unit", { count: readiness.itemsWithoutBaseUnit })}
               </span>
             </label>
-            <Button type="submit" className="min-h-11">
+            <SubmitButton className="min-h-11" pendingLabel={t("common.creating")}>
               {t("stock.setup.add_unit")}
-            </Button>
+            </SubmitButton>
           </form>
         </Card>
       ) : null}
@@ -285,9 +289,9 @@ export default async function WarehousesPage({
                 <span className="block text-ink-muted">{t("stock.setup.with_receiving_hint")}</span>
               </span>
             </label>
-            <Button type="submit" className="min-h-11">
+            <SubmitButton className="min-h-11" pendingLabel={t("common.creating")}>
               {t("stock.setup.add_warehouse")}
-            </Button>
+            </SubmitButton>
           </form>
         </Card>
       ) : null}

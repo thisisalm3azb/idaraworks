@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Badge, Button, Card, CardHeader, EmptyState, Field } from "@/platform/ui";
+import { Badge, Card, CardHeader, EmptyState, Field, SubmitButton } from "@/platform/ui";
 import { getT } from "@/platform/i18n/server";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { can } from "@/platform/authz";
@@ -91,9 +91,9 @@ export default async function LeadsPage({
           <div className="min-w-48 flex-1">
             <Field label={t("common.search")} name="q" defaultValue={f.q ?? ""} maxLength={120} />
           </div>
-          <Button type="submit" variant="secondary">
+          <SubmitButton variant="secondary" pendingLabel={t("common.working")}>
             {t("common.search")}
-          </Button>
+          </SubmitButton>
         </form>
         <div
           className="mt-3 flex flex-wrap gap-2"
@@ -178,7 +178,7 @@ export default async function LeadsPage({
               />
             </label>
             <div>
-              <Button type="submit">{t("leads.add.cta")}</Button>
+              <SubmitButton pendingLabel={t("common.creating")}>{t("leads.add.cta")}</SubmitButton>
             </div>
           </form>
         </Card>

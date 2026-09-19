@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { Badge, Button, Card, CardHeader } from "@/platform/ui";
+import { Badge, Card, CardHeader, SubmitButton } from "@/platform/ui";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { can } from "@/platform/authz";
 import { countryPacksEnabled } from "@/platform/flags";
@@ -129,9 +129,9 @@ export default async function EstablishmentPage({
             <span className="font-medium text-ink">{t("country.as_of")}</span>
             <input type="date" name="on" defaultValue={on} className={input} />
           </label>
-          <Button type="submit" variant="secondary">
+          <SubmitButton variant="secondary" pendingLabel={t("common.working")}>
             {t("country.as_of_apply")}
-          </Button>
+          </SubmitButton>
         </form>
       </Card>
 
@@ -248,9 +248,9 @@ export default async function EstablishmentPage({
               <span className="font-medium text-ink">{t("country.adopt.from")}</span>
               <input type="date" name="effectiveFrom" defaultValue={on} className={input} />
             </label>
-            <Button type="submit" variant="secondary">
+            <SubmitButton variant="secondary" pendingLabel={t("common.working")}>
               {t("country.adopt.preview")}
-            </Button>
+            </SubmitButton>
           </form>
         ) : null}
 
@@ -335,9 +335,9 @@ export default async function EstablishmentPage({
               <input type="date" name="expiresOn" className={input} />
             </label>
             <div className="sm:col-span-2">
-              <Button type="submit" variant="secondary">
+              <SubmitButton variant="secondary" pendingLabel={t("common.saving")}>
                 {t("country.registration.save")}
-              </Button>
+              </SubmitButton>
             </div>
           </form>
         ) : null}
@@ -398,9 +398,9 @@ export default async function EstablishmentPage({
                 {mayManage && !entry.reviewedAt ? (
                   <form action={reviewPrivacy} className="mt-2">
                     <input type="hidden" name="entryId" value={entry.id} />
-                    <Button type="submit" variant="ghost">
+                    <SubmitButton variant="ghost" pendingLabel={t("common.working")}>
                       {t("country.privacy.mark_reviewed")}
-                    </Button>
+                    </SubmitButton>
                   </form>
                 ) : null}
               </li>
@@ -446,9 +446,9 @@ export default async function EstablishmentPage({
               </span>
             </label>
             <div className="sm:col-span-2">
-              <Button type="submit" variant="secondary">
+              <SubmitButton variant="secondary" pendingLabel={t("common.saving")}>
                 {t("country.privacy.save")}
-              </Button>
+              </SubmitButton>
             </div>
           </form>
         ) : null}
@@ -543,7 +543,7 @@ export default async function EstablishmentPage({
             ) : null}
 
             <div className="sm:col-span-2">
-              <Button type="submit">{t("common.save")}</Button>
+              <SubmitButton pendingLabel={t("common.saving")}>{t("common.save")}</SubmitButton>
             </div>
           </form>
         </Card>

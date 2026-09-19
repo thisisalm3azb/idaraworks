@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Badge, Button, Card, CardHeader, EmptyState } from "@/platform/ui";
+import { Badge, Card, CardHeader, EmptyState, SubmitButton } from "@/platform/ui";
 import { getT, getServerLocale } from "@/platform/i18n/server";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { can } from "@/platform/authz";
@@ -91,9 +91,9 @@ export default async function WeekPlansPage({
                 ))}
               </select>
             </label>
-            <Button type="submit" variant="primary">
+            <SubmitButton variant="primary" pendingLabel={t("common.creating")}>
               {t("week_plan.create")}
-            </Button>
+            </SubmitButton>
           </form>
         </Card>
       ) : null}

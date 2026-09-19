@@ -1,5 +1,5 @@
 import { notFound, redirect } from "next/navigation";
-import { Button, Card } from "@/platform/ui";
+import { Card, SubmitButton } from "@/platform/ui";
 import { getT, getServerLocale } from "@/platform/i18n/server";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { hrSurfacesEnabled } from "@/platform/flags";
@@ -7,16 +7,9 @@ import type { CurrencyCode } from "@/platform/registries";
 import { listExpenseCategories } from "@/modules/expenses/service";
 import { createClaimAction } from "../actions";
 
-export default async function NewClaimPage({
-  params,
-  searchParams,
-}: {
-  params: Promise<{ orgId: string }>;
-  searchParams: Promise<{ error?: string }>;
-}) {
+export default async function NewClaimPage({ params }: { params: Promise<{ orgId: string }> }) {
   if (!hrSurfacesEnabled()) notFound();
   const { orgId } = await params;
-  const sp = await searchParams;
   const resolved = await resolveCtx(orgId);
   if (typeof resolved === "string") redirect("/");
   const t = await getT();
@@ -28,11 +21,6 @@ export default async function NewClaimPage({
   return (
     <div className="flex flex-col gap-4">
       <h1 className="text-lg font-semibold text-ink">{t("hr.claims.new")}</h1>
-      {sp.error ? (
-        <p className="rounded-md bg-danger-soft px-3 py-2 text-sm text-danger">
-          {t("common.error")}
-        </p>
-      ) : null}
       <form action={create} className="flex flex-col gap-3">
         <Card>
           <label className="text-xs text-ink-muted">
@@ -119,7 +107,7 @@ export default async function NewClaimPage({
             </div>
           </Card>
         ))}
-        <Button type="submit">{t("hr.claims.create")}</Button>
+        <SubmitButton pendingLabel={t("common.creating")}>{t("hr.claims.create")}</SubmitButton>
       </form>
     </div>
   );

@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { Badge, Button, Card, CardHeader } from "@/platform/ui";
+import { Badge, Card, CardHeader, SubmitButton } from "@/platform/ui";
 import { getT } from "@/platform/i18n/server";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { can } from "@/platform/authz";
@@ -51,7 +51,6 @@ export default async function ImportsPage({
         <h1 className="text-lg font-semibold text-ink">{t("imports.title")}</h1>
         <p className="text-sm text-ink-muted">{t("imports.subtitle")}</p>
       </header>
-      {sp.error ? <Badge tone="danger">{t("common.error")}</Badge> : null}
       {sp.applied ? <Badge tone="success">{t("imports.applied_ok")}</Badge> : null}
       {sp.skipped ? <Badge tone="success">{t("imports.skipped_ok")}</Badge> : null}
 
@@ -103,7 +102,7 @@ export default async function ImportsPage({
               </li>
             ))}
           </ul>
-          <Button type="submit">{t("imports.stage")}</Button>
+          <SubmitButton pendingLabel={t("common.working")}>{t("imports.stage")}</SubmitButton>
         </form>
       </Card>
 
@@ -221,9 +220,9 @@ export default async function ImportsPage({
                       </li>
                     ))}
                   </ul>
-                  <Button type="submit" variant="secondary">
+                  <SubmitButton variant="secondary" pendingLabel={t("common.working")}>
                     {t("imports.skip_selected")}
-                  </Button>
+                  </SubmitButton>
                 </form>
               ) : null}
             </section>
@@ -239,7 +238,9 @@ export default async function ImportsPage({
                 </a>
               ) : null}
               <form action={applyImportAction.bind(null, orgId, sp.batch)}>
-                <Button type="submit">{t("imports.apply", { n: valid })}</Button>
+                <SubmitButton pendingLabel={t("common.working")}>
+                  {t("imports.apply", { n: valid })}
+                </SubmitButton>
               </form>
             </div>
           ) : null}

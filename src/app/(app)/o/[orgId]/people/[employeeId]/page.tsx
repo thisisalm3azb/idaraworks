@@ -1,5 +1,5 @@
 import { notFound, redirect } from "next/navigation";
-import { Badge, Button, Card, CardHeader, Field } from "@/platform/ui";
+import { Badge, Card, CardHeader, Field, SubmitButton } from "@/platform/ui";
 import { getT } from "@/platform/i18n/server";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { can } from "@/platform/authz";
@@ -8,13 +8,11 @@ import { setHrAction, setTermsAction, updateEmployeeAction } from "../actions";
 
 export default async function EmployeePage({
   params,
-  searchParams,
 }: {
   params: Promise<{ orgId: string; employeeId: string }>;
-  searchParams: Promise<{ error?: string }>;
 }) {
   const { orgId, employeeId } = await params;
-  const { error } = await searchParams;
+
   const resolved = await resolveCtx(orgId);
   if (typeof resolved === "string") redirect("/");
   const t = await getT();
@@ -47,11 +45,6 @@ export default async function EmployeePage({
             </Badge>
           }
         />
-        {error ? (
-          <p className="mb-3 rounded-md bg-danger-soft p-3 text-sm text-danger">
-            {t("common.error")}
-          </p>
-        ) : null}
         {canManage ? (
           <form action={update} className="flex flex-col gap-4">
             <input type="hidden" name="employee_id" value={employeeId} />
@@ -79,7 +72,7 @@ export default async function EmployeePage({
               <input type="checkbox" name="active" defaultChecked={employee.active} />
               {t("common.active")}
             </label>
-            <Button type="submit">{t("common.save")}</Button>
+            <SubmitButton pendingLabel={t("common.saving")}>{t("common.save")}</SubmitButton>
           </form>
         ) : (
           <p className="text-sm text-ink-secondary">{employee.phone ?? ""}</p>
@@ -119,7 +112,7 @@ export default async function EmployeePage({
               step="0.05"
               defaultValue={employeeTerms ? String(employeeTerms.otRate) : "1.25"}
             />
-            <Button type="submit">{t("common.save")}</Button>
+            <SubmitButton pendingLabel={t("common.saving")}>{t("common.save")}</SubmitButton>
           </form>
         </Card>
       ) : null}
@@ -158,7 +151,7 @@ export default async function EmployeePage({
               defaultValue={hr?.visaExpiry ?? ""}
             />
             <Field label={t("common.notes")} name="notes" defaultValue={hr?.notes ?? ""} />
-            <Button type="submit">{t("common.save")}</Button>
+            <SubmitButton pendingLabel={t("common.saving")}>{t("common.save")}</SubmitButton>
           </form>
         </Card>
       ) : null}

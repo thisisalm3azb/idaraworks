@@ -3,9 +3,18 @@ import { IdaraDockMount } from "./idara/IdaraDockMount";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import type { CSSProperties } from "react";
-import { Icon, Menu, buildBottomNav, buildNavGroups, buildQuickCreate } from "@/platform/ui";
+import {
+  ActionNotice,
+  Icon,
+  Menu,
+  buildBottomNav,
+  buildNavGroups,
+  buildQuickCreate,
+} from "@/platform/ui";
+import { Suspense } from "react";
 import type { MenuSection } from "@/platform/ui";
 import { getT, getServerLocale } from "@/platform/i18n/server";
+import { formatDate } from "@/platform/format";
 import { offeredLocales } from "@/platform/i18n/offered";
 import { LOCALE_NATIVE_NAME } from "@/platform/i18n/locale";
 import { getSessionUser, listMyOrgs, resolveCtx } from "@/platform/auth/resolve";
@@ -75,6 +84,35 @@ export default async function OrgLayout({
   // Add-on model (0065): entitlements shape which items exist / lock — NAV ONLY,
   // never a route guard (freeze FR-9: entitlements gate ADD, never seeing).
   const ent = await resolveEntitlements(resolved.ctx);
+  // 30-day trial, visible: days left, what is included, what happens after.
+  const trialDaysLeft = ent.trialDaysLeft;
+  const canSeeBilling = can(a, "billing.manage");
+  const trialBanner =
+    ent.billingState === "trialing" && ent.trialEnd ? (
+      <div
+        role="status"
+        className={
+          ent.trialExpired
+            ? "mb-4 flex flex-wrap items-center justify-between gap-2 rounded-md border border-line bg-sunken px-3 py-2 text-sm text-ink"
+            : "mb-4 flex flex-wrap items-center justify-between gap-2 rounded-md border border-brand/30 bg-brand/5 px-3 py-2 text-sm text-ink"
+        }
+      >
+        <span>
+          {ent.trialExpired
+            ? t("trial.banner.ended", { date: formatDate(ent.trialEnd) })
+            : t("trial.banner.active", { days: String(trialDaysLeft ?? 0) })}
+          <span className="ms-2 text-ink-secondary">{t("trial.banner.no_card")}</span>
+        </span>
+        {canSeeBilling ? (
+          <Link
+            href={`/o/${orgId}/settings/subscription`}
+            className="text-sm font-medium text-brand hover:underline"
+          >
+            {ent.trialExpired ? t("trial.banner.see_plan") : t("trial.banner.whats_included")}
+          </Link>
+        ) : null}
+      </div>
+    ) : null;
 
   // Terminology vars for every nav label (doc 07 — nouns are ICU variables).
   const navVars = {
@@ -369,7 +407,69 @@ export default async function OrgLayout({
           </div>
         </header>
 
-        <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 pb-24 md:pb-8">{children}</main>
+        <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 pb-24 md:pb-8">
+          {/* The shared "did that work?" banner: any action that redirects with
+              ?ok= or ?error= from the registry below is answered here. */}
+          {trialBanner}
+          <Suspense fallback={null}>
+            <ActionNotice
+              messages={{
+                ok: {
+                  saved: t("notice.ok.saved"),
+                  created: t("notice.ok.created"),
+                  updated: t("notice.ok.updated"),
+                  deleted: t("notice.ok.deleted"),
+                  submitted: t("notice.ok.submitted"),
+                  sent: t("notice.ok.sent"),
+                  applied: t("notice.ok.applied"),
+                  invite_accepted: t("notice.ok.invite_accepted"),
+                  already_member: t("notice.ok.already_member"),
+                  quote_converted: t("notice.ok.quote_converted", {
+                    job: term("job", terms, "singular"),
+                  }),
+                },
+                error: {
+                  failed: t("notice.error.failed"),
+                  invalid: t("notice.error.invalid"),
+                  forbidden: t("notice.error.forbidden"),
+                  rate_limited: t("notice.error.rate_limited"),
+                  not_found: t("notice.error.not_found"),
+                  create_failed: t("notice.error.create_failed"),
+                  update_failed: t("notice.error.update_failed"),
+                  delete_failed: t("notice.error.delete_failed"),
+                  terms_failed: t("notice.error.terms_failed"),
+                  hr_failed: t("notice.error.hr_failed"),
+                  state: t("notice.error.state"),
+                  create: t("notice.error.create"),
+                  save: t("notice.error.save"),
+                  apply: t("notice.error.apply"),
+                  undo: t("notice.error.undo"),
+                  move: t("notice.error.move"),
+                  deactivate: t("notice.error.deactivate"),
+                  empty: t("notice.error.empty"),
+                  not_empty: t("notice.error.not_empty"),
+                  no_file: t("notice.error.no_file"),
+                  duplicates: t("notice.error.duplicates"),
+                  unknown_step: t("notice.error.unknown_step"),
+                  kind: t("notice.error.kind"),
+                  unknown: t("notice.error.unknown"),
+                  other: t("notice.error.other"),
+                  not_employee: t("notice.error.not_employee"),
+                  contact: t("notice.error.contact"),
+                  start_work: t("notice.error.start_work"),
+                  convert: t("notice.error.convert"),
+                  no_template: t("notice.error.no_template"),
+                  note: t("notice.error.note"),
+                  self: t("notice.error.self"),
+                  cap: t("notice.error.cap"),
+                  unavailable: t("notice.error.unavailable"),
+                },
+                dismiss: t("common.dismiss"),
+              }}
+            />
+          </Suspense>
+          {children}
+        </main>
         {/* H28 — the Idara Dock: rendered only behind FEATURE_IDARA_INTELLIGENCE, the person's permission and the organisation's AI policy. */}
         {/* H32 — the welcome panel and the short tour. Renders nothing with
             the flag off, and nothing for anybody who is not newly arrived. */}

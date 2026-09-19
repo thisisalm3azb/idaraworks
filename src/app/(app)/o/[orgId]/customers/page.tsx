@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Badge, Button, Card, CardHeader, EmptyState, Field } from "@/platform/ui";
+import { Badge, Card, CardHeader, EmptyState, Field, SubmitButton } from "@/platform/ui";
 import { getT, getServerLocale } from "@/platform/i18n/server";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { loadOrgTerminology, term } from "@/platform/terminology";
@@ -130,9 +130,9 @@ export default async function CustomersPage({
               placeholder={t("customers.search_hint")}
             />
           </div>
-          <Button type="submit" variant="secondary">
+          <SubmitButton variant="secondary" pendingLabel={t("common.working")}>
             {t("common.search")}
-          </Button>
+          </SubmitButton>
         </form>
         <div
           className="mt-3 flex flex-wrap gap-2"
@@ -324,9 +324,9 @@ export default async function CustomersPage({
             />
             <Field label={t("customers.tax_no")} name="tax_reg_no" defaultValue="" />
             <Field label={t("common.notes")} name="notes" defaultValue={sp.notes ?? ""} />
-            <Button type="submit">
+            <SubmitButton pendingLabel={t("common.creating")}>
               {dupCandidates.length > 0 ? t("crm.dup.create_anyway") : t("common.add")}
-            </Button>
+            </SubmitButton>
           </form>
         </Card>
       ) : null}

@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { Badge, Button, Card, CardHeader } from "@/platform/ui";
+import { Badge, Card, CardHeader, SubmitButton } from "@/platform/ui";
 import { getT, getServerLocale } from "@/platform/i18n/server";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { can } from "@/platform/authz";
@@ -51,7 +51,6 @@ export default async function OnboardingPreviewPage({
 
       {sp.applied ? <Badge tone="success">{t("onboarding.preview.applied_ok")}</Badge> : null}
       {sp.undone ? <Badge tone="neutral">{t("onboarding.preview.undone_ok")}</Badge> : null}
-      {sp.error ? <Badge tone="danger">{t("common.error")}</Badge> : null}
 
       <Card>
         <CardHeader title={t("onboarding.preview.summary")} />
@@ -97,9 +96,9 @@ export default async function OnboardingPreviewPage({
                   </span>
                 </div>
                 <form action={chooseAlternativeAction.bind(null, orgId, sessionId, alt.key)}>
-                  <Button type="submit" variant="secondary">
+                  <SubmitButton variant="secondary" pendingLabel={t("common.working")}>
                     {t("onboarding.preview.use_template")}
-                  </Button>
+                  </SubmitButton>
                 </form>
               </li>
             ))}
@@ -162,7 +161,9 @@ export default async function OnboardingPreviewPage({
 
       {session.status === "proposed" && canManage ? (
         <form action={applyOnboardingAction.bind(null, orgId, sessionId)}>
-          <Button type="submit">{t("onboarding.preview.apply")}</Button>
+          <SubmitButton pendingLabel={t("common.working")}>
+            {t("onboarding.preview.apply")}
+          </SubmitButton>
         </form>
       ) : null}
       {session.status === "applied" && canManage ? (
@@ -171,9 +172,9 @@ export default async function OnboardingPreviewPage({
             {t("onboarding.preview.go_today")}
           </Link>
           <form action={undoOnboardingAction.bind(null, orgId, sessionId)}>
-            <Button type="submit" variant="ghost">
+            <SubmitButton variant="ghost" pendingLabel={t("common.working")}>
               {t("onboarding.preview.undo")}
-            </Button>
+            </SubmitButton>
           </form>
         </div>
       ) : null}

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { Badge, Button, Card, CardHeader, EmptyState } from "@/platform/ui";
+import { Badge, Button, Card, CardHeader, EmptyState, SubmitButton } from "@/platform/ui";
 import { getT, getServerLocale } from "@/platform/i18n/server";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { loadOrgTerminology, term } from "@/platform/terminology";
@@ -115,11 +115,6 @@ export default async function CustomerDetailPage({
       {sp.ok === "contact_added" ? (
         <p role="status" className="rounded-md bg-success-soft px-3 py-2 text-sm text-success">
           {t("crm.contact.added")}
-        </p>
-      ) : null}
-      {sp.error ? (
-        <p role="alert" className="rounded-md bg-danger-soft px-3 py-2 text-sm text-danger">
-          {t("common.error")}
         </p>
       ) : null}
 
@@ -562,9 +557,9 @@ export default async function CustomerDetailPage({
                 {canManage && !ct.legacy ? (
                   <form action={removeContact}>
                     <input type="hidden" name="contact_id" value={ct.id} />
-                    <Button type="submit" variant="ghost">
+                    <SubmitButton variant="ghost" pendingLabel={t("common.working")}>
                       {t("crm.contact.remove")}
-                    </Button>
+                    </SubmitButton>
                   </form>
                 ) : null}
               </li>
@@ -612,7 +607,9 @@ export default async function CustomerDetailPage({
               {t("crm.contact.make_primary")}
             </label>
             <div>
-              <Button type="submit">{t("crm.contact.add_cta")}</Button>
+              <SubmitButton pendingLabel={t("common.creating")}>
+                {t("crm.contact.add_cta")}
+              </SubmitButton>
             </div>
           </form>
         ) : null}

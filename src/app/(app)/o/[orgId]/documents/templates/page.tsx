@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { Badge, Button, Card } from "@/platform/ui";
+import { Badge, Card, SubmitButton } from "@/platform/ui";
 import { getT, getServerLocale } from "@/platform/i18n/server";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { can } from "@/platform/authz";
@@ -154,7 +154,9 @@ export default async function TemplatesPage({
             <input name="description" maxLength={2000} className={input} />
           </label>
           <div className="sm:col-span-3">
-            <Button type="submit">{t("docstudio.tpl.create")}</Button>
+            <SubmitButton pendingLabel={t("common.creating")}>
+              {t("docstudio.tpl.create")}
+            </SubmitButton>
           </div>
         </form>
       </Card>

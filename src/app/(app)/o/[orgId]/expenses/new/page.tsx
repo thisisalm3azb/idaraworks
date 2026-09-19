@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { Badge, Button, Card, CardHeader } from "@/platform/ui";
+import { Badge, Card, CardHeader, SubmitButton } from "@/platform/ui";
 import { lockedFeatureGate } from "@/platform/ui/subscription";
 import { getT, getServerLocale } from "@/platform/i18n/server";
 import { resolveCtx } from "@/platform/auth/resolve";
@@ -98,7 +98,9 @@ export default async function NewExpensePage({
               />
             </label>
           </div>
-          <Button type="submit">{t("expenses.form.submit")}</Button>
+          <SubmitButton pendingLabel={t("common.submitting")}>
+            {t("expenses.form.submit")}
+          </SubmitButton>
         </form>
       </Card>
     </div>

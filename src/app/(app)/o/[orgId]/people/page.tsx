@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Badge, Button, Card, CardHeader, EmptyState, Field } from "@/platform/ui";
+import { Badge, Card, CardHeader, EmptyState, Field, SubmitButton } from "@/platform/ui";
 import { getT, getServerLocale } from "@/platform/i18n/server";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { loadOrgTerminology, term } from "@/platform/terminology";
@@ -8,15 +8,9 @@ import { can } from "@/platform/authz";
 import { listEmployees, listTeams } from "@/modules/masters/service";
 import { createEmployeeAction, createTeamAction } from "./actions";
 
-export default async function PeoplePage({
-  params,
-  searchParams,
-}: {
-  params: Promise<{ orgId: string }>;
-  searchParams: Promise<{ error?: string }>;
-}) {
+export default async function PeoplePage({ params }: { params: Promise<{ orgId: string }> }) {
   const { orgId } = await params;
-  const { error } = await searchParams;
+
   const resolved = await resolveCtx(orgId);
   if (typeof resolved === "string") redirect("/");
   const t = await getT();
@@ -35,11 +29,6 @@ export default async function PeoplePage({
     <div className="flex flex-col gap-4">
       <Card>
         <CardHeader title={t("people.employees", { employees: employeesTerm })} />
-        {error ? (
-          <p className="mb-3 rounded-md bg-danger-soft p-3 text-sm text-danger">
-            {t("common.error")}
-          </p>
-        ) : null}
         {employees.length === 0 ? (
           <EmptyState title={t("common.none")} />
         ) : (
@@ -89,7 +78,7 @@ export default async function PeoplePage({
                 </select>
               </div>
             ) : null}
-            <Button type="submit">{t("common.add")}</Button>
+            <SubmitButton pendingLabel={t("common.creating")}>{t("common.add")}</SubmitButton>
           </form>
         </Card>
       ) : null}
@@ -111,9 +100,9 @@ export default async function PeoplePage({
         {canManage ? (
           <form action={addTeam} className="mt-4 flex flex-col gap-4">
             <Field label={t("people.add_team")} name="name" required />
-            <Button type="submit" variant="secondary">
+            <SubmitButton variant="secondary" pendingLabel={t("common.creating")}>
               {t("common.add")}
-            </Button>
+            </SubmitButton>
           </form>
         ) : null}
       </Card>

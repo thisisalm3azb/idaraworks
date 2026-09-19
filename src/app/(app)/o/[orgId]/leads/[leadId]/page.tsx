@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect, notFound } from "next/navigation";
-import { Badge, Button, Card, CardHeader, Field } from "@/platform/ui";
+import { Badge, Card, CardHeader, Field, SubmitButton } from "@/platform/ui";
 import { getT, getServerLocale } from "@/platform/i18n/server";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { can } from "@/platform/authz";
@@ -165,24 +165,24 @@ export default async function LeadDetailPage({
                   ))}
                 </select>
               </label>
-              <Button type="submit" variant="secondary">
+              <SubmitButton variant="secondary" pendingLabel={t("common.saving")}>
                 {t("common.save")}
-              </Button>
+              </SubmitButton>
             </form>
             <form action={archive}>
               <input type="hidden" name="archived" value="1" />
-              <Button type="submit" variant="ghost">
+              <SubmitButton variant="ghost" pendingLabel={t("common.working")}>
                 {t("leads.archive")}
-              </Button>
+              </SubmitButton>
             </form>
           </div>
         ) : null}
         {canManage && lead.archived ? (
           <form action={archive} className="mt-4 border-t border-line pt-4">
             <input type="hidden" name="archived" value="0" />
-            <Button type="submit" variant="secondary">
+            <SubmitButton variant="secondary" pendingLabel={t("common.working")}>
               {t("leads.restore")}
-            </Button>
+            </SubmitButton>
           </form>
         ) : null}
       </Card>
@@ -237,9 +237,9 @@ export default async function LeadDetailPage({
               />
             </label>
             <div>
-              <Button type="submit" variant="secondary">
+              <SubmitButton variant="secondary" pendingLabel={t("common.saving")}>
                 {t("common.save")}
-              </Button>
+              </SubmitButton>
             </div>
           </form>
         </Card>
@@ -287,7 +287,9 @@ export default async function LeadDetailPage({
               {t("leads.convert.create_customer")}
             </label>
             <div>
-              <Button type="submit">{t("leads.convert.cta")}</Button>
+              <SubmitButton pendingLabel={t("common.working")}>
+                {t("leads.convert.cta")}
+              </SubmitButton>
             </div>
           </form>
         </Card>
@@ -315,9 +317,9 @@ export default async function LeadDetailPage({
                 hint={t("sales.activity.due_hint")}
               />
               <div className="flex items-end">
-                <Button type="submit" variant="secondary">
+                <SubmitButton variant="secondary" pendingLabel={t("common.creating")}>
                   {t("sales.activity.add")}
-                </Button>
+                </SubmitButton>
               </div>
             </div>
             <label className="flex flex-col gap-1.5 text-sm font-medium text-ink">
@@ -356,9 +358,9 @@ export default async function LeadDetailPage({
                   {a.kind === "follow_up" && !a.completedAt && canManage ? (
                     <form action={followUpDone}>
                       <input type="hidden" name="activity_id" value={a.id} />
-                      <Button type="submit" variant="ghost">
+                      <SubmitButton variant="ghost" pendingLabel={t("common.working")}>
                         {t("sales.activity.mark_done")}
-                      </Button>
+                      </SubmitButton>
                     </form>
                   ) : null}
                   <span className="text-xs text-ink-secondary" dir="ltr">

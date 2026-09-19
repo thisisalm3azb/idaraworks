@@ -1,5 +1,5 @@
 import { notFound, redirect } from "next/navigation";
-import { Button, Card } from "@/platform/ui";
+import { Card, SubmitButton } from "@/platform/ui";
 import { getT } from "@/platform/i18n/server";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { can } from "@/platform/authz";
@@ -56,7 +56,9 @@ export default async function FinanceSetupPage({
               {t("finance.setup.books_start")}
               <input name="books_start_date" type="date" required className={input} dir="ltr" />
             </label>
-            <Button type="submit">{t("finance.setup.install")}</Button>
+            <SubmitButton pendingLabel={t("common.working")}>
+              {t("finance.setup.install")}
+            </SubmitButton>
           </form>
         )}
       </Card>
@@ -68,9 +70,9 @@ export default async function FinanceSetupPage({
           <p className="text-sm text-success">{t("finance.setup.vat_pack_installed")}</p>
         ) : (
           <form action={vatPack}>
-            <Button type="submit" disabled={!setup.installed}>
+            <SubmitButton disabled={!setup.installed} pendingLabel={t("common.working")}>
               {t("finance.setup.vat_pack")}
-            </Button>
+            </SubmitButton>
           </form>
         )}
       </Card>
@@ -124,7 +126,7 @@ export default async function FinanceSetupPage({
             />
             {t("finance.setup.registered")}
           </label>
-          <Button type="submit">{t("common.save")}</Button>
+          <SubmitButton pendingLabel={t("common.saving")}>{t("common.save")}</SubmitButton>
         </form>
       </Card>
     </div>

@@ -1,6 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
-import { Badge, Button, Card } from "@/platform/ui";
+import { Badge, Card, SubmitButton } from "@/platform/ui";
 import {
   AI_PROVIDERS,
   allowanceStatus,
@@ -267,7 +267,7 @@ export default async function AiSettingsPage({
               />
             </label>
             <p className="text-xs text-ink-muted">{t("idara.settings.policy.note")}</p>
-            <Button type="submit">{t("common.save")}</Button>
+            <SubmitButton pendingLabel={t("common.saving")}>{t("common.save")}</SubmitButton>
           </form>
         </Card>
       ) : null}
@@ -326,9 +326,9 @@ export default async function AiSettingsPage({
                     {AI_PROVIDERS[r.providerKey].name}: {r.lawfulBasis} · {r.transferMechanism}
                   </span>
                   <form action={revokePrivacyAction.bind(null, orgId, r.providerKey)}>
-                    <Button type="submit" variant="secondary">
+                    <SubmitButton variant="secondary" pendingLabel={t("common.working")}>
                       {t("idara.settings.privacy.revoke")}
-                    </Button>
+                    </SubmitButton>
                   </form>
                 </li>
               ))}
@@ -406,7 +406,9 @@ export default async function AiSettingsPage({
               {t("idara.settings.privacy.dpo")}
             </label>
             <div className="sm:col-span-2">
-              <Button type="submit">{t("idara.settings.privacy.save")}</Button>
+              <SubmitButton pendingLabel={t("common.saving")}>
+                {t("idara.settings.privacy.save")}
+              </SubmitButton>
             </div>
           </form>
         </Card>
@@ -428,9 +430,9 @@ export default async function AiSettingsPage({
                     {t("idara.settings.byok.last4")} {k.last4}
                   </span>
                   <form action={revokeByokAction.bind(null, orgId, k.id)}>
-                    <Button type="submit" variant="secondary">
+                    <SubmitButton variant="secondary" pendingLabel={t("common.working")}>
                       {t("idara.settings.byok.revoke")}
-                    </Button>
+                    </SubmitButton>
                   </form>
                 </li>
               ))}
@@ -465,7 +467,9 @@ export default async function AiSettingsPage({
                 />
               </label>
               <div className="sm:col-span-2">
-                <Button type="submit">{t("idara.settings.byok.store")}</Button>
+                <SubmitButton pendingLabel={t("common.working")}>
+                  {t("idara.settings.byok.store")}
+                </SubmitButton>
               </div>
             </form>
           ) : (
@@ -513,9 +517,9 @@ export default async function AiSettingsPage({
                       />
                       {t("idara.settings.agents.enabled")}
                     </label>
-                    <Button type="submit" variant="secondary">
+                    <SubmitButton variant="secondary" pendingLabel={t("common.working")}>
                       {t("idara.settings.agents.toggle")}
-                    </Button>
+                    </SubmitButton>
                   </form>
                 ) : (
                   <Badge tone={(states[id] ?? def.defaultEnabled) ? "success" : "neutral"}>
@@ -628,9 +632,9 @@ export default async function AiSettingsPage({
                       />
                       {t("idara.settings.schedules.enabled")}
                     </label>
-                    <Button type="submit" variant="secondary">
+                    <SubmitButton variant="secondary" pendingLabel={t("common.saving")}>
                       {t("idara.settings.schedules.save")}
-                    </Button>
+                    </SubmitButton>
                   </form>
                 ) : null}
                 {s ? (
@@ -670,9 +674,9 @@ export default async function AiSettingsPage({
                         <option value="weekly">{t("idara.settings.schedules.weekly")}</option>
                       </select>
                     </label>
-                    <Button type="submit" variant="secondary">
+                    <SubmitButton variant="secondary" pendingLabel={t("common.saving")}>
                       {t("idara.settings.schedules.save_pref")}
-                    </Button>
+                    </SubmitButton>
                   </form>
                 ) : null}
               </li>
@@ -703,9 +707,9 @@ export default async function AiSettingsPage({
                   {typeof m.value === "string" ? m.value : JSON.stringify(m.value)}
                 </span>
                 <form action={forgetAction.bind(null, orgId, m.id)}>
-                  <Button type="submit" variant="secondary">
+                  <SubmitButton variant="secondary" pendingLabel={t("common.working")}>
                     {t("idara.settings.memory.forget")}
-                  </Button>
+                  </SubmitButton>
                 </form>
               </li>
             ))}
@@ -742,7 +746,9 @@ export default async function AiSettingsPage({
           </label>
           <input type="hidden" name="kind" value="knowledge" />
           <div className="sm:col-span-4">
-            <Button type="submit">{t("idara.settings.memory.add")}</Button>
+            <SubmitButton pendingLabel={t("common.creating")}>
+              {t("idara.settings.memory.add")}
+            </SubmitButton>
           </div>
         </form>
       </Card>

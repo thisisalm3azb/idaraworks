@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { Badge, Button, Card, CardHeader } from "@/platform/ui";
+import { Badge, Card, CardHeader, SubmitButton } from "@/platform/ui";
 import { getT, getServerLocale } from "@/platform/i18n/server";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { can } from "@/platform/authz";
@@ -180,7 +180,7 @@ export default async function WeekPlanDetailPage({
                   className="w-full rounded-md border border-line bg-card px-3 py-2 text-sm text-ink"
                 />
               </label>
-              <Button type="submit">{t("common.save")}</Button>
+              <SubmitButton pendingLabel={t("common.saving")}>{t("common.save")}</SubmitButton>
             </form>
           </Card>
 
@@ -220,7 +220,9 @@ export default async function WeekPlanDetailPage({
                     </li>
                   ))}
                 </ul>
-                <Button type="submit">{t("week_plan.save_selection")}</Button>
+                <SubmitButton pendingLabel={t("common.saving")}>
+                  {t("week_plan.save_selection")}
+                </SubmitButton>
               </form>
             )}
           </Card>
@@ -229,9 +231,9 @@ export default async function WeekPlanDetailPage({
             <CardHeader title={t("week_plan.issue")} meta={t("week_plan.issue_hint")} />
             <form action={issueWeekPlanAction.bind(null, orgId)}>
               <input type="hidden" name="plan_id" value={plan.id} />
-              <Button type="submit" variant="primary">
+              <SubmitButton variant="primary" pendingLabel={t("common.working")}>
                 {t("week_plan.issue")}
-              </Button>
+              </SubmitButton>
             </form>
           </Card>
         </>
@@ -250,7 +252,9 @@ export default async function WeekPlanDetailPage({
                 placeholder={t("week_plan.revise_reason")}
                 className={FIELD}
               />
-              <Button type="submit">{t("week_plan.revise")}</Button>
+              <SubmitButton pendingLabel={t("common.working")}>
+                {t("week_plan.revise")}
+              </SubmitButton>
             </form>
             <form action={cancelWeekPlanAction.bind(null, orgId)} className="flex flex-col gap-2">
               <input type="hidden" name="plan_id" value={plan.id} />
@@ -261,9 +265,9 @@ export default async function WeekPlanDetailPage({
                 placeholder={t("week_plan.cancel_reason")}
                 className={FIELD}
               />
-              <Button type="submit" variant="danger">
+              <SubmitButton variant="danger" pendingLabel={t("common.working")}>
                 {t("week_plan.cancel")}
-              </Button>
+              </SubmitButton>
             </form>
           </div>
         </Card>

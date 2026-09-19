@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { Badge, Button, Card, CardHeader } from "@/platform/ui";
+import { Badge, Button, Card, CardHeader, SubmitButton } from "@/platform/ui";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { can } from "@/platform/authz";
 import { countryPacksEnabled } from "@/platform/flags";
@@ -209,7 +209,9 @@ export default async function SimulatePage({
                   <span className="text-xs text-ink-muted">{t("country.simulate.note_hint")}</span>
                 </label>
                 <div className="flex flex-wrap gap-2">
-                  <Button type="submit">{t("country.simulate.apply_cta")}</Button>
+                  <SubmitButton pendingLabel={t("common.working")}>
+                    {t("country.simulate.apply_cta")}
+                  </SubmitButton>
                   <Link href={back}>
                     <Button variant="ghost" type="button">
                       {t("common.cancel")}

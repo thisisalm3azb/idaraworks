@@ -1,7 +1,7 @@
 import { revenueStudioEnabled } from "@/platform/flags";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Badge, Button, Card, CardHeader, EmptyState } from "@/platform/ui";
+import { Badge, Card, CardHeader, EmptyState, SubmitButton } from "@/platform/ui";
 import { can } from "@/platform/authz";
 import { formatDate } from "@/platform/format";
 import { listMembers } from "@/platform/auth/identity";
@@ -238,9 +238,9 @@ export default async function RevenueCustomerPage({
                 {t("revenue.signal.due")}
                 <input name="due_on" type="date" className={input} dir="ltr" />
               </label>
-              <Button type="submit" variant="secondary">
+              <SubmitButton variant="secondary" pendingLabel={t("common.saving")}>
                 {t("common.save")}
-              </Button>
+              </SubmitButton>
             </form>
           ) : null}
           {x.signals.length > 0 ? (
@@ -315,9 +315,9 @@ export default async function RevenueCustomerPage({
                 />
               </label>
               <div className="sm:col-span-2">
-                <Button type="submit" variant="secondary">
+                <SubmitButton variant="secondary" pendingLabel={t("common.saving")}>
                   {t("common.save")}
-                </Button>
+                </SubmitButton>
               </div>
             </form>
           ) : null}
@@ -379,9 +379,9 @@ export default async function RevenueCustomerPage({
                           <option value="ar">AR</option>
                         </select>
                       </label>
-                      <Button type="submit" variant="secondary">
+                      <SubmitButton variant="secondary" pendingLabel={t("common.saving")}>
                         {t("common.save")}
-                      </Button>
+                      </SubmitButton>
                     </form>
                   ) : null}
                 </li>
@@ -471,9 +471,9 @@ export default async function RevenueCustomerPage({
                 {t("revenue.consent.evidence")}
                 <input name="evidence" maxLength={500} className={input} />
               </label>
-              <Button type="submit" variant="secondary">
+              <SubmitButton variant="secondary" pendingLabel={t("common.working")}>
                 {t("revenue.consent.record")}
-              </Button>
+              </SubmitButton>
             </form>
             <form action={act(suppressAddressAction)} className="flex flex-wrap items-end gap-2">
               <label className={field}>
@@ -502,9 +502,9 @@ export default async function RevenueCustomerPage({
                   ))}
                 </select>
               </label>
-              <Button type="submit" variant="danger">
+              <SubmitButton variant="danger" pendingLabel={t("common.working")}>
                 {t("revenue.consent.suppress")}
-              </Button>
+              </SubmitButton>
             </form>
           </div>
         ) : null}
@@ -639,9 +639,9 @@ export default async function RevenueCustomerPage({
                 {t("common.notes")}
                 <textarea name="body" rows={2} maxLength={4000} className={input} />
               </label>
-              <Button type="submit" variant="secondary">
+              <SubmitButton variant="secondary" pendingLabel={t("common.working")}>
                 {t("revenue.activity.log")}
-              </Button>
+              </SubmitButton>
             </form>
           ) : null}
           {activities.ok ? (

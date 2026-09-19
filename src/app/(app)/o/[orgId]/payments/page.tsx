@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Badge, Button, EmptyState } from "@/platform/ui";
+import { Badge, Button, EmptyState, SubmitButton } from "@/platform/ui";
 import { getT } from "@/platform/i18n/server";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { can } from "@/platform/authz";
@@ -63,9 +63,9 @@ export default async function PaymentsPage({
                     placeholder={t("payments.void_reason")}
                     className="min-h-9 flex-1 rounded border border-line bg-card px-2 text-xs"
                   />
-                  <Button type="submit" variant="ghost">
+                  <SubmitButton variant="ghost" pendingLabel={t("common.working")}>
                     {t("payments.void")}
-                  </Button>
+                  </SubmitButton>
                 </form>
               ) : null}
             </li>

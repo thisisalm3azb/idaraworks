@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { Badge, Button, Card, CardHeader } from "@/platform/ui";
+import { Badge, Card, CardHeader, SubmitButton } from "@/platform/ui";
 import { getT } from "@/platform/i18n/server";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { can } from "@/platform/authz";
@@ -142,9 +142,13 @@ export default async function PoDetailPage({
                     action={postReceiptToStockAction.bind(null, orgId, id, r.receiptId)}
                     className="mt-2"
                   >
-                    <Button type="submit" variant="secondary" className="min-h-11">
+                    <SubmitButton
+                      variant="secondary"
+                      className="min-h-11"
+                      pendingLabel={t("common.working")}
+                    >
                       {t("po.unposted.post_now")}
-                    </Button>
+                    </SubmitButton>
                   </form>
                 ) : null}
               </li>
@@ -152,11 +156,6 @@ export default async function PoDetailPage({
           </ul>
           <p className="mt-2 text-xs text-ink-muted">{t("po.unposted.post_hint")}</p>
         </Card>
-      ) : null}
-      {sp.error ? (
-        <p className="rounded-md bg-danger-soft px-3 py-2 text-sm text-danger">
-          {t("common.error")}
-        </p>
       ) : null}
 
       <Card>
@@ -210,9 +209,9 @@ export default async function PoDetailPage({
       {canSubmit ? (
         <form action={submit}>
           <input type="hidden" name="po_id" value={po.id} />
-          <Button type="submit" size="lg" className="w-full">
+          <SubmitButton size="lg" className="w-full" pendingLabel={t("common.submitting")}>
             {t("po.submit")}
-          </Button>
+          </SubmitButton>
         </form>
       ) : null}
 
@@ -241,7 +240,7 @@ export default async function PoDetailPage({
                 </div>
               );
             })}
-            <Button type="submit">{t("po.record_grn")}</Button>
+            <SubmitButton pendingLabel={t("common.working")}>{t("po.record_grn")}</SubmitButton>
           </form>
         </Card>
       ) : null}

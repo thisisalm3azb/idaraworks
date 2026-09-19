@@ -1,5 +1,5 @@
 import { notFound, redirect } from "next/navigation";
-import { Badge, Button, Card, CardHeader } from "@/platform/ui";
+import { Badge, Card, CardHeader, SubmitButton } from "@/platform/ui";
 import { getT } from "@/platform/i18n/server";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { can } from "@/platform/authz";
@@ -37,7 +37,6 @@ export default async function CustomerUpdateDetailPage({
         </Badge>
       </div>
       {sp.ok ? <Badge tone="success">{t("common.saved")}</Badge> : null}
-      {sp.error ? <Badge tone="danger">{t("common.error")}</Badge> : null}
 
       {u.status === "draft" ? (
         <>
@@ -59,9 +58,9 @@ export default async function CustomerUpdateDetailPage({
                   className={inputCls}
                 />
               </label>
-              <Button type="submit" variant="ghost">
+              <SubmitButton variant="ghost" pendingLabel={t("common.saving")}>
                 {t("common.save")}
-              </Button>
+              </SubmitButton>
             </form>
           </Card>
           {canSend ? (
@@ -102,9 +101,9 @@ export default async function CustomerUpdateDetailPage({
             <form action={revokeShareAction.bind(null, orgId)} className="mt-3">
               <input type="hidden" name="update_id" value={u.id} />
               <input type="hidden" name="token_id" value={u.liveTokenId} />
-              <Button type="submit" variant="danger">
+              <SubmitButton variant="danger" pendingLabel={t("common.working")}>
                 {t("customer_updates.share.revoke")}
-              </Button>
+              </SubmitButton>
             </form>
           ) : (
             <p className="mt-3 text-xs text-ink-muted">

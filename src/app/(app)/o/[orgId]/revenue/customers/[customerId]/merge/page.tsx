@@ -1,7 +1,7 @@
 import { revenueStudioEnabled } from "@/platform/flags";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Badge, Button, Card, CardHeader } from "@/platform/ui";
+import { Badge, Card, CardHeader, SubmitButton } from "@/platform/ui";
 import { loadOrgTerminology, term } from "@/platform/terminology";
 import { previewMerge } from "@/modules/crm/service";
 import { getCustomer, listCustomers } from "@/modules/masters/service";
@@ -72,9 +72,9 @@ export default async function MergePage({
               ))}
             </select>
           </label>
-          <Button type="submit" variant="secondary">
+          <SubmitButton variant="secondary" pendingLabel={t("common.working")}>
             {t("revenue.merge.preview")}
-          </Button>
+          </SubmitButton>
         </form>
       </Card>
 
@@ -161,9 +161,9 @@ export default async function MergePage({
             </label>
             <p className="mt-2 text-xs text-ink-muted">{t("revenue.merge.irreversible")}</p>
             <div className="mt-3 flex flex-wrap gap-2">
-              <Button type="submit" variant="danger">
+              <SubmitButton variant="danger" pendingLabel={t("common.working")}>
                 {t("revenue.merge.apply")}
-              </Button>
+              </SubmitButton>
               <Link
                 href={back}
                 className="inline-flex min-h-11 items-center px-3 text-sm text-ink-secondary hover:underline"

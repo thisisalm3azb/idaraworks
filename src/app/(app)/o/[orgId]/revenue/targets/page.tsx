@@ -1,6 +1,6 @@
 import { revenueStudioEnabled } from "@/platform/flags";
 import { notFound } from "next/navigation";
-import { Badge, Button, Card, CardHeader, EmptyState } from "@/platform/ui";
+import { Badge, Card, CardHeader, EmptyState, SubmitButton } from "@/platform/ui";
 import { can } from "@/platform/authz";
 import { formatDate, formatMoney } from "@/platform/format";
 import type { CurrencyCode } from "@/platform/registries";
@@ -220,7 +220,9 @@ export default async function TargetsPage({
                 <input name="note" maxLength={500} className={input} />
               </label>
               <div className="flex items-end">
-                <Button type="submit">{t("revenue.targets.set")}</Button>
+                <SubmitButton pendingLabel={t("common.working")}>
+                  {t("revenue.targets.set")}
+                </SubmitButton>
               </div>
             </form>
             <p className="mt-2 text-xs text-ink-muted">{t("revenue.targets.hint")}</p>
@@ -234,9 +236,9 @@ export default async function TargetsPage({
           meta={
             canManage && territories.length > 0 ? (
               <form action={applyTerritoryRulesAction.bind(null, orgId)}>
-                <Button type="submit" variant="secondary" size="md">
+                <SubmitButton variant="secondary" size="md" pendingLabel={t("common.working")}>
                   {t("revenue.territory.apply_rules")}
-                </Button>
+                </SubmitButton>
               </form>
             ) : null
           }
@@ -291,9 +293,9 @@ export default async function TargetsPage({
                         />
                         {t("common.active")}
                       </label>
-                      <Button type="submit" variant="ghost" size="md">
+                      <SubmitButton variant="ghost" size="md" pendingLabel={t("common.saving")}>
                         {t("common.save")}
-                      </Button>
+                      </SubmitButton>
                     </form>
                   ) : null}
                 </span>
@@ -356,9 +358,9 @@ export default async function TargetsPage({
                 <input name="segments" className={input} dir="ltr" />
               </label>
               <div className="flex items-end">
-                <Button type="submit" variant="secondary">
+                <SubmitButton variant="secondary" pendingLabel={t("common.creating")}>
                   {t("revenue.territory.create")}
-                </Button>
+                </SubmitButton>
               </div>
             </form>
           </details>

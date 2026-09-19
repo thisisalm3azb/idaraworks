@@ -1,5 +1,5 @@
 import { notFound, redirect } from "next/navigation";
-import { Badge, Button, Card, EmptyState } from "@/platform/ui";
+import { Badge, Card, EmptyState, SubmitButton } from "@/platform/ui";
 import { getT, getServerLocale } from "@/platform/i18n/server";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { can } from "@/platform/authz";
@@ -107,7 +107,7 @@ export default async function BudgetsPage({
                 </label>
               </div>
             ))}
-            <Button type="submit">{t("common.save")}</Button>
+            <SubmitButton pendingLabel={t("common.saving")}>{t("common.save")}</SubmitButton>
           </form>
         </Card>
       ) : null}
@@ -140,18 +140,18 @@ export default async function BudgetsPage({
                   <form action={status}>
                     <input type="hidden" name="budget_id" value={selected.id} />
                     <input type="hidden" name="status" value="approved" />
-                    <Button type="submit" variant="secondary">
+                    <SubmitButton variant="secondary" pendingLabel={t("common.working")}>
                       {t("finance.budgets.approve")}
-                    </Button>
+                    </SubmitButton>
                   </form>
                 ) : null}
                 {approves && selected.status === "approved" ? (
                   <form action={status}>
                     <input type="hidden" name="budget_id" value={selected.id} />
                     <input type="hidden" name="status" value="locked" />
-                    <Button type="submit" variant="secondary">
+                    <SubmitButton variant="secondary" pendingLabel={t("common.working")}>
                       {t("finance.budgets.lock")}
-                    </Button>
+                    </SubmitButton>
                   </form>
                 ) : null}
               </div>

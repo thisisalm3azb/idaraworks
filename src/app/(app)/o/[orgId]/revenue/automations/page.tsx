@@ -1,6 +1,6 @@
 import { revenueStudioEnabled } from "@/platform/flags";
 import { notFound } from "next/navigation";
-import { Badge, Button, Card, CardHeader, EmptyState } from "@/platform/ui";
+import { Badge, Card, CardHeader, EmptyState, SubmitButton } from "@/platform/ui";
 import { can } from "@/platform/authz";
 import { formatDate } from "@/platform/format";
 import { listMembers } from "@/platform/auth/identity";
@@ -144,25 +144,25 @@ export default async function AutomationsPage({
                 <form action={runAutomationAction.bind(null, orgId)}>
                   <input type="hidden" name="id" value={a.id} />
                   <input type="hidden" name="mode" value="dry_run" />
-                  <Button type="submit" variant="secondary" size="md">
+                  <SubmitButton variant="secondary" size="md" pendingLabel={t("common.working")}>
                     {t("revenue.automations.dry_run")}
-                  </Button>
+                  </SubmitButton>
                 </form>
                 {a.enabled && !a.dryRun ? (
                   <form action={runAutomationAction.bind(null, orgId)}>
                     <input type="hidden" name="id" value={a.id} />
                     <input type="hidden" name="mode" value="live" />
-                    <Button type="submit" size="md">
+                    <SubmitButton size="md" pendingLabel={t("common.working")}>
                       {t("revenue.automations.run_live")}
-                    </Button>
+                    </SubmitButton>
                   </form>
                 ) : null}
                 <form action={toggleAutomationAction.bind(null, orgId)}>
                   <input type="hidden" name="id" value={a.id} />
                   <input type="hidden" name="intent" value={a.enabled ? "disable" : "enable"} />
-                  <Button type="submit" variant="ghost" size="md">
+                  <SubmitButton variant="ghost" size="md" pendingLabel={t("common.working")}>
                     {a.enabled ? t("revenue.automations.disable") : t("revenue.automations.enable")}
-                  </Button>
+                  </SubmitButton>
                 </form>
                 <a
                   href={`/o/${orgId}/revenue/automations?runs=${a.id}`}
@@ -371,7 +371,9 @@ export default async function AutomationsPage({
           </fieldset>
           <p className="text-xs text-ink-muted">{t("revenue.automations.create_hint")}</p>
           <div>
-            <Button type="submit">{t("revenue.automations.create")}</Button>
+            <SubmitButton pendingLabel={t("common.creating")}>
+              {t("revenue.automations.create")}
+            </SubmitButton>
           </div>
         </form>
       </Card>

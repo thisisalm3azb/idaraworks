@@ -1,7 +1,7 @@
 import { revenueStudioEnabled } from "@/platform/flags";
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { Badge, Button, Card, CardHeader, EmptyState } from "@/platform/ui";
+import { Badge, Card, CardHeader, EmptyState, SubmitButton } from "@/platform/ui";
 import { can } from "@/platform/authz";
 import { formatDate, formatMoney } from "@/platform/format";
 import type { CurrencyCode } from "@/platform/registries";
@@ -194,7 +194,7 @@ export default async function ForecastPage({
             <input name="to" type="date" defaultValue={sp.to ?? ""} className={input} dir="ltr" />
           </label>
           <div className="flex items-end gap-2">
-            <Button type="submit">{t("common.apply")}</Button>
+            <SubmitButton pendingLabel={t("common.working")}>{t("common.apply")}</SubmitButton>
             <Link
               href={`/o/${orgId}/revenue/forecast`}
               className="text-sm text-ink-secondary hover:underline"
@@ -364,9 +364,9 @@ export default async function ForecastPage({
               {t("common.notes")}
               <input name="note" maxLength={500} className={input} />
             </label>
-            <Button type="submit" variant="secondary">
+            <SubmitButton variant="secondary" pendingLabel={t("common.working")}>
               {t("revenue.forecast.capture")}
-            </Button>
+            </SubmitButton>
           </form>
           {accuracy.ok && accuracy.data.length > 0 ? (
             <div className="w-0 min-w-full relative overflow-x-auto">
@@ -446,9 +446,9 @@ export default async function ForecastPage({
                           maxLength={500}
                           className="min-h-9 w-36 rounded-md border border-line bg-card px-2 text-xs text-ink"
                         />
-                        <Button type="submit" variant="ghost" size="md">
+                        <SubmitButton variant="ghost" size="md" pendingLabel={t("common.working")}>
                           {t("revenue.forecast.apply")}
-                        </Button>
+                        </SubmitButton>
                       </form>
                     ) : null}
                   </span>

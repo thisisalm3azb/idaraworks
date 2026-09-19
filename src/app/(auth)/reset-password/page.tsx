@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { AppShell, Button, Card, Field } from "@/platform/ui";
+import { AppShell, Card, Field, SubmitButton } from "@/platform/ui";
 import { getT } from "@/platform/i18n/server";
 import { getSessionUser } from "@/platform/auth/resolve";
 import { PASSWORD_MIN_LENGTH } from "@/platform/auth/password";
@@ -56,7 +56,9 @@ export default async function ResetPasswordPage({
               required
               minLength={PASSWORD_MIN_LENGTH}
             />
-            <Button type="submit">{t("auth.reset.submit")}</Button>
+            <SubmitButton pendingLabel={t("common.submitting")}>
+              {t("auth.reset.submit")}
+            </SubmitButton>
           </form>
         </Card>
       </div>

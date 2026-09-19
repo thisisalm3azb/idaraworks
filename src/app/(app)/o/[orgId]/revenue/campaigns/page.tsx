@@ -1,7 +1,7 @@
 import { revenueStudioEnabled } from "@/platform/flags";
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { Badge, Button, Card, CardHeader, EmptyState } from "@/platform/ui";
+import { Badge, Card, CardHeader, EmptyState, SubmitButton } from "@/platform/ui";
 import { formatDate, formatMoney } from "@/platform/format";
 import type { CurrencyCode } from "@/platform/registries";
 import { listMembers } from "@/platform/auth/identity";
@@ -194,9 +194,9 @@ export default async function CampaignsPage({
                       dir="ltr"
                     />
                   </label>
-                  <Button type="submit" variant="ghost" size="md">
+                  <SubmitButton variant="ghost" size="md" pendingLabel={t("common.saving")}>
                     {t("common.save")}
-                  </Button>
+                  </SubmitButton>
                 </form>
               </li>
             ))}
@@ -284,7 +284,9 @@ export default async function CampaignsPage({
               <input name="objective" maxLength={1000} className={input} />
             </label>
             <div className="sm:col-span-2 lg:col-span-4">
-              <Button type="submit">{t("revenue.campaigns.create")}</Button>
+              <SubmitButton pendingLabel={t("common.creating")}>
+                {t("revenue.campaigns.create")}
+              </SubmitButton>
             </div>
           </form>
         </details>
@@ -325,9 +327,9 @@ export default async function CampaignsPage({
                   dir="ltr"
                 />
               </label>
-              <Button type="submit" variant="secondary">
+              <SubmitButton variant="secondary" pendingLabel={t("common.working")}>
                 {t("common.apply")}
-              </Button>
+              </SubmitButton>
             </form>
           }
         />
@@ -436,9 +438,9 @@ export default async function CampaignsPage({
               <input name="note" maxLength={300} className={input} />
             </label>
             <div className="sm:col-span-2">
-              <Button type="submit" variant="secondary">
+              <SubmitButton variant="secondary" pendingLabel={t("common.working")}>
                 {t("revenue.attribution.record_touch")}
-              </Button>
+              </SubmitButton>
             </div>
           </form>
         </Card>
@@ -519,9 +521,9 @@ export default async function CampaignsPage({
               </select>
             </label>
             <div className="sm:col-span-2">
-              <Button type="submit" variant="secondary">
+              <SubmitButton variant="secondary" pendingLabel={t("common.working")}>
                 {t("revenue.marketing.preview")}
-              </Button>
+              </SubmitButton>
             </div>
           </form>
           {preview ? (
@@ -555,12 +557,12 @@ export default async function CampaignsPage({
                   {previewRecipients.map((c) => (
                     <input key={c} type="hidden" name="c" value={c} />
                   ))}
-                  <Button
-                    type="submit"
+                  <SubmitButton
                     disabled={!preview.data.provider.configured || preview.data.allowed === 0}
+                    pendingLabel={t("common.sending")}
                   >
                     {t("revenue.marketing.send", { n: preview.data.allowed })}
-                  </Button>
+                  </SubmitButton>
                 </form>
               </div>
             ) : (

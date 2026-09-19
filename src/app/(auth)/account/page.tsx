@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { AppShell, Button, Card, CardHeader } from "@/platform/ui";
+import { AppShell, Button, Card, CardHeader, SubmitButton } from "@/platform/ui";
 import { getT } from "@/platform/i18n/server";
 import { getSessionUser } from "@/platform/auth/resolve";
 import { getServerLocale } from "@/platform/i18n/server";
@@ -41,14 +41,18 @@ export default async function AccountPage({
               </Button>
             </Link>
             <form action={signOutOtherDevicesAction}>
-              <Button type="submit" variant="secondary" className="w-full">
+              <SubmitButton
+                variant="secondary"
+                className="w-full"
+                pendingLabel={t("common.working")}
+              >
                 {t("auth.account.sign_out_others")}
-              </Button>
+              </SubmitButton>
             </form>
             <form action={logoutAction}>
-              <Button type="submit" variant="ghost" className="w-full">
+              <SubmitButton variant="ghost" className="w-full" pendingLabel={t("common.working")}>
                 {t("auth.account.sign_out")}
-              </Button>
+              </SubmitButton>
             </form>
           </div>
         </Card>
@@ -62,15 +66,14 @@ export default async function AccountPage({
             {offeredLocales().map((candidate) => (
               <form key={candidate} action={changeLanguageAction} className="min-w-32 flex-1">
                 <input type="hidden" name="locale" value={candidate} />
-                <Button
-                  type="submit"
+                <SubmitButton
                   lang={candidate}
                   variant={locale === candidate ? "primary" : "secondary"}
                   className="w-full"
                   aria-pressed={locale === candidate}
                 >
                   {LOCALE_NATIVE_NAME[candidate]}
-                </Button>
+                </SubmitButton>
               </form>
             ))}
           </div>

@@ -1,5 +1,5 @@
 import { notFound, redirect } from "next/navigation";
-import { Badge, Button, Card } from "@/platform/ui";
+import { Badge, Card, SubmitButton } from "@/platform/ui";
 import { getT, getServerLocale } from "@/platform/i18n/server";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { can } from "@/platform/authz";
@@ -59,11 +59,6 @@ export default async function PayRunPage({
           {t(sp.ok === "finalize" ? "hr.payroll.finalized" : "hr.payroll.calculated")}
         </p>
       ) : null}
-      {sp.error ? (
-        <p className="rounded-md bg-danger-soft px-3 py-2 text-sm text-danger">
-          {t("common.error")}
-        </p>
-      ) : null}
 
       <div className="flex flex-wrap items-center gap-2">
         {manages &&
@@ -72,30 +67,36 @@ export default async function PayRunPage({
           <form action={step}>
             <input type="hidden" name="run_id" value={run.id} />
             <input type="hidden" name="step" value="calculate" />
-            <Button type="submit">{t("hr.payroll.calculate")}</Button>
+            <SubmitButton pendingLabel={t("common.working")}>
+              {t("hr.payroll.calculate")}
+            </SubmitButton>
           </form>
         ) : null}
         {manages && run.status === "review" && run.lines.length > 0 ? (
           <form action={step}>
             <input type="hidden" name="run_id" value={run.id} />
             <input type="hidden" name="step" value="submit" />
-            <Button type="submit">{t("hr.payroll.submit_approval")}</Button>
+            <SubmitButton pendingLabel={t("common.submitting")}>
+              {t("hr.payroll.submit_approval")}
+            </SubmitButton>
           </form>
         ) : null}
         {approves && run.status === "approved" ? (
           <form action={step}>
             <input type="hidden" name="run_id" value={run.id} />
             <input type="hidden" name="step" value="finalize" />
-            <Button type="submit">{t("hr.payroll.finalize")}</Button>
+            <SubmitButton pendingLabel={t("common.working")}>
+              {t("hr.payroll.finalize")}
+            </SubmitButton>
           </form>
         ) : null}
         {manages && (run.status === "awaiting_approval" || run.status === "approved") ? (
           <form action={step}>
             <input type="hidden" name="run_id" value={run.id} />
             <input type="hidden" name="step" value="reopen" />
-            <Button type="submit" variant="secondary">
+            <SubmitButton variant="secondary" pendingLabel={t("common.working")}>
               {t("hr.payroll.reopen")}
-            </Button>
+            </SubmitButton>
           </form>
         ) : null}
         {run.status === "finalized" ? (
@@ -199,9 +200,9 @@ export default async function PayRunPage({
                 className="mt-1 min-h-11 w-full rounded-md border border-line-strong bg-card px-3 text-base text-ink"
               />
             </label>
-            <Button type="submit" variant="danger">
+            <SubmitButton variant="danger" pendingLabel={t("common.working")}>
               {t("hr.payroll.reverse")}
-            </Button>
+            </SubmitButton>
           </form>
         </Card>
       ) : null}

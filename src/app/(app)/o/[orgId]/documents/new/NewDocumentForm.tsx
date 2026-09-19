@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Button } from "@/platform/ui";
+import { SubmitButton } from "@/platform/ui";
 
 type Option = { id: string; label: string };
 export type NewDocDict = {
@@ -20,6 +20,8 @@ export type NewDocDict = {
   folder: string;
   noFolder: string;
   create: string;
+  /** Pending verb for the submit button. */
+  creating?: string;
   kinds: Record<"customer" | "supplier" | "employee" | "other", string>;
   recordKinds: Record<"quote" | "invoice" | "job", string>;
 };
@@ -201,7 +203,7 @@ export function NewDocumentForm({
         <input name="tags" maxLength={400} className={input} />
       </label>
       <div className="sm:col-span-2">
-        <Button type="submit">{dict.create}</Button>
+        <SubmitButton pendingLabel={dict.creating ?? dict.create}>{dict.create}</SubmitButton>
       </div>
     </form>
   );

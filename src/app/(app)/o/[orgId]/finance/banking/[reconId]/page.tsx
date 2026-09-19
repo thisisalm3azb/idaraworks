@@ -1,5 +1,5 @@
 import { notFound, redirect } from "next/navigation";
-import { Badge, Button, Card } from "@/platform/ui";
+import { Badge, Card, SubmitButton } from "@/platform/ui";
 import { getT, getServerLocale } from "@/platform/i18n/server";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { can } from "@/platform/authz";
@@ -97,9 +97,9 @@ export default async function ReconciliationPage({
                       <input type="hidden" name="statement_line_id" value={s.statementLineId} />
                       <input type="hidden" name="journal_line_id" value={s.journalLineId} />
                       <input type="hidden" name="amount_minor" value={stmt.amountMinor} />
-                      <Button type="submit" variant="secondary">
+                      <SubmitButton variant="secondary" pendingLabel={t("common.working")}>
                         {t("finance.banking.accept")}
-                      </Button>
+                      </SubmitButton>
                     </form>
                   </span>
                 </li>
@@ -161,7 +161,9 @@ export default async function ReconciliationPage({
         {open && reconciles ? (
           <form action={complete}>
             <input type="hidden" name="reconciliation_id" value={reconId} />
-            <Button type="submit">{t("finance.banking.complete")}</Button>
+            <SubmitButton pendingLabel={t("common.working")}>
+              {t("finance.banking.complete")}
+            </SubmitButton>
           </form>
         ) : null}
       </div>

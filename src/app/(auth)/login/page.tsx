@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { AppShell, Button, Card, Field } from "@/platform/ui";
+import { AppShell, Card, Field, SubmitButton } from "@/platform/ui";
 import { getT } from "@/platform/i18n/server";
 import { sanitizeNext } from "@/platform/auth/callback";
 import { loginAction, signInWithProviderAction } from "../actions";
@@ -69,7 +69,9 @@ export default async function LoginPage({
               autoComplete="current-password"
               required
             />
-            <Button type="submit">{t("auth.login.submit")}</Button>
+            <SubmitButton pendingLabel={t("common.submitting")}>
+              {t("auth.login.submit")}
+            </SubmitButton>
           </form>
           <p className="mt-3 text-sm">
             <Link className="text-brand hover:underline" href="/forgot">
@@ -84,16 +86,24 @@ export default async function LoginPage({
               <form action={signInWithProviderAction}>
                 <input type="hidden" name="provider" value="google" />
                 {next ? <input type="hidden" name="next" value={next} /> : null}
-                <Button type="submit" variant="secondary" className="w-full">
+                <SubmitButton
+                  variant="secondary"
+                  className="w-full"
+                  pendingLabel={t("common.working")}
+                >
                   {t("auth.login.google")}
-                </Button>
+                </SubmitButton>
               </form>
               <form action={signInWithProviderAction}>
                 <input type="hidden" name="provider" value="azure" />
                 {next ? <input type="hidden" name="next" value={next} /> : null}
-                <Button type="submit" variant="secondary" className="w-full">
+                <SubmitButton
+                  variant="secondary"
+                  className="w-full"
+                  pendingLabel={t("common.working")}
+                >
                   {t("auth.login.microsoft")}
-                </Button>
+                </SubmitButton>
               </form>
             </div>
           ) : null}

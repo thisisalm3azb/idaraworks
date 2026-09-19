@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { Badge, Button, Card, CardHeader } from "@/platform/ui";
+import { Card, CardHeader, SubmitButton } from "@/platform/ui";
 import { lockedFeatureGate } from "@/platform/ui/subscription";
 import { getT } from "@/platform/i18n/server";
 import { resolveCtx } from "@/platform/auth/resolve";
@@ -14,15 +14,8 @@ const field = "flex flex-col gap-1 text-sm";
 const input =
   "min-h-11 rounded-md border border-line bg-card px-3 py-2 text-ink focus:border-brand";
 
-export default async function NewInvoicePage({
-  params,
-  searchParams,
-}: {
-  params: Promise<{ orgId: string }>;
-  searchParams: Promise<{ error?: string }>;
-}) {
+export default async function NewInvoicePage({ params }: { params: Promise<{ orgId: string }> }) {
   const { orgId } = await params;
-  const sp = await searchParams;
   const resolved = await resolveCtx(orgId);
   if (typeof resolved === "string") redirect("/");
   if (!can(resolved.archetype, "invoices.manage")) redirect(`/o/${orgId}/invoices`);
@@ -40,7 +33,6 @@ export default async function NewInvoicePage({
   return (
     <div className="mx-auto flex w-full max-w-md flex-col gap-4">
       <h1 className="text-lg font-semibold text-ink">{t("invoices.new")}</h1>
-      {sp.error ? <Badge tone="danger">{t("common.error")}</Badge> : null}
       <Card>
         <CardHeader title={t("invoices.form.title")} />
         <form action={createInvoiceAction.bind(null, orgId)} className="flex flex-col gap-3">
@@ -120,7 +112,9 @@ export default async function NewInvoicePage({
           <label className="flex items-center gap-2 text-sm">
             <input name="is_export" type="checkbox" /> {t("invoices.form.is_export")}
           </label>
-          <Button type="submit">{t("invoices.form.submit")}</Button>
+          <SubmitButton pendingLabel={t("common.submitting")}>
+            {t("invoices.form.submit")}
+          </SubmitButton>
         </form>
       </Card>
     </div>

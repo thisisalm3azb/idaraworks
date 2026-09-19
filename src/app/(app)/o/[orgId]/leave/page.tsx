@@ -1,5 +1,5 @@
 import { notFound, redirect } from "next/navigation";
-import { Badge, Button, Card, EmptyState } from "@/platform/ui";
+import { Badge, Card, EmptyState, SubmitButton } from "@/platform/ui";
 import { getT, getServerLocale } from "@/platform/i18n/server";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { can } from "@/platform/authz";
@@ -171,7 +171,9 @@ export default async function LeavePage({
                 className="mt-1 min-h-11 w-full rounded-md border border-line-strong bg-card px-3 text-base text-ink"
               />
             </label>
-            <Button type="submit">{t("hr.leave.submit")}</Button>
+            <SubmitButton pendingLabel={t("common.submitting")}>
+              {t("hr.leave.submit")}
+            </SubmitButton>
           </form>
         </Card>
       ) : null}
@@ -257,9 +259,9 @@ export default async function LeavePage({
                 className="mt-1 min-h-11 w-full rounded-md border border-line-strong bg-card px-3 text-base text-ink"
               />
             </label>
-            <Button type="submit" variant="secondary">
+            <SubmitButton variant="secondary" pendingLabel={t("common.submitting")}>
               {t("hr.leave.submit")}
-            </Button>
+            </SubmitButton>
           </form>
         </Card>
       ) : null}
@@ -335,9 +337,9 @@ export default async function LeavePage({
                 {t("hr.leave.types.requires_attachment")}
               </label>
             </div>
-            <Button type="submit" variant="secondary">
+            <SubmitButton variant="secondary" pendingLabel={t("common.creating")}>
               {t("hr.leave.types.add")}
-            </Button>
+            </SubmitButton>
           </form>
         </Card>
       ) : null}

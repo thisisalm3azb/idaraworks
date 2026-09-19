@@ -1,5 +1,5 @@
 import { notFound, redirect } from "next/navigation";
-import { Badge, Button, Card } from "@/platform/ui";
+import { Badge, Card, SubmitButton } from "@/platform/ui";
 import { getT, getServerLocale } from "@/platform/i18n/server";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { can } from "@/platform/authz";
@@ -61,11 +61,6 @@ export default async function ClaimDetailPage({
           {t("hr.claims.duplicates_warning", { count: sp.warn })}
         </p>
       ) : null}
-      {sp.error ? (
-        <p className="rounded-md bg-danger-soft px-3 py-2 text-sm text-danger">
-          {t("common.error")}
-        </p>
-      ) : null}
 
       <Card>
         <p className="text-sm text-ink-secondary">
@@ -106,21 +101,23 @@ export default async function ClaimDetailPage({
         {claim.status === "draft" || claim.status === "returned" ? (
           <form action={submit}>
             <input type="hidden" name="claim_id" value={claim.id} />
-            <Button type="submit">{t("hr.claims.submit")}</Button>
+            <SubmitButton pendingLabel={t("common.submitting")}>
+              {t("hr.claims.submit")}
+            </SubmitButton>
           </form>
         ) : null}
         {canSettle ? (
           <form action={settle}>
             <input type="hidden" name="claim_id" value={claim.id} />
-            <Button type="submit">{t("hr.claims.settle")}</Button>
+            <SubmitButton pendingLabel={t("common.working")}>{t("hr.claims.settle")}</SubmitButton>
           </form>
         ) : null}
         {["draft", "returned", "submitted"].includes(claim.status) ? (
           <form action={cancel}>
             <input type="hidden" name="claim_id" value={claim.id} />
-            <Button type="submit" variant="danger">
+            <SubmitButton variant="danger" pendingLabel={t("common.working")}>
               {t("hr.claims.cancel")}
-            </Button>
+            </SubmitButton>
           </form>
         ) : null}
         <a

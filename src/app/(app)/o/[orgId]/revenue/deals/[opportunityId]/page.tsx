@@ -3,7 +3,7 @@ import { AskIdara } from "../../../idara/AskIdara";
 import { askDictFor } from "../../../idara/dict";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Badge, Button, Card, CardHeader, EmptyState } from "@/platform/ui";
+import { Badge, Card, CardHeader, EmptyState, SubmitButton } from "@/platform/ui";
 import { can } from "@/platform/authz";
 import { formatDate, formatMoney } from "@/platform/format";
 import type { CurrencyCode } from "@/platform/registries";
@@ -282,9 +282,9 @@ export default async function DealRoomPage({
                   {t("revenue.board.reason")}
                   <input name="reason" maxLength={500} className={input} />
                 </label>
-                <Button type="submit" variant="secondary">
+                <SubmitButton variant="secondary" pendingLabel={t("common.working")}>
                   {t("revenue.board.confirm")}
-                </Button>
+                </SubmitButton>
               </form>
             ) : (
               <p className="text-sm text-ink-muted">{t("revenue.deal.no_move")}</p>
@@ -438,9 +438,9 @@ export default async function DealRoomPage({
                 </select>
               </label>
               <div className="sm:col-span-2 lg:col-span-5">
-                <Button type="submit" variant="secondary">
+                <SubmitButton variant="secondary" pendingLabel={t("common.creating")}>
                   {t("revenue.deal.add_stakeholder")}
-                </Button>
+                </SubmitButton>
               </div>
             </form>
           ) : null}
@@ -584,9 +584,9 @@ export default async function DealRoomPage({
                   <input name="recurrence_months" inputMode="numeric" className={input} dir="ltr" />
                 </label>
                 <div className="col-span-2 lg:col-span-7">
-                  <Button type="submit" variant="secondary">
+                  <SubmitButton variant="secondary" pendingLabel={t("common.creating")}>
                     {t("revenue.deal.add_product")}
-                  </Button>
+                  </SubmitButton>
                 </div>
               </form>
             ) : null}
@@ -642,9 +642,9 @@ export default async function DealRoomPage({
                   {t("revenue.leads.reason")}
                   <input name="reason" required maxLength={500} className={input} />
                 </label>
-                <Button type="submit" variant="secondary">
+                <SubmitButton variant="secondary" pendingLabel={t("common.working")}>
                   {t("revenue.discount.request")}
-                </Button>
+                </SubmitButton>
                 <span className="w-full text-xs text-ink-muted">{t("revenue.discount.note")}</span>
               </form>
             ) : null}
@@ -693,24 +693,24 @@ export default async function DealRoomPage({
                     {canManage && r.status === "open" ? (
                       <form action={act(setRiskStatusAction)} className="flex gap-2">
                         <input type="hidden" name="id" value={r.id} />
-                        <Button
-                          type="submit"
+                        <SubmitButton
                           name="status"
                           value="mitigated"
                           variant="ghost"
                           size="md"
+                          pendingLabel={t("common.working")}
                         >
                           {t("revenue.risk_status.mitigated")}
-                        </Button>
-                        <Button
-                          type="submit"
+                        </SubmitButton>
+                        <SubmitButton
                           name="status"
                           value="closed"
                           variant="ghost"
                           size="md"
+                          pendingLabel={t("common.working")}
                         >
                           {t("revenue.risk_status.closed")}
-                        </Button>
+                        </SubmitButton>
                       </form>
                     ) : null}
                   </li>
@@ -766,9 +766,9 @@ export default async function DealRoomPage({
                   </label>
                 ) : null}
                 <div className="col-span-2">
-                  <Button type="submit" variant="secondary">
+                  <SubmitButton variant="secondary" pendingLabel={t("common.creating")}>
                     {t("revenue.deal.add_risk")}
-                  </Button>
+                  </SubmitButton>
                 </div>
               </form>
             ) : null}
@@ -812,9 +812,9 @@ export default async function DealRoomPage({
                   {t("revenue.deal.weaknesses")}
                   <input name="weaknesses" maxLength={1000} className={input} />
                 </label>
-                <Button type="submit" variant="secondary">
+                <SubmitButton variant="secondary" pendingLabel={t("common.creating")}>
                   {t("revenue.deal.add_competitor")}
-                </Button>
+                </SubmitButton>
               </form>
             ) : null}
           </Card>
@@ -950,7 +950,7 @@ export default async function DealRoomPage({
                 <span>{t("revenue.deal.buying_process_hint")}</span>
               </label>
               <div className="sm:col-span-2 lg:col-span-4">
-                <Button type="submit">{t("common.save")}</Button>
+                <SubmitButton pendingLabel={t("common.saving")}>{t("common.save")}</SubmitButton>
               </div>
             </form>
           ) : (
@@ -1048,9 +1048,9 @@ export default async function DealRoomPage({
                   {t("common.notes")}
                   <textarea name="body" rows={2} maxLength={4000} className={input} />
                 </label>
-                <Button type="submit" variant="secondary">
+                <SubmitButton variant="secondary" pendingLabel={t("common.working")}>
                   {t("revenue.activity.log")}
-                </Button>
+                </SubmitButton>
               </form>
             ) : null}
             {activities?.ok ? (

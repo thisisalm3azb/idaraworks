@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Badge, Button, Card, CardHeader, EmptyState, Field, FilterBar } from "@/platform/ui";
+import { Badge, Card, CardHeader, EmptyState, Field, FilterBar, SubmitButton } from "@/platform/ui";
 import { getT, getServerLocale } from "@/platform/i18n/server";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { can } from "@/platform/authz";
@@ -142,9 +142,9 @@ export default async function OpportunitiesPage({
               </option>
             ))}
           </select>
-          <Button type="submit" variant="ghost">
+          <SubmitButton variant="ghost" pendingLabel={t("common.working")}>
             {t("opps.move_cta")}
-          </Button>
+          </SubmitButton>
         </form>
       ) : null}
     </div>
@@ -319,7 +319,7 @@ export default async function OpportunitiesPage({
               <Field label={t("opps.field.close")} name="expected_close" type="date" />
             </div>
             <div>
-              <Button type="submit">{t("opps.add.cta")}</Button>
+              <SubmitButton pendingLabel={t("common.creating")}>{t("opps.add.cta")}</SubmitButton>
             </div>
           </form>
         </Card>

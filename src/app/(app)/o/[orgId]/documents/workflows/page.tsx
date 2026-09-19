@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { Badge, Button, Card } from "@/platform/ui";
+import { Badge, Card, SubmitButton } from "@/platform/ui";
 import { getT, getServerLocale } from "@/platform/i18n/server";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { can } from "@/platform/authz";
@@ -103,7 +103,7 @@ export default async function WorkflowsPage({
             <input name="description" maxLength={2000} className={input} />
           </label>
           <div className="sm:col-span-3">
-            <Button type="submit">{k("create")}</Button>
+            <SubmitButton>{k("create")}</SubmitButton>
           </div>
         </form>
       </Card>

@@ -1,7 +1,7 @@
 import { revenueStudioEnabled } from "@/platform/flags";
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { Badge, Button, Card, CardHeader } from "@/platform/ui";
+import { Badge, Card, CardHeader, SubmitButton } from "@/platform/ui";
 import { listPipelines, listStageSettings, STAGE_REQUIREMENTS } from "@/modules/crm/service";
 import { localeText, resolveRevenue, tabLabels } from "../shared";
 import { RevenueTabs } from "../RevenueTabs";
@@ -76,20 +76,26 @@ export default async function RevenueSettingsPage({
               <form action={updatePipelineAction.bind(null, orgId)} className="flex gap-2">
                 <input type="hidden" name="id" value={p.id} />
                 {!p.isDefault ? (
-                  <Button type="submit" name="intent" value="default" variant="ghost" size="md">
+                  <SubmitButton
+                    name="intent"
+                    value="default"
+                    variant="ghost"
+                    size="md"
+                    pendingLabel={t("common.working")}
+                  >
                     {t("revenue.settings.make_default")}
-                  </Button>
+                  </SubmitButton>
                 ) : null}
                 {!p.isDefault ? (
-                  <Button
-                    type="submit"
+                  <SubmitButton
                     name="intent"
                     value={p.active ? "deactivate" : "activate"}
                     variant="ghost"
                     size="md"
+                    pendingLabel={t("common.working")}
                   >
                     {p.active ? t("common.deactivate") : t("common.activate")}
-                  </Button>
+                  </SubmitButton>
                 ) : null}
               </form>
             </li>
@@ -143,7 +149,9 @@ export default async function RevenueSettingsPage({
               />
             </label>
             <div>
-              <Button type="submit">{t("revenue.settings.create_pipeline")}</Button>
+              <SubmitButton pendingLabel={t("common.creating")}>
+                {t("revenue.settings.create_pipeline")}
+              </SubmitButton>
             </div>
           </form>
         </details>
@@ -246,9 +254,13 @@ export default async function RevenueSettingsPage({
                           </label>
                         </div>
                         <div>
-                          <Button type="submit" variant="secondary" size="md">
+                          <SubmitButton
+                            variant="secondary"
+                            size="md"
+                            pendingLabel={t("common.saving")}
+                          >
                             {t("common.save")}
-                          </Button>
+                          </SubmitButton>
                         </div>
                       </>
                     ) : null}

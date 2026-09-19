@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { Button, Card, EmptyState } from "@/platform/ui";
+import { Card, EmptyState, SubmitButton } from "@/platform/ui";
 import { getT, getServerLocale } from "@/platform/i18n/server";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { can } from "@/platform/authz";
@@ -65,7 +65,9 @@ export default async function StudioPage({
               <input name="description" maxLength={4000} className={input} />
             </label>
             <div className="sm:col-span-3">
-              <Button type="submit">{t("studio.new_plan")}</Button>
+              <SubmitButton pendingLabel={t("common.creating")}>
+                {t("studio.new_plan")}
+              </SubmitButton>
             </div>
           </form>
           <form
@@ -92,9 +94,9 @@ export default async function StudioPage({
               <input name="startDate" type="date" className={input} dir="ltr" />
             </label>
             <div className="sm:col-span-3">
-              <Button type="submit" variant="ghost">
+              <SubmitButton variant="ghost" pendingLabel={t("common.creating")}>
                 {t("studio.template.create")}
-              </Button>
+              </SubmitButton>
             </div>
           </form>
         </Card>

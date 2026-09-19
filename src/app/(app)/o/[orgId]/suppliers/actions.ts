@@ -29,5 +29,5 @@ export async function createSupplierAction(orgId: string, formData: FormData): P
     return failMasterDataAction(err, { ctx: resolved.ctx, base, entity: "supplier", values });
   }
   revalidatePath(base);
-  redirect(base);
+  redirect(`${base}?ok=created`);
 }

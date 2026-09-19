@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Badge, Button, Card, EmptyState } from "@/platform/ui";
+import { Badge, Card, EmptyState, SubmitButton } from "@/platform/ui";
 import { getT, getServerLocale, type Translator } from "@/platform/i18n/server";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { can } from "@/platform/authz";
@@ -159,9 +159,9 @@ export default async function InboxPage({
                     {n.readAt === null ? (
                       <form action={markRead}>
                         <input type="hidden" name="id" value={n.id} />
-                        <Button type="submit" variant="secondary">
+                        <SubmitButton variant="secondary" pendingLabel={t("common.working")}>
                           {t("inbox.mark_read")}
-                        </Button>
+                        </SubmitButton>
                       </form>
                     ) : null}
                   </div>

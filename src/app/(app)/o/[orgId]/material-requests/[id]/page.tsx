@@ -1,5 +1,5 @@
 import { notFound, redirect } from "next/navigation";
-import { Badge, Button, Card, CardHeader } from "@/platform/ui";
+import { Badge, Card, CardHeader, SubmitButton } from "@/platform/ui";
 import { getT } from "@/platform/i18n/server";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { can } from "@/platform/authz";
@@ -80,9 +80,9 @@ export default async function MrDetailPage({
       {canSubmit ? (
         <form action={submit}>
           <input type="hidden" name="mr_id" value={mr.id} />
-          <Button type="submit" size="lg" className="w-full">
+          <SubmitButton size="lg" className="w-full" pendingLabel={t("common.submitting")}>
             {t("mr.submit")}
-          </Button>
+          </SubmitButton>
         </form>
       ) : null}
 
@@ -111,7 +111,7 @@ export default async function MrDetailPage({
               placeholder={t("po.vat")}
               className="min-h-11 w-full rounded-md border border-line-strong bg-card px-3 text-base text-ink"
             />
-            <Button type="submit">{t("mr.convert")}</Button>
+            <SubmitButton pendingLabel={t("common.working")}>{t("mr.convert")}</SubmitButton>
           </form>
         </Card>
       ) : null}

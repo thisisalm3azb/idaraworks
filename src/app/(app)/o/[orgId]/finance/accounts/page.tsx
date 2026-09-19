@@ -1,5 +1,5 @@
 import { notFound, redirect } from "next/navigation";
-import { Badge, Button, Card, EmptyState } from "@/platform/ui";
+import { Badge, Card, EmptyState, SubmitButton } from "@/platform/ui";
 import { getT, getServerLocale } from "@/platform/i18n/server";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { can } from "@/platform/authz";
@@ -65,7 +65,9 @@ export default async function AccountsPage({
               </select>
             </label>
             <div className="sm:col-span-4">
-              <Button type="submit">{t("finance.accounts.new")}</Button>
+              <SubmitButton pendingLabel={t("common.creating")}>
+                {t("finance.accounts.new")}
+              </SubmitButton>
             </div>
           </form>
         </Card>

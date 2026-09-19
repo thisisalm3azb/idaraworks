@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { Button, Card, CardHeader } from "@/platform/ui";
+import { Button, Card, CardHeader, SubmitButton } from "@/platform/ui";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { can } from "@/platform/authz";
 import { countryPacksEnabled } from "@/platform/flags";
@@ -148,7 +148,9 @@ export default async function NewEstablishmentPage({
           </label>
 
           <div className="flex gap-2">
-            <Button type="submit">{t("country.new.create")}</Button>
+            <SubmitButton pendingLabel={t("common.creating")}>
+              {t("country.new.create")}
+            </SubmitButton>
             <Link href={`/o/${orgId}/settings/countries`}>
               <Button variant="ghost" type="button">
                 {t("common.cancel")}

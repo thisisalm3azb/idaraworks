@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { AppShell, Button, Card, Field } from "@/platform/ui";
+import { AppShell, Card, Field, SubmitButton } from "@/platform/ui";
 import { getT } from "@/platform/i18n/server";
 import { forgotPasswordAction } from "../actions";
 import { LanguageToggle } from "../LanguageToggle";
@@ -41,7 +41,9 @@ export default async function ForgotPasswordPage({
               autoComplete="email"
               required
             />
-            <Button type="submit">{t("auth.forgot.submit")}</Button>
+            <SubmitButton pendingLabel={t("common.submitting")}>
+              {t("auth.forgot.submit")}
+            </SubmitButton>
           </form>
           <p className="mt-4 text-sm text-ink-secondary">
             <Link className="font-medium text-brand" href="/login">

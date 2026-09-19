@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { notFound, redirect } from "next/navigation";
-import { Badge, Button, Card, CardHeader, EmptyState, Field } from "@/platform/ui";
+import { Badge, Card, CardHeader, EmptyState, Field, SubmitButton } from "@/platform/ui";
 import { getT, getServerLocale } from "@/platform/i18n/server";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { loadOrgTerminology, term } from "@/platform/terminology";
@@ -266,9 +266,9 @@ async function OverviewTab(props: {
           {canArchive ? (
             <form action={archiveForm} className="mt-3">
               <input type="hidden" name="archived" value="0" />
-              <Button type="submit" variant="secondary">
+              <SubmitButton variant="secondary" pendingLabel={t("common.working")}>
                 {t("work.lifecycle.restore")}
-              </Button>
+              </SubmitButton>
             </form>
           ) : null}
         </Card>
@@ -314,9 +314,9 @@ async function OverviewTab(props: {
                 hint={t("work.lifecycle.hold_reason")}
               />
             </div>
-            <Button type="submit" variant="secondary">
+            <SubmitButton variant="secondary" pendingLabel={t("common.saving")}>
               {t("common.save")}
-            </Button>
+            </SubmitButton>
           </form>
         </Card>
       ) : null}
@@ -349,17 +349,17 @@ async function OverviewTab(props: {
                     maxLength={500}
                   />
                 </div>
-                <Button type="submit" variant="secondary">
+                <SubmitButton variant="secondary" pendingLabel={t("common.working")}>
                   {t("work.lifecycle.reopen")}
-                </Button>
+                </SubmitButton>
               </form>
             ) : null}
             {canArchive ? (
               <form action={archiveForm}>
                 <input type="hidden" name="archived" value="1" />
-                <Button type="submit" variant="ghost">
+                <SubmitButton variant="ghost" pendingLabel={t("common.working")}>
                   {t("work.lifecycle.archive")}
-                </Button>
+                </SubmitButton>
               </form>
             ) : null}
           </div>
@@ -472,7 +472,7 @@ async function OverviewTab(props: {
                 required={f.required}
               />
             ))}
-            <Button type="submit">{t("common.save")}</Button>
+            <SubmitButton pendingLabel={t("common.saving")}>{t("common.save")}</SubmitButton>
           </form>
         ) : (
           <dl className="flex flex-col gap-2 text-sm">
@@ -512,9 +512,13 @@ async function OverviewTab(props: {
                 {canCrew ? (
                   <form action={crewRemove}>
                     <input type="hidden" name="employee_id" value={c.employeeId} />
-                    <Button type="submit" variant="ghost" className="text-danger">
+                    <SubmitButton
+                      variant="ghost"
+                      className="text-danger"
+                      pendingLabel={t("common.working")}
+                    >
                       {t("jobs.crew.remove")}
-                    </Button>
+                    </SubmitButton>
                   </form>
                 ) : null}
               </li>
@@ -535,9 +539,9 @@ async function OverviewTab(props: {
                   </option>
                 ))}
             </select>
-            <Button type="submit" variant="secondary">
+            <SubmitButton variant="secondary" pendingLabel={t("common.creating")}>
               {t("jobs.crew.add")}
-            </Button>
+            </SubmitButton>
           </form>
         ) : null}
       </Card>
@@ -551,9 +555,9 @@ async function OverviewTab(props: {
                 {Number(d.progressOverride)}% — {d.progressOverrideReason}
               </span>
               <form action={clearOverrideForm}>
-                <Button type="submit" variant="ghost">
+                <SubmitButton variant="ghost" pendingLabel={t("common.working")}>
                   {t("jobs.override.clear")}
-                </Button>
+                </SubmitButton>
               </form>
             </div>
           ) : null}
@@ -568,9 +572,9 @@ async function OverviewTab(props: {
               required
             />
             <Field label={t("jobs.override.reason")} name="reason" required maxLength={500} />
-            <Button type="submit" variant="secondary">
+            <SubmitButton variant="secondary" pendingLabel={t("common.working")}>
               {t("jobs.override.set")}
-            </Button>
+            </SubmitButton>
           </form>
         </Card>
       ) : null}
@@ -592,9 +596,9 @@ async function OverviewTab(props: {
               name="payment_terms"
               defaultValue={pricing!.paymentTerms ?? ""}
             />
-            <Button type="submit" variant="secondary">
+            <SubmitButton variant="secondary" pendingLabel={t("common.saving")}>
               {t("common.save")}
-            </Button>
+            </SubmitButton>
           </form>
           {(pricing!.priceAdjustments ?? []).length > 0 ? (
             <div className="mt-3">
@@ -625,9 +629,9 @@ async function OverviewTab(props: {
                 required
                 maxLength={500}
               />
-              <Button type="submit" variant="secondary">
+              <SubmitButton variant="secondary" pendingLabel={t("common.working")}>
                 {t("jobs.pricing.adjust.cta")}
-              </Button>
+              </SubmitButton>
             </form>
           ) : null}
         </Card>
@@ -668,7 +672,7 @@ async function OverviewTab(props: {
               />
             </div>
             <Field label={t("reports.form.blockers")} name="blockers" />
-            <Button type="submit">{t("reports.form.cta")}</Button>
+            <SubmitButton pendingLabel={t("common.working")}>{t("reports.form.cta")}</SubmitButton>
           </form>
         </Card>
       ) : null}
@@ -712,23 +716,25 @@ async function StagesTab(props: {
               {s.status === "not_started" && (canStages || canRequest) ? (
                 <form action={start}>
                   <input type="hidden" name="stage_id" value={s.id} />
-                  <Button type="submit" variant="secondary">
+                  <SubmitButton variant="secondary" pendingLabel={t("common.working")}>
                     {t("stages.start")}
-                  </Button>
+                  </SubmitButton>
                 </form>
               ) : null}
               {s.status === "in_progress" && canRequest && !canStages ? (
                 <form action={request}>
                   <input type="hidden" name="stage_id" value={s.id} />
-                  <Button type="submit" variant="secondary">
+                  <SubmitButton variant="secondary" pendingLabel={t("common.working")}>
                     {t("stages.request_complete")}
-                  </Button>
+                  </SubmitButton>
                 </form>
               ) : null}
               {s.status === "in_progress" && canStages ? (
                 <form action={complete}>
                   <input type="hidden" name="stage_id" value={s.id} />
-                  <Button type="submit">{t("stages.complete")}</Button>
+                  <SubmitButton pendingLabel={t("common.working")}>
+                    {t("stages.complete")}
+                  </SubmitButton>
                 </form>
               ) : null}
               {s.status === "completed" && canReopen ? (
@@ -742,9 +748,13 @@ async function StagesTab(props: {
                       maxLength={500}
                     />
                   </div>
-                  <Button type="submit" variant="ghost" className="text-danger">
+                  <SubmitButton
+                    variant="ghost"
+                    className="text-danger"
+                    pendingLabel={t("common.working")}
+                  >
                     {t("stages.reopen")}
-                  </Button>
+                  </SubmitButton>
                 </form>
               ) : null}
             </div>
@@ -867,9 +877,9 @@ async function TasksTab(props: {
                           maxLength={500}
                           className="min-h-11 w-36 rounded-md border border-line bg-card px-2 text-sm text-ink"
                         />
-                        <Button type="submit" variant="ghost">
+                        <SubmitButton variant="ghost" pendingLabel={t("common.working")}>
                           {t("tasks.apply")}
-                        </Button>
+                        </SubmitButton>
                       </form>
                     ) : (
                       <Badge tone={task.status === "completed" ? "success" : "neutral"}>
@@ -890,9 +900,9 @@ async function TasksTab(props: {
                           {canTasks ? (
                             <form action={removeDep}>
                               <input type="hidden" name="dependency_id" value={e.id} />
-                              <Button type="submit" variant="ghost">
+                              <SubmitButton variant="ghost" pendingLabel={t("common.working")}>
                                 {t("tasks.remove_dependency")}
-                              </Button>
+                              </SubmitButton>
                             </form>
                           ) : null}
                         </li>
@@ -930,9 +940,9 @@ async function TasksTab(props: {
                               </option>
                             ))}
                         </select>
-                        <Button type="submit" variant="secondary">
+                        <SubmitButton variant="secondary" pendingLabel={t("common.working")}>
                           {t("tasks.apply")}
-                        </Button>
+                        </SubmitButton>
                       </form>
                     </details>
                   ) : null}
@@ -990,7 +1000,7 @@ async function TasksTab(props: {
               <input type="checkbox" name="requires_approval" value="1" className="size-5" />
               {t("tasks.requires_approval")}
             </label>
-            <Button type="submit">{t("common.add")}</Button>
+            <SubmitButton pendingLabel={t("common.creating")}>{t("common.add")}</SubmitButton>
           </form>
         </Card>
       ) : null}
@@ -1109,9 +1119,9 @@ async function CommentsTab(props: {
           className="rounded-md border border-line-strong bg-card px-3 py-2 text-base text-ink"
           placeholder={t("comments.add")}
         />
-        <Button type="submit" variant="secondary">
+        <SubmitButton variant="secondary" pendingLabel={t("common.creating")}>
           {t("comments.add")}
-        </Button>
+        </SubmitButton>
       </form>
       {comments.length === 0 ? (
         <EmptyState title={t("comments.empty")} />
