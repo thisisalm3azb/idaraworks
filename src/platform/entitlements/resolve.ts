@@ -17,6 +17,7 @@ import { sql, withCtx, type Ctx } from "@/platform/tenancy";
 import {
   isFeatureKey,
   isLimitKey,
+  TRIAL_LANDING_PLAN,
   type EntitlementKey,
   type FeatureKey,
   type LimitKey,
@@ -26,6 +27,16 @@ import { getAddon } from "./addons";
 export type ResolvedEntitlements = {
   planKey: string;
   billingState: string;
+  /** The stamped trial deadline (ISO), or null when the workspace has none. */
+  trialEnd: string | null;
+  /**
+   * True when the workspace is still `trialing` but its deadline has passed:
+   * entitlements are then the landing plan's, in the backend, whether or not
+   * the nightly lifecycle sweep has recorded the transition yet.
+   */
+  trialExpired: boolean;
+  /** Whole days until the trial ends (0 once passed), or null without a trial. */
+  trialDaysLeft: number | null;
   features: Record<string, boolean>;
   limits: Record<string, number | null>; // null = unlimited
 };
@@ -52,12 +63,22 @@ export function invalidateEntitlements(orgId: string): void {
 async function loadResolved(ctx: Ctx): Promise<ResolvedEntitlements> {
   return withCtx(ctx, async (tx) => {
     const planRows = (await tx.execute(sql`
-      select plan_key, billing_state from public.org_plan_state
+      select plan_key, billing_state, trial_end::text as trial_end from public.org_plan_state
       where org_id = ${ctx.orgId}
-    `)) as unknown as Array<{ plan_key: string; billing_state: string }>;
+    `)) as unknown as Array<{ plan_key: string; billing_state: string; trial_end: string | null }>;
     // Every org has a plan (assigned atomically at creation). Absence is a bug,
     // not a silent free pass — fail loud.
-    const plan = planRows[0];
+    const stored = planRows[0];
+    // 0139: an expired trial lands on the free base at once, server-side. The
+    // lifecycle sweep records the same transition later; until then the
+    // entitlements already say so, and the state stays honest ("trialing" with
+    // trialExpired = true) so the UI can explain it.
+    const trialExpired =
+      stored !== undefined &&
+      stored.billing_state === "trialing" &&
+      stored.trial_end !== null &&
+      Date.parse(stored.trial_end) <= Date.now();
+    const plan = stored && trialExpired ? { ...stored, plan_key: TRIAL_LANDING_PLAN } : stored;
     if (!plan) {
       throw new Error(`org ${ctx.orgId} has no plan state`);
     }
@@ -121,6 +142,12 @@ async function loadResolved(ctx: Ctx): Promise<ResolvedEntitlements> {
     return {
       planKey: plan.plan_key,
       billingState: plan.billing_state,
+      trialEnd: plan.trial_end ?? null,
+      trialExpired,
+      trialDaysLeft:
+        plan.billing_state === "trialing" && plan.trial_end
+          ? Math.max(0, Math.ceil((Date.parse(plan.trial_end) - Date.now()) / 86_400_000))
+          : null,
       features,
       limits,
     };

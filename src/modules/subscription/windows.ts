@@ -15,7 +15,7 @@ const days = (envKey: string, dflt: number): number => {
 };
 
 export const LIFECYCLE_WINDOWS = {
-  trialDays: days("SUB_TRIAL_DAYS", 14),
+  trialDays: days("SUB_TRIAL_DAYS", 30), // 0139: "30 days free, no credit card required"
   dunningDays: days("SUB_DUNNING_DAYS", 14), // past_due → grace
   graceDays: days("SUB_GRACE_DAYS", 3), // grace → suspended
   readonlyDays: days("SUB_READONLY_DAYS", 60), // suspended/cancelled → purge_pending
