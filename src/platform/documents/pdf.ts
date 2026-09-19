@@ -209,17 +209,34 @@ function pageFooterTemplate(rtl: boolean): string {
 }
 
 /**
- * How many documents may be rendering at once in this process.
+ * How many documents may render at once, and what happens to the rest.
  *
- * Every render opens a page in the shared Chromium and lays out a full document;
- * the public share route can start one without a signed-in member behind it. The
- * per-IP rate limit bounds one caller, not the total, so this bounds the total.
- * Rejecting rather than queueing is deliberate: a caller waiting behind a long
- * queue would hit the route's own timeout anyway, having held a connection open
- * for the whole wait.
+ * Rendering is the one expensive thing a request can start, and the public
+ * share route can start one without a signed-in member behind it. The per-IP
+ * rate limit bounds one caller, not the total, so this bounds the total.
+ *
+ * On a serverless instance the bound is ONE. The extracted browser leaves the
+ * instance about 90 MB of temp space, and Chromium keeps its renderers' shared
+ * memory there, so parallel renders ran the disk out: the browser crashed
+ * mid-print and the instance stayed low on space afterwards (production,
+ * 2026-09-19: four downloads at once failed one to three of them; twenty in a
+ * row never failed). Later renders WAIT for the slot, briefly and boundedly,
+ * rather than being refused: a second person's download arrives a couple of
+ * seconds later instead of failing. Beyond the queue bound, or the wait bound,
+ * the caller gets the busy answer. `PDF_RENDER_SLOTS` raises the bound on a
+ * larger instance without a code change.
  */
-const MAX_CONCURRENT_RENDERS = 4;
+const LOCAL_RENDER_SLOTS = 4;
+const SERVERLESS_RENDER_SLOTS = 1;
+const MAX_QUEUED_RENDERS = 8;
+export const QUEUE_WAIT_MS = Number(process.env.PDF_QUEUE_WAIT_MS ?? 20_000);
+export function renderSlots(): number {
+  const configured = Number(process.env.PDF_RENDER_SLOTS);
+  if (Number.isInteger(configured) && configured > 0) return configured;
+  return isServerless() ? SERVERLESS_RENDER_SLOTS : LOCAL_RENDER_SLOTS;
+}
 let activeRenders = 0;
+let waiters: Array<() => void> = [];
 
 export class PdfBusyError extends Error {
   constructor() {
@@ -228,13 +245,38 @@ export class PdfBusyError extends Error {
   }
 }
 
+async function acquireSlot(): Promise<void> {
+  if (activeRenders < renderSlots()) {
+    activeRenders++;
+    return;
+  }
+  if (waiters.length >= MAX_QUEUED_RENDERS) throw new PdfBusyError();
+  await new Promise<void>((resolve, reject) => {
+    const wake = () => {
+      clearTimeout(timer);
+      resolve();
+    };
+    const timer = setTimeout(() => {
+      waiters = waiters.filter((w) => w !== wake);
+      reject(new PdfBusyError());
+    }, QUEUE_WAIT_MS);
+    waiters.push(wake);
+  });
+  // The finishing render handed its slot over: activeRenders already counts it.
+}
+
+function releaseSlot(): void {
+  const next = waiters.shift();
+  if (next) next();
+  else activeRenders--;
+}
+
 export async function renderPdf(html: string, options: PdfOptions = {}): Promise<Uint8Array> {
-  if (activeRenders >= MAX_CONCURRENT_RENDERS) throw new PdfBusyError();
-  activeRenders++;
+  await acquireSlot();
   try {
     return await renderPdfInner(html, options);
   } finally {
-    activeRenders--;
+    releaseSlot();
   }
 }
 
@@ -341,6 +383,11 @@ export async function closePdfBrowser(): Promise<void> {
 }
 
 /** Test-only view of the lifecycle state. */
-export function pdfBrowserStateForTests(): { cached: boolean; rendersSinceLaunch: number } {
-  return { cached: cached !== null, rendersSinceLaunch };
+export function pdfBrowserStateForTests(): {
+  cached: boolean;
+  rendersSinceLaunch: number;
+  activeRenders: number;
+  queued: number;
+} {
+  return { cached: cached !== null, rendersSinceLaunch, activeRenders, queued: waiters.length };
 }

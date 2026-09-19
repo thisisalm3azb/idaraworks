@@ -132,6 +132,8 @@ describe("PDF browser lifecycle", () => {
   });
   afterEach(() => {
     process.env = { ...env };
+    delete process.env.PDF_QUEUE_WAIT_MS;
+    delete process.env.PDF_RENDER_SLOTS;
   });
 
   it("four concurrent renders share one launch and one browser", async () => {
@@ -143,12 +145,67 @@ describe("PDF browser lifecycle", () => {
     await pdf.closePdfBrowser();
   });
 
-  it("a fifth concurrent render is refused rather than queued", async () => {
+  it("renders beyond the slots wait for a slot; beyond the queue bound they are refused", async () => {
     const pdf = await fresh();
-    const slow = [1, 2, 3, 4].map(() => pdf.renderPdf(html));
-    await expect(pdf.renderPdf(html)).rejects.toBeInstanceOf(pdf.PdfBusyError);
-    await Promise.all(slow);
+    const hold = gate();
+    state.pdfGate = hold.p;
+    const inFlight = [1, 2, 3, 4].map(() => pdf.renderPdf(html));
+    await tick(50);
+    expect(pdf.pdfBrowserStateForTests().activeRenders).toBe(4);
+    const queued = [1, 2, 3, 4, 5, 6, 7, 8].map(() => pdf.renderPdf(html));
+    await tick(10);
+    expect(pdf.pdfBrowserStateForTests().queued).toBe(8);
+    await expect(pdf.renderPdf(html)).rejects.toBeInstanceOf(pdf.PdfBusyError); // 13th: queue full
+    state.pdfGate = null;
+    hold.open();
+    const out = await Promise.all([...inFlight, ...queued]);
+    expect(out.every((b) => b.length === 4)).toBe(true);
+    expect(state.launches).toBe(1);
+    expect(pdf.pdfBrowserStateForTests().activeRenders).toBe(0);
     await pdf.closePdfBrowser();
+  });
+
+  it("serverless: renders run one at a time and the rest wait their turn", async () => {
+    process.env.VERCEL = "1";
+    const pdf = await fresh();
+    expect(pdf.renderSlots()).toBe(1);
+    const hold = gate();
+    state.pdfGate = hold.p;
+    const all = [1, 2, 3].map(() => pdf.renderPdf(html));
+    await tick(80);
+    expect(state.browsers[0]!.pages).toBe(1); // only one page open at a time
+    expect(pdf.pdfBrowserStateForTests().queued).toBe(2);
+    state.pdfGate = null;
+    hold.open();
+    const out = await Promise.all(all);
+    expect(out.every((b) => b.length === 4)).toBe(true);
+    expect(state.browsers[0]!.pages).toBe(3);
+    expect(state.launches).toBe(1);
+    await pdf.closePdfBrowser();
+  });
+
+  it("a render that waits longer than the bound is refused, and the slot is not lost", async () => {
+    process.env.VERCEL = "1";
+    process.env.PDF_QUEUE_WAIT_MS = "60";
+    const pdf = await fresh();
+    const hold = gate();
+    state.pdfGate = hold.p;
+    const first = pdf.renderPdf(html);
+    await tick(20);
+    await expect(pdf.renderPdf(html)).rejects.toBeInstanceOf(pdf.PdfBusyError);
+    state.pdfGate = null;
+    hold.open();
+    expect((await first).length).toBe(4);
+    expect(pdf.pdfBrowserStateForTests().activeRenders).toBe(0);
+    expect(pdf.pdfBrowserStateForTests().queued).toBe(0);
+    await pdf.closePdfBrowser();
+  });
+
+  it("PDF_RENDER_SLOTS raises the serverless bound without a code change", async () => {
+    process.env.VERCEL = "1";
+    process.env.PDF_RENDER_SLOTS = "3";
+    const pdf = await fresh();
+    expect(pdf.renderSlots()).toBe(3);
   });
 
   it("a cached browser that died gets exactly one relaunch, and the render succeeds", async () => {
@@ -205,6 +262,7 @@ describe("PDF browser lifecycle", () => {
 
   it("serverless: retires the browser as soon as the temp disk is low, but not under a concurrent render", async () => {
     process.env.VERCEL = "1";
+    process.env.PDF_RENDER_SLOTS = "2"; // two slots: the only way two renders share a browser on serverless
     const pdf = await fresh();
     await pdf.renderPdf(html);
     state.freeBytes = 10 * 1024 * 1024;
@@ -226,6 +284,7 @@ describe("PDF browser lifecycle", () => {
     // space, every render retired the browser, and a concurrent render that had
     // just attached died with "browser has been closed".
     process.env.VERCEL = "1";
+    process.env.PDF_RENDER_SLOTS = "2"; // two slots: the only way two renders share a browser on serverless
     const pdf = await fresh();
     await pdf.renderPdf(html);
     state.freeBytes = 10 * 1024 * 1024;
