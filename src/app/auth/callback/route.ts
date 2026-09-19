@@ -23,8 +23,14 @@ export async function GET(request: Request): Promise<NextResponse> {
   // public origin from the forwarded headers like the auth actions do.
   const origin = requestOrigin(request.headers);
   const code = url.searchParams.get("code");
+  // The intended destination survives every outcome: an invited person whose
+  // confirmation link was already spent by a mail scanner still lands on the
+  // invitation after signing in, instead of on a bare login page.
+  const next = url.searchParams.get("next");
+  const keep =
+    next && sanitizeNext(next) !== "/" ? `&next=${encodeURIComponent(sanitizeNext(next))}` : "";
   if (!code) {
-    return NextResponse.redirect(`${origin}/login?error=confirm_missing`);
+    return NextResponse.redirect(`${origin}/login?error=confirm_missing${keep}`);
   }
   const supabase = supabaseServer(await cookies());
   const { error } = await supabase.auth.exchangeCodeForSession(code);
@@ -32,8 +38,8 @@ export async function GET(request: Request): Promise<NextResponse> {
     const kind = classifyExchangeError(error);
     return NextResponse.redirect(
       kind === "already_confirmed"
-        ? `${origin}/login?notice=already_confirmed`
-        : `${origin}/login?error=confirm_invalid`,
+        ? `${origin}/login?notice=already_confirmed${keep}`
+        : `${origin}/login?error=confirm_invalid${keep}`,
     );
   }
   // Session established — land on the requested page (email confirm passes

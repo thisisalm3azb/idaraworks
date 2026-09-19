@@ -31,8 +31,10 @@ export async function GET(request: Request): Promise<NextResponse> {
   const type = url.searchParams.get("type");
   const next = confirmDestination(type, url.searchParams.get("next"));
 
+  const rawNext = url.searchParams.get("next");
+  const keep = rawNext ? `&next=${encodeURIComponent(next)}` : "";
   if (!tokenHash || !isAllowedEmailOtpType(type)) {
-    return NextResponse.redirect(`${origin}/auth/verify?reason=invalid`);
+    return NextResponse.redirect(`${origin}/auth/verify?reason=invalid${keep}`);
   }
 
   const supabase = supabaseServer(await cookies());
@@ -40,7 +42,7 @@ export async function GET(request: Request): Promise<NextResponse> {
   if (error) {
     // No token in the URL, no internal error text surfaced.
     return NextResponse.redirect(
-      `${origin}/auth/verify?reason=${confirmFailureReason(error.message)}`,
+      `${origin}/auth/verify?reason=${confirmFailureReason(error.message)}${keep}`,
     );
   }
 

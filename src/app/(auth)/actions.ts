@@ -8,7 +8,14 @@ import { validateNewPassword } from "@/platform/auth/password";
 import { sql, withUserCtx } from "@/platform/tenancy";
 import { supabaseServer } from "@/platform/tenancy/supabase";
 import { getSessionUser, listMyOrgs } from "@/platform/auth/resolve";
-import { acceptInvite, logAuthEvent } from "@/platform/auth/identity";
+import {
+  acceptInvite,
+  InviteAccountMismatchError,
+  InviteAlreadyMemberError,
+  InviteStateError,
+  logAuthEvent,
+  SeatLimitError,
+} from "@/platform/auth/identity";
 import { getDraft } from "@/modules/onboarding/service";
 import { rateLimit } from "@/platform/http/rateLimit";
 import { LOCALE_COOKIE } from "@/platform/i18n";
@@ -118,15 +125,19 @@ export async function loginAction(formData: FormData): Promise<void> {
   const meta = await requestMeta();
 
   const rl = await rateLimit("login", meta.ip ?? email);
+  // A failed attempt keeps the intended destination (an invitation, a deep
+  // link): one typo must not drop the person onto a bare login page.
+  const keep = safeNextFrom(formData);
+  const keepQs = keep ? `&next=${encodeURIComponent(keep)}` : "";
   if (!rl.allowed) {
-    redirect("/login?error=rate_limited");
+    redirect(`/login?error=rate_limited${keepQs}`);
   }
 
   const supabase = supabaseServer(await cookies());
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
   if (error || !data.user) {
     await logAuthEvent({ event: "login_failure", detail: { email }, ...meta });
-    redirect("/login?error=invalid");
+    redirect(`/login?error=invalid${keepQs}`);
   }
   await logAuthEvent({ userId: data.user.id, event: "login_success", ...meta });
   await applyLocaleFromProfile(data.user.id);
@@ -352,13 +363,39 @@ export async function acceptInviteAction(formData: FormData): Promise<void> {
   if (!rl.allowed) {
     redirect(`/invite/${encodeURIComponent(token)}?error=rate_limited`);
   }
+  const back = `/invite/${encodeURIComponent(token)}`;
   try {
-    const orgId = await acceptInvite(user.id, token);
-    redirect(`/o/${orgId}`);
+    const orgId = await acceptInvite(user.id, token, user.email ?? null);
+    await logAuthEvent({ userId: user.id, event: "login_success", ...meta });
+    redirect(`/o/${orgId}?ok=invite_accepted`);
   } catch (err) {
     if ((err as { digest?: string }).digest?.startsWith("NEXT_REDIRECT")) throw err;
-    redirect(`/invite/${encodeURIComponent(token)}?error=invalid`);
+    // Already a member: nothing to accept — open the workspace instead of a dead end.
+    if (err instanceof InviteAlreadyMemberError) redirect(`/o/${err.orgId}?ok=already_member`);
+    if (err instanceof InviteAccountMismatchError) redirect(`${back}?error=mismatch`);
+    if (err instanceof SeatLimitError) redirect(`${back}?error=seats`);
+    if (err instanceof InviteStateError) {
+      redirect(`${back}?error=${err.state === "missing" ? "invalid" : err.state}`);
+    }
+    redirect(`${back}?error=invalid`);
   }
+}
+
+/**
+ * Signed in as the wrong account for an invitation: sign out and come back to
+ * the same invitation, so the invited address can sign in or register.
+ */
+export async function switchAccountForInviteAction(formData: FormData): Promise<void> {
+  const token = String(formData.get("token") ?? "");
+  const next = `/invite/${encodeURIComponent(token)}`;
+  const supabase = supabaseServer(await cookies());
+  const user = await getSessionUser();
+  await supabase.auth.signOut();
+  if (user) {
+    const meta = await requestMeta();
+    await logAuthEvent({ userId: user.id, event: "logout", ...meta });
+  }
+  redirect(`/login?next=${encodeURIComponent(next)}`);
 }
 
 /**

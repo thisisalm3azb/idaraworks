@@ -6,7 +6,12 @@
 import { fetchWithPolicy } from "@/platform/http/fetchWithPolicy";
 import { logger } from "@/platform/logger";
 
-export type Email = { to: string; subject: string; text: string };
+export type Email = { to: string; subject: string; text: string; html?: string };
+
+/** True when an email provider is configured, so the UI can say whether a message will be sent. */
+export function emailDeliveryConfigured(): boolean {
+  return Boolean(process.env.RESEND_API_KEY);
+}
 
 export async function sendEmail(email: Email): Promise<{ delivered: boolean }> {
   const apiKey = process.env.RESEND_API_KEY;
@@ -22,7 +27,13 @@ export async function sendEmail(email: Email): Promise<{ delivered: boolean }> {
     {
       method: "POST",
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ from, to: [email.to], subject: email.subject, text: email.text }),
+      body: JSON.stringify({
+        from,
+        to: [email.to],
+        subject: email.subject,
+        text: email.text,
+        ...(email.html ? { html: email.html } : {}),
+      }),
     },
     { timeoutMs: 10_000 },
   );

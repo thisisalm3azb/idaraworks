@@ -12,6 +12,7 @@ import { getLimit } from "@/platform/entitlements";
 import { CURRENCY_CODES, type RoleArchetype } from "@/platform/registries";
 import { command } from "@/platform/audit";
 import { sendEmail } from "@/platform/notifications/email";
+import { brandedEmail } from "@/platform/notifications/branded";
 import { logger } from "@/platform/logger";
 
 /**
@@ -172,9 +173,175 @@ export function hashInviteToken(token: string): string {
 export const InviteInput = z.object({
   email: z.string().email(),
   roleKey: z.string().min(1).max(40),
+  /** The public origin the invitation link should use (from the request). */
+  origin: z.string().url().optional(),
 });
 
-const INVITE_TTL_DAYS = 7;
+export const INVITE_TTL_DAYS = 7;
+
+export type InviteState = "pending" | "accepted" | "revoked" | "expired" | "missing";
+
+/** The invite exists but cannot be taken: expired, revoked, already accepted, or unknown. */
+export class InviteStateError extends DomainError {
+  constructor(public readonly state: InviteState) {
+    super("invite invalid or expired");
+    this.name = "InviteStateError";
+  }
+}
+/** The signed-in account is not the one the invitation was sent to. */
+export class InviteAccountMismatchError extends DomainError {
+  constructor(public readonly invitedEmail: string) {
+    super("invite account mismatch");
+    this.name = "InviteAccountMismatchError";
+  }
+}
+/** The signed-in account already belongs to the workspace: nothing to accept. */
+export class InviteAlreadyMemberError extends DomainError {
+  constructor(public readonly orgId: string) {
+    super("already a member");
+    this.name = "InviteAlreadyMemberError";
+  }
+}
+
+export type InviteDetails = {
+  orgId: string;
+  orgName: string;
+  roleKey: string;
+  archetype: RoleArchetype;
+  email: string | null;
+  expiresAt: string;
+  state: Exclude<InviteState, "missing">;
+};
+
+/**
+ * Read-only look at an invitation by its raw token: which company, which role,
+ * which address, and whether it can still be taken. Never consumes the invite,
+ * so a mail scanner or a curious click cannot spend it.
+ */
+export async function peekInviteDetails(token: string): Promise<InviteDetails | null> {
+  if (!token || token.length > 200) return null;
+  const tokenHash = hashInviteToken(token);
+  const rows = (await appDb().transaction((tx) =>
+    tx.execute(sql`
+      select org_id::text as org_id, org_name, role_key, archetype, email, expires_at::text as expires_at, state
+      from app.peek_invite_details(${tokenHash})
+    `),
+  )) as unknown as Array<{
+    org_id: string;
+    org_name: string;
+    role_key: string;
+    archetype: RoleArchetype;
+    email: string | null;
+    expires_at: string;
+    state: Exclude<InviteState, "missing">;
+  }>;
+  const r = rows[0];
+  if (!r) return null;
+  return {
+    orgId: r.org_id,
+    orgName: r.org_name,
+    roleKey: r.role_key,
+    archetype: r.archetype,
+    email: r.email,
+    expiresAt: r.expires_at,
+    state: r.state,
+  };
+}
+
+export type PendingInvite = {
+  id: string;
+  email: string | null;
+  roleKey: string;
+  invitedBy: string;
+  createdAt: string;
+  expiresAt: string;
+};
+
+/** The invitations still waiting to be accepted (members.view). */
+export async function listPendingInvites(
+  ctx: Ctx,
+  archetype: RoleArchetype,
+): Promise<PendingInvite[]> {
+  assertCan(archetype, "members.view");
+  return withCtx(ctx, async (tx) => {
+    const rows = (await tx.execute(sql`
+      select id::text as id, email, role_key, invited_by::text as invited_by,
+             created_at::text as created_at, expires_at::text as expires_at
+      from public.membership_invite
+      where org_id = ${ctx.orgId} and accepted_at is null and revoked_at is null and expires_at > now()
+      order by created_at desc
+      limit 200
+    `)) as unknown as Array<{
+      id: string;
+      email: string | null;
+      role_key: string;
+      invited_by: string;
+      created_at: string;
+      expires_at: string;
+    }>;
+    return rows.map((r) => ({
+      id: r.id,
+      email: r.email,
+      roleKey: r.role_key,
+      invitedBy: r.invited_by,
+      createdAt: r.created_at,
+      expiresAt: r.expires_at,
+    }));
+  });
+}
+
+/** Withdraw a pending invitation: the link stops working and the seat is released. */
+export async function revokeInvite(
+  ctx: Ctx,
+  archetype: RoleArchetype,
+  inviteId: string,
+): Promise<{ email: string | null; roleKey: string }> {
+  assertCan(archetype, "members.invite");
+  return command(
+    ctx,
+    {
+      audit: (r: { email: string | null; roleKey: string }) => ({
+        action: "membership_invite.revoke",
+        entityType: "membership_invite",
+        entityId: inviteId,
+        summary: `Withdrew the invitation for ${r.email ?? "a phone number"} (${r.roleKey})`,
+      }),
+    },
+    async (tx) => {
+      const rows = (await tx.execute(sql`
+        update public.membership_invite
+        set revoked_at = now()
+        where id = ${inviteId} and org_id = ${ctx.orgId}
+          and accepted_at is null and revoked_at is null
+        returning email, role_key
+      `)) as unknown as Array<{ email: string | null; role_key: string }>;
+      if (!rows[0]) throw new DomainError("invite not pending");
+      return { email: rows[0].email, roleKey: rows[0].role_key };
+    },
+  );
+}
+
+/**
+ * Issue a fresh link for a pending invitation: the old link is withdrawn and a
+ * new one created for the same address and role (the raw token is never stored,
+ * so "resend" can only mean "issue again").
+ */
+export async function rotateInvite(
+  ctx: Ctx,
+  archetype: RoleArchetype,
+  inviteId: string,
+  origin?: string,
+): Promise<{ inviteId: string; token: string; delivered: boolean; email: string }> {
+  assertCan(archetype, "members.invite");
+  const old = await revokeInvite(ctx, archetype, inviteId);
+  if (!old.email) throw new DomainError("only emailed invitations can be re-issued");
+  const fresh = await inviteMember(ctx, archetype, {
+    email: old.email,
+    roleKey: old.roleKey,
+    origin,
+  });
+  return { ...fresh, email: old.email };
+}
 
 export async function inviteMember(
   ctx: Ctx,
@@ -191,6 +358,7 @@ export async function inviteMember(
   const fullLimit = await getLimit(ctx, "limit.full_users");
   const viewerLimit = await getLimit(ctx, "limit.viewer_users");
 
+  let orgName = "IdaraWorks";
   // Insert + audit atomically through the command path (audit_log).
   const inviteId = await command(
     ctx,
@@ -249,21 +417,76 @@ export async function inviteMember(
                 ${ctx.userId}, now() + make_interval(days => ${INVITE_TTL_DAYS}))
         returning id::text as id
       `)) as unknown as Array<{ id: string }>;
+      const org = (await tx.execute(sql`
+        select name from public.org where id = ${ctx.orgId}
+      `)) as unknown as Array<{ name: string }>;
+      orgName = org[0]?.name ?? "IdaraWorks";
       return rows[0]!.id;
     },
   );
 
-  const appUrl = process.env.APP_URL ?? "http://localhost:3000";
-  const { delivered } = await sendEmail({
-    to: input.email,
-    subject: "You have been invited to IdaraWorks",
-    text: `You have been invited to join a workspace on IdaraWorks.\n\nAccept: ${appUrl}/invite/${token}\n\nThis link expires in ${INVITE_TTL_DAYS} days.`,
+  // The link uses the request's public origin (previews and localhost get their
+  // own); APP_URL is the production fallback. Never localhost in production.
+  const origin =
+    input.origin ??
+    process.env.APP_URL ??
+    (process.env.APP_ENV === "prod" ? "https://www.idaraworks.com" : "http://localhost:3000");
+  const link = `${origin}/invite/${token}`;
+  const body = brandedEmail({
+    heading: `Join ${orgName} on IdaraWorks`,
+    paragraphs: [
+      `You have been invited to join ${orgName} as ${input.roleKey}.`,
+      "Accept the invitation with the button below. If you don't have an IdaraWorks account yet, you can create one with this same email address in the next step.",
+    ],
+    action: { label: "Accept invitation", url: link },
+    expiry: `This invitation expires in ${INVITE_TTL_DAYS} days and can only be used by ${input.email.toLowerCase()}.`,
+    footer: "If you weren't expecting this invitation, you can ignore this email.",
   });
+  // A delivery failure is reported, never thrown: the invitation already exists
+  // and the inviter needs its link, not an error that hides it.
+  let delivered = false;
+  try {
+    delivered = (
+      await sendEmail({
+        to: input.email,
+        subject: `You're invited to join ${orgName} on IdaraWorks`,
+        text: body.text,
+        html: body.html,
+      })
+    ).delivered;
+  } catch (err) {
+    logger.warn(
+      { err: err instanceof Error ? err.message : String(err), inviteId },
+      "invite email not delivered",
+    );
+  }
   return { inviteId, token, delivered };
 }
 
-export async function acceptInvite(userId: string, token: string): Promise<string> {
+export async function acceptInvite(
+  userId: string,
+  token: string,
+  /** The signed-in account's address; when given, a mismatch is refused before any write. */
+  userEmail?: string | null,
+): Promise<string> {
   const tokenHash = hashInviteToken(token);
+
+  // 0138: say precisely why an invitation cannot be taken, and never let the
+  // wrong account take it. The database function enforces the same rules.
+  const details = await peekInviteDetails(token);
+  if (!details) throw new InviteStateError("missing");
+  if (details.state !== "pending") throw new InviteStateError(details.state);
+  if (details.email && userEmail && details.email.toLowerCase() !== userEmail.toLowerCase()) {
+    throw new InviteAccountMismatchError(details.email);
+  }
+  const already = await withUserCtx(userId, async (tx) => {
+    const rows = (await tx.execute(sql`
+      select 1 as one from public.membership
+      where user_id = ${userId} and org_id = ${details.orgId} and deactivated_at is null
+    `)) as unknown as Array<{ one: number }>;
+    return rows.length > 0;
+  });
+  if (already) throw new InviteAlreadyMemberError(details.orgId);
 
   // Seat recount at ACCEPT (0069): a pending invite can outlive a plan downgrade,
   // so inviteMember's creation-time count is not enough — the cap must also hold
@@ -341,6 +564,7 @@ export async function acceptInvite(userId: string, token: string): Promise<strin
     }
   } catch (err) {
     if (err instanceof SeatLimitError) throw err;
+    if (err instanceof DomainError) throw err;
     rethrowDbMessage(err);
   }
   // The 'membership.join' audit row is written INSIDE app.accept_invite (0007),
