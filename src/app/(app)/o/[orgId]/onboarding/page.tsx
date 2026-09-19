@@ -1,5 +1,8 @@
 import { redirect } from "next/navigation";
-import { Badge, Button, Card, CardHeader } from "@/platform/ui";
+import Link from "next/link";
+import { getInstalledTemplate } from "@/platform/config";
+import { getCatalogueEntry } from "@/platform/config/templates";
+import { Badge, Card, CardHeader, SubmitButton } from "@/platform/ui";
 import { getT, getServerLocale } from "@/platform/i18n/server";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { can } from "@/platform/authz";
@@ -16,7 +19,7 @@ export default async function OnboardingPage({
   searchParams,
 }: {
   params: Promise<{ orgId: string }>;
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; again?: string }>;
 }) {
   const { orgId } = await params;
   const sp = await searchParams;
@@ -26,6 +29,87 @@ export default async function OnboardingPage({
   const t = await getT();
   const locale = await getServerLocale();
   const ar = locale === "ar";
+
+  // A workspace that already has its configuration applied is not asked to
+  // "set up" again (owner, 2026-09-20). It gets a summary and the places to
+  // review or change things; the intake stays one click away for the rare case
+  // where somebody really wants to run it again.
+  const installed = await getInstalledTemplate(resolved.ctx);
+  if (installed && sp.again !== "1") {
+    const entry = getCatalogueEntry(installed.key);
+    const stages = entry?.manifest.stage_template?.stages ?? [];
+    const jobTerm = entry?.manifest.terminology?.job?.[ar ? "ar" : "en"];
+    return (
+      <div className="mx-auto flex w-full max-w-lg flex-col gap-4">
+        <header className="flex flex-col gap-1">
+          <h1 className="text-lg font-semibold text-ink">{t("onboarding.already.title")}</h1>
+          <p className="text-sm text-ink-muted">{t("onboarding.already.body")}</p>
+        </header>
+        <Card>
+          <CardHeader
+            title={entry ? (ar ? entry.names.ar : entry.names.en) : installed.key}
+            meta={<Badge tone="success">{t("onboarding.already.applied")}</Badge>}
+          />
+          {jobTerm ? (
+            <p className="text-sm text-ink">
+              {t("onboarding.already.calls_work")}{" "}
+              <span className="font-medium">{jobTerm.singular}</span> ·{" "}
+              <span className="font-medium">{jobTerm.plural}</span>
+            </p>
+          ) : null}
+          {stages.length > 0 ? (
+            <ol className="mt-2 flex flex-wrap gap-1">
+              {stages.map((st, i) => (
+                <li
+                  key={st.stage_key}
+                  className="rounded-full bg-sunken px-2 py-1 text-xs text-ink"
+                >
+                  {i + 1}. {ar ? st.names.ar : st.names.en}
+                </li>
+              ))}
+            </ol>
+          ) : null}
+        </Card>
+        <Card>
+          <CardHeader title={t("onboarding.already.next_title")} />
+          <ul className="flex flex-col gap-2 text-sm">
+            <li>
+              <Link
+                href={`/o/${orgId}/settings/configuration`}
+                className="text-brand hover:underline"
+              >
+                {t("onboarding.already.review")}
+              </Link>
+            </li>
+            <li>
+              <Link href={`/o/${orgId}/settings/branding`} className="text-brand hover:underline">
+                {t("onboarding.already.branding")}
+              </Link>
+            </li>
+            <li>
+              <Link href={`/o/${orgId}/settings/members`} className="text-brand hover:underline">
+                {t("onboarding.already.members")}
+              </Link>
+            </li>
+            <li>
+              <Link href={`/o/${orgId}/imports`} className="text-brand hover:underline">
+                {t("onboarding.checklist.import")}
+              </Link>
+            </li>
+          </ul>
+          <p className="mt-3 text-xs text-ink-muted">
+            {t("onboarding.already.again_hint")}{" "}
+            <Link href={`/o/${orgId}/onboarding?again=1`} className="text-brand hover:underline">
+              {t("onboarding.already.again")}
+            </Link>
+          </p>
+        </Card>
+        <Link href={`/o/${orgId}`} className="text-sm text-brand hover:underline">
+          {t("onboarding.already.home")}
+        </Link>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto flex w-full max-w-lg flex-col gap-4">
@@ -124,7 +208,9 @@ export default async function OnboardingPage({
           </label>
           <input type="hidden" name="languages" value="ar" />
           <input type="hidden" name="languages" value="en" />
-          <Button type="submit">{t("onboarding.intake.submit")}</Button>
+          <SubmitButton pendingLabel={t("common.submitting")}>
+            {t("onboarding.intake.submit")}
+          </SubmitButton>
         </form>
       </Card>
     </div>

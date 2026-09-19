@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { Badge, Button, Card, CardHeader, EmptyState, buildQuickCreate } from "@/platform/ui";
+import { Badge, Card, CardHeader, EmptyState, SubmitButton, buildQuickCreate } from "@/platform/ui";
 import {
   ActivityTimeline,
   AttentionZone,
@@ -124,6 +124,15 @@ export default async function OrgHome({
   // composition below, byte-for-byte (the legacy law, pinned by tests).
   const shell = await resolveShell(resolved);
   if (shell.shape && a !== "worker_reserved_p3") {
+    // What is genuinely done already, so the welcome links never re-ask for it
+    // (owner, 2026-09-20: "a setup message that felt like I had to set up the
+    // company again"). A blueprint workspace HAS its configuration applied.
+    const [installedTpl, brandingNow] = await Promise.all([
+      getInstalledTemplate(resolved.ctx),
+      can(a, "config.manage") ? getAppBranding(resolved.ctx) : null,
+    ]);
+    const configured = installedTpl !== null;
+    const hasLogoNow = brandingNow?.branding.logoFileId != null;
     const adaptiveLocale = await getServerLocale();
     const terms = await loadOrgTerminology(resolved.ctx, adaptiveLocale);
     const vars = {
@@ -163,11 +172,39 @@ export default async function OrgHome({
         .filter(Boolean),
     );
     const welcomeLinksAdaptive = [
-      ...(can(a, "onboarding.run")
+      // Configured already → review it; not configured → the intake is the real next step.
+      ...(can(a, "onboarding.run") && !configured
+        ? [{ key: "setup", label: t("onboarding.checklist.run"), href: `/o/${orgId}/onboarding` }]
+        : []),
+      ...(can(a, "config.manage") && configured
         ? [
-            { key: "setup", label: t("onboarding.checklist.run"), href: `/o/${orgId}/onboarding` },
-            { key: "import", label: t("onboarding.checklist.import"), href: `/o/${orgId}/imports` },
+            {
+              key: "review",
+              label: t("dashboard.welcome.review_setup"),
+              href: `/o/${orgId}/settings/configuration`,
+            },
           ]
+        : []),
+      ...(can(a, "config.manage") && configured && !hasLogoNow
+        ? [
+            {
+              key: "logo",
+              label: t("dashboard.welcome.add_logo"),
+              href: `/o/${orgId}/settings/branding`,
+            },
+          ]
+        : []),
+      ...(can(a, "members.invite")
+        ? [
+            {
+              key: "team",
+              label: t("dashboard.welcome.invite_team"),
+              href: `/o/${orgId}/settings/members`,
+            },
+          ]
+        : []),
+      ...(can(a, "onboarding.run")
+        ? [{ key: "import", label: t("onboarding.checklist.import"), href: `/o/${orgId}/imports` }]
         : []),
       ...(can(a, "jobs.view")
         ? [{ key: "jobs", label: t("nav.item.jobs", vars), href: `/o/${orgId}/jobs` }]
@@ -179,12 +216,24 @@ export default async function OrgHome({
           <div className="mb-4">
             <WelcomeBanner
               title={t("dashboard.welcome.title")}
-              body={t("dashboard.welcome.body")}
+              body={
+                configured ? t("dashboard.welcome.body_configured") : t("dashboard.welcome.body")
+              }
               dismissLabel={t("dashboard.welcome.dismiss")}
               links={welcomeLinksAdaptive}
             />
           </div>
         ) : null}
+        {/* First real work, recognised from real records (customer / {job} / invoice):
+            it shows only what is left and disappears once done or dismissed. */}
+        <div className="mb-4">
+          <GettingStarted
+            orgId={orgId}
+            ctx={resolved.ctx}
+            archetype={a}
+            terms={{ job: vars.job, jobs: vars.jobs }}
+          />
+        </div>
         <AdaptiveDashboard
           t={t}
           locale={adaptiveLocale}
@@ -266,11 +315,20 @@ export default async function OrgHome({
   );
 
   const welcomeLinks = [
-    ...(can(a, "onboarding.run")
+    ...(can(a, "onboarding.run") && !installedTemplate
+      ? [{ key: "setup", label: t("onboarding.checklist.run"), href: `/o/${orgId}/onboarding` }]
+      : []),
+    ...(can(a, "config.manage") && installedTemplate
       ? [
-          { key: "setup", label: t("onboarding.checklist.run"), href: `/o/${orgId}/onboarding` },
-          { key: "import", label: t("onboarding.checklist.import"), href: `/o/${orgId}/imports` },
+          {
+            key: "review",
+            label: t("dashboard.welcome.review_setup"),
+            href: `/o/${orgId}/settings/configuration`,
+          },
         ]
+      : []),
+    ...(can(a, "onboarding.run")
+      ? [{ key: "import", label: t("onboarding.checklist.import"), href: `/o/${orgId}/imports` }]
       : []),
     ...(can(a, "jobs.view")
       ? [{ key: "jobs", label: t("nav.item.jobs", jobVars), href: `/o/${orgId}/jobs` }]
@@ -1454,9 +1512,7 @@ function TodayCardView({
               {canDismiss && typeof item.id === "string" ? (
                 <form action={dismissExceptionAction.bind(null, orgId)}>
                   <input type="hidden" name="exception_id" value={item.id} />
-                  <Button type="submit" variant="ghost">
-                    {dismissLabel}
-                  </Button>
+                  <SubmitButton variant="ghost">{dismissLabel}</SubmitButton>
                 </form>
               ) : null}
             </li>
