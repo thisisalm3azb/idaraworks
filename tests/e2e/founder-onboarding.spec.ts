@@ -426,6 +426,12 @@ test.describe("founder onboarding journey (U6)", () => {
     await page.getByRole("button", { name: "Create my workspace" }).click();
     await expect(page).toHaveURL(/\/o\/[0-9a-f-]{36}\?welcome=1/);
     await expect(page.getByText("Welcome to your workspace")).toBeVisible();
+    // A configured workspace is never asked to set up again (2026-09-20).
+    await expect(page.getByText("Configure your workspace")).toHaveCount(0);
+    await expect(page.getByRole("link", { name: /Review your setup/ })).toBeVisible();
+    await expect(page.getByRole("link", { name: /Invite your team/ })).toBeVisible();
+    // The 30-day trial is visible from the first screen.
+    await expect(page.getByText(/Free trial: 30 days left/)).toBeVisible();
     // 375px dashboard: template noun in the KPI cards; no overflow.
     await expect(page.getByText("Active Service Jobs").first()).toBeVisible();
     await assertNoRawKeys(page);

@@ -327,6 +327,15 @@ export default async function OrgHome({
           },
         ]
       : []),
+    ...(can(a, "members.invite")
+      ? [
+          {
+            key: "team",
+            label: t("dashboard.welcome.invite_team"),
+            href: `/o/${orgId}/settings/members`,
+          },
+        ]
+      : []),
     ...(can(a, "onboarding.run")
       ? [{ key: "import", label: t("onboarding.checklist.import"), href: `/o/${orgId}/imports` }]
       : []),
