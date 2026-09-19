@@ -7,7 +7,7 @@
  * rules (modules/onboarding/flow.ts) remain the source of truth on submit.
  */
 import Link from "next/link";
-import { Badge, Button, Card, CardHeader } from "@/platform/ui";
+import { Badge, Card, CardHeader, SubmitButton, logoEditorLabels } from "@/platform/ui";
 import { SubscriptionSelector } from "@/platform/ui/subscription";
 import type { SelectionCurrency, SelectionView } from "@/platform/ui/subscription";
 import { formatMoney } from "@/platform/format";
@@ -107,7 +107,9 @@ function NavRow({
       <Link href={stepHref(prevStepBefore(step, data.answers))} className={backLinkCls}>
         {t("onboarding.flow.back")}
       </Link>
-      <Button type="submit">{nextLabel ?? t("onboarding.flow.next")}</Button>
+      <SubmitButton pendingLabel={t("common.working")}>
+        {nextLabel ?? t("onboarding.flow.next")}
+      </SubmitButton>
     </div>
   );
 }
@@ -236,9 +238,9 @@ export function WelcomeStep({ t }: StepProps) {
       </ul>
       <p className={`mb-4 ${help}`}>{t("onboarding.flow.resume_note")}</p>
       <form action={startFlowAction}>
-        <Button type="submit" size="lg" className="w-full">
+        <SubmitButton size="lg" className="w-full" pendingLabel={t("common.working")}>
           {t("onboarding.flow.welcome.start")}
-        </Button>
+        </SubmitButton>
       </form>
     </Card>
   );
@@ -773,35 +775,143 @@ function TemplatePreview({
   t,
   locale,
   entry,
+  recommended = false,
 }: {
   t: Translator;
   locale: Locale;
   entry: TemplateCatalogueEntry;
+  recommended?: boolean;
 }) {
   const ar = locale === "ar";
   const stages = entry.manifest.stage_template?.stages ?? [];
-  const jobTerm = entry.manifest.terminology?.job?.[locale]?.singular;
+  const terms = entry.manifest.terminology ?? {};
+  // The words a person will actually meet in menus and buttons, in both
+  // languages, with one concrete example each — the point of the card is that
+  // the setup is a vocabulary, not an abstract "template".
+  const rows = (["job", "task", "daily_report", "material_request"] as const)
+    .map((key) => {
+      const term = (
+        terms as Record<
+          string,
+          | { en?: { singular: string; plural: string }; ar?: { singular: string; plural: string } }
+          | undefined
+        >
+      )[key];
+      if (!term?.en || !term?.ar) return null;
+      return { key, en: term.en, ar: term.ar };
+    })
+    .filter((r): r is NonNullable<typeof r> => r !== null);
+  const primary = rows.find((r) => r.key === "job");
   return (
-    <div className="flex flex-col gap-2 text-sm">
-      <p className="text-ink-muted">{ar ? entry.description.ar : entry.description.en}</p>
-      {jobTerm ? (
-        <p className="text-ink">
-          {t("onboarding.flow.template.calls_things")}{" "}
-          <span className="font-medium">{jobTerm}</span>
-        </p>
-      ) : null}
-      <div>
-        <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-ink-muted">
-          {t("onboarding.flow.template.stages_label")}
-        </p>
-        <ol className="flex flex-wrap gap-1">
-          {stages.map((s, i) => (
-            <li key={s.stage_key} className="rounded-full bg-sunken px-2 py-1 text-xs text-ink">
-              {i + 1}. {ar ? s.names.ar : s.names.en}
-            </li>
-          ))}
-        </ol>
+    <div className="flex flex-col gap-3 text-sm" data-setup-card={entry.key}>
+      <div className="flex flex-wrap items-center gap-2">
+        {recommended ? (
+          <Badge tone="success">{t("onboarding.flow.template.recommended_chip")}</Badge>
+        ) : null}
+        <p className="text-ink-muted">{ar ? entry.description.ar : entry.description.en}</p>
       </div>
+
+      {primary ? (
+        <div className="grid gap-2 sm:grid-cols-2">
+          {/* What you see in the menu */}
+          <div className="rounded-md border border-line bg-sunken p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-ink-muted">
+              {t("onboarding.flow.template.example_menu")}
+            </p>
+            <div className="mt-2 flex flex-col gap-1 rounded-md border border-line bg-card p-2">
+              <span className="rounded px-2 py-1 text-xs text-ink-secondary">
+                {t("onboarding.flow.template.example_home")}
+              </span>
+              <span className="rounded bg-brand/10 px-2 py-1 text-xs font-medium text-ink">
+                {ar ? primary.ar.plural : primary.en.plural}
+              </span>
+              <span className="rounded px-2 py-1 text-xs text-ink-secondary">
+                {t("onboarding.flow.template.example_customers")}
+              </span>
+            </div>
+          </div>
+          {/* What a button says */}
+          <div className="rounded-md border border-line bg-sunken p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-ink-muted">
+              {t("onboarding.flow.template.example_button")}
+            </p>
+            <div className="mt-2 flex flex-col gap-2">
+              <span className="inline-flex w-fit items-center rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-ink-inverse">
+                {t("onboarding.flow.template.example_new", {
+                  term: ar ? primary.ar.singular : primary.en.singular,
+                })}
+              </span>
+              <span className="text-xs text-ink-secondary">
+                {t("onboarding.flow.template.example_ref", {
+                  term: ar ? primary.ar.singular : primary.en.singular,
+                })}
+              </span>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {rows.length > 0 ? (
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <caption className="sr-only">{t("onboarding.flow.template.terms_caption")}</caption>
+            <thead>
+              <tr className="text-start text-ink-muted">
+                <th scope="col" className="py-1 pe-2 text-start font-semibold">
+                  {t("onboarding.flow.template.term_col")}
+                </th>
+                <th scope="col" className="py-1 pe-2 text-start font-semibold" lang="en">
+                  English
+                </th>
+                <th scope="col" className="py-1 text-start font-semibold" lang="ar">
+                  العربية
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.key} className="border-t border-line">
+                  <th scope="row" className="py-1 pe-2 text-start font-medium text-ink">
+                    {t(`onboarding.flow.template.term_${r.key}`)}
+                  </th>
+                  <td className="py-1 pe-2 text-ink" lang="en" dir="ltr">
+                    {r.en.singular} <span className="text-ink-muted">/ {r.en.plural}</span>
+                  </td>
+                  <td className="py-1 text-ink" lang="ar" dir="rtl">
+                    {r.ar.singular} <span className="text-ink-muted">/ {r.ar.plural}</span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
+
+      {stages.length > 0 ? (
+        <div>
+          <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-ink-muted">
+            {t("onboarding.flow.template.stages_label")}
+          </p>
+          <ol
+            className="flex flex-wrap items-center gap-1"
+            aria-label={t("onboarding.flow.template.stages_label")}
+          >
+            {stages.map((st, i) => (
+              <li key={st.stage_key} className="flex items-center gap-1">
+                <span className="rounded-full bg-sunken px-2 py-1 text-xs text-ink">
+                  {i + 1}. {ar ? st.names.ar : st.names.en}
+                </span>
+                {i < stages.length - 1 ? (
+                  <span aria-hidden className="text-ink-muted">
+                    {ar ? "←" : "→"}
+                  </span>
+                ) : null}
+              </li>
+            ))}
+          </ol>
+        </div>
+      ) : null}
+
       <div>
         <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-ink-muted">
           {t("onboarding.flow.template.limitations")}
@@ -812,6 +922,7 @@ function TemplatePreview({
           ))}
         </ul>
       </div>
+      <p className="text-xs text-ink-muted">{t("onboarding.flow.template.rename_later")}</p>
     </div>
   );
 }
@@ -839,9 +950,9 @@ function ChooseTemplateForm({
       <input type="hidden" name="template_key" value={templateKey} />
       <input type="hidden" name="recommended_key" value={recommendedKey} />
       <input type="hidden" name="confident" value={confident ? "1" : "0"} />
-      <Button type="submit" variant={primary ? "primary" : "secondary"}>
+      <SubmitButton variant={primary ? "primary" : "secondary"} pendingLabel={t("common.working")}>
         {primary ? t("onboarding.flow.template.use") : t("onboarding.flow.template.choose")}
-      </Button>
+      </SubmitButton>
     </form>
   );
 }
@@ -879,7 +990,7 @@ export function TemplateStep({ t, locale, data }: StepProps) {
               <span className="font-medium">{t("onboarding.flow.template.why_label")}:</span>{" "}
               {ar ? rec.reasonAr : rec.reasonEn}
             </p>
-            <TemplatePreview t={t} locale={locale} entry={recEntry} />
+            <TemplatePreview t={t} locale={locale} entry={recEntry} recommended />
             <div className="flex flex-wrap items-center gap-3">
               <ChooseTemplateForm
                 t={t}
@@ -1098,6 +1209,15 @@ export function PlanStep({ t, locale, data, view }: StepProps & { view: Selectio
     <div className="flex flex-col gap-5">
       <Card>
         <CardHeader title={t("onboarding.flow.plan.title")} />
+        <div className="mb-3 rounded-md border border-brand/30 bg-brand/5 p-3">
+          <p className="text-base font-semibold text-ink">{t("trial.promise.headline")}</p>
+          <ul className="mt-1 flex flex-col gap-0.5 text-sm text-ink">
+            <li>{t("trial.promise.included")}</li>
+            <li>{t("trial.promise.dates")}</li>
+            <li>{t("trial.promise.after")}</li>
+            <li>{t("trial.promise.no_restart")}</li>
+          </ul>
+        </div>
         <p className="text-sm text-ink">{t("onboarding.flow.plan.must_choose")}</p>
         <p className="mt-2 rounded-md bg-sunken p-3 text-sm text-ink">
           {t("onboarding.flow.plan.honesty")}
@@ -1195,6 +1315,7 @@ export function BrandingStep({ t, data }: StepProps) {
             uploading: t("onboarding.flow.branding.logo_uploading"),
             hint: t("onboarding.flow.branding.logo_hint"),
             reference: t("onboarding.flow.branding.logo_reference"),
+            editor: logoEditorLabels(t),
             errors,
           }}
           uploadAction={uploadFlowLogoAction}
@@ -1276,9 +1397,9 @@ export function BrandingStep({ t, data }: StepProps) {
       </form>
 
       <form action={skipBrandingStepAction} className="self-center">
-        <Button type="submit" variant="ghost">
+        <SubmitButton variant="ghost" pendingLabel={t("common.working")}>
           {t("onboarding.flow.skip")}
-        </Button>
+        </SubmitButton>
       </form>
     </div>
   );
@@ -1484,9 +1605,9 @@ function WorkspaceProposal({
 
       {blocked ? null : (
         <div className="flex justify-end">
-          <Button type="submit" variant="secondary">
+          <SubmitButton variant="secondary" pendingLabel={t("common.saving")}>
             {t("onboarding.flow.ws.save_changes")}
-          </Button>
+          </SubmitButton>
         </div>
       )}
     </form>
@@ -1747,11 +1868,11 @@ export function ReviewStep({
           </p>
         ) : (
           <form action={confirmFlowAction}>
-            <Button type="submit" size="lg" className="w-full">
+            <SubmitButton size="lg" className="w-full" pendingLabel={t("common.working")}>
               {partialConfirm
                 ? t("onboarding.flow.review.confirm_resume")
                 : t("onboarding.flow.review.confirm")}
-            </Button>
+            </SubmitButton>
           </form>
         )}
       </Card>
