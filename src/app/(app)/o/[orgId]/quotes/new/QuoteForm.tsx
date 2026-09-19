@@ -169,7 +169,13 @@ export function QuoteForm({
         {dict.terms}
         <input name="terms" maxLength={2000} className={input} />
       </label>
-      <Button type="submit" disabled={pending}>
+      <Button type="submit" disabled={pending} aria-busy={pending || undefined}>
+        {pending ? (
+          <span
+            aria-hidden
+            className="size-4 shrink-0 animate-spin rounded-full border-2 border-current border-t-transparent"
+          />
+        ) : null}
         {dict.submit}
       </Button>
     </form>

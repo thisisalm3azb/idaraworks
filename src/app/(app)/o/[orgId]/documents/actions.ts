@@ -1,5 +1,8 @@
 "use server";
 
+import { headers } from "next/headers";
+import { requestOrigin } from "@/platform/auth/callback";
+
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { resolveCtxForAction } from "@/platform/auth/resolve";
@@ -70,7 +73,7 @@ export async function createDocumentShareAction(
       id,
       days: Math.min(Math.max(Math.trunc(requested), 1), SHARE_MAX_DAYS),
     });
-    const base = process.env.NEXT_PUBLIC_APP_URL ?? "";
+    const base = requestOrigin(await headers());
     revalidatePath(DETAIL_PATH[kind](orgId, id));
     return { ok: true, link: `${base}/d/${token}`, expiresAt };
   } catch (err) {

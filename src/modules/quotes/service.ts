@@ -426,6 +426,68 @@ export async function convertQuoteToJob(
   return { jobId };
 }
 
+/** A conversion claim older than this is treated as abandoned (the function died mid-way). */
+export const STALE_CONVERSION_MS = 3 * 60_000;
+
+/**
+ * Release a quotation stuck in `converting`.
+ *
+ * The claim → create job → mark converted sequence runs in one function call;
+ * if that call dies between the claim and the release (a serverless deadline,
+ * a crash), the quotation stays `converting` with no control that can move it.
+ * A claim older than STALE_CONVERSION_MS is treated as abandoned: if a job was
+ * in fact linked, the quotation is marked converted; otherwise it returns to
+ * `accepted` (the customer's acceptance was recorded at the claim) so the
+ * person can start the project again. Nothing is duplicated: createJobFromPreset
+ * is atomic, so an abandoned claim never left a half-made job behind.
+ */
+export async function recoverStaleConversion(
+  ctx: Ctx,
+  archetype: RoleArchetype,
+  quoteId: string,
+): Promise<"converted" | "released" | "not_stale"> {
+  assertCan(archetype, "quotes.manage");
+  return command(
+    ctx,
+    {
+      audit: (r: "converted" | "released" | "not_stale") => ({
+        action: "quote.recover",
+        entityType: "quote",
+        entityId: quoteId,
+        summary:
+          r === "released"
+            ? "Released a stuck quotation conversion"
+            : r === "converted"
+              ? "Marked a stuck conversion as converted (job existed)"
+              : "Conversion was not stale",
+      }),
+    },
+    async (tx) => {
+      const rows = (await tx.execute(sql`
+        select status, converted_job_id::text as converted_job_id,
+               (updated_at < now() - make_interval(secs => ${STALE_CONVERSION_MS / 1000})) as stale
+        from public.quote where id = ${quoteId} and org_id = ${ctx.orgId} for update
+      `)) as unknown as Array<{ status: string; converted_job_id: string | null; stale: boolean }>;
+      const q = rows[0];
+      if (!q) throw new QuoteStateError("quote not found");
+      if (q.status !== "converting") throw new QuoteStateError("quote is not converting");
+      if (!q.stale) return "not_stale";
+      if (q.converted_job_id) {
+        await tx.execute(sql`
+          update public.quote set status = 'converted', updated_at = now()
+          where id = ${quoteId} and org_id = ${ctx.orgId} and status = 'converting'
+        `);
+        return "converted";
+      }
+      await tx.execute(sql`
+        update public.quote set status = 'accepted', updated_at = now()
+        where id = ${quoteId} and org_id = ${ctx.orgId} and status = 'converting'
+      `);
+      return "released";
+    },
+  );
+}
+
 async function readQuoteState(
   ctx: Ctx,
   quoteId: string,
@@ -711,6 +773,11 @@ export type QuoteDetail = QuoteRow & {
   presetId: string | null;
   acceptedAt: string | null;
   acceptedNote: string | null;
+  rejectedReason: string | null;
+  /** Last status change, for spotting an abandoned conversion claim. */
+  updatedAt: string;
+  /** True when a `converting` claim is older than STALE_CONVERSION_MS. */
+  staleConversion: boolean;
   lines: Array<{
     id: string;
     sectionKey: string | null;
@@ -736,7 +803,8 @@ export async function getQuote(
              currency, exchange_rate,
              subtotal_minor, vat_amount_minor, total_minor, terms, valid_until::text as valid_until,
              converted_job_id::text as converted_job_id, created_at::text as created_at,
-             preset_id::text as preset_id, accepted_at::text as accepted_at, accepted_note
+             preset_id::text as preset_id, accepted_at::text as accepted_at, accepted_note,
+             rejected_reason, updated_at::text as updated_at
       from public.quote where id = ${id} and org_id = ${ctx.orgId}
     `)) as unknown as Array<Record<string, unknown>>;
     if (!q[0]) return null;
@@ -762,6 +830,11 @@ export async function getQuote(
       presetId: (r.preset_id as string | null) ?? null,
       acceptedAt: (r.accepted_at as string | null) ?? null,
       acceptedNote: (r.accepted_note as string | null) ?? null,
+      rejectedReason: (r.rejected_reason as string | null) ?? null,
+      updatedAt: r.updated_at as string,
+      staleConversion:
+        r.status === "converting" &&
+        Date.now() - Date.parse(r.updated_at as string) > STALE_CONVERSION_MS,
       createdAt: r.created_at as string,
       lines: lines.map((l) => ({
         id: l.id as string,

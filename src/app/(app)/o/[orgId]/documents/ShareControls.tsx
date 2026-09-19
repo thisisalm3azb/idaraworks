@@ -32,6 +32,8 @@ export function ShareControls({
     copied: string;
     failed: string;
     forbidden: string;
+    /** Shown when the session must sign in again (or step up MFA) before sharing. */
+    session?: string;
   };
 }) {
   const [pending, start] = useTransition();
@@ -46,7 +48,14 @@ export function ShareControls({
     start(async () => {
       const res = await createDocumentShareAction(orgId, kind, id, days);
       if (res.ok) setLink(res.link);
-      else setError(res.error === "forbidden" ? labels.forbidden : labels.failed);
+      else
+        setError(
+          res.error === "forbidden"
+            ? labels.forbidden
+            : res.error === "mfa" || res.error === "auth"
+              ? (labels.session ?? labels.failed)
+              : labels.failed,
+        );
     });
   }
 

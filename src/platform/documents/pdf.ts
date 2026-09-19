@@ -317,13 +317,20 @@ async function renderPdfInner(html: string, options: PdfOptions): Promise<Uint8A
   return bytes;
 }
 
+const FONT_WAIT_MS = 8_000;
+
 async function renderOnce(html: string, options: PdfOptions): Promise<Uint8Array> {
   const browser = await launch();
   const page = await browser.newPage();
   try {
     await page.setContent(html, { waitUntil: "load" });
-    // Fonts must be ready or the first page can print in a fallback face.
-    await page.evaluate(() => (document as unknown as { fonts: FontFaceSet }).fonts.ready);
+    // Fonts must be ready or the first page can print in a fallback face —
+    // but a font that never arrives must not hold the render past the route's
+    // own deadline: after the bound, print with what is loaded.
+    await Promise.race([
+      page.evaluate(() => (document as unknown as { fonts: FontFaceSet }).fonts.ready),
+      new Promise<void>((resolve) => setTimeout(resolve, FONT_WAIT_MS)),
+    ]).catch(() => undefined);
     const numbered = options.pageNumbers ?? false;
     const bytes = await page.pdf({
       format: "a4",

@@ -15,6 +15,7 @@ import {
   rejectQuote,
   QuoteStateError,
   InvalidQuoteInputError,
+  recoverStaleConversion,
 } from "@/modules/quotes/service";
 
 /** Typed create result (003C): the client form keeps every entered value on
@@ -80,7 +81,9 @@ async function quoteTransition(
     await fn(resolved.ctx as never, resolved.archetype as never, id);
   } catch (err) {
     if ((err as { digest?: string }).digest?.startsWith("NEXT_REDIRECT")) throw err;
-    redirect(`${base}?error=${err instanceof QuoteStateError ? "state" : "failed"}`);
+    redirect(
+      `${base}?error=${err instanceof QuoteStateError ? `${ok === "submitted" ? "submit" : ok === "sent" ? "send" : "action"}_state` : "failed"}`,
+    );
   }
   revalidatePath(base);
   redirect(`${base}?ok=${ok}`);
@@ -104,12 +107,12 @@ export async function acceptQuoteAction(orgId: string, formData: FormData): Prom
     revalidatePath(`/o/${orgId}/quotes/${id}`);
     // A quotation with a template starts its project at once; one without
     // records the acceptance and returns here for the template (D4).
-    if (accepted.jobId) redirect(`/o/${orgId}/jobs/${accepted.jobId}`);
+    if (accepted.jobId) redirect(`/o/${orgId}/jobs/${accepted.jobId}?ok=quote_converted`);
     redirect(`/o/${orgId}/quotes/${id}?ok=accepted`);
   } catch (err) {
     if ((err as { digest?: string }).digest?.startsWith("NEXT_REDIRECT")) throw err;
     redirect(
-      `/o/${orgId}/quotes/${id}?error=${err instanceof QuoteStateError ? "state" : "failed"}`,
+      `/o/${orgId}/quotes/${id}?error=${err instanceof QuoteStateError ? "accept_state" : "failed"}`,
     );
   }
 }
@@ -128,12 +131,29 @@ export async function convertQuoteAction(orgId: string, formData: FormData): Pro
       jobName: String(formData.get("job_name") ?? "").trim() || undefined,
     });
     revalidatePath(`/o/${orgId}/quotes/${id}`);
-    redirect(`/o/${orgId}/jobs/${jobId}`);
+    redirect(`/o/${orgId}/jobs/${jobId}?ok=quote_converted`);
   } catch (err) {
     if ((err as { digest?: string }).digest?.startsWith("NEXT_REDIRECT")) throw err;
     redirect(
-      `/o/${orgId}/quotes/${id}?error=${err instanceof QuoteStateError ? "state" : "failed"}`,
+      `/o/${orgId}/quotes/${id}?error=${err instanceof QuoteStateError ? "convert_state" : "failed"}`,
     );
+  }
+}
+
+/** Release a quotation stuck in `converting` (see recoverStaleConversion). */
+export async function recoverQuoteAction(orgId: string, formData: FormData): Promise<void> {
+  const resolved = await resolveCtxForAction(orgId);
+  if (resolved === "mfa_required") redirect("/mfa");
+  if (typeof resolved === "string") redirect("/");
+  const id = String(formData.get("quote_id") ?? "");
+  const base = `/o/${orgId}/quotes/${id}`;
+  try {
+    const result = await recoverStaleConversion(resolved.ctx, resolved.archetype, id);
+    revalidatePath(base);
+    redirect(`${base}?ok=${result === "not_stale" ? "still_converting" : "recovered"}`);
+  } catch (err) {
+    if ((err as { digest?: string }).digest?.startsWith("NEXT_REDIRECT")) throw err;
+    redirect(`${base}?error=${err instanceof QuoteStateError ? "convert_state" : "failed"}`);
   }
 }
 export async function rejectQuoteAction(orgId: string, formData: FormData): Promise<void> {
@@ -146,7 +166,7 @@ export async function rejectQuoteAction(orgId: string, formData: FormData): Prom
     await rejectQuote(resolved.ctx, resolved.archetype, id, String(formData.get("reason") ?? ""));
   } catch (err) {
     if ((err as { digest?: string }).digest?.startsWith("NEXT_REDIRECT")) throw err;
-    redirect(`${base}?error=${err instanceof QuoteStateError ? "state" : "failed"}`);
+    redirect(`${base}?error=${err instanceof QuoteStateError ? "reject_state" : "failed"}`);
   }
   revalidatePath(base);
   redirect(`${base}?ok=rejected`);

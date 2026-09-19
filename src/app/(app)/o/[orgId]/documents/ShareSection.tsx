@@ -1,5 +1,5 @@
 import { getT, getServerLocale } from "@/platform/i18n/server";
-import { Button, Card, CardHeader } from "@/platform/ui";
+import { Card, CardHeader, SubmitButton } from "@/platform/ui";
 import { formatDate } from "@/platform/format";
 import type { DocumentKind, DocumentShareRow } from "@/modules/documents/service";
 import { ShareControls } from "./ShareControls";
@@ -44,6 +44,7 @@ export async function ShareSection({
           copied: t("documents.share_copied"),
           failed: t("documents.share_failed"),
           forbidden: t("documents.share_forbidden"),
+          session: t("documents.share_session"),
         }}
       />
       {shares.length === 0 ? (
@@ -74,9 +75,9 @@ export async function ShareSection({
                     <input type="hidden" name="kind" value={kind} />
                     <input type="hidden" name="subject_id" value={id} />
                     <input type="hidden" name="share_id" value={s.id} />
-                    <Button type="submit" variant="danger">
+                    <SubmitButton variant="danger" pendingLabel={t("common.working")}>
                       {t("documents.share_revoke")}
-                    </Button>
+                    </SubmitButton>
                   </form>
                 ) : null}
               </li>

@@ -64,9 +64,16 @@ export async function DocumentActions({
       <Link href={withLang("print=1")} target="_blank" rel="noopener" className={LINK}>
         {t("documents.print")}
       </Link>
-      <Link href={withLang("format=pdf")} className={LINK}>
+      {/*
+        A plain anchor with `download`, deliberately not a <Link>: the router
+        would fetch the PDF as a navigation (and prefetch it on sight), get a
+        binary or a JSON 503 it cannot render, and show nothing (owner,
+        2026-09-20: "Download PDF did nothing"). The browser's own download
+        path saves the file, and a failure arrives as the route's fallback page.
+      */}
+      <a href={withLang("format=pdf")} download className={LINK} data-testid="download-pdf">
         {t("documents.download_pdf")}
-      </Link>
+      </a>
       <Link
         href={`${base}?lang=${alternate}`}
         target="_blank"
