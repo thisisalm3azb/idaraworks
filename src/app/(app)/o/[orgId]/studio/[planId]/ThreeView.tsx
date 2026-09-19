@@ -97,7 +97,22 @@ export function ThreeView({
             </div>
           </div>
         ) : !hasSchedule && world !== "capacity" ? (
-          <p className="p-4 text-sm text-ink-muted">{dict.nothingScheduled}</p>
+          <div className="flex flex-col gap-2 p-4 text-sm text-ink-muted">
+            <p>
+              {payload.unscheduled.length > 0
+                ? dict.worldEmptyUnscheduled
+                    .replace("{n}", String(payload.unscheduled.length))
+                    .replace("{reason}", payload.unscheduled[0]!.reason)
+                : dict.nothingScheduled}
+            </p>
+            <p className="text-xs">{dict.worldEmptyHint}</p>
+            <a
+              href="?view=gantt"
+              className="inline-flex min-h-9 w-fit items-center rounded-md border border-line bg-card px-3 text-xs text-ink"
+            >
+              {dict.worldOpenGantt}
+            </a>
+          </div>
         ) : (
           <ThreeWorld
             payload={payload}

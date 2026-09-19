@@ -150,6 +150,10 @@ export type StudioDict = {
   worldHint: string;
   worldFallback: string;
   worldLoading: string;
+  /** D5: what stops the 3D world, and where to fix it. `{n}` and `{reason}` are substituted client-side. */
+  worldEmptyUnscheduled: string;
+  worldEmptyHint: string;
+  worldOpenGantt: string;
   search: string;
   commands: string;
   nothingFound: string;
