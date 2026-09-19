@@ -109,7 +109,7 @@ export default async function LeavePage({
         </Card>
       ) : null}
 
-      {me && types.length === 0 ? (
+      {types.length === 0 ? (
         <Card>
           <h2 className="mb-2 text-sm font-semibold text-ink">{t("hr.leave.request_new")}</h2>
           <p className="text-sm text-ink-secondary" role="status">
