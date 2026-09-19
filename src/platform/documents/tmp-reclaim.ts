@@ -65,11 +65,53 @@ export async function reclaimBrowserTemp(dir: string = tmpdir()): Promise<Reclai
       out.failed++;
     }
   }
+  out.freeBytes = await tempFreeBytes(dir);
+  return out;
+}
+
+/** Free bytes in the temp directory, or null where the platform cannot say. */
+export async function tempFreeBytes(dir: string = tmpdir()): Promise<number | null> {
   try {
     const s = await statfs(dir);
-    out.freeBytes = Number(s.bavail) * Number(s.bsize);
+    return Number(s.bavail) * Number(s.bsize);
   } catch {
-    // statfs is unavailable on some platforms; the count above still stands.
+    return null; // statfs is unavailable on some platforms
   }
-  return out;
+}
+
+/**
+ * The temp directory's largest top-level entries, for the log line that names
+ * what is holding the space when a launch finds the disk low. Bounded: at
+ * most `maxEntries` files are visited, and the walk stops counting past that.
+ */
+export async function describeTemp(
+  dir: string = tmpdir(),
+  maxEntries = 4000,
+): Promise<Array<{ name: string; mb: number }>> {
+  const { stat } = await import("node:fs/promises");
+  let visited = 0;
+  async function sizeOf(p: string): Promise<number> {
+    if (visited++ > maxEntries) return 0;
+    try {
+      const s = await stat(p);
+      if (!s.isDirectory()) return s.size;
+      let total = 0;
+      for (const child of await readdir(p)) total += await sizeOf(path.join(p, child));
+      return total;
+    } catch {
+      return 0;
+    }
+  }
+  let names: string[] = [];
+  try {
+    names = await readdir(dir);
+  } catch {
+    return [];
+  }
+  const sized: Array<{ name: string; mb: number }> = [];
+  for (const name of names) {
+    const bytes = await sizeOf(path.join(dir, name));
+    sized.push({ name, mb: Math.round((bytes / 1048576) * 10) / 10 });
+  }
+  return sized.sort((a, b) => b.mb - a.mb).slice(0, 12);
 }

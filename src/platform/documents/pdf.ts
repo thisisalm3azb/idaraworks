@@ -47,15 +47,64 @@ export type PdfOptions = {
 type SparticuzChromium = { args: string[]; executablePath: () => Promise<string> };
 
 let cached: Browser | null = null;
+/**
+ * One launch at a time. Several renders arriving on an instance that has no
+ * browser yet must share the one launch, not each start their own: two
+ * launches would mean two profiles, and the temp reclaim below would be
+ * sweeping the directory while a sibling's browser was still writing into it.
+ */
+let launching: Promise<Browser> | null = null;
+/** Renders served by the current browser, for the bounded recycle below. */
+let rendersSinceLaunch = 0;
 
 /** True when running somewhere @sparticuz/chromium is the right binary. */
 function isServerless(): boolean {
   return Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
 }
 
+/**
+ * When to retire a healthy browser and let the next render start a fresh one.
+ *
+ * Chromium keeps state on disk for as long as it runs — its profile, and the
+ * shared-memory files it uses instead of /dev/shm in a container — and a
+ * serverless instance's small temp disk is shared by every browser the
+ * instance ever runs. A browser that exits cleanly takes its files with it, so
+ * retiring one on a bounded schedule, and early when the disk is already low,
+ * keeps the next launch off a full disk. The thresholds are exported for the
+ * lifecycle test.
+ */
+export const RECYCLE_AFTER_RENDERS = 25;
+export const RECYCLE_BELOW_FREE_BYTES = 96 * 1024 * 1024;
+export function shouldRecycle(freeBytes: number | null, renders: number): boolean {
+  if (renders >= RECYCLE_AFTER_RENDERS) return true;
+  return freeBytes !== null && freeBytes < RECYCLE_BELOW_FREE_BYTES;
+}
+
 async function launch(): Promise<Browser> {
   if (cached?.isConnected()) return cached;
+  if (launching) return launching;
+  launching = (async () => {
+    try {
+      const browser = await launchFresh();
+      cached = browser;
+      rendersSinceLaunch = 0;
+      return browser;
+    } finally {
+      launching = null;
+    }
+  })();
+  return launching;
+}
+
+async function launchFresh(): Promise<Browser> {
   const { chromium } = await import("playwright-core");
+
+  // A handle that says it is disconnected still owns whatever its process left
+  // behind; closing it lets Playwright remove the profile it created.
+  if (cached) {
+    await cached.close().catch(() => {});
+    cached = null;
+  }
 
   if (isServerless()) {
     // @sparticuz/chromium ships the binary and the flags a serverless container
@@ -70,35 +119,56 @@ async function launch(): Promise<Browser> {
      * that died left its profile and shared-memory files there. After a few
      * renders the disk is full, the next Chromium dies at page.pdf, and so does
      * every one after it (production 2026-09-19: "Less than 64MB of free space
-     * in temporary directory for shared memory files: 2"). No browser is live
-     * at this point, so the leftovers are exactly that. See tmp-reclaim.ts.
+     * in temporary directory for shared memory files: 2").
+     *
+     * This runs with no browser of ours alive — `cached` is null and launches
+     * are serialised above — so every artefact the reclaim recognises belongs
+     * to a browser that is gone. Nothing outside those names is touched. See
+     * tmp-reclaim.ts.
      */
-    const { reclaimBrowserTemp } = await import("./tmp-reclaim");
+    const { reclaimBrowserTemp, describeTemp } = await import("./tmp-reclaim");
     const reclaimed = await reclaimBrowserTemp();
+    const freeMb = reclaimed.freeBytes === null ? null : Math.round(reclaimed.freeBytes / 1048576);
     logger.info(
-      {
-        removed: reclaimed.removed,
-        failed: reclaimed.failed,
-        freeMb: reclaimed.freeBytes === null ? null : Math.round(reclaimed.freeBytes / 1048576),
-      },
+      { removed: reclaimed.removed, failed: reclaimed.failed, freeMb },
       "pdf: temp directory reclaimed before browser launch",
     );
-    cached = await chromium.launch({
+    if (reclaimed.freeBytes !== null && reclaimed.freeBytes < RECYCLE_BELOW_FREE_BYTES) {
+      // Still low after the sweep: name what is holding the space, so the next
+      // occurrence is diagnosed from the log rather than reproduced.
+      logger.warn({ freeMb, usage: await describeTemp() }, "pdf: temp directory low after reclaim");
+    }
+    return chromium.launch({
       executablePath: await sparticuz.executablePath(),
       args: sparticuz.args,
       headless: true,
     });
-    return cached;
   }
 
   // Locally and in CI, Playwright's own download. An explicit override exists
   // for a machine that keeps Chrome somewhere else.
   const override = process.env.CHROME_EXECUTABLE_PATH;
-  cached = await chromium.launch({
+  return chromium.launch({
     ...(override ? { executablePath: override } : {}),
     headless: true,
   });
-  return cached;
+}
+
+/**
+ * After a render on a serverless instance: retire the browser if it has done
+ * its share or the temp disk is low — but only when this render is the last
+ * one in flight, because the other renders are pages on the same browser.
+ */
+async function maybeRecycle(): Promise<void> {
+  if (!isServerless() || activeRenders !== 1) return;
+  const { tempFreeBytes } = await import("./tmp-reclaim");
+  const free = await tempFreeBytes();
+  if (!shouldRecycle(free, rendersSinceLaunch)) return;
+  logger.info(
+    { renders: rendersSinceLaunch, freeMb: free === null ? null : Math.round(free / 1048576) },
+    "pdf: retiring the browser so the next render starts fresh",
+  );
+  await closePdfBrowser();
 }
 
 /**
@@ -176,13 +246,22 @@ export async function renderPdf(html: string, options: PdfOptions = {}): Promise
  */
 async function renderPdfInner(html: string, options: PdfOptions): Promise<Uint8Array> {
   const wasCached = cached !== null;
+  let bytes: Uint8Array;
   try {
-    return await renderOnce(html, options);
+    bytes = await renderOnce(html, options);
   } catch (err) {
     if (!wasCached) throw err;
     await closePdfBrowser();
-    return await renderOnce(html, options);
+    bytes = await renderOnce(html, options);
   }
+  rendersSinceLaunch++;
+  await maybeRecycle().catch((err) => {
+    logger.warn(
+      { err: err instanceof Error ? err.message : String(err) },
+      "pdf: recycle check failed",
+    );
+  });
+  return bytes;
 }
 
 async function renderOnce(html: string, options: PdfOptions): Promise<Uint8Array> {
@@ -240,10 +319,17 @@ export async function embeddedDocumentFonts(): Promise<Record<string, string>> {
   return out;
 }
 
-/** Release the shared browser. Called by tests; serverless reuses it warm. */
+/** Release the shared browser. Called by tests and by the recycle above; serverless otherwise reuses it warm. */
 export async function closePdfBrowser(): Promise<void> {
   if (cached) {
-    await cached.close().catch(() => {});
+    const closing = cached;
     cached = null;
+    rendersSinceLaunch = 0;
+    await closing.close().catch(() => {});
   }
+}
+
+/** Test-only view of the lifecycle state. */
+export function pdfBrowserStateForTests(): { cached: boolean; rendersSinceLaunch: number } {
+  return { cached: cached !== null, rendersSinceLaunch };
 }
