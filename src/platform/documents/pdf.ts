@@ -17,6 +17,7 @@
  * Arabic render on Linux at all.
  */
 import type { Browser } from "playwright-core";
+import { logger } from "@/platform/logger";
 
 export type PdfOptions = {
   /** Shown in the PDF's own metadata and used for the download filename. */
@@ -64,6 +65,24 @@ async function launch(): Promise<Browser> {
       default?: SparticuzChromium;
     } & Partial<SparticuzChromium>;
     const sparticuz = (mod.default ?? mod) as SparticuzChromium;
+    /*
+     * The instance's /tmp outlives every browser that ran on it, and a browser
+     * that died left its profile and shared-memory files there. After a few
+     * renders the disk is full, the next Chromium dies at page.pdf, and so does
+     * every one after it (production 2026-09-19: "Less than 64MB of free space
+     * in temporary directory for shared memory files: 2"). No browser is live
+     * at this point, so the leftovers are exactly that. See tmp-reclaim.ts.
+     */
+    const { reclaimBrowserTemp } = await import("./tmp-reclaim");
+    const reclaimed = await reclaimBrowserTemp();
+    logger.info(
+      {
+        removed: reclaimed.removed,
+        failed: reclaimed.failed,
+        freeMb: reclaimed.freeBytes === null ? null : Math.round(reclaimed.freeBytes / 1048576),
+      },
+      "pdf: temp directory reclaimed before browser launch",
+    );
     cached = await chromium.launch({
       executablePath: await sparticuz.executablePath(),
       args: sparticuz.args,
