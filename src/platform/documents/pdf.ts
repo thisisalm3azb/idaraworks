@@ -74,7 +74,15 @@ function isServerless(): boolean {
  * lifecycle test.
  */
 export const RECYCLE_AFTER_RENDERS = 25;
-export const RECYCLE_BELOW_FREE_BYTES = 96 * 1024 * 1024;
+/**
+ * Chromium itself refuses to start under 64 MB free ("Less than 64MB of free
+ * space in temporary directory for shared memory files"), so that is the floor
+ * a retirement must keep the disk above. It is deliberately NOT higher: the
+ * extracted browser leaves a Vercel instance ~90 MB, and a 96 MB floor retired
+ * the browser after every single render, which made concurrent renders race
+ * each other's retirement (production, 2026-09-19).
+ */
+export const RECYCLE_BELOW_FREE_BYTES = 64 * 1024 * 1024;
 export function shouldRecycle(freeBytes: number | null, renders: number): boolean {
   if (renders >= RECYCLE_AFTER_RENDERS) return true;
   return freeBytes !== null && freeBytes < RECYCLE_BELOW_FREE_BYTES;
@@ -164,6 +172,9 @@ async function maybeRecycle(): Promise<void> {
   const { tempFreeBytes } = await import("./tmp-reclaim");
   const free = await tempFreeBytes();
   if (!shouldRecycle(free, rendersSinceLaunch)) return;
+  // The probe yielded: a render that attached to this browser meanwhile must
+  // not lose it under its feet. It retires the browser after itself instead.
+  if (activeRenders !== 1) return;
   logger.info(
     { renders: rendersSinceLaunch, freeMb: free === null ? null : Math.round(free / 1048576) },
     "pdf: retiring the browser so the next render starts fresh",
