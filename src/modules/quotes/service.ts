@@ -291,28 +291,200 @@ export const AcceptQuoteInput = z.object({
  * (stages + billing_points), its selling price (frozen base) + terms are set, and the
  * quote is linked + marked converted. On a job-creation failure the claim is released.
  */
+export type AcceptQuoteResult = {
+  /** The project created from the quotation's template, when it has one. */
+  jobId: string | null;
+  /** `converted` when a project was started; `accepted` when the customer's
+   * decision is recorded and a template is still needed to start one. */
+  status: "converted" | "accepted";
+};
+
 export async function acceptQuote(
+  ctx: Ctx,
+  archetype: RoleArchetype,
+  quoteId: string,
+  raw: unknown,
+): Promise<AcceptQuoteResult> {
+  assertCan(archetype, "quotes.manage");
+  const input = AcceptQuoteInput.parse(raw);
+
+  /*
+   * Two different things happen here, and they used to be one (D4).
+   *
+   * The CUSTOMER'S ACCEPTANCE is a fact about the sale: the customer said yes,
+   * on a date, with a note and perhaps a signed copy. STARTING THE PROJECT is a
+   * decision about delivery, and it needs a template (a preset), because that
+   * is where the stages and billing points come from.
+   *
+   * A quotation with a template does both at once, as before. A quotation
+   * without one used to be refused outright — and the screen offered the button
+   * anyway, so pressing Accept did nothing visible. Now it records the
+   * acceptance, wins the linked opportunity, and leaves the project to
+   * `convertQuoteToJob`, which takes the template when the team has chosen one.
+   */
+  const state = await readQuoteState(ctx, quoteId);
+  if (!state.preset_id) {
+    if (state.converted_job_id || state.status === "converted") {
+      throw new QuoteStateError("quote already converted");
+    }
+    if (state.status !== "approved" && state.status !== "sent") {
+      throw new QuoteStateError(
+        `only an approved/sent quote can be accepted (was ${state.status})`,
+      );
+    }
+    await command(
+      ctx,
+      {
+        audit: {
+          action: "quote.accept",
+          entityType: "quote",
+          entityId: quoteId,
+          summary: "Accepted quote — awaiting a template before the project starts",
+        },
+        // No QUOTE_ACCEPTED event here: its contract names the project, and
+        // there is none yet. The event fires when convertQuoteToJob starts it.
+      },
+      async (tx) => {
+        const rows = (await tx.execute(sql`
+          update public.quote set status = 'accepted', accepted_at = now(),
+              accepted_note = ${input.note ?? null},
+              acceptance_evidence_file_id = ${input.evidenceFileId ?? null}, updated_at = now()
+          where id = ${quoteId} and org_id = ${ctx.orgId}
+            and status in ('approved', 'sent') and converted_job_id is null and preset_id is null
+          returning reference
+        `)) as unknown as Array<{ reference: string }>;
+        if (!rows[0]) throw new QuoteStateError("quote is no longer acceptable");
+        // The identity is frozen at the moment of acceptance, exactly as on the
+        // template path: this is the document the customer said yes to.
+        await captureIssuer(tx, ctx, quoteId, { stampIssuedAt: true });
+        // Acceptance alone wins the linked opportunity (H20); conversion later
+        // finds it already won and leaves it be.
+        const wonOpp = (await tx.execute(sql`
+          update public.opportunity
+          set status = 'won', stage_key = 'won', won_at = now(), updated_at = now()
+          where org_id = ${ctx.orgId} and quote_id = ${quoteId} and status = 'open'
+          returning id::text as id
+        `)) as unknown as Array<{ id: string }>;
+        if (wonOpp[0]) {
+          await tx.execute(sql`
+            insert into public.sales_activity (org_id, opportunity_id, kind, actor_user_id)
+            values (${ctx.orgId}, ${wonOpp[0].id}, 'won', ${ctx.userId})
+          `);
+        }
+        return { jobId: null };
+      },
+    );
+    return { jobId: null, status: "accepted" };
+  }
+  const jobId = await claimAndConvert(ctx, archetype, quoteId, {
+    from: ["approved", "sent"],
+    releaseTo: "approved",
+    acceptance: input,
+    jobName: input.jobName,
+  });
+  return { jobId, status: "converted" };
+}
+
+/**
+ * Start the project from a quotation the customer has already accepted, with
+ * the template chosen now (D4). The quotation keeps its acceptance date and
+ * note; only the template is added before the usual claim-and-convert.
+ */
+export const ConvertQuoteInput = z.object({
+  presetId: z.string().uuid(),
+  jobName: z.string().trim().min(1).max(160).optional(),
+});
+
+export async function convertQuoteToJob(
   ctx: Ctx,
   archetype: RoleArchetype,
   quoteId: string,
   raw: unknown,
 ): Promise<{ jobId: string }> {
   assertCan(archetype, "quotes.manage");
-  const input = AcceptQuoteInput.parse(raw);
+  const input = ConvertQuoteInput.parse(raw);
+  const state = await readQuoteState(ctx, quoteId);
+  if (state.converted_job_id || state.status === "converted") {
+    throw new QuoteStateError("quote already converted");
+  }
+  if (state.status !== "accepted") {
+    throw new QuoteStateError(`only an accepted quote can be converted (was ${state.status})`);
+  }
+  await withCtx(ctx, (tx) =>
+    tx.execute(sql`
+      update public.quote set preset_id = ${input.presetId}, updated_at = now()
+      where id = ${quoteId} and org_id = ${ctx.orgId} and status = 'accepted'
+        and converted_job_id is null
+    `),
+  );
+  const jobId = await claimAndConvert(ctx, archetype, quoteId, {
+    from: ["accepted"],
+    releaseTo: "accepted",
+    acceptance: null,
+    jobName: input.jobName,
+  });
+  return { jobId };
+}
 
-  // CLAIM: atomically move approved/sent → converting (only if it has a preset and is
-  // not already converting/converted). The single guarded UPDATE is the serialization
-  // point — a losing racer matches 0 rows and never reaches createJobFromPreset.
+async function readQuoteState(
+  ctx: Ctx,
+  quoteId: string,
+): Promise<{ status: string; preset_id: string | null; converted_job_id: string | null }> {
+  const [q] = (await withCtx(ctx, (tx) =>
+    tx.execute(sql`
+      select status, preset_id::text as preset_id, converted_job_id::text as converted_job_id
+      from public.quote where id = ${quoteId} and org_id = ${ctx.orgId}
+    `),
+  )) as unknown as Array<{
+    status: string;
+    preset_id: string | null;
+    converted_job_id: string | null;
+  }>;
+  if (!q) throw new QuoteNotFoundError();
+  return q;
+}
+
+/**
+ * Claim the quotation into the transient 'converting' state and build its
+ * project. Shared by acceptance-with-template and convert-after-acceptance;
+ * only the statuses it may start from, where a failed build releases it to,
+ * and whether the acceptance itself is being recorded differ.
+ */
+async function claimAndConvert(
+  ctx: Ctx,
+  archetype: RoleArchetype,
+  quoteId: string,
+  opts: {
+    from: string[];
+    releaseTo: "approved" | "accepted";
+    acceptance: z.infer<typeof AcceptQuoteInput> | null;
+    jobName?: string;
+  },
+): Promise<string> {
+  // CLAIM: atomically move → converting (only if it has a preset and is not
+  // already converting/converted). The single guarded UPDATE is the
+  // serialization point — a losing racer matches 0 rows and never reaches
+  // createJobFromPreset.
   const claimed = await withCtx(ctx, async (tx) => {
-    const rows = (await tx.execute(sql`
+    const rows = (await tx.execute(
+      opts.acceptance
+        ? sql`
       update public.quote set status = 'converting', accepted_at = now(),
-          accepted_note = ${input.note ?? null},
-          acceptance_evidence_file_id = ${input.evidenceFileId ?? null}, updated_at = now()
+          accepted_note = ${opts.acceptance.note ?? null},
+          acceptance_evidence_file_id = ${opts.acceptance.evidenceFileId ?? null}, updated_at = now()
       where id = ${quoteId} and org_id = ${ctx.orgId}
-        and status in ('approved', 'sent') and converted_job_id is null and preset_id is not null
+        and status = any(string_to_array(${opts.from.join(",")}, ',')) and converted_job_id is null and preset_id is not null
       returning preset_id::text as preset_id, customer_id::text as customer_id,
                 base_total_minor, terms, reference
-    `)) as unknown as Array<{
+    `
+        : sql`
+      update public.quote set status = 'converting', updated_at = now()
+      where id = ${quoteId} and org_id = ${ctx.orgId}
+        and status = any(string_to_array(${opts.from.join(",")}, ',')) and converted_job_id is null and preset_id is not null
+      returning preset_id::text as preset_id, customer_id::text as customer_id,
+                base_total_minor, terms, reference
+    `,
+    )) as unknown as Array<{
       preset_id: string;
       customer_id: string | null;
       base_total_minor: string;
@@ -323,28 +495,21 @@ export async function acceptQuote(
     // official without ever having been sent. The identity is captured in the
     // SAME transaction as the claim, which is also the serialization point: a
     // losing racer matched no row above and reaches nothing here.
-    if (rows[0]) await captureIssuer(tx, ctx, quoteId, { stampIssuedAt: true });
+    if (rows[0] && opts.acceptance) await captureIssuer(tx, ctx, quoteId, { stampIssuedAt: true });
     return rows[0];
   });
   if (!claimed) {
     // Diagnose the 0-row claim (rare path) to preserve the precise error.
-    const [q] = (await withCtx(ctx, (tx) =>
-      tx.execute(sql`
-        select status, preset_id::text as preset_id, converted_job_id::text as converted_job_id
-        from public.quote where id = ${quoteId} and org_id = ${ctx.orgId}
-      `),
-    )) as unknown as Array<{
-      status: string;
-      preset_id: string | null;
-      converted_job_id: string | null;
-    }>;
-    if (!q) throw new QuoteNotFoundError();
+    const q = await readQuoteState(ctx, quoteId);
     if (q.converted_job_id || q.status === "converted") {
       throw new QuoteStateError("quote already converted");
     }
     if (!q.preset_id) throw new QuoteStateError("quote has no preset to convert from");
-    throw new QuoteStateError(`only an approved/sent quote can be accepted (was ${q.status})`);
+    throw new QuoteStateError(
+      `only a quote in ${opts.from.join("/")} can be converted (was ${q.status})`,
+    );
   }
+  const input = { jobName: opts.jobName };
 
   // H21: when the quotation came from an opportunity, the work carries that
   // provenance too. Without it the opportunity cannot see the delivery it
@@ -377,10 +542,10 @@ export async function acceptQuote(
     });
   } catch (err) {
     // createJobFromPreset is atomic — on throw NO job was committed, so it is safe to
-    // RELEASE the claim (converting → approved) and let the accept be retried.
+    // RELEASE the claim (converting → where it came from) and let the step be retried.
     await withCtx(ctx, (tx) =>
       tx.execute(sql`
-        update public.quote set status = 'approved', updated_at = now()
+        update public.quote set status = ${opts.releaseTo}, updated_at = now()
         where id = ${quoteId} and org_id = ${ctx.orgId} and status = 'converting'
       `),
     );
@@ -391,10 +556,12 @@ export async function acceptQuote(
     ctx,
     {
       audit: {
-        action: "quote.accept",
+        action: opts.acceptance ? "quote.accept" : "quote.convert",
         entityType: "quote",
         entityId: quoteId,
-        summary: `Accepted quote ${claimed.reference} → job ${job.reference}`,
+        summary: opts.acceptance
+          ? `Accepted quote ${claimed.reference} → job ${job.reference}`
+          : `Started job ${job.reference} from accepted quote ${claimed.reference}`,
       },
       events: [{ name: QUOTE_ACCEPTED, payload: { quoteId, jobId: job.id } }],
     },
@@ -432,7 +599,7 @@ export async function acceptQuote(
       return { jobId: job.id };
     },
   );
-  return { jobId: job.id };
+  return job.id;
 }
 
 /** Record a CUSTOMER rejection of a sent quote (reason required, terminal). */
@@ -540,6 +707,10 @@ export type QuoteDetail = QuoteRow & {
   terms: string | null;
   validUntil: string | null;
   convertedJobId: string | null;
+  /** The template the project would be built from; null until one is chosen (D4). */
+  presetId: string | null;
+  acceptedAt: string | null;
+  acceptedNote: string | null;
   lines: Array<{
     id: string;
     sectionKey: string | null;
@@ -564,7 +735,8 @@ export async function getQuote(
       select id::text as id, reference, customer_id::text as customer_id, customer_name, status,
              currency, exchange_rate,
              subtotal_minor, vat_amount_minor, total_minor, terms, valid_until::text as valid_until,
-             converted_job_id::text as converted_job_id, created_at::text as created_at
+             converted_job_id::text as converted_job_id, created_at::text as created_at,
+             preset_id::text as preset_id, accepted_at::text as accepted_at, accepted_note
       from public.quote where id = ${id} and org_id = ${ctx.orgId}
     `)) as unknown as Array<Record<string, unknown>>;
     if (!q[0]) return null;
@@ -587,6 +759,9 @@ export async function getQuote(
       terms: (r.terms as string | null) ?? null,
       validUntil: (r.valid_until as string | null) ?? null,
       convertedJobId: (r.converted_job_id as string | null) ?? null,
+      presetId: (r.preset_id as string | null) ?? null,
+      acceptedAt: (r.accepted_at as string | null) ?? null,
+      acceptedNote: (r.accepted_note as string | null) ?? null,
       createdAt: r.created_at as string,
       lines: lines.map((l) => ({
         id: l.id as string,

@@ -162,7 +162,8 @@ describe("H18 — workflow stage adoption", () => {
     const { jobId } = await acceptQuote(ctxOf(orgA, userA), "owner", quoteId, {
       jobName: "Converted villa",
     });
-    const stages = await jobStages(jobId);
+    expect(jobId).toBeTruthy();
+    const stages = await jobStages(jobId!);
     expect(stages.map((s) => s.stage_key)).toEqual(FIXTURE_STAGES.map((s) => s.key));
   });
 

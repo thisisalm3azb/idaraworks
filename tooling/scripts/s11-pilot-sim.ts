@@ -99,7 +99,7 @@ async function coreLoop(o: Org, priceMinor: number) {
   const { approvalId } = await submitQuote(ctx(o), "owner", quote.id);
   await decideApproval(ctx(o), "owner", { approvalId, decision: "approved" });
   await markQuoteSent(ctx(o), "owner", quote.id);
-  const { jobId: soldJob } = await acceptQuote(ctx(o), "owner", quote.id, { note: "أمر موقّع" });
+  const soldJob = (await acceptQuote(ctx(o), "owner", quote.id, { note: "أمر موقّع" })).jobId!;
 
   const inv = await createInvoice(ctx(o), "owner", {
     customerId: cust.id,

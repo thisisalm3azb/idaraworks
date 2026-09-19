@@ -135,9 +135,11 @@ describe("H19 — quote from customer → work with blueprint stages", () => {
   it("acceptance creates work carrying the customer AND the approved stages", async () => {
     await owner`update public.quote set status = 'sent', updated_at = now()
                 where id = ${quoteId} and org_id = ${orgA}`;
-    ({ jobId } = await acceptQuote(ctxOf(orgA, userA), "owner", quoteId, {
-      jobName: "Marina fit-out",
-    }));
+    jobId = (
+      await acceptQuote(ctxOf(orgA, userA), "owner", quoteId, {
+        jobName: "Marina fit-out",
+      })
+    ).jobId!;
     const job = (await owner`
       select customer_id::text as customer_id from public.job where id = ${jobId}`) as unknown as Array<{
       customer_id: string;

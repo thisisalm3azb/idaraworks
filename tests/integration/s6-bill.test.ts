@@ -121,7 +121,8 @@ describe("quote → approve → accept → convert", () => {
     const accepted = await acceptQuote(ownerCtx(), "owner", quoteId, {
       note: "Signed PO attached",
     });
-    convertedJobId = accepted.jobId;
+    expect(accepted.jobId).toBeTruthy();
+    convertedJobId = accepted.jobId!;
 
     const [q] = (await owner`
       select status, base_total_minor, converted_job_id::text as job

@@ -11,6 +11,7 @@ import {
   submitQuote,
   markQuoteSent,
   acceptQuote,
+  convertQuoteToJob,
   rejectQuote,
   QuoteStateError,
   InvalidQuoteInputError,
@@ -97,8 +98,34 @@ export async function acceptQuoteAction(orgId: string, formData: FormData): Prom
   if (typeof resolved === "string") redirect("/");
   const id = String(formData.get("quote_id") ?? "");
   try {
-    const { jobId } = await acceptQuote(resolved.ctx, resolved.archetype, id, {
+    const accepted = await acceptQuote(resolved.ctx, resolved.archetype, id, {
       note: String(formData.get("note") ?? "") || undefined,
+    });
+    revalidatePath(`/o/${orgId}/quotes/${id}`);
+    // A quotation with a template starts its project at once; one without
+    // records the acceptance and returns here for the template (D4).
+    if (accepted.jobId) redirect(`/o/${orgId}/jobs/${accepted.jobId}`);
+    redirect(`/o/${orgId}/quotes/${id}?ok=accepted`);
+  } catch (err) {
+    if ((err as { digest?: string }).digest?.startsWith("NEXT_REDIRECT")) throw err;
+    redirect(
+      `/o/${orgId}/quotes/${id}?error=${err instanceof QuoteStateError ? "state" : "failed"}`,
+    );
+  }
+}
+
+/** Start the project from an accepted quotation with the template chosen now (D4). */
+export async function convertQuoteAction(orgId: string, formData: FormData): Promise<void> {
+  const resolved = await resolveCtxForAction(orgId);
+  if (resolved === "mfa_required") redirect("/mfa");
+  if (typeof resolved === "string") redirect("/");
+  const id = String(formData.get("quote_id") ?? "");
+  const presetId = String(formData.get("preset_id") ?? "").trim();
+  if (!presetId) redirect(`/o/${orgId}/quotes/${id}?error=no_template`);
+  try {
+    const { jobId } = await convertQuoteToJob(resolved.ctx, resolved.archetype, id, {
+      presetId,
+      jobName: String(formData.get("job_name") ?? "").trim() || undefined,
     });
     revalidatePath(`/o/${orgId}/quotes/${id}`);
     redirect(`/o/${orgId}/jobs/${jobId}`);
