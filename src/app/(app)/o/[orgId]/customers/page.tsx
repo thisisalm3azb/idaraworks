@@ -6,7 +6,12 @@ import { resolveCtx } from "@/platform/auth/resolve";
 import { loadOrgTerminology, term } from "@/platform/terminology";
 import { can } from "@/platform/authz";
 import { cn } from "@/lib/cn";
-import { getCustomer, listCustomers } from "@/modules/masters/service";
+import {
+  CUSTOMER_PAGE_SIZE,
+  getCustomer,
+  listCustomers,
+  listCustomersPage,
+} from "@/modules/masters/service";
 import { customerOutstandingMap } from "@/modules/invoices/service";
 import { orgToday } from "@/modules/dashboard/service";
 import { formatMoney } from "@/platform/format";
@@ -28,6 +33,7 @@ export default async function CustomersPage({
   searchParams: Promise<{
     q?: string;
     status?: string;
+    page?: string;
     error?: string;
     ref?: string;
     field?: string;
@@ -50,11 +56,23 @@ export default async function CustomersPage({
 
   const q = (sp.q ?? "").trim();
   const status = sp.status === "archived" ? "archived" : sp.status === "all" ? "all" : "active";
-  const customers = await listCustomers(resolved.ctx, resolved.archetype, { q, status });
+  // D3: a real page of the filtered set, with its honest total — never the
+  // first N rows presented as the whole list.
+  const pageNo = Math.max(1, Number.parseInt(sp.page ?? "1", 10) || 1);
+  const page = await listCustomersPage(resolved.ctx, resolved.archetype, {
+    q,
+    status,
+    offset: (pageNo - 1) * CUSTOMER_PAGE_SIZE,
+    limit: CUSTOMER_PAGE_SIZE,
+  });
+  const customers = page.rows;
+  const pageCount = Math.max(1, Math.ceil(page.total / page.limit));
+  const pageHref = (n: number) =>
+    `/o/${orgId}/customers?status=${status}${q ? `&q=${encodeURIComponent(q)}` : ""}${n > 1 ? `&page=${n}` : ""}`;
   // Distinguish "no customers at all" from "only archived remain" for the
   // active view's empty state (one bounded probe, only when needed).
   const archivedOnly =
-    customers.length === 0 && status === "active" && q === ""
+    page.total === 0 && status === "active" && q === ""
       ? (await listCustomers(resolved.ctx, resolved.archetype, { status: "archived", limit: 1 }))
           .length > 0
       : false;
@@ -138,7 +156,16 @@ export default async function CustomersPage({
           ))}
         </div>
 
-        {customers.length === 0 ? (
+        {customers.length === 0 && page.total > 0 ? (
+          <div className="mt-4">
+            <EmptyState title={t("customers.page_empty")} />
+            <p className="mt-2 text-center text-sm">
+              <Link href={pageHref(1)} className="text-accent hover:underline">
+                {t("common.page_of", { page: 1, pages: pageCount })} →
+              </Link>
+            </p>
+          </div>
+        ) : customers.length === 0 ? (
           <div className="mt-4">
             <EmptyState
               title={
@@ -191,6 +218,41 @@ export default async function CustomersPage({
             ))}
           </ul>
         )}
+        {page.total > 0 ? (
+          <nav
+            className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-line pt-3 text-xs text-ink-muted"
+            aria-label={t("common.pagination")}
+          >
+            <span dir="ltr">
+              {t("customers.showing", {
+                from: page.offset + (customers.length ? 1 : 0),
+                to: page.offset + customers.length,
+                total: page.total,
+              })}
+            </span>
+            <span className="flex items-center gap-2">
+              {pageNo > 1 ? (
+                <Link
+                  href={pageHref(pageNo - 1)}
+                  rel="prev"
+                  className="inline-flex min-h-9 items-center rounded-md border border-line bg-card px-3 text-ink"
+                >
+                  ← {t("common.previous")}
+                </Link>
+              ) : null}
+              <span>{t("common.page_of", { page: pageNo, pages: pageCount })}</span>
+              {page.hasMore ? (
+                <Link
+                  href={pageHref(pageNo + 1)}
+                  rel="next"
+                  className="inline-flex min-h-9 items-center rounded-md border border-line bg-card px-3 text-ink"
+                >
+                  {t("common.next")} →
+                </Link>
+              ) : null}
+            </span>
+          </nav>
+        ) : null}
       </Card>
 
       {canManage ? (

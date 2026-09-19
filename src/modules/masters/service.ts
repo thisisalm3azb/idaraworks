@@ -433,6 +433,98 @@ export async function listCustomers(
   }));
 }
 
+/**
+ * One PAGE of customers, with the honest total (D3).
+ *
+ * `listCustomers` above is the bounded read the pickers use; it stops at its
+ * limit and says nothing, which is right for a dropdown and wrong for the
+ * customers screen, where a tenant past the limit saw the first rows and no
+ * sign that more existed. This is the paged read for that screen: a stable
+ * order (active first, then name, then id, so two customers with one name
+ * never swap pages), the total for the same filter from the same statement,
+ * and `hasMore` so the page can show the way on.
+ */
+export type CustomerPage = {
+  rows: CustomerListRow[];
+  total: number;
+  hasMore: boolean;
+  limit: number;
+  offset: number;
+};
+
+export const CUSTOMER_PAGE_SIZE = 50;
+
+export async function listCustomersPage(
+  ctx: Ctx,
+  archetype: RoleArchetype,
+  opts: CustomerListOptions & { offset?: number } = {},
+): Promise<CustomerPage> {
+  assertCan(archetype, "customers.view");
+  const status = opts.status ?? "active";
+  const limit = Math.min(Math.max(opts.limit ?? CUSTOMER_PAGE_SIZE, 1), 200);
+  const offset = Math.max(opts.offset ?? 0, 0);
+  const q = (opts.q ?? "").trim();
+  const pattern = q ? `%${q.replace(/[\\%_]/g, (m) => `\\${m}`)}%` : null;
+  const rows = (await withCtx(ctx, (tx) =>
+    tx.execute(sql`
+      select id::text as id, name, country, contact_name, phone, active,
+             count(*) over () as total_count
+      from public.customer
+      where org_id = ${ctx.orgId}
+        and (${status}::text = 'all' or active = (${status}::text = 'active'))
+        and (${pattern}::text is null
+             or name ilike ${pattern}
+             or coalesce(contact_name, '') ilike ${pattern}
+             or coalesce(phone, '') ilike ${pattern}
+             or coalesce(email, '') ilike ${pattern}
+             or coalesce(tax_reg_no, '') ilike ${pattern})
+      order by active desc, name, id
+      limit ${limit} offset ${offset}
+    `),
+  )) as unknown as Array<{
+    id: string;
+    name: string;
+    country: string | null;
+    contact_name: string | null;
+    phone: string | null;
+    active: boolean;
+    total_count: string | number;
+  }>;
+  const total = rows[0] ? Number(rows[0].total_count) : await countCustomers(ctx, status, pattern);
+  return {
+    rows: rows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      country: r.country,
+      contactName: r.contact_name,
+      phone: r.phone,
+      active: r.active,
+    })),
+    total,
+    hasMore: offset + rows.length < total,
+    limit,
+    offset,
+  };
+}
+
+/** The filtered total when the requested page is past the end (no row carries it). */
+async function countCustomers(ctx: Ctx, status: string, pattern: string | null): Promise<number> {
+  const rows = (await withCtx(ctx, (tx) =>
+    tx.execute(sql`
+      select count(*)::int as n from public.customer
+      where org_id = ${ctx.orgId}
+        and (${status}::text = 'all' or active = (${status}::text = 'active'))
+        and (${pattern}::text is null
+             or name ilike ${pattern}
+             or coalesce(contact_name, '') ilike ${pattern}
+             or coalesce(phone, '') ilike ${pattern}
+             or coalesce(email, '') ilike ${pattern}
+             or coalesce(tax_reg_no, '') ilike ${pattern})
+    `),
+  )) as unknown as Array<{ n: number }>;
+  return rows[0]?.n ?? 0;
+}
+
 export type CustomerDetail = {
   id: string;
   name: string;
