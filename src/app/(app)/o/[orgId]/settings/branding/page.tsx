@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { Badge, Card, CardHeader } from "@/platform/ui";
+import { Badge, Card, CardHeader, logoEditorLabels } from "@/platform/ui";
 import { getServerLocale, getT } from "@/platform/i18n/server";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { can } from "@/platform/authz";
@@ -76,6 +76,7 @@ export default async function BrandingPage({ params }: { params: Promise<{ orgId
     logo_remove: t("branding.logo.remove"),
     logo_replace: t("branding.logo.replace"),
     logo_empty: t("branding.logo.empty"),
+    editor: logoEditorLabels(t),
     accent_title: t("branding.accent.title"),
     accent_hex: t("branding.accent.hex"),
     identity_title: t("branding.identity.title"),

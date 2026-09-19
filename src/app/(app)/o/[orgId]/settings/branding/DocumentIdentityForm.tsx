@@ -249,7 +249,18 @@ export function DocumentIdentityForm({
               <option value="en">{dict.doc_language_en}</option>
             </select>
           </div>
-          <Button type="submit" disabled={pending} className="self-start">
+          <Button
+            type="submit"
+            disabled={pending}
+            aria-busy={pending || undefined}
+            className="self-start"
+          >
+            {pending ? (
+              <span
+                aria-hidden
+                className="size-4 shrink-0 animate-spin rounded-full border-2 border-current border-t-transparent"
+              />
+            ) : null}
             {dict.save}
           </Button>
         </div>

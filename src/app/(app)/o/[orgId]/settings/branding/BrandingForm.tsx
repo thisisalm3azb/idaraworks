@@ -10,10 +10,20 @@
  */
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Button, Card, CardHeader, Field, OrgAvatar } from "@/platform/ui";
+import {
+  Button,
+  Card,
+  CardHeader,
+  Field,
+  OrgAvatar,
+  LogoEditor,
+  type LogoEditorLabels,
+} from "@/platform/ui";
 import type { BrandingActionResult } from "./actions";
 
 export type BrandingDict = {
+  /** Copy for the crop / zoom editor shown before every upload. */
+  editor: LogoEditorLabels;
   logo_title: string;
   logo_hint: string;
   logo_drop: string;
@@ -85,6 +95,12 @@ export function BrandingForm({
   const [pending, startTransition] = useTransition();
   const [dragOver, setDragOver] = useState(false);
   const [error, setError] = useState<{ msg: string; ref?: string } | null>(null);
+  const [editing, setEditing] = useState<File | null>(null);
+  function pick(file: File | null | undefined) {
+    if (!file || pending) return;
+    setError(null);
+    setEditing(file);
+  }
   const [saved, setSaved] = useState(false);
   const [accent, setAccent] = useState(initial.accentColor ?? "");
 
@@ -153,7 +169,19 @@ export function BrandingForm({
       <Card>
         <CardHeader title={dict.logo_title} />
         <div className="flex flex-col gap-3">
+          {editing ? (
+            <LogoEditor
+              file={editing}
+              labels={dict.editor}
+              onDone={(r) => {
+                setEditing(null);
+                submitFile(r.file);
+              }}
+              onCancel={() => setEditing(null)}
+            />
+          ) : null}
           <div
+            hidden={editing !== null}
             role="button"
             tabIndex={0}
             aria-label={dict.logo_choose}
@@ -169,7 +197,7 @@ export function BrandingForm({
             onDrop={(e) => {
               e.preventDefault();
               setDragOver(false);
-              submitFile(e.dataTransfer.files?.[0]);
+              pick(e.dataTransfer.files?.[0]);
             }}
             className={`flex min-h-32 cursor-pointer flex-col items-center justify-center gap-2 rounded-md border-2 border-dashed p-4 text-center ${
               dragOver ? "border-brand bg-sunken" : "border-line-strong"
@@ -204,7 +232,7 @@ export function BrandingForm({
             accept="image/png,image/jpeg,image/webp"
             className="hidden"
             onChange={(e) => {
-              submitFile(e.target.files?.[0]);
+              pick(e.target.files?.[0]);
               e.target.value = "";
             }}
           />
@@ -277,7 +305,18 @@ export function BrandingForm({
             </div>
           </Card>
 
-          <Button type="submit" disabled={pending} className="self-start">
+          <Button
+            type="submit"
+            disabled={pending}
+            aria-busy={pending || undefined}
+            className="self-start"
+          >
+            {pending ? (
+              <span
+                aria-hidden
+                className="size-4 shrink-0 animate-spin rounded-full border-2 border-current border-t-transparent"
+              />
+            ) : null}
             {dict.save}
           </Button>
         </div>

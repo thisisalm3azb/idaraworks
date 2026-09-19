@@ -8,9 +8,11 @@
  */
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Button } from "@/platform/ui";
+import { Button, LogoEditor, type LogoEditorLabels } from "@/platform/ui";
 
 export type LogoPickerLabels = {
+  /** Copy for the crop / zoom editor shown before every upload. */
+  editor: LogoEditorLabels;
   drop: string;
   choose: string;
   replace: string;
@@ -48,6 +50,12 @@ export function LogoPicker({
   const [pending, startTransition] = useTransition();
   const [dragOver, setDragOver] = useState(false);
   const [error, setError] = useState<{ msg: string; ref?: string } | null>(null);
+  const [editing, setEditing] = useState<File | null>(null);
+  function pick(file: File | null | undefined) {
+    if (!file || pending) return;
+    setError(null);
+    setEditing(file);
+  }
 
   function errMsg(code: string): string {
     return labels.errors[code] ?? labels.errors.failed ?? code;
@@ -90,7 +98,19 @@ export function LogoPicker({
           ) : null}
         </p>
       ) : null}
+      {editing ? (
+        <LogoEditor
+          file={editing}
+          labels={labels.editor}
+          onDone={(r) => {
+            setEditing(null);
+            submitFile(r.file);
+          }}
+          onCancel={() => setEditing(null)}
+        />
+      ) : null}
       <div
+        hidden={editing !== null}
         role="button"
         tabIndex={0}
         aria-label={labels.choose}
@@ -106,7 +126,7 @@ export function LogoPicker({
         onDrop={(e) => {
           e.preventDefault();
           setDragOver(false);
-          submitFile(e.dataTransfer.files?.[0]);
+          pick(e.dataTransfer.files?.[0]);
         }}
         className={`flex min-h-32 cursor-pointer flex-col items-center justify-center gap-2 rounded-md border-2 border-dashed p-4 text-center ${
           dragOver ? "border-brand bg-sunken" : "border-line-strong"
@@ -133,7 +153,7 @@ export function LogoPicker({
         accept="image/png,image/jpeg,image/webp"
         className="hidden"
         onChange={(e) => {
-          submitFile(e.target.files?.[0]);
+          pick(e.target.files?.[0]);
           e.target.value = "";
         }}
       />
