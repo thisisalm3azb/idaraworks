@@ -37,6 +37,26 @@ export function leaveTypeKeyFrom(labelEn: string): string {
   return keyed.slice(0, 40).replace(/_+$/g, "");
 }
 
+/**
+ * Classify a failed leave-type creation for the screen (D2). The driver's
+ * unique-key violation arrives wrapped — drizzle throws "Failed query …" with
+ * the PostgresError as `cause` — so the chain is walked, not just the top.
+ */
+export function leaveTypeErrorCode(err: unknown): "type_exists" | "type_invalid" | "failed" {
+  const chain: unknown[] = [];
+  for (let e: unknown = err; e && chain.length < 6; e = (e as { cause?: unknown }).cause)
+    chain.push(e);
+  const blob = chain
+    .map((e) => {
+      const o = e as { name?: string; code?: string; message?: string };
+      return `${o.name ?? ""} ${o.code ?? ""} ${o.message ?? ""}`;
+    })
+    .join(" | ");
+  if (/duplicate|already exists|leave_type_key_uq|23505/i.test(blob)) return "type_exists";
+  if (/ZodError|invalid|regex|too_small|too_big/i.test(blob)) return "type_invalid";
+  return "failed";
+}
+
 export async function createLeaveType(
   ctx: Ctx,
   archetype: RoleArchetype,

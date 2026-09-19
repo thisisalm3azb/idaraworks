@@ -11,6 +11,7 @@ import {
   myEmployee,
   createLeaveType,
   leaveTypeKeyFrom,
+  leaveTypeErrorCode,
 } from "@/modules/hr/service";
 
 /**
@@ -41,15 +42,7 @@ export async function createLeaveTypeAction(orgId: string, formData: FormData): 
     });
   } catch (err) {
     if ((err as { digest?: string }).digest?.startsWith("NEXT_REDIRECT")) throw err;
-    const message = err instanceof Error ? err.message : String(err);
-    const hrCode = (err as { code?: string }).code;
-    const code =
-      hrCode === "duplicate" || /leave_type_key_uq|duplicate|already exists|23505/i.test(message)
-        ? "type_exists"
-        : /ZodError|invalid|regex|too_small|too_big/i.test(`${(err as Error).name} ${message}`)
-          ? "type_invalid"
-          : "failed";
-    redirect(`${base}?error=${code}#leave-types`);
+    redirect(`${base}?error=${leaveTypeErrorCode(err)}#leave-types`);
   }
   revalidatePath(base);
   redirect(`${base}?ok=type_created#leave-types`);
