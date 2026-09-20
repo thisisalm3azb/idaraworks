@@ -7,6 +7,16 @@
 import { createBrowserClient, createServerClient } from "@supabase/ssr";
 import type { cookies } from "next/headers";
 import { NextResponse, type NextRequest } from "next/server";
+import { isDeployed } from "@/platform/env";
+
+/**
+ * Cookie flags for the auth session. `httpOnly` stays at the library default
+ * (false) because the browser client (MFA enrolment, sign-in form) reads the
+ * session; `secure` is forced on every deployed origin (all HTTPS) so the
+ * token can never travel over plain HTTP, and SameSite=Lax is stated rather
+ * than inherited.
+ */
+const COOKIE_OPTIONS = { secure: isDeployed(), sameSite: "lax" as const };
 
 function supabaseEnv(): { url: string; anonKey: string } {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -33,6 +43,7 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
   let response = NextResponse.next({ request });
   const { url, anonKey } = supabaseEnv();
   const supabase = createServerClient(url, anonKey, {
+    cookieOptions: COOKIE_OPTIONS,
     cookies: {
       getAll() {
         return request.cookies.getAll();
@@ -56,6 +67,7 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
 export function supabaseServer(cookieStore: CookieStore) {
   const { url, anonKey } = supabaseEnv();
   return createServerClient(url, anonKey, {
+    cookieOptions: COOKIE_OPTIONS,
     cookies: {
       getAll() {
         return cookieStore.getAll();

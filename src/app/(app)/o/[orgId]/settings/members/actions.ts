@@ -13,6 +13,7 @@ import {
   SeatLimitError,
 } from "@/platform/auth/identity";
 import { rateLimit } from "@/platform/http/rateLimit";
+import { clientIpFromHeaders } from "@/platform/http/clientIp";
 
 import { INVITE_LINK_COOKIE } from "./inviteLinkCookie";
 
@@ -43,10 +44,7 @@ export async function inviteMemberAction(orgId: string, formData: FormData): Pro
   if (resolved === "mfa_required") redirect("/mfa");
   if (typeof resolved === "string") redirect("/");
   const h = await headers();
-  const rl = await rateLimit(
-    "invite_send",
-    `${orgId}:${h.get("x-forwarded-for")?.split(",")[0] ?? resolved.ctx.userId}`,
-  );
+  const rl = await rateLimit("invite_send", `${orgId}:${clientIpFromHeaders(h)}`);
   const base = `/o/${orgId}/settings/members`;
   if (!rl.allowed) redirect(`${base}?error=rate_limited`);
   try {
@@ -88,10 +86,7 @@ export async function reissueInviteAction(orgId: string, formData: FormData): Pr
   if (typeof resolved === "string") redirect("/");
   const h = await headers();
   const base = `/o/${orgId}/settings/members`;
-  const rl = await rateLimit(
-    "invite_send",
-    `${orgId}:${h.get("x-forwarded-for")?.split(",")[0] ?? resolved.ctx.userId}`,
-  );
+  const rl = await rateLimit("invite_send", `${orgId}:${clientIpFromHeaders(h)}`);
   if (!rl.allowed) redirect(`${base}?error=rate_limited`);
   try {
     const { inviteId, token, delivered } = await rotateInvite(

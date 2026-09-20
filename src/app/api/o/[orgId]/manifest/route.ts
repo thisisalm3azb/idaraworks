@@ -26,6 +26,8 @@
  */
 import { NextResponse } from "next/server";
 import { brandedCompanyAppsEnabled } from "@/platform/flags";
+import { clientIpFromHeaders } from "@/platform/http/clientIp";
+import { rateLimit } from "@/platform/http/rateLimit";
 import { publicAppIcon, publicAppIdentity } from "@/modules/companyapp/service";
 import { appIdentity } from "@/platform/tenanthost/manifest";
 
@@ -43,6 +45,13 @@ export async function GET(
   const { orgId } = await params;
   if (!ORG_ID_RE.test(orgId)) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
+  const gate = await rateLimit("identity", clientIpFromHeaders(request.headers));
+  if (!gate.allowed) {
+    return NextResponse.json(
+      { error: "rate_limited" },
+      { status: 429, headers: { "retry-after": "60" } },
+    );
   }
 
   const identity = await publicAppIdentity(orgId);

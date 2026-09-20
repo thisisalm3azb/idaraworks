@@ -32,6 +32,11 @@ export const RATE_RULES = {
   // S10: the unauthenticated billing webhook — bound per-IP so an attacker can't hammer the
   // signature-verify + org-resolve path. Generous for a real provider's legitimate burst.
   webhook: { limit: 120, windowSeconds: 60 },
+  // Security review 2026-09-20: the unauthenticated per-company manifest and
+  // icon endpoints each open a database connection (and the icon may render).
+  // An install fetches one manifest and up to four icons; sixty a minute per
+  // address is generous for people and a ceiling for a script.
+  identity: { limit: 60, windowSeconds: 60 },
 } as const satisfies Record<string, Rule>;
 
 export type RateScope = keyof typeof RATE_RULES;

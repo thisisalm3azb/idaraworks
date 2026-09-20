@@ -24,38 +24,9 @@ export type LogoValidationError =
   | "too_small_dims" // < LOGO_MIN_EDGE_PX on either edge
   | "too_large_dims"; // > LOGO_MAX_SOURCE_EDGE_PX on either edge
 
-/** File-signature sniff for the three accepted bitmap formats. */
+/** File-signature sniff, shared with the upload pipeline (platform/files/image). */
 export function sniffImageMime(bytes: Uint8Array): LogoMime | null {
-  if (
-    bytes.length >= 8 &&
-    bytes[0] === 0x89 &&
-    bytes[1] === 0x50 && // P
-    bytes[2] === 0x4e && // N
-    bytes[3] === 0x47 && // G
-    bytes[4] === 0x0d &&
-    bytes[5] === 0x0a &&
-    bytes[6] === 0x1a &&
-    bytes[7] === 0x0a
-  ) {
-    return "image/png";
-  }
-  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
-    return "image/jpeg";
-  }
-  if (
-    bytes.length >= 12 &&
-    bytes[0] === 0x52 && // R
-    bytes[1] === 0x49 && // I
-    bytes[2] === 0x46 && // F
-    bytes[3] === 0x46 && // F
-    bytes[8] === 0x57 && // W
-    bytes[9] === 0x45 && // E
-    bytes[10] === 0x42 && // B
-    bytes[11] === 0x50 // P
-  ) {
-    return "image/webp";
-  }
-  return null;
+  return platformSniff(bytes) as LogoMime | null;
 }
 
 export type LogoBytesVerdict =
@@ -90,3 +61,4 @@ export function checkLogoDimensions(
   }
   return null;
 }
+import { sniffImageMime as platformSniff } from "@/platform/files/image";
