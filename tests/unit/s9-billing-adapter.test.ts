@@ -88,7 +88,12 @@ describe("getBillingProvider selection", () => {
       delete process.env.BILLING_PROVIDER;
       process.env.APP_ENV = "prod";
       expect(getBillingProvider().enabled).toBe(false);
+      // A deployed preview is disabled too unless an operator set a fake secret
+      // for it (security review 2026-09-20); local dev keeps the fake provider.
       process.env.APP_ENV = "preview";
+      delete process.env.BILLING_FAKE_WEBHOOK_SECRET;
+      expect(getBillingProvider().enabled).toBe(false);
+      process.env.APP_ENV = "dev";
       expect(getBillingProvider().enabled).toBe(true);
       process.env.APP_ENV = "dev";
       expect(getBillingProvider().enabled).toBe(true);

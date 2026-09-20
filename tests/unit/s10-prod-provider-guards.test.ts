@@ -36,14 +36,27 @@ describe("S10 production provider guards (APP_ENV=prod → all seams disabled)",
     expect(getNarrationProvider().enabled).toBe(false);
   });
 
-  it("all three seams run the fake provider off-prod (dev/preview exercise the lifecycle)", () => {
+  it("all three seams run the fake provider in local dev (the lifecycle stays exercisable)", () => {
     clearProviderEnv();
-    for (const env of ["dev", "preview"]) {
-      process.env.APP_ENV = env;
-      expect(getBillingProvider().enabled).toBe(true);
-      expect(getEInvoiceProvider().name).toBe("fake");
-      expect(getNarrationProvider().enabled).toBe(true);
-    }
+    process.env.APP_ENV = "dev";
+    expect(getBillingProvider().enabled).toBe(true);
+    expect(getEInvoiceProvider().name).toBe("fake");
+    expect(getNarrationProvider().enabled).toBe(true);
+  });
+
+  it("a deployed preview runs the fake billing lifecycle only with an operator-set secret (security review 2026-09-20)", () => {
+    clearProviderEnv();
+    process.env.APP_ENV = "preview";
+    delete process.env.BILLING_FAKE_WEBHOOK_SECRET;
+    // Internet-reachable, no secret of its own: the repository default must
+    // never be enough to accept a forged subscription event.
+    expect(getBillingProvider().enabled).toBe(false);
+    process.env.BILLING_FAKE_WEBHOOK_SECRET = "preview-only-secret-for-this-test";
+    expect(getBillingProvider().enabled).toBe(true);
+    delete process.env.BILLING_FAKE_WEBHOOK_SECRET;
+    // The other two seams are unaffected by this law.
+    expect(getEInvoiceProvider().name).toBe("fake");
+    expect(getNarrationProvider().enabled).toBe(true);
   });
 
   it("an explicit real credential still wins in prod (activation path unaffected)", () => {

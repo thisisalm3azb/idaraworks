@@ -14,7 +14,7 @@
  * 'unverified' and never transitions state.
  */
 import { createHmac, timingSafeEqual } from "node:crypto";
-import { isProd } from "@/platform/env";
+import { isDeployed, isProd } from "@/platform/env";
 
 export type ProviderName = "fake" | "stripe" | "paddle" | "lemonsqueezy" | "tap" | "moyasar";
 
@@ -109,7 +109,14 @@ export class BillingProviderDisabledError extends Error {
 }
 
 /** Test/dev HMAC secret. In prod a real provider uses its own signing secret from the secret store. */
-const FAKE_SECRET = process.env.BILLING_FAKE_WEBHOOK_SECRET ?? "idaraworks/fake-billing/dev-secret";
+// No default once deployed: a preview or production build must never accept a
+// webhook signed with a secret that is readable in this repository.
+function fakeSecret(): string | null {
+  return (
+    process.env.BILLING_FAKE_WEBHOOK_SECRET ??
+    (isDeployed() ? null : "idaraworks/fake-billing/dev-secret")
+  );
+}
 
 function hmac(rawBody: string, secret: string): string {
   return createHmac("sha256", secret).update(rawBody).digest("hex");
@@ -140,7 +147,9 @@ export const fakeBillingProvider: BillingProvider & {
     // No-op: the fake caller emits the resulting `canceled` webhook via signEvent().
   },
   verifySignature(rawBody, signature) {
-    const expected = hmac(rawBody, FAKE_SECRET);
+    const secret = fakeSecret();
+    if (secret === null) return false;
+    const expected = hmac(rawBody, secret);
     // Constant-time compare; guard against length-mismatch throwing in timingSafeEqual.
     const a = Buffer.from(expected);
     const b = Buffer.from(signature ?? "");
@@ -154,7 +163,7 @@ export const fakeBillingProvider: BillingProvider & {
   },
   signEvent(e) {
     const body = JSON.stringify(e);
-    return { body, signature: hmac(body, FAKE_SECRET) };
+    return { body, signature: hmac(body, fakeSecret() ?? "") };
   },
 };
 
@@ -241,6 +250,14 @@ export function getBillingProvider(): BillingProvider {
   const explicit = process.env.BILLING_PROVIDER;
   if (explicit === "fake") return fakeBillingProvider;
   if (explicit === "disabled") return disabledBillingProvider;
-  // Default: fake off-prod so the lifecycle is fully exercisable; disabled in production (D1 gate).
-  return isProd() ? disabledBillingProvider : fakeBillingProvider;
+  // Default: fake for local dev and tests so the lifecycle is fully exercisable;
+  // DISABLED in production until BILLING_PROVIDER names a real, credentialed
+  // provider (D1 gate). A Vercel preview is internet-reachable, so it runs the
+  // fake lifecycle only when an operator set a secret for it — never with the
+  // default secret that anyone can read in this repository.
+  if (isProd()) return disabledBillingProvider;
+  if (isDeployed()) {
+    return process.env.BILLING_FAKE_WEBHOOK_SECRET ? fakeBillingProvider : disabledBillingProvider;
+  }
+  return fakeBillingProvider;
 }
