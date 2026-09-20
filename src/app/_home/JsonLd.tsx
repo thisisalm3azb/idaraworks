@@ -9,10 +9,13 @@ export function JsonLd({
   canonical,
   languages,
   freePriceUsd,
+  nonce,
 }: {
   canonical: string;
   languages: readonly string[];
   freePriceUsd: number;
+  /** The per-request nonce minted by middleware, so the staged nonce policy sees this script as ours. */
+  nonce?: string;
 }) {
   const data = [
     {
@@ -48,6 +51,6 @@ export function JsonLd({
   const json = JSON.stringify(data).replace(/</g, "\\u003c");
   return (
     // eslint-disable-next-line react/no-danger -- static JSON-LD, see above
-    <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: json }} />
+    <script type="application/ld+json" nonce={nonce} dangerouslySetInnerHTML={{ __html: json }} />
   );
 }

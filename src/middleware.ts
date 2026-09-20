@@ -2,11 +2,36 @@ import { NextResponse, type NextRequest } from "next/server";
 import { updateSession } from "@/platform/tenancy/supabase";
 import { REQUEST_ID_HEADER } from "@/platform/observability/requestId";
 
+/**
+ * A nonce-based script policy, staged as REPORT-ONLY (security review
+ * 2026-09-20, F-04 / SEC-1). This is observation, not enforcement: the
+ * enforced policy stays the one next.config.ts sends (with 'unsafe-inline'),
+ * and this second header only asks the browser to REPORT what a nonce policy
+ * would have blocked, to /api/csp-report. Next.js reads the nonce from this
+ * request header and stamps it on every script it emits, so the reports show
+ * only the scripts the app itself failed to nonce. It is enforced — moved to
+ * next.config as the real policy — only after the reports are empty across
+ * signup, install, PDFs, Studio and the installed app.
+ */
+function reportOnlyPolicy(nonce: string): string {
+  const dev = process.env.NODE_ENV === "development";
+  return [
+    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${dev ? " 'unsafe-eval'" : ""}`,
+    "object-src 'none'",
+    "base-uri 'self'",
+    "report-uri /api/csp-report",
+  ].join("; ");
+}
+
 export async function middleware(request: NextRequest) {
   // Correlation id (Phase I; BUILD_BIBLE §15.3): always server-minted — an
   // inbound client value is overwritten, never trusted (log-spoofing guard).
   const requestId = crypto.randomUUID();
   request.headers.set(REQUEST_ID_HEADER, requestId);
+  const nonce = btoa(crypto.randomUUID());
+  const cspReportOnly = reportOnlyPolicy(nonce);
+  request.headers.set("x-nonce", nonce);
+  request.headers.set("content-security-policy-report-only", cspReportOnly);
   // Auth-code resilience (docs/ux/AUTH_CALLBACK_FIX.md): if the Supabase Site URL
   // is the only thing the owner fixes, confirmation links land on "/?code=…".
   // Forward that code to /auth/callback (preserving all params) so the exchange
@@ -33,6 +58,8 @@ export async function middleware(request: NextRequest) {
   const response = await updateSession(request);
   // Echoed on the response so user-reported failures correlate with logs.
   response.headers.set(REQUEST_ID_HEADER, requestId);
+  // Report-only: the browser reports, it does not block (see reportOnlyPolicy).
+  response.headers.set("content-security-policy-report-only", cspReportOnly);
   return response;
 }
 

@@ -1,3 +1,4 @@
+import { headers } from "next/headers";
 import { getT, getServerLocale } from "@/platform/i18n/server";
 import { languageVars, offeredLocales } from "@/platform/i18n/offered";
 import { directionFor } from "@/platform/i18n";
@@ -55,6 +56,7 @@ export async function HomePage({ workspaceHref }: { workspaceHref: string | null
         canonical={CANONICAL}
         languages={offered}
         freePriceUsd={pricingTiers()[0]!.price.monthlyUsd}
+        nonce={(await headers()).get("x-nonce") ?? undefined}
       />
       <a
         href="#main"
