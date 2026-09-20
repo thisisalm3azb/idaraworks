@@ -144,10 +144,19 @@ export async function generateIconSet(input: {
   source: Buffer | null;
   orgName: string;
   brandColor: string | null;
+  /**
+   * The maskable background behind an UPLOADED logo. A logo drawn in the brand
+   * colour on the brand colour disappears (LiwaHarvest, 2026-09-20: dark green
+   * leaves on the green tile), so the app background colour is used, white by
+   * default. The generated initials mark keeps the brand colour, whose
+   * foreground is chosen for contrast.
+   */
+  backgroundColor?: string | null;
 }): Promise<{ icons: GeneratedIcon[]; kind: IconSourceKind }> {
   const { default: sharp } = await import("sharp");
 
   const bgRgb: Rgb = parseHex(input.brandColor) ?? parseHex(FALLBACK_BRAND_COLOR)!;
+  const logoTileRgb: Rgb = parseHex(input.backgroundColor) ?? { r: 255, g: 255, b: 255 };
   const bg =
     input.brandColor && parseHex(input.brandColor) ? input.brandColor : FALLBACK_BRAND_COLOR;
   const fg = readableForeground(bgRgb).color;
@@ -244,7 +253,9 @@ export async function generateIconSet(input: {
           channels: 4,
           // A maskable icon must be opaque to the edge or the launcher shows the
           // page behind it through the corners.
-          background: maskable ? { ...bgRgb, alpha: 1 } : { r: 0, g: 0, b: 0, alpha: 0 },
+          background: maskable
+            ? { ...(input.source ? logoTileRgb : bgRgb), alpha: 1 }
+            : { r: 0, g: 0, b: 0, alpha: 0 },
         },
       })
         .composite([{ input: markBuffer, top: pad, left: pad }])

@@ -20,6 +20,7 @@ export function AppIconPreview({
   background,
   dir,
   maskableUrl = null,
+  anyUrl = null,
 }: {
   name: string;
   shortName: string;
@@ -29,6 +30,8 @@ export function AppIconPreview({
   dir: "ltr" | "rtl";
   /** The maskable icon rendered from the uploaded logo, when one exists (item 10). */
   maskableUrl?: string | null;
+  /** The `any` icon (what an install prompt and a desktop shortcut show). */
+  anyUrl?: string | null;
 }) {
   const initials = initialsFor(name);
   return (
@@ -76,14 +79,19 @@ export function AppIconPreview({
           style={{ backgroundColor: background }}
           aria-hidden
         >
-          <div
-            className="flex h-12 w-12 items-center justify-center rounded-[22%]"
-            style={{ backgroundColor: brandColor }}
-          >
-            <span className="text-sm font-semibold" style={{ color: foreground }} dir={dir}>
-              {initials}
-            </span>
-          </div>
+          {anyUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element -- the icon route renders the PNG
+            <img src={anyUrl} alt="" className="h-12 w-12 object-contain" />
+          ) : (
+            <div
+              className="flex h-12 w-12 items-center justify-center rounded-[22%]"
+              style={{ backgroundColor: brandColor }}
+            >
+              <span className="text-sm font-semibold" style={{ color: foreground }} dir={dir}>
+                {initials}
+              </span>
+            </div>
+          )}
         </div>
         <figcaption className="text-xs text-ink-muted">
           {/* Not translated: this is a shape label, and the screenshot beside it

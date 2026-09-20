@@ -29,6 +29,39 @@ import { claimSubdomainAction, requestCustomDomainAction, saveAppBrandAction } f
  *   - moving to a short address later means re-installing, and that is said
  *     before anyone commits rather than discovered afterwards.
  */
+/** The persistent install help on the Company app page (owner, 2026-09-20). */
+function installHelpLabels(t: (key: string) => string) {
+  const routes = [
+    "chrome_desktop",
+    "edge_desktop",
+    "chrome_android",
+    "samsung_android",
+    "firefox_android",
+    "ios_safari",
+    "mac_safari",
+    "firefox_desktop",
+    "other",
+  ] as const;
+  return {
+    stateInstalled: t("app.help.state_installed"),
+    stateNotInstalled: t("app.help.state_not_installed"),
+    promptAvailable: t("app.help.prompt_available"),
+    promptDismissed: t("app.help.prompt_dismissed"),
+    menuIntro: t("app.help.menu_intro"),
+    afterUninstall: t("app.help.after_uninstall"),
+    refreshIcon: t("app.help.refresh_icon"),
+    routes: Object.fromEntries(
+      routes.map((r) => [
+        r,
+        {
+          browser: t(`app.help.browser.${r}`),
+          steps: [1, 2, 3].map((n) => t(`app.help.steps.${r}.${n}`)),
+        },
+      ]),
+    ) as Record<(typeof routes)[number], { browser: string; steps: string[] }>,
+  };
+}
+
 export default async function CompanyAppSettingsPage({
   params,
   searchParams,
@@ -100,6 +133,7 @@ export default async function CompanyAppSettingsPage({
         <p className="mb-3 text-sm text-ink-secondary">{t("app.preview_hint")}</p>
         <AppIconPreview
           maskableUrl={storedIcon ? `/api/o/${orgId}/icon/192-maskable.png?v=${iconVersion}` : null}
+          anyUrl={storedIcon ? `/api/o/${orgId}/icon/192.png?v=${iconVersion}` : null}
           name={identity.name}
           shortName={identity.shortName}
           brandColor={identity.brand.value}
@@ -151,6 +185,7 @@ export default async function CompanyAppSettingsPage({
               macSafari: t("app.install_mac_safari"),
               firefox: t("app.install_firefox"),
               generic: t("app.install_generic"),
+              help: installHelpLabels(t),
               later: t("app.install_later"),
               never: t("app.install_never"),
             }}

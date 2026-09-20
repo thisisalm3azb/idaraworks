@@ -20,17 +20,28 @@ import { logger } from "@/platform/logger";
 
 const MAX_ICON_BYTES = 1024 * 1024;
 
-async function brandInputs(ctx: Ctx): Promise<{ orgName: string; brandColor: string | null }> {
+async function brandInputs(
+  ctx: Ctx,
+): Promise<{ orgName: string; brandColor: string | null; backgroundColor: string | null }> {
   return withCtx(ctx, async (tx) => {
     const rows = (await tx.execute(sql`
       select coalesce(nullif(b.app_name, ''), nullif(ob.display_name, ''), o.name) as name,
-             coalesce(b.brand_color, ob.accent_color) as brand_color
+             coalesce(b.brand_color, ob.accent_color) as brand_color,
+             b.background_color
       from public.org o
       left join public.org_app_brand b on b.org_id = o.id
       left join public.org_branding ob on ob.org_id = o.id
       where o.id = ${ctx.orgId}
-    `)) as unknown as Array<{ name: string; brand_color: string | null }>;
-    return { orgName: rows[0]?.name ?? "IdaraWorks", brandColor: rows[0]?.brand_color ?? null };
+    `)) as unknown as Array<{
+      name: string;
+      brand_color: string | null;
+      background_color: string | null;
+    }>;
+    return {
+      orgName: rows[0]?.name ?? "IdaraWorks",
+      brandColor: rows[0]?.brand_color ?? null,
+      backgroundColor: rows[0]?.background_color ?? null,
+    };
   });
 }
 
@@ -41,8 +52,13 @@ export async function refreshAppIconsFromLogo(ctx: Ctx, sourcePng: Buffer): Prom
       logger.warn({ bytes: sourcePng.length }, "app icons: logo source too large to keep");
       return false;
     }
-    const { orgName, brandColor } = await brandInputs(ctx);
-    const { icons } = await generateIconSet({ source: sourcePng, orgName, brandColor });
+    const { orgName, brandColor, backgroundColor } = await brandInputs(ctx);
+    const { icons } = await generateIconSet({
+      source: sourcePng,
+      orgName,
+      brandColor,
+      backgroundColor,
+    });
     await withCtx(ctx, async (tx) => {
       await tx.execute(sql`
         insert into public.org_app_icon (org_id, size, maskable, png, bytes, updated_at)

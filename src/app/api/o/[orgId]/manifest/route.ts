@@ -26,7 +26,8 @@
  */
 import { NextResponse } from "next/server";
 import { brandedCompanyAppsEnabled } from "@/platform/flags";
-import { publicAppIdentity } from "@/modules/companyapp/service";
+import { publicAppIcon, publicAppIdentity } from "@/modules/companyapp/service";
+import { appIdentity } from "@/platform/tenanthost/manifest";
 
 export const dynamic = "force-dynamic";
 
@@ -53,8 +54,17 @@ export async function GET(
 
   const origin = new URL(request.url).origin;
   const base = `${origin}/o/${orgId}`;
+  /*
+   * The icon URLs carry the icon set's version. Browsers fetch manifest icons
+   * through the HTTP cache and keep the bytes they last saw for the URL; with
+   * an unversioned URL, a company that uploaded a new logo kept seeing its old
+   * initials mark in the install prompt (LiwaHarvest, 2026-09-20). A new logo
+   * is a new URL, so the prompt fetches it fresh.
+   */
+  const stored = await publicAppIcon(orgId, 192, false).catch(() => null);
+  const version = stored ? String(Date.parse(stored.updatedAt)) : "0";
   const iconUrl = (size: number, maskable: boolean) =>
-    `${origin}/api/o/${orgId}/icon/${size}${maskable ? "-maskable" : ""}.png`;
+    `${origin}/api/o/${orgId}/icon/${size}${maskable ? "-maskable" : ""}.png?v=${version}`;
 
   const manifest = {
     /*
@@ -63,14 +73,14 @@ export async function GET(
      * Not the slug, not the display name. A company that renames itself, or
      * moves to a subdomain later, must not acquire a second installed app or
      * lose the one it has — and the spec says a matching id replaces the
-     * existing manifest rather than creating a new app.
+     * existing manifest rather than creating a new app. The scope law (each
+     * company owns exactly its own pages) lives with these three members in
+     * tenanthost/manifest.ts, where it is tested.
      */
-    id: `/o/${orgId}`,
+    ...appIdentity(origin, orgId),
     name: identity.name,
     short_name: identity.shortName,
     description: identity.description ?? undefined,
-    start_url: `${base}?source=pwa`,
-    scope: `${base}/`,
     display: "standalone",
     // If a browser cannot honour standalone it should degrade to a plain
     // browser tab rather than to fullscreen, which hides the address bar

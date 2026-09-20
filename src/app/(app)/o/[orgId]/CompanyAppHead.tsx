@@ -1,5 +1,5 @@
 import { brandedCompanyAppsEnabled } from "@/platform/flags";
-import { publicAppIdentity } from "@/modules/companyapp/service";
+import { publicAppIcon, publicAppIdentity } from "@/modules/companyapp/service";
 
 /**
  * H31 — the tags that make a workspace installable as this company's app.
@@ -24,8 +24,11 @@ export async function CompanyAppHead({ orgId }: { orgId: string }) {
   if (!identity) return null;
 
   const manifestUrl = `/api/o/${orgId}/manifest`;
+  // Same version as the manifest: a new logo is a new URL (see the manifest route).
+  const stored = await publicAppIcon(orgId, 192, false).catch(() => null);
+  const version = stored ? String(Date.parse(stored.updatedAt)) : "0";
   const icon = (size: number, maskable = false) =>
-    `/api/o/${orgId}/icon/${size}${maskable ? "-maskable" : ""}.png`;
+    `/api/o/${orgId}/icon/${size}${maskable ? "-maskable" : ""}.png?v=${version}`;
 
   return (
     <>

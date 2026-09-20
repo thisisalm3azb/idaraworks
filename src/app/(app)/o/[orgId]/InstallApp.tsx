@@ -5,18 +5,28 @@ import { useEffect, useState } from "react";
 /**
  * H31 — the install affordance, and the service-worker registration.
  *
- * ── The two rules that shape this ───────────────────────────────────────────
+ * ── The two rules that shape this ────────────────────────────────────────────
  * 1. Never nag. The browser gives us one `beforeinstallprompt` event and it is
  *    tempting to fire it immediately, on every page. That is the pattern people
- *    have learned to dismiss without reading. This shows a quiet button, and
- *    "don't remind me" is honoured permanently on that device.
+ *    have learned to dismiss without reading. The floating affordance is a quiet
+ *    button, and "don't remind me" is honoured permanently on that device.
  * 2. Never pretend. Firefox cannot install a web app from a manifest, and iOS
  *    has no programmatic prompt at all. Telling a Firefox user to "click
  *    install" when no install exists, or showing Windows instructions on an
  *    iPhone, is worse than saying nothing.
  *
- * Platform detection here decides only which SENTENCE to show. It never decides
- * what the user may do — the browser does that.
+ * ── The settings page is different (owner, 2026-09-20) ──────────────────────
+ * "Sometimes it opens installation, sometimes it shows a brief instruction and
+ * disappears. On mobile Chrome I cannot find how to install." The browser's own
+ * prompt is a courtesy that comes and goes: Chrome withholds it for a while
+ * after an uninstall, Safari never has it, and a dismissed prompt cannot be
+ * shown again. So the Company app page always keeps a HELP entry: whether this
+ * device has the app installed, the direct Install button when the browser
+ * offers one, and the menu route for the browser and system actually in use,
+ * which works whether or not the automatic prompt exists.
+ *
+ * Platform detection here decides only which SENTENCES to show. It never
+ * decides what the user may do — the browser does that.
  */
 
 type BeforeInstallPromptEvent = Event & {
@@ -25,6 +35,16 @@ type BeforeInstallPromptEvent = Event & {
 };
 
 type Platform = "chromium" | "ios" | "mac-safari" | "firefox" | "other";
+type Route =
+  | "chrome_desktop"
+  | "edge_desktop"
+  | "chrome_android"
+  | "samsung_android"
+  | "firefox_android"
+  | "ios_safari"
+  | "mac_safari"
+  | "firefox_desktop"
+  | "other";
 
 /** Which sentence this device needs. Read once; never sent anywhere. */
 function detectPlatform(): Platform {
@@ -45,6 +65,24 @@ function detectPlatform(): Platform {
   return "other";
 }
 
+/** The exact menu route for the browser and system in use. */
+function detectRoute(): Route {
+  if (typeof navigator === "undefined") return "other";
+  const ua = navigator.userAgent;
+  const platform = detectPlatform();
+  const android = /Android/.test(ua);
+  if (platform === "ios") return "ios_safari";
+  if (platform === "mac-safari") return "mac_safari";
+  if (platform === "firefox") return android ? "firefox_android" : "firefox_desktop";
+  if (platform === "chromium") {
+    if (/SamsungBrowser\//.test(ua)) return "samsung_android";
+    if (android) return "chrome_android";
+    if (/Edg\//.test(ua)) return "edge_desktop";
+    return "chrome_desktop";
+  }
+  return "other";
+}
+
 /** True when the page is already running as an installed app. */
 function isStandalone(): boolean {
   if (typeof window === "undefined") return false;
@@ -52,6 +90,17 @@ function isStandalone(): boolean {
   // Safari's own flag, which predates the standard media query.
   return (window.navigator as unknown as { standalone?: boolean }).standalone === true;
 }
+
+export type InstallHelpLabels = {
+  stateInstalled: string;
+  stateNotInstalled: string;
+  promptAvailable: string;
+  promptDismissed: string;
+  menuIntro: string;
+  afterUninstall: string;
+  refreshIcon: string;
+  routes: Record<Route, { browser: string; steps: string[] }>;
+};
 
 export type InstallLabels = {
   install: string;
@@ -62,6 +111,8 @@ export type InstallLabels = {
   generic: string;
   later: string;
   never: string;
+  /** Present on the settings page: the persistent help entry. */
+  help?: InstallHelpLabels;
 };
 
 export function InstallApp({
@@ -81,8 +132,10 @@ export function InstallApp({
    * cascading re-render is triggered by writing state inside an effect.
    */
   const [platform] = useState<Platform>(() => detectPlatform());
+  const [route] = useState<Route>(() => detectRoute());
   const [standalone, setStandalone] = useState<boolean>(() => isStandalone());
   const [deferred, setDeferred] = useState<BeforeInstallPromptEvent | null>(null);
+  const [promptDismissed, setPromptDismissed] = useState(false);
   const [dismissed, setDismissed] = useState<boolean>(() => {
     try {
       // Per device and per organisation: a user who declined for one company
@@ -130,6 +183,79 @@ export function InstallApp({
     });
   }, []);
 
+  const canPromptDirectly = deferred !== null;
+
+  const doInstall = async () => {
+    if (!deferred) {
+      setOpen(true);
+      return;
+    }
+    await deferred.prompt();
+    const choice = await deferred.userChoice;
+    setDeferred(null);
+    if (choice.outcome === "accepted") setStandalone(true);
+    else setPromptDismissed(true);
+  };
+
+  const remember = () => {
+    try {
+      window.localStorage.setItem(dismissKey, "1");
+    } catch {
+      // Nothing to do: the preference simply will not persist.
+    }
+    setDismissed(true);
+    setOpen(false);
+  };
+
+  // ── The settings page: a persistent help entry ────────────────────────────
+  if (variant === "settings" && labels.help) {
+    const help = labels.help;
+    const r = help.routes[route];
+    return (
+      <div className="flex flex-col gap-3" data-install-help data-install-route={route}>
+        <p className="text-sm font-medium text-ink" role="status">
+          {standalone ? help.stateInstalled : help.stateNotInstalled}
+        </p>
+        {!standalone && canPromptDirectly ? (
+          <div className="flex flex-col gap-1">
+            <p className="text-sm text-ink-secondary">{help.promptAvailable}</p>
+            <button
+              type="button"
+              onClick={doInstall}
+              className="inline-flex min-h-11 w-fit items-center gap-1.5 rounded-md bg-brand px-4 text-sm font-medium text-ink-inverse hover:bg-brand-strong"
+            >
+              {labels.install}
+            </button>
+          </div>
+        ) : null}
+        {promptDismissed ? (
+          <p className="text-sm text-ink-secondary" role="status">
+            {help.promptDismissed}
+          </p>
+        ) : null}
+        {!standalone ? (
+          <div className="rounded-md border border-line bg-sunken p-3">
+            <p className="text-sm font-medium text-ink">
+              {help.menuIntro} <span className="text-ink-secondary">({r.browser})</span>
+            </p>
+            <ol className="mt-1 flex list-decimal flex-col gap-0.5 ps-5 text-sm text-ink">
+              {r.steps.map((step, i) => (
+                <li key={i}>{step}</li>
+              ))}
+            </ol>
+            {route === "chrome_android" ||
+            route === "chrome_desktop" ||
+            route === "edge_desktop" ? (
+              <p className="mt-2 text-xs text-ink-muted">{help.afterUninstall}</p>
+            ) : null}
+          </div>
+        ) : null}
+        <p className="text-xs text-ink-muted">{help.refreshIcon}</p>
+      </div>
+    );
+  }
+
+  // ── The floating affordance (layout): quiet, dismissable ──────────────────
   if (standalone) {
     return variant === "settings" ? (
       <p className="text-sm text-ink-secondary">{labels.installed}</p>
@@ -145,29 +271,6 @@ export function InstallApp({
         : platform === "firefox"
           ? labels.firefox
           : labels.generic;
-
-  const canPromptDirectly = deferred !== null;
-
-  const doInstall = async () => {
-    if (!deferred) {
-      setOpen(true);
-      return;
-    }
-    await deferred.prompt();
-    const choice = await deferred.userChoice;
-    setDeferred(null);
-    if (choice.outcome === "accepted") setStandalone(true);
-  };
-
-  const remember = () => {
-    try {
-      window.localStorage.setItem(dismissKey, "1");
-    } catch {
-      // Nothing to do: the preference simply will not persist.
-    }
-    setDismissed(true);
-    setOpen(false);
-  };
 
   return (
     <div className="flex flex-col gap-2">

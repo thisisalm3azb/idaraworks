@@ -15,7 +15,13 @@ import {
   AA_NORMAL,
   FALLBACK_BRAND_COLOR,
 } from "@/platform/tenanthost/contrast";
-import { initialsFor, ICON_SIZES, MASKABLE_SAFE_FRACTION } from "@/platform/tenanthost/icon";
+import {
+  generateIconSet,
+  initialsFor,
+  ICON_SIZES,
+  MASKABLE_SAFE_FRACTION,
+} from "@/platform/tenanthost/icon";
+import { appIdentity, withinScope } from "@/platform/tenanthost/manifest";
 import { truncateGraphemes } from "@/platform/tenanthost/text";
 
 describe("the release flag", () => {
@@ -141,6 +147,46 @@ describe("the generated mark", () => {
   it("the maskable safe area matches the spec's guaranteed 80%", () => {
     expect(MASKABLE_SAFE_FRACTION).toBeCloseTo(0.8, 5);
   });
+
+  it("an uploaded logo sits on the app background for maskable, and on nothing for any", async () => {
+    // LiwaHarvest, 2026-09-20: a dark-green logo on the brand-green tile was
+    // invisible. The tile behind an uploaded logo is the app background (white
+    // by default); the transparent margin of the `any` icon is untouched.
+    const { default: sharp } = await import("sharp");
+    // Wider than tall, like most wordmarks: contain-fit leaves margins above and below.
+    const source = await sharp({
+      create: {
+        width: 64,
+        height: 32,
+        channels: 4,
+        background: { r: 200, g: 20, b: 20, alpha: 1 },
+      },
+    })
+      .png()
+      .toBuffer();
+    const { icons, kind } = await generateIconSet({
+      source,
+      orgName: "Liwa Harvest",
+      brandColor: "#1f6f5c",
+      backgroundColor: null,
+    });
+    expect(kind).toBe("uploaded");
+    const corner = async (buf: Buffer) => {
+      const { data } = await sharp(buf).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+      return [data[0], data[1], data[2], data[3]] as [number, number, number, number];
+    };
+    const maskable = icons.find((i) => i.size === 192 && i.maskable)!;
+    const any = icons.find((i) => i.size === 192 && !i.maskable)!;
+    expect(await corner(maskable.buffer)).toEqual([255, 255, 255, 255]); // white tile, not brand green
+    expect((await corner(any.buffer))[3]).toBe(0); // transparent margin
+    // The logo itself is still there: a centre pixel of the maskable icon is the source colour.
+    const centre = await sharp(maskable.buffer)
+      .extract({ left: 96, top: 96, width: 1, height: 1 })
+      .ensureAlpha()
+      .raw()
+      .toBuffer();
+    expect(centre[0]).toBeGreaterThan(150);
+  });
 });
 
 describe("short names fit a home screen", () => {
@@ -157,5 +203,35 @@ describe("short names fit a home screen", () => {
 
   it("leaves a short name alone", () => {
     expect(truncateGraphemes("Acme", 12)).toBe("Acme");
+  });
+});
+
+describe("one installed app per company", () => {
+  const origin = "https://www.idaraworks.com";
+  const a = "11111111-1111-4111-8111-111111111111";
+  const b = "22222222-2222-4222-8222-222222222222";
+
+  it("a company's start_url is inside its own scope", () => {
+    const id = appIdentity(origin, a);
+    expect(withinScope(id.start_url, id.scope)).toBe(true);
+  });
+
+  it("the old trailing-slash scope did not contain the start_url (why companies shared a scope)", () => {
+    const id = appIdentity(origin, a);
+    expect(withinScope(id.start_url, `${id.scope}/`)).toBe(false);
+  });
+
+  it("two companies never fall inside each other's scope", () => {
+    const A = appIdentity(origin, a);
+    const B = appIdentity(origin, b);
+    expect(A.id).not.toBe(B.id);
+    expect(withinScope(B.start_url, A.scope)).toBe(false);
+    expect(withinScope(A.start_url, B.scope)).toBe(false);
+    expect(withinScope(`${origin}/o/${b}/settings/app`, A.scope)).toBe(false);
+    expect(withinScope(`${origin}/o/${a}/settings/app`, A.scope)).toBe(true);
+  });
+
+  it("the id is the organisation alone: a new origin or name is the same app", () => {
+    expect(appIdentity("https://ops.example.com", a).id).toBe(appIdentity(origin, a).id);
   });
 });

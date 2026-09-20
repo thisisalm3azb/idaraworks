@@ -34,7 +34,7 @@ const ORG_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}
 const SPEC_RE = /^(\d{2,4})(-maskable)?\.png$/;
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ orgId: string; spec: string }> },
 ): Promise<NextResponse> {
   if (!brandedCompanyAppsEnabled()) {
@@ -62,7 +62,16 @@ export async function GET(
   // Item 10: an icon rendered from the company's uploaded logo, kept in the
   // database at upload time (never a storage read on an anonymous request).
   const stored = await publicAppIcon(orgId, size, maskable).catch(() => null);
-  if (stored) return png(stored.png, stored.updatedAt);
+  if (stored) {
+    const tag = etagFor(stored.updatedAt);
+    if (request.headers.get("if-none-match") === tag) {
+      return new NextResponse(null, {
+        status: 304,
+        headers: { etag: tag, "cache-control": CACHE },
+      });
+    }
+    return png(stored.png, stored.updatedAt);
+  }
 
   try {
     /*
@@ -106,18 +115,22 @@ export async function GET(
 }
 
 /** One place decides the icon headers, so the fallback cannot differ. */
+/*
+ * Five minutes, revalidated: the URL's version parameter is what makes a new
+ * logo visible at once; this only bounds how long an OLD unversioned URL (an
+ * already-installed manifest) can keep showing the previous image.
+ */
+const CACHE = "private, max-age=300, must-revalidate";
+const etagFor = (updatedAt: string) => `"${Buffer.from(updatedAt).toString("base64url")}"`;
+
 function png(body: Buffer, updatedAt?: string): NextResponse {
   return new NextResponse(new Uint8Array(body), {
     headers: {
       "content-type": "image/png",
-      /*
-       * `private` keeps a shared cache out of it; the org-scoped URL is what
-       * actually prevents crossover. An hour is long enough to make repeat
-       * launches cheap and short enough that a colour change is visible the
-       * same morning it is made.
-       */
-      "cache-control": "private, max-age=3600",
-      ...(updatedAt ? { etag: `"${Buffer.from(updatedAt).toString("base64url")}"` } : {}),
+      // `private` keeps a shared cache out of it; the org-scoped, versioned URL is
+      // what actually prevents crossover and staleness (see CACHE above).
+      "cache-control": CACHE,
+      ...(updatedAt ? { etag: etagFor(updatedAt) } : {}),
       "x-robots-tag": "noindex, nofollow",
       "content-disposition": "inline",
     },

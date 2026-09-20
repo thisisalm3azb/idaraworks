@@ -71,7 +71,11 @@ export async function getAppIdentity(ctx: Ctx): Promise<AppIdentity> {
           b.app_name, b.app_short_name, b.app_description,
           b.icon_file_id::text as icon_file_id,
           b.brand_color, b.background_color, b.default_locale,
-          ob.accent_color, ob.display_name
+          ob.accent_color, ob.display_name,
+          exists (
+            select 1 from public.org_app_icon i
+            where i.org_id = o.id and i.size = 192 and i.bytes > 8
+          ) as has_icon_set
         from public.org o
         left join public.org_app_brand b on b.org_id = o.id
         left join public.org_branding ob on ob.org_id = o.id
@@ -106,7 +110,11 @@ export async function getAppIdentity(ctx: Ctx): Promise<AppIdentity> {
   const warnings: string[] = [];
   if (brand.warningKey) warnings.push(brand.warningKey);
   if (background.warningKey) warnings.push(background.warningKey);
-  if (!row?.icon_file_id) warnings.push("app.brand.icon_generated");
+  // An icon set rendered from the uploaded logo counts as an icon (item 10);
+  // the warning is for a company whose icon really is drawn from initials.
+  if (!row?.icon_file_id && String(row?.has_icon_set) !== "true") {
+    warnings.push("app.brand.icon_generated");
+  }
 
   return {
     orgId: ctx.orgId,
