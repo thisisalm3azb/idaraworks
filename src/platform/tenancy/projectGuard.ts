@@ -85,9 +85,13 @@ export function supabaseRefFromDatabaseUrl(raw: string | undefined): string | nu
  * Throws when the auth project and the database project are both hosted and
  * differ. Returns the refs it compared (for a startup log line).
  */
-export function assertSameSupabaseProject(
-  env: Pick<NodeJS.ProcessEnv, "NEXT_PUBLIC_SUPABASE_URL" | "DATABASE_URL"> = process.env,
-): { authRef: string | null; databaseRef: string | null } {
+/** Only NEXT_PUBLIC_SUPABASE_URL and DATABASE_URL are read. */
+export type ProjectGuardEnv = Record<string, string | undefined>;
+
+export function assertSameSupabaseProject(env: ProjectGuardEnv = process.env): {
+  authRef: string | null;
+  databaseRef: string | null;
+} {
   const authRef = supabaseRefFromUrl(env.NEXT_PUBLIC_SUPABASE_URL);
   const databaseRef = supabaseRefFromDatabaseUrl(env.DATABASE_URL);
   if (authRef && databaseRef && authRef !== databaseRef) {
