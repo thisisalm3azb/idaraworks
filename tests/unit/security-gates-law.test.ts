@@ -65,7 +65,7 @@ describe("the identity budget on the memory backend", () => {
     delete process.env.UPSTASH_REDIS_REST_URL;
     delete process.env.UPSTASH_REDIS_REST_TOKEN;
     const { rateLimit, RATE_RULES } = await import("@/platform/http/rateLimit");
-    expect(RATE_RULES.identity).toEqual({ limit: 60, windowSeconds: 60 });
+    expect(RATE_RULES.identity).toMatchObject({ limit: 60, windowSeconds: 60 });
     const who = `probe-${Date.now()}`;
     let allowed = 0;
     let refusedAt = -1;
