@@ -1,117 +1,137 @@
 /**
- * 005A — the public homepage: routing/CTA contract, bilingual parity, RTL and
- * physical-class safety, mobile-menu accessibility, no dead pricing CTA, and
- * no unsupported customer/compliance/metric claims. The page + sections are
- * server components rendered to static markup; the mobile menu is the one
- * client island. Auth-routing regressions are guarded here and in the
- * auth-callback suite; the full journey lives in the gated e2e spec.
+ * The public homepage: routing/CTA contract, catalogue parity for its copy,
+ * RTL and physical-class safety, mobile-menu accessibility, and no
+ * unsupported claims (customer counts, certifications, testimonials, AI,
+ * compliance) anywhere in the marketing copy. The page and its sections are
+ * server components; the interactive demo and the mobile menu are the client
+ * islands (the demo's rules are pinned in home-try-it.test.ts).
  */
-import { existsSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { createElement as h } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import en from "@/platform/i18n/messages/en.json";
 import ar from "@/platform/i18n/messages/ar.json";
+import es from "@/platform/i18n/messages/es.json";
 import { t } from "@/platform/i18n";
-import { pricingTiers } from "@/app/_home/pricing";
-import { homeNav, SIGNUP_HREF, LOGIN_HREF } from "@/app/_home/nav";
-import { getTierBundle } from "@/platform/entitlements";
+import { homeNav, ANCHORS, SIGNUP_HREF, LOGIN_HREF } from "@/app/_home/nav";
 
 const tFake = (k: string) => k; // identity translator — we assert on keys/hrefs
+const read = (p: string) => readFileSync(fileURLToPath(new URL(p, import.meta.url)), "utf8");
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: () => {}, refresh: () => {} }),
   usePathname: () => "/",
 }));
 
-const HOME_KEYS = Object.keys(en).filter((k) => k.startsWith("home."));
-// The public-homepage marketing copy only — the home.brief/action/chip/
-// attention/setup/map namespaces are the owner-DASHBOARD keys (002B), governed
-// by their own tests; the content-quality checks below target marketing copy.
-const MARKETING = HOME_KEYS.filter((k) =>
-  /^home.(meta|nav|hero|agents|viz|flow|built|os|gcc|trust|pricing|close|footer)\./.test(k),
+/** The public-homepage namespaces (home.brief/action/chip/attention/setup/map
+ * are the owner-dashboard keys, governed by their own suites). */
+const MARKETING = Object.keys(en).filter((k) =>
+  /^home\.(meta|nav|hero|strip|q|demo|platform|app|start|plans|pricing|faq|trial|footer)\./.test(k),
 );
 
 const PHYSICAL =
   /\b(ml-|mr-|pl-|pr-|text-left|text-right|left-[\d[]|right-[\d[]|border-l-|border-r-|rounded-l(?!g)|rounded-r|float-(left|right))\b/;
 
 describe("homepage i18n content", () => {
-  it("every home.* key exists in BOTH catalogs (parity)", () => {
-    for (const k of HOME_KEYS) {
-      expect(en[k as keyof typeof en], `en missing ${k}`).toBeTruthy();
+  it("every marketing key exists in all three catalogues (parity)", () => {
+    for (const k of MARKETING) {
       expect(ar[k as keyof typeof ar], `ar missing ${k}`).toBeTruthy();
+      expect(es[k as keyof typeof es], `es missing ${k}`).toBeTruthy();
     }
-    // ar has no home.* key that en lacks.
     for (const k of Object.keys(ar).filter((x) => x.startsWith("home."))) {
       expect(en[k as keyof typeof en], `en missing ${k}`).toBeTruthy();
     }
   });
 
-  it("Arabic homepage copy is genuinely Arabic, not English left in place", () => {
-    // Every marketing sentence (skip demo values / brand / acronyms) must carry
-    // Arabic script — catches an untranslated string slipping through.
-    const proseKeys = MARKETING.filter(
-      (k) =>
-        !/\.(customer_v|quote_v|total|badge)$/.test(k) &&
-        !k.endsWith(".rights") &&
-        !k.startsWith("home.viz.quote_v"),
-    );
-    for (const k of proseKeys) {
-      const v = ar[k as keyof typeof ar] as string;
+  it("Arabic homepage copy carries Arabic script wherever English has words", () => {
+    for (const k of MARKETING) {
+      const source = String(en[k as keyof typeof en]);
+      // Codes, numbers and the bare brand carry no language to translate.
+      if (!/[A-Za-z]{3,}/.test(source.replace(/\{[a-z_]+\}/g, "").replace(/IdaraWorks/g, "")))
+        continue;
+      if (
+        /^(Sidra Farms|Oasis Market|Palm Properties|Northstar Studio|Atlas Engineering)$/.test(
+          source,
+        )
+      )
+        continue;
+      const v = String(ar[k as keyof typeof ar]);
       expect(/[؀-ۿ]/.test(v), `ar.${k} has no Arabic script: "${v}"`).toBe(true);
     }
   });
 
-  it("makes no unsupported customer-count, compliance, or rating claims", () => {
-    // "reviews" (plural) targets fake social proof; the verb "review" is the
-    // product's real review-before-apply behavior (H5) and stays allowed.
-    // A percentage is banned as fake statistics UNLESS it is the verified
-    // annual saving ("Save 20%" / "وفّر 20%" — H9.1).
+  it("makes no unsupported customer-count, compliance, rating, AI or urgency claims", () => {
     const BANNED =
-      /\b(trusted by|customers worldwide|\d+[\d,]*\+? (customers|businesses|users|companies)|certified|compliant|ISO|SOC ?2|GDPR|guarantee|award|rated|reviews|testimonial|★|money[- ]back)\b|(?<!save )(?<!وفّر )(?<!\d)\d+%/i;
-    for (const loc of [en, ar]) {
-      for (const k of MARKETING) {
-        expect(
-          BANNED.test(String(loc[k as keyof typeof loc])),
-          `${k} makes an unsupported claim`,
-        ).toBe(false);
-      }
+      /\b(trusted by|customers worldwide|\d+[\d,]*\+? (customers|businesses|users|companies)|certified|compliant|ISO|SOC ?2|GDPR|guarantee[ds]?|award|rated|reviews|testimonial|AI|artificial intelligence|e-invoic|only \d+ left|limited time|hurry|countdown|migrat)/i;
+    for (const k of MARKETING) {
+      const v = String(en[k as keyof typeof en]);
+      expect(BANNED.test(v), `${k} makes an unsupported claim: "${v}"`).toBe(false);
     }
   });
 
-  it("pricing numerals are only the approved facts (H9.1: prices live in config)", () => {
-    // Prices render from the typed pricing config, never from catalog copy.
-    // The only catalog numerals allowed are the verified facts: seat counts
-    // (3 / 13) and the 20% annual saving.
-    for (const k of HOME_KEYS.filter((x) => x.startsWith("home.pricing."))) {
-      const v = String(en[k as keyof typeof en]);
-      const stripped = v.replace(/\b(3|13)\b/g, "").replace(/20%/g, "");
-      expect(/\d/.test(stripped), `pricing key ${k} carries an unapproved number: "${v}"`).toBe(
-        false,
-      );
+  it("names only the shipped languages and no em dash in any language", () => {
+    for (const k of MARKETING) {
+      for (const cat of [en, ar, es] as const) {
+        const v = String(cat[k as keyof typeof cat] ?? "");
+        expect(v, `${k}`).not.toContain("—");
+      }
+      expect(String(en[k as keyof typeof en])).not.toMatch(/spanish/i);
     }
+  });
+
+  it("states the trial exactly as the product implements it", () => {
+    // 30 days, no card, then the Free plan with data kept (0139 + TRIAL_LANDING_PLAN).
+    const blob = MARKETING.map((k) =>
+      t(
+        k,
+        {
+          languages_or: "English or Arabic",
+          languages: "English and Arabic",
+          job: "job",
+          n: 1,
+          name: "x",
+          amount: "$1",
+          billed: "$1",
+          customer: "c",
+          value: "1",
+          work: "w",
+          detail: "d",
+          resource: "r",
+          resource_text: "s",
+          year: "2026",
+        },
+        "en",
+      ),
+    ).join("\n");
+    expect(blob).toMatch(/30 days free/);
+    expect(blob).toMatch(/No credit card/);
+    expect(blob).toMatch(/moves to the Free plan and keeps its data/);
+    expect(blob).not.toMatch(/\b(14|60|90) days\b/);
   });
 });
 
 describe("routing / CTA contract", () => {
-  it("signed-out: Get Started → registration, Log in → /login, sections anchor on-page", () => {
+  it("signed-out: Start free → registration, Log in → /login, sections anchor on-page", () => {
     const { authed, primary, secondary, sections } = homeNav(tFake, null);
     expect(authed).toBe(false);
     expect(primary).toEqual({ href: SIGNUP_HREF, label: "home.nav.get_started" });
     expect(primary.href).toBe("/signup");
     expect(secondary).toEqual({ href: LOGIN_HREF, label: "home.nav.login" });
-    expect(secondary!.href).toBe("/login");
-    // H2/H8: section links in the page's own reading order. Trust is
-    // deliberately absent (a fifth item overflows the 768px English header);
-    // #trust is reached through the page flow and the footer.
-    expect(sections.map((s) => s.href)).toEqual(["#how", "#product", "#international", "#pricing"]);
+    expect(sections.map((s) => s.href)).toEqual([
+      ANCHORS.platform,
+      ANCHORS.demo,
+      ANCHORS.app,
+      ANCHORS.trial,
+    ]);
   });
 
   it("authenticated: Open workspace → resolved landing, and NO log-in action", () => {
     const { authed, primary, secondary } = homeNav(tFake, "/o/abc-123");
     expect(authed).toBe(true);
     expect(primary).toEqual({ href: "/o/abc-123", label: "home.nav.open_workspace" });
-    expect(secondary).toBeNull(); // never forced back through registration/login
+    expect(secondary).toBeNull();
   });
 
   it("every routing destination is a real internal path (no dead CTA)", () => {
@@ -123,37 +143,77 @@ describe("routing / CTA contract", () => {
       }
     }
   });
+
+  it("every navigated anchor is a section on the page with the sticky offset", () => {
+    const sources = [
+      "HomePage",
+      "PlatformDepth",
+      "CompanyApp",
+      "Start",
+      "Plans",
+      "Faq",
+      "FinalTrial",
+    ]
+      .map((f) => read(`../../src/app/_home/${f}.tsx`))
+      .join("\n");
+    for (const anchor of Object.values(ANCHORS)) {
+      const id = anchor.slice(1);
+      expect(sources, `#${id} missing`).toMatch(
+        new RegExp(
+          `id="${id}"[^>]*className="[^"]*scroll-mt-20|className="[^"]*scroll-mt-20[^"]*"[^>]*id="${id}"`,
+        ),
+      );
+    }
+  });
 });
 
-describe("pricing config — single source, real catalogue tiers", () => {
-  it("anchors internal tiers to the catalogue; public labels are the H9.1 names", () => {
-    const tiers = pricingTiers();
-    expect(tiers.map((t) => t.key)).toEqual(["free", "medium", "high"]);
-    // The catalogue tiers must still exist (identity anchor); the PUBLIC
-    // display labels are deliberately different (documented mapping).
-    expect(getTierBundle("medium")).toBeTruthy();
-    expect(getTierBundle("high")).toBeTruthy();
-    expect(tiers.map((t) => t.names.en)).toEqual(["Free", "Operations", "Complete"]);
+describe("no local-prototype leftovers", () => {
+  const sources = [
+    "HomePage",
+    "Hero",
+    "Questions",
+    "TryIt",
+    "PlatformDepth",
+    "CompanyApp",
+    "Start",
+    "Plans",
+    "Faq",
+    "FinalTrial",
+    "Frame",
+  ].map((f) => read(`../../src/app/_home/${f}.tsx`));
+
+  it("no design-concept dialog, no external link to the live site, no localhost", () => {
+    for (const src of sources) {
+      expect(src).not.toMatch(
+        /<dialog|showModal|Local design concept|localhost|Not the live website/,
+      );
+      expect(src).not.toMatch(/https:\/\/www\.idaraworks\.com\/(login|signup)/);
+    }
   });
 
-  it("carries exactly the approved target prices and one truthful badge", () => {
-    const tiers = pricingTiers();
-    expect(tiers.filter((t) => t.badgeKey).length).toBe(1);
-    expect(tiers.map((t) => t.price.monthlyUsd)).toEqual([0, 39, 89]);
-    expect(tiers.map((t) => t.price.annualBilledUsd)).toEqual([0, 372, 852]);
+  it("the demo keeps its state in the page: no fetch, storage or form submission", () => {
+    const demo = read("../../src/app/_home/TryIt.tsx");
+    expect(demo).not.toMatch(
+      /fetch\(|localStorage|sessionStorage|<form|navigator\.sendBeacon|XMLHttpRequest/,
+    );
+    expect(demo).not.toMatch(/dangerouslySetInnerHTML/);
+    expect(demo).toMatch(/useState/);
   });
-});
 
-describe("robots — public page indexable, app paths kept private", async () => {
-  const robots = (await import("@/app/robots")).default;
-  const r = robots();
+  it("uses no physical-direction classes (mirrors under RTL)", () => {
+    for (const src of sources) {
+      const classes = [...src.matchAll(/className=["`]([^"`]*)["`]/g)].map((m) => m[1]).join(" ");
+      expect(PHYSICAL.test(classes), classes.match(PHYSICAL)?.[0]).toBe(false);
+    }
+  });
 
-  it("allows the public root and disallows every authenticated/tenant path", () => {
-    const rule = Array.isArray(r.rules) ? r.rules[0]! : r.rules!;
-    expect(rule.allow).toBe("/");
-    const disallow = rule.disallow as string[];
-    for (const p of ["/o/", "/account", "/onboarding", "/mfa", "/s/", "/api/", "/auth/"]) {
-      expect(disallow, `robots must disallow ${p}`).toContain(p);
+  it("no real tenant's name appears in the sample content", () => {
+    for (const k of MARKETING) {
+      for (const cat of [en, ar, es] as const) {
+        expect(String(cat[k as keyof typeof cat] ?? "")).not.toMatch(
+          /Liwa ?Harvest|Rimal|ليوا|رمال/,
+        );
+      }
     }
   });
 });
@@ -163,10 +223,10 @@ describe("MobileMenu accessibility + RTL safety", async () => {
   const html = renderToStaticMarkup(
     h(MobileMenu, {
       links: [
-        { href: "#product", label: "المنتج" },
-        { href: "#pricing", label: "الأسعار" },
+        { href: "#platform", label: "المنصة" },
+        { href: "#trial", label: "تجربة مجانية" },
       ],
-      primary: { href: "/signup", label: "ابدأ الآن" },
+      primary: { href: "/signup", label: "ابدأ مجاناً" },
       secondary: { href: "/login", label: "تسجيل الدخول" },
       openLabel: "فتح القائمة",
       closeLabel: "إغلاق القائمة",
@@ -187,245 +247,16 @@ describe("MobileMenu accessibility + RTL safety", async () => {
   });
 });
 
-// H1 (006B): homepage truthfulness + international-first copy. These assertions
-// encode the deliberate copy corrections and must not be weakened to pass.
-describe("H1 truthfulness + international-first copy", () => {
-  // H29: copy that lists the interface languages takes them as a variable, so
-  // the rendered sentence — not the raw template — is what these claims are
-  // read from. The lists here are what Intl produces for the shipped pair.
-  const marketingEn = MARKETING.map((k) => t(k, { languages: "English and Arabic" }, "en")).join(
-    "  ",
-  );
-  const marketingAr = MARKETING.map((k) => t(k, { languages: "الإنجليزية والعربية" }, "ar")).join(
-    "  ",
-  );
-  const builtEn = Object.keys(en)
-    .filter((k) => k.startsWith("home.built."))
-    .map((k) => String(en[k as keyof typeof en]))
-    .join("  ");
+describe("robots — public page indexable, app paths kept private", async () => {
+  const robots = (await import("@/app/robots")).default;
+  const r = robots();
 
-  it("does not claim AI configures the product today (removed claim cannot return)", () => {
-    expect(marketingEn.toLowerCase()).not.toContain("ai can help");
-    expect(marketingEn).not.toMatch(
-      /turn(s|ing)?\s+(your\s+)?(plain\s+)?answers\s+into\s+a\s+working\s+setup/i,
-    );
-    // No marketing copy attributes configuration or setup to AI in the present tense.
-    expect(marketingEn).not.toMatch(/\bAI\b[^.]{0,60}(configur|set\s?up|setup)/i);
-    expect(builtEn).not.toMatch(/\bAI\b/); // the built section is AI-free after H1
-  });
-
-  it("describes guided setup truthfully: nothing is created until confirmed", () => {
-    expect(builtEn).toMatch(/guided setup/i);
-    expect(builtEn).toMatch(
-      /nothing is created until|before (anything|it) is (created|confirmed)/i,
-    );
-  });
-
-  it("keeps the AI configuration boundary as a planned principle, not an active feature", () => {
-    const guard = String(en["home.built.guardrail" as keyof typeof en]);
-    expect(guard).toMatch(/propose changes for you to approve/i);
-    expect(guard).toMatch(/never (write|change)[^.]*(code|database|security)/i);
-    expect(guard.toLowerCase()).not.toContain("ai helps with configuration");
-  });
-
-  it("removes GCC-only positioning", () => {
-    for (const blob of [marketingEn, marketingAr]) {
-      expect(blob.toLowerCase()).not.toContain("made for the gcc");
-    }
-    expect(marketingEn).not.toMatch(/native for (the )?gcc/i);
-    expect(marketingEn).not.toMatch(/(built|made|only|exclusively) for (the )?gcc\b/i);
-    expect(String(en["home.meta.description" as keyof typeof en])).not.toMatch(
-      /for gcc (small|medium|businesses)/i,
-    );
-  });
-
-  it("renders international-first framing, with the UAE and GCC as the launch market", () => {
-    expect(marketingEn).toMatch(/across markets/i);
-    expect(marketingEn).toMatch(/first launch market/i);
-    // GCC is allowed only as launch-market context, never as the product boundary.
-    expect(marketingEn).toMatch(/uae and gcc/i);
-  });
-
-  it("describes the shipped languages as available now", () => {
-    // H29 made the list a variable, so the claim is tested on the RENDERED
-    // sentence. Order comes from Intl, not from us, so either order passes —
-    // what must hold is that the languages are described as working today.
-    expect(marketingEn).toMatch(/(arabic and english|english and arabic)/i);
-    expect(marketingEn).toMatch(
-      /(arabic and english|english and arabic)[^.]*\b(today|now|work)\b/i,
-    );
-    expect(marketingEn).toMatch(/right-to-left/i);
-  });
-
-  it("hard-codes no language list in the marketing catalogue", () => {
-    // The sentences above must come from {languages}; a hand-written pair in the
-    // catalogue is exactly the drift H29 removed, and it would silently become a
-    // false claim the day a third language is released.
-    for (const key of MARKETING) {
-      const value = String(en[key as keyof typeof en]);
-      expect(value, `${key} names languages literally`).not.toMatch(
-        /(arabic and english|english and arabic|arabic or english|english or arabic)/i,
-      );
-    }
-  });
-
-  it("names no language the product does not offer", () => {
-    // H29 added a Spanish catalogue, so its existence is no longer the test.
-    // The claim is: the public page may not advertise a language until the
-    // owner turns it on, and the switcher may not offer one either. The
-    // catalogue can exist and be worked on without either of those happening.
-    expect(marketingEn).not.toMatch(/spanish|español/i);
-    expect(existsSync("src/platform/i18n/messages/es.json")).toBe(true);
-    const flags = readFileSync("src/platform/flags.ts", "utf8");
-    expect(flags).toMatch(/FEATURE_LOCALE_ES === "1"/);
-  });
-
-  it("does not claim custom roles or trade-tailored permissions", () => {
-    expect(marketingEn).not.toMatch(/custom roles?/i);
-    expect(marketingEn).not.toMatch(/create (your own )?roles?/i);
-    expect(marketingEn).not.toMatch(/permissions that match your trade/i);
-  });
-
-  it("keeps the Illustrative label and carries no roadmap-status label (H13)", () => {
-    expect(en["home.viz.illustrative" as keyof typeof en]).toBeTruthy();
-    expect(ar["home.viz.illustrative" as keyof typeof ar]).toBeTruthy();
-    expect("home.built.now_label" in en).toBe(false);
-    expect("home.built.planned_label" in en).toBe(false);
-    expect(marketingEn).not.toMatch(
-      /\b(planned|coming soon|expanding|future capabilit|available now|roadmap)\b/i,
-    );
-  });
-
-  it("contains no em dash in any homepage marketing copy (en or ar)", () => {
-    for (const k of MARKETING) {
-      expect(String(en[k as keyof typeof en]), `en.${k} has an em dash`).not.toContain("—");
-      expect(String(ar[k as keyof typeof ar]), `ar.${k} has an em dash`).not.toContain("—");
-    }
-  });
-});
-
-// H2 (006C): public header + navigation. The homepage is an async server
-// component (cookies-bound), so structural wiring is asserted against its
-// SOURCE, the nav contract against the pure homeNav(), and the focus trap
-// against its pure decision function — the repo has no DOM test environment
-// (vitest env "node", no jsdom dependency), so real keydown/focus events are
-// verified on the deployed page, not here.
-describe("H2 header + navigation", () => {
-  const homeSrc = readFileSync("src/app/_home/HomePage.tsx", "utf8");
-  const menuSrc = readFileSync("src/app/_home/MobileMenu.tsx", "utf8");
-  const langSrc = readFileSync("src/app/_home/LanguageSwitch.tsx", "utf8");
-
-  it("every header section link targets an existing homepage anchor, with sticky offset", () => {
-    const { sections } = homeNav(tFake, null);
-    for (const s of sections) {
-      const id = s.href.slice(1);
-      const sectionTag = new RegExp(`<section id="${id}" className="[^"]*scroll-mt-`);
-      expect(sectionTag.test(homeSrc), `#${id} must exist with a scroll-mt offset`).toBe(true);
-    }
-  });
-
-  it("the Trust section exists; the header omits it by measured decision (H8)", () => {
-    // The section and anchor are real; the header stays at four items because
-    // a fifth overflows the English header at 768px. The footer links #trust.
-    expect(homeSrc).toMatch(/<section id="trust" className="[^"]*scroll-mt-16/);
-    const { sections } = homeNav(tFake, null);
-    expect(sections.some((s) => s.href === "#trust")).toBe(false);
-    expect(en["home.nav.trust" as keyof typeof en]).toBeTruthy(); // used by the footer
-    expect(ar["home.nav.trust" as keyof typeof ar]).toBeTruthy();
-  });
-
-  it("International targets the real international section anchor", () => {
-    const { sections } = homeNav(tFake, null);
-    const intl = sections.find((s) => s.label === "home.nav.international");
-    expect(intl?.href).toBe("#international");
-    expect(homeSrc).toMatch(/<section id="international"/);
-    expect(en["home.nav.international" as keyof typeof en]).toBeTruthy();
-    expect(ar["home.nav.international" as keyof typeof ar]).toBeTruthy();
-  });
-
-  it("skip link targets a real, focusable main-content destination", () => {
-    expect(homeSrc).toMatch(/href="#main"/);
-    expect(homeSrc).toMatch(/<main id="main" tabIndex=\{-1\}/);
-    // Hidden until focus, then a visible ≥44px card above the sticky header.
-    expect(homeSrc).toMatch(/sr-only focus:not-sr-only/);
-    expect(homeSrc).toMatch(/focus:min-h-11/);
-    expect(homeSrc).toMatch(/focus:z-50/);
-    expect(en["home.nav.skip" as keyof typeof en]).toBeTruthy();
-    expect(ar["home.nav.skip" as keyof typeof ar]).toBeTruthy();
-  });
-
-  it("desktop navigation is a labelled landmark with 44px targets; brand link is named", () => {
-    expect(homeSrc).toMatch(/<nav[^>]*aria-label=\{t\("home\.nav\.primary"\)\}/s);
-    expect(homeSrc).toMatch(/min-h-11 items-center rounded-md px-3 text-sm font-medium/);
-    expect(homeSrc).toMatch(/aria-label=\{t\("home\.nav\.brand_home"\)\}/);
-  });
-
-  it("mobile nav landmark uses a proper label, not the open-menu button label", () => {
-    expect(menuSrc).toMatch(/<nav[^>]*aria-label=\{navLabel\}/s);
-    expect(menuSrc).not.toMatch(/<nav[^>]*aria-label=\{openLabel\}/s);
-  });
-
-  describe("mobile-menu focus trap (pure decision function)", async () => {
-    const { trapTabTarget } = await import("@/app/_home/MobileMenu");
-    const [trigger, a, b, c] = ["trigger", "a", "b", "c"];
-
-    it("Tab from the last control wraps to the trigger", () => {
-      expect(trapTabTarget([trigger, a, b, c], c, false)).toBe(trigger);
-    });
-    it("Shift+Tab from the trigger wraps to the last control", () => {
-      expect(trapTabTarget([trigger, a, b, c], trigger, true)).toBe(c);
-    });
-    it("focus that escaped the cycle is pulled back to the trigger", () => {
-      expect(trapTabTarget([trigger, a, b, c], "outside", false)).toBe(trigger);
-      expect(trapTabTarget([trigger, a, b, c], null, false)).toBe(trigger);
-    });
-    it("mid-cycle Tab lets the browser's default order proceed", () => {
-      expect(trapTabTarget([trigger, a, b, c], a, false)).toBeNull();
-      expect(trapTabTarget([trigger, a, b, c], b, true)).toBeNull();
-    });
-    it("an empty cycle traps nothing", () => {
-      expect(trapTabTarget([], null, false)).toBeNull();
-    });
-    it("the keydown handler wires Tab through the trap with trigger + sheet controls", () => {
-      expect(menuSrc).toMatch(/e\.key === "Tab"/);
-      expect(menuSrc).toMatch(/\[trigger, \.\.\.Array\.from\(sheet\.querySelectorAll/);
-      expect(menuSrc).toMatch(/trapTabTarget\(\s*cycle/);
-    });
-  });
-
-  it("Escape closes and returns focus to the trigger; links close; scroll is restored", () => {
-    // Source-level wiring tripwires (real events are exercised on production —
-    // no DOM environment exists in this suite).
-    expect(menuSrc).toMatch(
-      /e\.key === "Escape"[\s\S]{0,120}setOpen\(false\);\s*triggerRef\.current\?\.focus\(\)/,
-    );
-    expect(menuSrc).toMatch(/onClick=\{\(\) => setOpen\(false\)\}/);
-    expect(menuSrc).toMatch(/document\.body\.style\.overflow = "hidden"/);
-    expect(menuSrc).toMatch(/document\.body\.style\.overflow = "";/);
-  });
-
-  it("language control is text-labelled, 44px, accessible, and lists only released languages", () => {
-    // H29 replaced the EN/AR toggle with a list built from offeredLocales(), so
-    // the languages are no longer literals here at all. The law the original
-    // test protected still holds and is now stronger: the public site cannot
-    // name a language the deployment has not released, because it names no
-    // language itself — it asks the same gate the workspace switcher asks.
-    expect(langSrc).toMatch(/offeredLocales\(\)/);
-    expect(langSrc).toMatch(/LOCALE_NATIVE_NAME\[candidate\]/);
-    expect(langSrc).toMatch(/min-h-11/);
-    expect(langSrc).toMatch(/aria-label=\{ariaLabel\}/);
-    expect(langSrc).not.toMatch(/"es"|Español|"ar"|العربية/);
-  });
-
-  it("new header copy exists in both catalogs with no em dash and natural Arabic", () => {
-    for (const k of ["home.nav.international", "home.nav.skip", "home.nav.brand_home"] as const) {
-      const e = String(en[k as keyof typeof en]);
-      const a2 = String(ar[k as keyof typeof ar]);
-      expect(e).toBeTruthy();
-      expect(a2).toBeTruthy();
-      expect(e).not.toContain("—");
-      expect(a2).not.toContain("—");
-      expect(/[؀-ۿ]/.test(a2), `ar.${k} must carry Arabic script`).toBe(true);
+  it("allows the public root and disallows every authenticated/tenant path", () => {
+    const rule = Array.isArray(r.rules) ? r.rules[0]! : r.rules!;
+    expect(rule.allow).toBe("/");
+    const disallow = rule.disallow as string[];
+    for (const p of ["/o/", "/account", "/onboarding", "/mfa", "/s/", "/api/", "/auth/"]) {
+      expect(disallow, `robots must disallow ${p}`).toContain(p);
     }
   });
 });

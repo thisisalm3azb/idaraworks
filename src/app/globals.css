@@ -94,6 +94,19 @@
   --color-accent: var(--accent);
   --color-accent-soft: var(--accent-soft);
   --color-accent-line: var(--accent-line);
+  /* Public homepage palette (marketing only). The values live under `.iw-home`
+     in app/_home/home.css, so these utilities resolve to nothing elsewhere and
+     the workspace is untouched. */
+  --color-mk-lime: var(--mk-lime);
+  --color-mk-lime-strong: var(--mk-lime-strong);
+  --color-mk-forest: var(--mk-forest);
+  --color-mk-forest-raised: var(--mk-forest-raised);
+  --color-mk-forest-line: var(--mk-forest-line);
+  --color-mk-forest-ink: var(--mk-forest-ink);
+  --color-mk-forest-dim: var(--mk-forest-dim);
+  --color-mk-green: var(--mk-green);
+  --color-mk-tint: var(--mk-tint);
+  --color-mk-strip: var(--mk-strip);
   --shadow-card: var(--elevation-1);
   --shadow-pop: var(--elevation-2);
   --radius-sm: var(--radius-sm);

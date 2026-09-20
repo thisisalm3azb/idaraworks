@@ -1,14 +1,26 @@
 /**
- * Public-homepage navigation contract (005A) — a pure function so the routing
- * rules are unit-testable without rendering the async server tree:
- *  - Get Started routes to the real registration route (/signup);
+ * Public-homepage navigation contract, a pure function so the routing rules are
+ * unit-testable without rendering the async server tree:
+ *  - Start free routes to the real registration route (/signup);
  *  - Log in routes to /login;
  *  - an authenticated visitor gets "Open workspace" → their resolved landing,
  *    and no "Log in" (they are not sent back through registration);
- *  - section links target the on-page anchors.
+ *  - section links target the on-page anchors in the page's reading order:
+ *    the platform depth, the interactive demo, the company app, the trial.
  */
 export const SIGNUP_HREF = "/signup";
 export const LOGIN_HREF = "/login";
+
+/** On-page anchors. One list, so header, footer and tests agree. */
+export const ANCHORS = {
+  platform: "#platform",
+  demo: "#try-it",
+  app: "#company-app",
+  start: "#getting-started",
+  plans: "#plans",
+  questions: "#questions",
+  trial: "#trial",
+} as const;
 
 export type HomeCta = { href: string; label: string };
 
@@ -28,16 +40,11 @@ export function homeNav(
   const secondary: HomeCta | null = authed
     ? null
     : { href: LOGIN_HREF, label: t("home.nav.login") };
-  // Section links in the PAGE'S reading order (H2): flow → capabilities →
-  // international → pricing. H8 decision: the Trust section (#trust) is
-  // deliberately NOT in the header — a fifth item overflows the English
-  // header at 768px (verified by measurement). Trust stays reachable through
-  // the page flow and the footer link instead.
   const sections: HomeCta[] = [
-    { href: "#how", label: t("home.nav.how") },
-    { href: "#product", label: t("home.nav.product") },
-    { href: "#international", label: t("home.nav.international") },
-    { href: "#pricing", label: t("home.nav.pricing") },
+    { href: ANCHORS.platform, label: t("home.nav.platform") },
+    { href: ANCHORS.demo, label: t("home.nav.demo") },
+    { href: ANCHORS.app, label: t("home.nav.app") },
+    { href: ANCHORS.trial, label: t("home.nav.trial") },
   ];
   return { authed, primary, secondary, sections };
 }

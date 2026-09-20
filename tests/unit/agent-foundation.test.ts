@@ -428,7 +428,7 @@ describe("A1 — registry coherence and public truth", () => {
   });
 
   it("no public copy claims live AI, and the readiness flag stays false", async () => {
-    const { AI_AGENTS_PRODUCTION_READY } = await import("@/app/_home/BusinessOS");
+    const { AI_AGENTS_PRODUCTION_READY } = await import("@/app/_home/aiReadiness");
     expect(AI_AGENTS_PRODUCTION_READY).toBe(false);
     const allPublic = Object.keys(en)
       .filter((k) => k.startsWith("home."))

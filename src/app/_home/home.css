@@ -1,0 +1,143 @@
+/*
+ * The public homepage's own skin. Everything is scoped under `.iw-home`, which
+ * re-points the shared design tokens (surfaces, ink, brand, lines, radii) so the
+ * existing primitives the page reuses (mobile menu, language switch, icons)
+ * pick up the marketing palette without a single change to the workspace.
+ *
+ * Palette (approved reference, 2026-09-20): warm ivory page, deep forest for
+ * dark surfaces, restrained lime for the one highlighted action, muted green
+ * secondary copy. One type family throughout: Space Grotesk; Noto Sans Arabic
+ * supplies the Arabic glyphs on the same stack, so Latin numerals, references
+ * and the brand keep their shapes on the Arabic page.
+ */
+.iw-home {
+  --surface-page: #f7f8f2;
+  --surface-card: #ffffff;
+  --surface-sunken: #eef2e6;
+  --surface-inverse: #122925;
+  --text-primary: #152c28;
+  --text-secondary: #5a665f;
+  --text-muted: #5f6a63;
+  --text-inverse: #f2f6ea;
+  --brand: #3f6b48;
+  --brand-strong: #2e5236;
+  --brand-soft: #e9efdc;
+  --border: #dce3d7;
+  --border-strong: #c9d3c2;
+  --focus-ring: #2e5236;
+  --accent: var(--brand);
+  --mk-lime: #d9f5a3;
+  --mk-lime-strong: #c5ec86;
+  --mk-forest: #102822;
+  --mk-forest-raised: #182f29;
+  --mk-forest-line: rgba(255, 255, 255, 0.09);
+  --mk-forest-ink: #e6efdf;
+  --mk-forest-dim: #8eaa98;
+  --mk-green: #527040;
+  --mk-tint: #e9efdc;
+  --mk-strip: #eef2e6;
+  --radius-sm: 7px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --elevation-1: 0 1px 2px rgb(21 44 40 / 0.05), 0 1px 3px rgb(21 44 40 / 0.06);
+  --elevation-2: 0 12px 35px rgb(32 59 36 / 0.13);
+  font-family: var(--font-space-grotesk), var(--font-noto-arabic), system-ui, sans-serif;
+  background: var(--surface-page);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Arabic reads better without the tight Latin tracking the headlines use. */
+.iw-home[dir="rtl"] .mk-tight {
+  letter-spacing: 0;
+}
+
+/* The one decorative motion on the page: a sample document settling into
+   place when the demo step changes. Motion-safe only. */
+@media (prefers-reduced-motion: no-preference) {
+  .iw-home .mk-pop {
+    animation: mk-card-in 0.35s ease both;
+  }
+  @keyframes mk-card-in {
+    from {
+      opacity: 0.2;
+      transform: translateY(9px) rotate(-2deg);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) rotate(-2deg);
+    }
+  }
+  .iw-home .mk-lift {
+    transition:
+      transform 0.2s ease,
+      background-color 0.2s ease;
+  }
+  .iw-home .mk-lift:hover {
+    transform: translateY(-2px);
+  }
+  .iw-home .mk-plan-block {
+    transition: transform 0.6s ease;
+  }
+  .iw-home .mk-plan:hover .mk-plan-block {
+    transform: translateY(-6px);
+  }
+}
+
+/* Dimensional product illustrations: the owner window is turned very
+   slightly toward the reader; the sample document sits at a paper angle.
+   Reduced motion also flattens them: no perspective, nothing that could
+   read as movement. */
+.iw-home .mk-window-3d {
+  transform: perspective(1400px) rotateY(-5deg) rotateX(2deg);
+}
+.iw-home[dir="rtl"] .mk-window-3d {
+  transform: perspective(1400px) rotateY(5deg) rotateX(2deg);
+}
+.iw-home .mk-doc-tilt {
+  transform: rotate(-2deg);
+}
+.iw-home .mk-plan-base {
+  transform: rotateX(45deg) rotateZ(-28deg);
+}
+.iw-home .mk-plan-grid {
+  background-image:
+    linear-gradient(#edf2e8 1px, transparent 1px),
+    linear-gradient(90deg, #edf2e8 1px, transparent 1px);
+  background-size: 28px 28px;
+  perspective: 500px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .iw-home .mk-window-3d,
+  .iw-home .mk-doc-tilt {
+    transform: none;
+  }
+}
+@media (max-width: 767px) {
+  .iw-home .mk-window-3d,
+  .iw-home .mk-doc-tilt {
+    transform: none;
+  }
+}
+
+/* Native disclosure FAQ: hide the default marker and draw a plus that turns
+   into a minus, in the reader's own text colour. */
+.iw-home .mk-faq summary {
+  list-style: none;
+}
+.iw-home .mk-faq summary::-webkit-details-marker {
+  display: none;
+}
+.iw-home .mk-faq summary::after {
+  content: "+";
+  position: absolute;
+  inset-inline-end: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 1.35rem;
+  line-height: 1;
+  color: var(--brand);
+}
+.iw-home .mk-faq details[open] summary::after {
+  content: "−";
+}

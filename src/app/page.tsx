@@ -9,17 +9,17 @@ import { HomePage } from "./_home/HomePage";
 const CANONICAL = "https://www.idaraworks.com";
 
 /**
- * Root `/` — the public IdaraWorks homepage (005A). Rendered for everyone:
- * signed-out visitors get Get Started / Log in; an authenticated visitor gets
- * an "Open workspace" action (resolveLanding → their workspace or onboarding),
- * never forced back through registration.
+ * Root `/` — the public IdaraWorks homepage. Rendered for everyone: signed-out
+ * visitors get Start free / Log in; an authenticated visitor gets an "Open
+ * workspace" action (resolveLanding → their workspace or onboarding), never
+ * forced back through registration.
  */
 export async function generateMetadata(): Promise<Metadata> {
   const locale = await getServerLocale();
   const title = t("home.meta.title", undefined, locale);
   const description = t("home.meta.description", { languages: languageListFor(locale) }, locale);
-  // No social-preview image asset exists in the repository; Open Graph is
-  // declared without one rather than fabricating a misleading image (005A gap).
+  // The social preview is rendered by app/opengraph-image.tsx from the same
+  // headline; Next wires its URL and dimensions into the tags automatically.
   return {
     title,
     description,
@@ -30,9 +30,9 @@ export async function generateMetadata(): Promise<Metadata> {
       title,
       description,
       url: CANONICAL,
-      locale: locale === "ar" ? "ar_AE" : "en_US",
+      locale: locale === "ar" ? "ar_AE" : locale === "es" ? "es_ES" : "en_US",
     },
-    twitter: { card: "summary", title, description },
+    twitter: { card: "summary_large_image", title, description },
     robots: { index: true, follow: true },
   };
 }
