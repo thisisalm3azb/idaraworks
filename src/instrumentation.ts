@@ -12,6 +12,13 @@ import { logger } from "@/platform/logger";
 import { REQUEST_ID_HEADER } from "@/platform/observability/requestId";
 
 export async function register(): Promise<void> {
+  // Fail fast if the build's auth project and the runtime's database project
+  // differ (security review 2026-09-20: a bare `next build` once baked the
+  // production auth URL into a server that ran against the TEST database).
+  // Throwing here stops `next start`; the message says how to rebuild.
+  const { assertSameSupabaseProject } = await import("@/platform/tenancy/projectGuard");
+  const refs = assertSameSupabaseProject();
+  logger.info({ auth_ref: refs.authRef, database_ref: refs.databaseRef }, "supabase project check");
   // Sentry (env-gated) initializes here — see observability/sentry.
   const { initSentryServer } = await import("@/platform/observability/sentry");
   initSentryServer();
