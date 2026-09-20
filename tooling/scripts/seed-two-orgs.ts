@@ -50,6 +50,8 @@ export const ORG_AND_USER_TABLES = [
   // the cross-USER sweep is the one that matters here — an administrator must
   // not see a colleague's tour progress any more than another tenant's.
   "onboarding_state",
+  // A person's dashboard layout: same (org AND user) policy, same sweep.
+  "user_dashboard_pref",
 ] as const;
 
 /** Tables that app.create_org_with_owner already populates — seeded by org creation. */
@@ -224,6 +226,11 @@ export const SEEDERS: Record<string, Seeder> = {
   notification_preference: async (o, org, _u, recipient) => {
     await o`insert into public.notification_preference (org_id, user_id, channels)
             values (${org}, ${recipient}, '{}'::jsonb) on conflict (org_id, user_id) do nothing`;
+  },
+  user_dashboard_pref: async (o, org, _u, recipient) => {
+    await o`insert into public.user_dashboard_pref (org_id, user_id, layout)
+            values (${org}, ${recipient}, '{"v":1,"widgets":[{"key":"attention","size":"l"}]}'::jsonb)
+            on conflict (org_id, user_id) do nothing`;
   },
   onboarding_state: async (o, org, _u, recipient) => {
     await o`insert into public.onboarding_state (org_id, user_id, status, step_index, tour_key)

@@ -65,7 +65,16 @@ import {
   HORIZON_DAYS,
 } from "@/modules/dashboard/service";
 import { resolveShell } from "./shell";
-import { AdaptiveDashboard } from "./adaptive";
+import { AdaptiveHeader, UnavailableNotice } from "./adaptive";
+import { hrSurfacesEnabled, stockSurfacesEnabled } from "@/platform/flags";
+import {
+  availableWidgets,
+  loadDashboardPref,
+  loadPriorities,
+  resolveLayout,
+} from "@/modules/dashboard/service";
+import { DashboardBoard, type BoardLabels } from "./board/DashboardBoard";
+import { ADAPTIVE_WIDGETS, renderWidgets, type BoardInputs } from "./board/widgets";
 import { dismissExceptionAction } from "./actions";
 
 const SEV_TONE: Record<string, "neutral" | "info" | "warning" | "danger"> = {
@@ -149,28 +158,81 @@ export default async function OrgHome({
     // (closing opportunities, expiring quotes) match their drill-downs.
     const compiledDash = shell.shape.compiled.dashboards[a as BlueprintArchetype] ?? null;
     const horizonDays = HORIZON_DAYS[compiledDash?.timeHorizon ?? ""] ?? 7;
-    const [data, ent] = await Promise.all([
-      gatherDashboardData(resolved.ctx, a, { asOf, computedAt: now.toISOString(), horizonDays }),
+    // The person's arrangement, the company's stated priorities, and what this
+    // person may have at all: permission x entitlement x blueprint x flags.
+    const [ent, savedLayout, priorities] = await Promise.all([
       resolveEntitlements(resolved.ctx),
+      loadDashboardPref(resolved.ctx).catch(() => null),
+      loadPriorities(resolved.ctx).catch(() => [] as never[]),
     ]);
-    const view = composeAdaptiveDashboard(
-      {
-        orgId,
-        archetype: a as BlueprintArchetype,
-        seesPrice: resolved.ctx.pricePrivileged,
-        features: ent.features,
-        disabledModules: disabledModulesOf(shell.shape.compiled),
-        compiledDashboard: compiledDash,
+    const disabledModules = disabledModulesOf(shell.shape.compiled);
+    const available = availableWidgets({
+      archetype: a,
+      features: ent.features,
+      disabledModules,
+      seesPrice: resolved.ctx.pricePrivileged,
+      flags: { stock: stockSurfacesEnabled(), hr: hrSurfacesEnabled() },
+      adaptive: true,
+    });
+    const layout = resolveLayout(savedLayout, a, priorities, available);
+    const shownKeys = layout.entries.filter((e) => !e.hidden).map((e) => e.key);
+
+    // The composition is gathered once, and only when one of its layers is on
+    // the board. A person who shows none of them pays for none of them.
+    let adaptive: BoardInputs["adaptive"] = null;
+    if (shownKeys.some((k) => ADAPTIVE_WIDGETS.has(k))) {
+      const data = await gatherDashboardData(resolved.ctx, a, {
         asOf,
-      },
-      data,
-    );
+        computedAt: now.toISOString(),
+        horizonDays,
+      });
+      const view = composeAdaptiveDashboard(
+        {
+          orgId,
+          archetype: a as BlueprintArchetype,
+          seesPrice: resolved.ctx.pricePrivileged,
+          features: ent.features,
+          disabledModules,
+          compiledDashboard: compiledDash,
+          asOf,
+        },
+        data,
+      );
+      adaptive = { view, data };
+    }
     const cookieJar = await cookies();
     const collapsed = new Set(
       decodeURIComponent(cookieJar.get("iw_dash")?.value ?? "")
         .split(",")
         .filter(Boolean),
     );
+    const slots = await renderWidgets(shownKeys, {
+      t,
+      locale: adaptiveLocale,
+      orgId,
+      ctx: resolved.ctx,
+      archetype: a,
+      currency: resolved.baseCurrency as CurrencyCode,
+      timezone: resolved.timezone,
+      vars,
+      asOf,
+      horizonDays,
+      features: ent.features,
+      disabledModules,
+      adaptive,
+      extras: adaptive?.data.extras ?? null,
+      prefetched: adaptive
+        ? { inbox: adaptive.data.inbox, ar: adaptive.data.ar, work: adaptive.data.work }
+        : undefined,
+      collapsed,
+      now,
+    });
+    const boardLabels = boardLabelsFor(t);
+    const catalogue = available.map((w) => ({
+      key: w.key,
+      label: t(`dash.widget.${w.key}`, vars),
+      hint: t(`dash.widget.${w.key}.hint`, vars),
+    }));
     const welcomeLinksAdaptive = [
       // Configured already → review it; not configured → the intake is the real next step.
       ...(can(a, "onboarding.run") && !configured
@@ -234,21 +296,27 @@ export default async function OrgHome({
             terms={{ job: vars.job, jobs: vars.jobs }}
           />
         </div>
-        <AdaptiveDashboard
-          t={t}
-          locale={adaptiveLocale}
+        <DashboardBoard
           orgId={orgId}
-          currency={resolved.baseCurrency as CurrencyCode}
-          timezone={resolved.timezone}
-          vars={vars}
-          view={view}
-          extras={data.extras}
-          myJobs={data.myJobs ?? []}
-          returnedReports={data.returnedReports ?? []}
-          collapsed={collapsed}
-          now={now}
-          orgName={resolved.orgName}
-          roleLabel={adaptiveLocale === "ar" ? shell.roleLabel.ar : shell.roleLabel.en}
+          entries={layout.entries}
+          catalogue={catalogue}
+          slots={slots}
+          labels={boardLabels}
+          droppedCount={layout.dropped.length}
+          header={
+            <div className="flex flex-col gap-3">
+              <AdaptiveHeader
+                t={t}
+                locale={adaptiveLocale}
+                timezone={resolved.timezone}
+                now={now}
+                roleLabel={adaptiveLocale === "ar" ? shell.roleLabel.ar : shell.roleLabel.en}
+              />
+              {adaptive ? (
+                <UnavailableNotice t={t} locale={adaptiveLocale} view={adaptive.view} />
+              ) : null}
+            </div>
+          }
         />
       </>
     );
@@ -481,93 +549,188 @@ export default async function OrgHome({
     />
   ) : null;
 
-  return (
-    <div className="flex flex-col gap-4">
-      {briefNode ?? (
-        <div className="flex items-center justify-between gap-2">
-          <div>
-            <h1 className="text-xl font-semibold text-ink">{t("today.title")}</h1>
-            <p className="text-xs text-ink-muted">
-              {`${t("today.card_as_of")} ${formatDate(now, { locale })}`}
-            </p>
-          </div>
-          <Badge tone="neutral">{t(`today.screen.${payload?.screen ?? "viewer"}`)}</Badge>
-        </div>
-      )}
-
-      {/* H32 — the getting-started checklist. Renders nothing with the
-          flag off, nothing once its items are done, and nothing once the person
-          has dismissed it. */}
-      <GettingStarted
-        orgId={orgId}
-        ctx={resolved.ctx}
-        archetype={a}
-        terms={{ job: jobVars.job, jobs: jobVars.jobs }}
-      />
-
-      {sp.welcome === "1" ? (
-        <WelcomeBanner
-          title={t("dashboard.welcome.title")}
-          body={t("dashboard.welcome.body")}
-          dismissLabel={t("dashboard.welcome.dismiss")}
-          links={welcomeLinks}
-        />
-      ) : null}
-
-      {sp.ok === "dismissed" ? (
-        <Badge tone="success">{t("today.dismissed")}</Badge>
-      ) : sp.error ? (
-        <Badge tone="danger">{t("common.error")}</Badge>
-      ) : null}
-
-      {/* Non-owner screens keep the digest block exactly where it was. The
+  // The board for an organisation without an applied blueprint: the whole
+  // composition below is ONE widget ("Today overview"), so nothing changes for
+  // anybody until they choose to, and every focused widget can be added beside
+  // it. Same store, same permission law, same editor as a blueprint workspace.
+  const [savedLayout, priorities] = await Promise.all([
+    loadDashboardPref(resolved.ctx).catch(() => null),
+    loadPriorities(resolved.ctx).catch(() => [] as never[]),
+  ]);
+  const available = availableWidgets({
+    archetype: a,
+    features: ent.features,
+    disabledModules: new Set(),
+    seesPrice: resolved.ctx.pricePrivileged,
+    flags: { stock: stockSurfacesEnabled(), hr: hrSurfacesEnabled() },
+    adaptive: false,
+  });
+  const layout = resolveLayout(savedLayout, a, priorities, available);
+  const shownKeys = layout.entries.filter((e) => !e.hidden).map((e) => e.key);
+  const slots = {
+    ...(await renderWidgets(
+      shownKeys.filter((k) => k !== "classic"),
+      {
+        t,
+        locale,
+        orgId,
+        ctx: resolved.ctx,
+        archetype: a,
+        currency,
+        timezone: resolved.timezone,
+        vars: jobVars,
+        asOf,
+        horizonDays: 7,
+        features: ent.features,
+        disabledModules: new Set(),
+        adaptive: null,
+        extras,
+        prefetched: { inbox },
+        collapsed: new Set(),
+        now,
+      },
+    )),
+    classic: (
+      <div className="flex flex-col gap-4">
+        {/* Non-owner screens keep the digest block exactly where it was. The
           owner home renders the digest inside its curated layout instead, and
           replaces the LockedCard upsell with the compact capabilities row. */}
-      {!isOwnerScreen && canViewDigest && !digestEntitled ? (
-        <LockedCard
-          title={t("digest.title")}
-          description={t("digest.upsell")}
-          href={s.canBilling ? `/o/${orgId}/settings/subscription` : undefined}
-          ctaLabel={s.canBilling ? t("digest.upsell_cta") : undefined}
-        />
-      ) : null}
-      {!isOwnerScreen ? digestCard : null}
+        {!isOwnerScreen && canViewDigest && !digestEntitled ? (
+          <LockedCard
+            title={t("digest.title")}
+            description={t("digest.upsell")}
+            href={s.canBilling ? `/o/${orgId}/settings/subscription` : undefined}
+            ctaLabel={s.canBilling ? t("digest.upsell_cta") : undefined}
+          />
+        ) : null}
+        {!isOwnerScreen ? digestCard : null}
 
-      {ownerHome ? <OwnerScreen s={s} home={ownerHome} digestCard={digestCard} /> : null}
-      {payload?.screen === "manager" ? <ManagerScreen s={s} /> : null}
-      {payload?.screen === "foreman" ? <ForemanScreen s={s} /> : null}
-      {payload?.screen === "accounts" ? <AccountsScreen s={s} /> : null}
-      {payload?.screen === "procurement" ? <ProcurementScreen s={s} /> : null}
-      {isViewer ? <ViewerScreen s={s} /> : null}
+        {ownerHome ? <OwnerScreen s={s} home={ownerHome} digestCard={digestCard} /> : null}
+        {payload?.screen === "manager" ? <ManagerScreen s={s} /> : null}
+        {payload?.screen === "foreman" ? <ForemanScreen s={s} /> : null}
+        {payload?.screen === "accounts" ? <AccountsScreen s={s} /> : null}
+        {payload?.screen === "procurement" ? <ProcurementScreen s={s} /> : null}
+        {isViewer ? <ViewerScreen s={s} /> : null}
 
-      {/* Non-owner screens keep the shared bottom section unchanged (002B
+        {/* Non-owner screens keep the shared bottom section unchanged (002B
           restructures ONLY the owner composition). */}
-      {!isOwnerScreen ? (
-        <>
-          {quickActions.length > 0 ? (
-            <SectionCard title={t("dashboard.quick_actions")}>
-              <QuickActions actions={quickActions} />
-            </SectionCard>
-          ) : null}
+        {!isOwnerScreen ? (
+          <>
+            {quickActions.length > 0 ? (
+              <SectionCard title={t("dashboard.quick_actions")}>
+                <QuickActions actions={quickActions} />
+              </SectionCard>
+            ) : null}
 
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-            {extras.deadlines !== null ? <DeadlinesCard s={s} /> : null}
-            <SectionCard title={t("dashboard.activity")}>
-              <ActivityTimeline
-                entries={extras.activity.map((e) => ({
-                  key: e.id,
-                  summary: e.summary,
-                  when: formatDate(e.createdAt, { locale }),
-                  actor: e.actorName,
-                }))}
-                emptyLabel={t("dashboard.activity_empty")}
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              {extras.deadlines !== null ? <DeadlinesCard s={s} /> : null}
+              <SectionCard title={t("dashboard.activity")}>
+                <ActivityTimeline
+                  entries={extras.activity.map((e) => ({
+                    key: e.id,
+                    summary: e.summary,
+                    when: formatDate(e.createdAt, { locale }),
+                    actor: e.actorName,
+                  }))}
+                  emptyLabel={t("dashboard.activity_empty")}
+                />
+              </SectionCard>
+            </div>
+          </>
+        ) : null}
+      </div>
+    ),
+  };
+  const catalogue = available.map((w) => ({
+    key: w.key,
+    label: t(`dash.widget.${w.key}`, jobVars),
+    hint: t(`dash.widget.${w.key}.hint`, jobVars),
+  }));
+
+  return (
+    <div className="flex flex-col gap-4">
+      <DashboardBoard
+        orgId={orgId}
+        entries={layout.entries}
+        catalogue={catalogue}
+        slots={slots}
+        labels={boardLabelsFor(t)}
+        droppedCount={layout.dropped.length}
+        header={
+          <div className="flex flex-col gap-4">
+            {briefNode ?? (
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <h1 className="text-xl font-semibold text-ink">{t("today.title")}</h1>
+                  <p className="text-xs text-ink-muted">
+                    {`${t("today.card_as_of")} ${formatDate(now, { locale })}`}
+                  </p>
+                </div>
+                <Badge tone="neutral">{t(`today.screen.${payload?.screen ?? "viewer"}`)}</Badge>
+              </div>
+            )}
+
+            {/* H32 — the getting-started checklist. Renders nothing with the
+          flag off, nothing once its items are done, and nothing once the person
+          has dismissed it. */}
+            <GettingStarted
+              orgId={orgId}
+              ctx={resolved.ctx}
+              archetype={a}
+              terms={{ job: jobVars.job, jobs: jobVars.jobs }}
+            />
+
+            {sp.welcome === "1" ? (
+              <WelcomeBanner
+                title={t("dashboard.welcome.title")}
+                body={t("dashboard.welcome.body")}
+                dismissLabel={t("dashboard.welcome.dismiss")}
+                links={welcomeLinks}
               />
-            </SectionCard>
+            ) : null}
+
+            {sp.ok === "dismissed" ? (
+              <Badge tone="success">{t("today.dismissed")}</Badge>
+            ) : sp.error ? (
+              <Badge tone="danger">{t("common.error")}</Badge>
+            ) : null}
           </div>
-        </>
-      ) : null}
+        }
+      />
     </div>
   );
+}
+
+function boardLabelsFor(t: Translator): BoardLabels {
+  return {
+    edit: t("dash.edit"),
+    done: t("dash.done"),
+    save: t("dash.save"),
+    saving: t("dash.saving"),
+    saved: t("dash.saved"),
+    cancel: t("dash.cancel"),
+    reset: t("dash.reset"),
+    resetHint: t("dash.reset_hint"),
+    add: t("dash.add"),
+    addTitle: t("dash.add_title"),
+    nothingToAdd: t("dash.nothing_to_add"),
+    remove: t("dash.remove"),
+    hide: t("dash.hide"),
+    show: t("dash.show"),
+    hidden: t("dash.hidden"),
+    moveUp: t("dash.move_up"),
+    moveDown: t("dash.move_down"),
+    size: t("dash.size"),
+    sizes: { s: t("dash.size.s"), m: t("dash.size.m"), l: t("dash.size.l") },
+    pending: t("dash.pending"),
+    empty: t("dash.empty"),
+    emptyHint: t("dash.empty_hint"),
+    errorInvalid: t("dash.error.invalid"),
+    errorForbidden: t("dash.error.forbidden"),
+    errorFailed: t("dash.error.failed"),
+    droppedNote: t("dash.dropped_note"),
+    editing: t("dash.editing"),
+  };
 }
 
 // ── shared pieces ─────────────────────────────────────────────────────────────

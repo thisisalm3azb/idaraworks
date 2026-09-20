@@ -29,6 +29,8 @@ import type { DashboardData } from "./compose";
 
 // H18 canonical drill-down filter contracts (module public surface).
 export * from "./filters";
+export * from "./board";
+export * from "./board-store";
 
 export {
   composeAdaptiveDashboard,
