@@ -76,8 +76,8 @@ export default async function NewQuotePage({
             create: t("common.add"),
             cancel: t("common.cancel"),
             close: t("common.close"),
-            created: t("relationship.created_selected"),
-            similar: t("relationship.similar_exists"),
+            created: t("relationship.created_selected", { name: "{name}" }),
+            similar: t("relationship.similar_exists", { name: "{name}" }),
             useExisting: t("relationship.use_existing"),
             reference: t("masterdata.error.reference_short"),
             errors: {
