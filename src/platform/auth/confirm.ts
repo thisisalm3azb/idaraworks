@@ -27,13 +27,15 @@ export function isAllowedEmailOtpType(v: string | null): v is EmailOtpType {
   return !!v && (ALLOWED_EMAIL_OTP_TYPES as readonly string[]).includes(v);
 }
 
-/** Safe post-verification destination: recovery always ends on the
- * set-a-new-password screen; everything else defaults to onboarding, and any
- * explicit same-origin `next` (e.g. an invite) is honoured after sanitisation
- * (open-redirect guarded). */
+/** Safe post-verification destination: recovery ALWAYS ends on the
+ * set-a-new-password screen — a recovery link mints a session, and nothing in
+ * the URL may carry that fresh session anywhere else (security review
+ * 2026-09-20: `next` used to override the recovery landing). Everything else
+ * defaults to onboarding, and any explicit same-origin `next` (e.g. an invite)
+ * is honoured after sanitisation (open-redirect guarded). */
 export function confirmDestination(type: string | null, nextRaw: string | null): string {
-  const fallback = type === "recovery" ? "/reset-password" : "/onboarding";
-  return sanitizeNext(nextRaw, fallback);
+  if (type === "recovery") return "/reset-password";
+  return sanitizeNext(nextRaw, "/onboarding");
 }
 
 /** Map a verifyOtp failure message to a safe, recoverable reason — never the

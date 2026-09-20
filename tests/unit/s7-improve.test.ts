@@ -204,3 +204,24 @@ describe("AI narration adapter seam (disabled-provider fallback)", () => {
     }
   });
 });
+
+describe("clientIpFromHeaders on Vercel (security review 2026-09-20)", () => {
+  it("consults only the platform-set headers and ignores a client-supplied true-client-ip", () => {
+    const env = { VERCEL: "1" } as unknown as NodeJS.ProcessEnv;
+    expect(
+      clientIpFromHeaders(
+        new Headers({ "x-vercel-forwarded-for": "203.0.113.7", "true-client-ip": "1.1.1.1" }),
+        env,
+      ),
+    ).toBe("203.0.113.7");
+    expect(clientIpFromHeaders(new Headers({ "x-real-ip": "203.0.113.8" }), env)).toBe(
+      "203.0.113.8",
+    );
+    expect(
+      clientIpFromHeaders(
+        new Headers({ "true-client-ip": "1.1.1.1", "x-forwarded-for": "2.2.2.2" }),
+        env,
+      ),
+    ).toBe("unknown");
+  });
+});

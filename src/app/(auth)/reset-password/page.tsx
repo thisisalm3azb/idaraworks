@@ -12,6 +12,7 @@ const ERROR_KEYS: Record<string, string> = {
   too_short: "auth.reset.error.too_short",
   mismatch: "auth.reset.error.mismatch",
   failed: "auth.reset.error.failed",
+  rate_limited: "auth.reset.error.rate_limited",
 };
 
 /**

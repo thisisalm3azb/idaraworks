@@ -316,6 +316,13 @@ export async function resetPasswordAction(formData: FormData): Promise<void> {
   if (invalid) {
     redirect(`/reset-password?error=${invalid}`);
   }
+  // Security review 2026-09-20: the password update itself was unbudgeted.
+  // Keyed by the signed-in user (the recovery session), after validation so a
+  // typo does not spend the budget.
+  const gate = await rateLimit("password_reset", `user:${user.id}`);
+  if (!gate.allowed) {
+    redirect("/reset-password?error=rate_limited");
+  }
   const supabase = supabaseServer(await cookies());
   const { error } = await supabase.auth.updateUser({ password });
   if (error) {

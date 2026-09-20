@@ -14,6 +14,8 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { supabaseServer } from "@/platform/tenancy/supabase";
 import { classifyExchangeError, requestOrigin, sanitizeNext } from "@/platform/auth/callback";
+import { clientIpFromHeaders } from "@/platform/http/clientIp";
+import { rateLimit } from "@/platform/http/rateLimit";
 
 export const dynamic = "force-dynamic";
 
@@ -31,6 +33,14 @@ export async function GET(request: Request): Promise<NextResponse> {
     next && sanitizeNext(next) !== "/" ? `&next=${encodeURIComponent(sanitizeNext(next))}` : "";
   if (!code) {
     return NextResponse.redirect(`${origin}/login?error=confirm_missing${keep}`);
+  }
+  // Security review 2026-09-20: the code exchange calls the auth provider on
+  // every request; budget it per client address like the confirm route.
+  const gate = await rateLimit("confirm", clientIpFromHeaders(request.headers));
+  if (!gate.allowed) {
+    return NextResponse.redirect(`${origin}/login?error=rate_limited${keep}`, {
+      headers: { "retry-after": String(gate.retryAfterSeconds) },
+    });
   }
   const supabase = supabaseServer(await cookies());
   const { error } = await supabase.auth.exchangeCodeForSession(code);

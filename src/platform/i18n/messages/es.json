@@ -376,6 +376,7 @@
   "auth.reset.confirm": "Repita la contraseña nueva",
   "auth.reset.error.failed": "No se ha podido actualizar la contraseña. Pida un enlace nuevo e inténtelo otra vez.",
   "auth.reset.error.mismatch": "Las dos contraseñas no coinciden.",
+  "auth.reset.error.rate_limited": "Demasiados intentos. Espera un momento y vuelve a intentarlo con este mismo enlace.",
   "auth.reset.error.too_short": "La contraseña debe tener al menos 10 caracteres.",
   "auth.reset.expired": "Ese enlace para restablecer la contraseña ha caducado o ya se usó. Pida uno nuevo.",
   "auth.reset.password": "Contraseña nueva",

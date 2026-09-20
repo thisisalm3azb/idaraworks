@@ -376,6 +376,7 @@
   "auth.reset.confirm": "Repeat new password",
   "auth.reset.error.failed": "The password could not be updated. Request a new reset link and try again.",
   "auth.reset.error.mismatch": "The two passwords don't match.",
+  "auth.reset.error.rate_limited": "Too many attempts. Please wait a little while, then try again with this same link.",
   "auth.reset.error.too_short": "The password must be at least 10 characters.",
   "auth.reset.expired": "That password-reset link has expired or was already used — request a new one.",
   "auth.reset.password": "New password",

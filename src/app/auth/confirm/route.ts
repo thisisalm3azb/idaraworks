@@ -21,6 +21,8 @@ import {
   confirmFailureReason,
   isAllowedEmailOtpType,
 } from "@/platform/auth/confirm";
+import { clientIpFromHeaders } from "@/platform/http/clientIp";
+import { rateLimit } from "@/platform/http/rateLimit";
 
 export const dynamic = "force-dynamic";
 
@@ -35,6 +37,17 @@ export async function GET(request: Request): Promise<NextResponse> {
   const keep = rawNext ? `&next=${encodeURIComponent(next)}` : "";
   if (!tokenHash || !isAllowedEmailOtpType(type)) {
     return NextResponse.redirect(`${origin}/auth/verify?reason=invalid${keep}`);
+  }
+
+  // Security review 2026-09-20: every call verifies against the auth provider,
+  // so the route is budgeted per client address. A refusal lands on the same
+  // recoverable page as a transient provider failure — the link itself is
+  // still valid and works again once the window rolls over.
+  const gate = await rateLimit("confirm", clientIpFromHeaders(request.headers));
+  if (!gate.allowed) {
+    return NextResponse.redirect(`${origin}/auth/verify?reason=temporary${keep}`, {
+      headers: { "retry-after": String(gate.retryAfterSeconds) },
+    });
   }
 
   const supabase = supabaseServer(await cookies());
