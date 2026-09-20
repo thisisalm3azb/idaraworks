@@ -42,6 +42,7 @@ import { logoutAction, setActiveLocaleAction } from "@/app/(auth)/actions";
 import { OrgLogo } from "./OrgLogo";
 import { CompanyAppHead } from "./CompanyAppHead";
 import { InstallApp } from "./InstallApp";
+import { installLabels } from "./install/labels";
 import { GuidedTourMount } from "./onboarding-tour/GuidedTourMount";
 import { restartTourAction } from "./onboarding-tour/actions";
 import { resolveShell } from "./shell";
@@ -108,7 +109,7 @@ export default async function OrgLayout({
             href={`/o/${orgId}/settings/subscription`}
             className="text-sm font-medium text-brand hover:underline"
           >
-            {ent.trialExpired ? t("trial.banner.see_plan") : t("trial.banner.whats_included")}
+            {ent.trialExpired ? t("trial.banner.see_plan") : t("trial.promise.details")}
           </Link>
         ) : null}
       </div>
@@ -221,16 +222,7 @@ export default async function OrgLayout({
 
   // H31: labels are resolved on the server so the client island ships no
   // translation catalogue and no locale logic of its own.
-  const installLabels = {
-    install: t("app.install"),
-    installed: t("app.installed"),
-    ios: t("app.install_ios"),
-    macSafari: t("app.install_mac_safari"),
-    firefox: t("app.install_firefox"),
-    generic: t("app.install_generic"),
-    later: t("app.install_later"),
-    never: t("app.install_never"),
-  };
+  const installLabelsVM = installLabels(t);
 
   // DEFECT 4: header menu data is computed server-side and handed to the client
   // <Menu> as plain view-models (labels already resolved). One section for the
@@ -269,6 +261,15 @@ export default async function OrgLayout({
       key: "members",
       label: t("members.title"),
       href: `/o/${orgId}/settings/members`,
+    });
+  }
+  // The permanent install entry, for every member: the Company app settings
+  // page is for administrators, so this one lives in the account menu.
+  if (brandedCompanyAppsEnabled()) {
+    accountLinks.push({
+      key: "install",
+      label: t("app.install_page.title"),
+      href: `/o/${orgId}/install`,
     });
   }
   // H32: the restart. Behind the flag, so with it off the menu is unchanged.
@@ -390,7 +391,7 @@ export default async function OrgLayout({
               */}
               {brandedCompanyAppsEnabled() ? (
                 <div className="hidden sm:block">
-                  <InstallApp orgId={orgId} labels={installLabels} />
+                  <InstallApp orgId={orgId} labels={installLabelsVM} />
                 </div>
               ) : null}
 
@@ -407,9 +408,36 @@ export default async function OrgLayout({
           </div>
         </header>
 
-        <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 pb-24 md:pb-8">
+        {/* Bottom padding clears the mobile bar (3.5rem) plus the device's
+            safe area, so a page's last action is never under the tabs. */}
+        <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 pb-[calc(6rem+env(safe-area-inset-bottom))] md:pb-8">
           {/* The shared "did that work?" banner: any action that redirects with
               ?ok= or ?error= from the registry below is answered here. */}
+          {/* One compact install card on phones (hidden once running as the
+              installed app, or after "Not now" for a fortnight on that device). */}
+          {brandedCompanyAppsEnabled() ? (
+            <div className="md:hidden">
+              <InstallApp
+                orgId={orgId}
+                variant="banner"
+                labels={installLabelsVM}
+                banner={{
+                  title: t("app.banner.title", { org: resolved.orgName }),
+                  body: t("app.banner.body"),
+                  how: t("app.banner.how"),
+                  later: t("app.banner.later"),
+                  close: t("common.close"),
+                }}
+                leading={
+                  <OrgLogo
+                    ctx={resolved.ctx}
+                    archetype={resolved.archetype}
+                    orgName={resolved.orgName}
+                  />
+                }
+              />
+            </div>
+          ) : null}
           {trialBanner}
           <Suspense fallback={null}>
             <ActionNotice
@@ -478,7 +506,7 @@ export default async function OrgLayout({
           ctx={resolved.ctx}
           archetype={resolved.archetype}
           orgName={resolved.orgName}
-          terms={{ job: navVars.job, jobs: navVars.jobs }}
+          terms={{ job: navVars.job, jobs: navVars.jobs, daily_report: navVars.daily_report }}
         />
         <IdaraDockMount
           orgId={orgId}

@@ -11,6 +11,13 @@ nothing to download and no version to keep track of.
 Find the address in **Settings → Company app**, or ask whoever set up your
 workspace.
 
+**On a phone the app shows you the steps itself.** Signed in, a small
+"Install … on this phone" card sits near the top of your workspace; tap **How
+to install** for the steps that match the browser you are using (Safari,
+Chrome or Firefox on iPhone; Chrome or Samsung Internet on Android). The same
+help lives permanently under **Account → Install company app**. Dismissing the
+card hides it for two weeks on that device only.
+
 ---
 
 ## Windows — Chrome or Edge

@@ -66,6 +66,9 @@ export function Dialog({
       }}
       className={cn(
         "m-auto w-full max-w-lg rounded-lg border border-line bg-card p-0 text-ink shadow-pop",
+        // Never taller than the screen: the body scrolls instead, so the last
+        // control is always reachable on a phone.
+        "max-h-[calc(100dvh-1rem)] overflow-y-auto overscroll-contain",
         "backdrop:bg-ink/40",
         // Mobile: bottom-sheet presentation.
         "max-sm:mb-0 max-sm:mt-auto max-sm:max-w-full max-sm:rounded-b-none",
