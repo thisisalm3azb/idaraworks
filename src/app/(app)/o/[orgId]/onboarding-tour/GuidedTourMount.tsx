@@ -25,7 +25,7 @@ import { GuidedTour, type TourStepView } from "./GuidedTour";
  * job a "boat" or a "hull" must read its own word here, and a tour that says
  * "job" to that company is the first thing it will notice is not really theirs.
  */
-export type TourTerms = { job: string; jobs: string };
+export type TourTerms = { job: string; jobs: string; daily_report?: string };
 
 export async function GuidedTourMount({
   orgId,
@@ -62,6 +62,8 @@ export async function GuidedTourMount({
   const steps: TourStepView[] = onboarding.steps.map((s) => ({
     key: s.key,
     target: s.target,
+    advance: s.advance,
+    whenAbsent: s.whenAbsent ?? "explain",
     // Keyed by tour AND step, so the same idea can be phrased for the person
     // reading it — "your invoices" means something different to the owner and
     // to the bookkeeper.
@@ -71,20 +73,26 @@ export async function GuidedTourMount({
 
   return (
     <GuidedTour
+      key={`${onboarding.state.status}:${onboarding.resumeAt}:${onboarding.state.updatedAt ?? "new"}`}
       orgId={orgId}
       steps={steps}
+      // A tour that was started resumes straight into its step. A position
+      // stored by an older version of the tour resumes at the first step of
+      // this one (resumeAt), never at a number that meant something else.
       mode={onboarding.state.status === "in_progress" ? "tour" : "welcome"}
-      startAt={onboarding.state.stepIndex}
+      startAt={onboarding.resumeAt}
       labels={{
         welcomeTitle: t("tour.welcome.title", { org: orgName }),
         welcomeBody: t("tour.welcome.body", { org: orgName }),
         start: t("tour.start"),
         notNow: t("tour.not_now"),
         next: t("tour.next"),
-        back: t("tour.back"),
         finish: t("tour.finish"),
-        skip: t("tour.skip"),
+        skipStep: t("tour.skip_step"),
+        exit: t("tour.exit"),
         close: t("tour.close"),
+        notFound: t("tour.not_found"),
+        notFoundHint: t("tour.not_found_hint"),
         // Resolved here, one per step: ICU stays on the server and the island
         // ships no formatter and no catalogue.
         progress: onboarding.steps.map((_, i) => t("tour.progress", { current: i + 1, total })),

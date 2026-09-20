@@ -147,6 +147,51 @@ describe("progress round-trips", () => {
   });
 });
 
+describe("a rewrite of the tour never resets anybody", () => {
+  it("a version-1 position resumes at the first step of version 2, and the first write wins", async () => {
+    /*
+     * The monotonic guard exists for two tabs of the SAME tour. A row written
+     * by version 1 at step 5 must not clamp version 2's first write to 5:
+     * that number meant something else. So the guard yields when the stored
+     * version differs, and the loader reports resumeAt = 0 for such a row.
+     */
+    const ctx = ctxOf(orgA, userThirdA);
+    await owner`
+      insert into public.onboarding_state (org_id, user_id, status, step_index, tour_key, tour_version)
+      values (${orgA}, ${userThirdA}, 'in_progress', 5, 'field', 1)
+      on conflict (org_id, user_id) do update set
+        status = 'in_progress', step_index = 5, tour_key = 'field', tour_version = 1`;
+
+    const before = await loadOnboarding(ctx, "viewer");
+    expect(before.state.stepIndex).toBe(5);
+    expect(before.state.tourVersion).toBe(1);
+    expect(before.resumeAt).toBe(0);
+    expect(before.autoStart).toBe(true); // unfinished: picked up, from the start
+
+    await saveProgress(ctx, { status: "in_progress", stepIndex: 0, tourKey: "field" });
+    const row = await rawRow(orgA, userThirdA);
+    expect(row?.step_index).toBe(0);
+    expect(row?.status).toBe("in_progress");
+
+    // From here on the ordinary never-backwards rule applies again.
+    await saveProgress(ctx, { status: "in_progress", stepIndex: 2, tourKey: "field" });
+    await saveProgress(ctx, { status: "in_progress", stepIndex: 1, tourKey: "field" });
+    expect((await rawRow(orgA, userThirdA))?.step_index).toBe(2);
+  });
+
+  it("somebody who finished or declined version 1 is left alone", async () => {
+    const ctx = ctxOf(orgA, userThirdA);
+    await owner`
+      update public.onboarding_state set status = 'completed', tour_version = 1, completed_at = now()
+      where org_id = ${orgA} and user_id = ${userThirdA}`;
+    const loaded = await loadOnboarding(ctx, "viewer");
+    expect(loaded.state.status).toBe("completed");
+    expect(loaded.autoStart).toBe(false);
+    // Reset for the tests below, which expect this person to have no row.
+    await owner`delete from public.onboarding_state where org_id = ${orgA} and user_id = ${userThirdA}`;
+  });
+});
+
 describe("one person's progress is their own", () => {
   it("an administrator does not see a colleague's progress", async () => {
     // The owner of Org A has a row by now (the tests above wrote one).

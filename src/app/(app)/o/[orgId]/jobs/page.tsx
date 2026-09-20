@@ -318,7 +318,7 @@ export default async function JobsPage({
       ) : null}
 
       {canCreate && presets.length > 0 ? (
-        <Card>
+        <Card data-tour="jobs:new">
           <CardHeader title={t("jobs.new.title", { job: jobTerm })} />
           <form action={createWithOrg} className="flex flex-col gap-4">
             <div className="flex flex-col gap-1.5">

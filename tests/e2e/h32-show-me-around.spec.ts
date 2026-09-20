@@ -6,22 +6,18 @@ import EN from "../../src/platform/i18n/messages/en.json";
 import AR from "../../src/platform/i18n/messages/ar.json";
 
 /**
- * H32 — the complete owner tour, driven by a real signed-in browser.
+ * The action-driven owner tour (version 2), driven by a real signed-in browser
+ * with real taps.
  *
- * Written twice. The first version proved that "Show me around" produced the
- * first card, because the owner had clicked it in production and nothing
- * happened. The owner then reported the tour stopping at step 2 of 7 — and
- * that version had clicked Next exactly once. Proving the first card is not
- * proving the tour. This version walks every step, presses Back, finishes,
- * checks the database after every action, restarts, and proves nothing else in
- * the organisation moved.
- *
- * ── The assertion that catches the second defect ────────────────────────────
- * After every transition the card must be INSIDE the viewport. Step 3 points at
- * a sidebar item that can sit below the fold of a scrollable nav; a card
- * positioned relative to an off-screen target is a card nobody can see, and
- * every other assertion (title, progress, database) passes while it is
- * invisible. That is exactly how the owner experienced it.
+ * Version 1 of this file clicked Next through a slideshow. Version 2 of the
+ * tour has no slideshow: a step ends when the person does the thing it asks
+ * (the route becomes /jobs; a click lands on the + button) or, for a look
+ * step, presses Next. So this walk taps the real Work tab, opens the real
+ * drawer on a phone, taps Customers inside it, opens the real + menu, and
+ * checks the database after every transition. It also proves the three
+ * escape hatches — Skip this step, Exit, Escape — never record "completed",
+ * that nothing in the organisation moves, and that a version-1 position
+ * resumes at step 1.
  *
  * ── Harness ─────────────────────────────────────────────────────────────────
  * Runs ONLY against the isolated test project (or CI's local stack): it creates
@@ -30,7 +26,7 @@ import AR from "../../src/platform/i18n/messages/ar.json";
  * the app's own /auth/confirm route — no password exists anywhere in this file.
  * Self-cleaning: every row it creates is removed in afterAll.
  *
- * Needs the dev server on baseURL running with the SAME test env and
+ * Needs the server on baseURL running with the SAME test env and
  * FEATURE_GUIDED_ONBOARDING=1 (see playwright.local.config.ts).
  */
 
@@ -42,7 +38,6 @@ const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
 const SERVICE_ROLE = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
 const DIRECT_URL = process.env.DIRECT_URL ?? "";
 
-/** True only for the disposable test project or a local stack. */
 function isolatedTarget(): boolean {
   const refs = [SUPABASE_URL, DIRECT_URL].join(" ");
   if (refs.includes(PRODUCTION_PROJECT_REF)) return false;
@@ -52,20 +47,7 @@ function isolatedTarget(): boolean {
 
 const RUN = isolatedTarget() && !!SERVICE_ROLE && !!DIRECT_URL;
 
-/**
- * The owner tour, in order, from the same source the product reads. Titles are
- * looked up in the catalogue rather than typed here, so a copy change cannot
- * make this file lie in either direction.
- */
-const OWNER_STEPS = ["home", "create", "customers", "jobs", "invoices", "team", "help"] as const;
 type Catalogue = Record<string, string>;
-const title = (cat: Catalogue, step: string) => cat[`tour.owner.${step}.title`]!;
-const progress = (cat: Catalogue, n: number) =>
-  cat["tour.progress"]!.replace("{current}", String(n)).replace(
-    "{total}",
-    String(OWNER_STEPS.length),
-  );
-
 type Fixture = { email: string; userId: string; orgId: string };
 
 async function makeFixture(opts: { preCutoff: boolean; label: string }): Promise<Fixture> {
@@ -74,9 +56,6 @@ async function makeFixture(opts: { preCutoff: boolean; label: string }): Promise
   const admin = createClient(SUPABASE_URL, SERVICE_ROLE, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
-
-  // A confirmed user, created through the admin API. The auth.users trigger
-  // creates the user_profile row the org creation needs.
   const created = await admin.auth.admin.createUser({
     email,
     email_confirm: true,
@@ -88,10 +67,6 @@ async function makeFixture(opts: { preCutoff: boolean; label: string }): Promise
   const sql = postgres(DIRECT_URL, { max: 1, onnotice: () => {} });
   let orgId = "";
   try {
-    // The same door the product uses to create a workspace, called directly so
-    // this file needs nothing from src/. Inside one transaction with the acting
-    // user set, exactly as withUserCtx would: the function writes the
-    // 'org.create' audit row from that GUC.
     orgId = await sql.begin(async (tx) => {
       await tx`select set_config('app.user_id', ${userId}, true)`;
       const [row] = (await tx`
@@ -102,16 +77,11 @@ async function makeFixture(opts: { preCutoff: boolean; label: string }): Promise
       `) as unknown as Array<{ org_id: string }>;
       return row!.org_id;
     });
-
-    // The membership date is the whole eligibility rule. Somebody who joined
-    // long before the cutoff must never be greeted automatically.
     if (opts.preCutoff) {
       await sql`
         update public.membership set created_at = '2026-01-15T00:00:00Z'
         where org_id = ${orgId} and user_id = ${userId}`;
     }
-
-    // Marked by EVIDENCE, so a residue sweep can identify it without guessing.
     await sql`
       insert into public.app_settings (org_id, key, value)
       values (${orgId}, ${FIXTURE_KEY}, ${sql.json({
@@ -124,7 +94,6 @@ async function makeFixture(opts: { preCutoff: boolean; label: string }): Promise
   } finally {
     await sql.end();
   }
-
   return { email, userId, orgId };
 }
 
@@ -155,13 +124,6 @@ async function removeFixture(f: Fixture): Promise<void> {
   }
 }
 
-/**
- * A one-time sign-in URL, consumed by the app's own /auth/confirm route.
- *
- * This is the magic-link flow with the email step removed — nothing is typed
- * anywhere. Minted per sign-in rather than per fixture, because the token is
- * single-use.
- */
 async function mintSignInPath(f: Fixture): Promise<string> {
   const admin = createClient(SUPABASE_URL, SERVICE_ROLE, {
     auth: { autoRefreshToken: false, persistSession: false },
@@ -176,13 +138,7 @@ async function mintSignInPath(f: Fixture): Promise<string> {
   );
 }
 
-/** Sign in without a password: a fresh token, consumed by the app itself. */
 async function signIn(page: Page, f: Fixture): Promise<void> {
-  // The Next.js DEV overlay badge floats over the bottom corner and, on a
-  // 375px screen in RTL, sits exactly on the sheet's primary button —
-  // Playwright reported "<nextjs-portal> intercepts pointer events". It does
-  // not exist in a production build; hiding it here keeps the walk about the
-  // product, not the dev tooling.
   await page.addInitScript(() => {
     const style = document.createElement("style");
     style.textContent = "nextjs-portal { display: none !important; }";
@@ -192,7 +148,6 @@ async function signIn(page: Page, f: Fixture): Promise<void> {
   await page.waitForURL(new RegExp(`/o/${f.orgId}`), { timeout: 30_000 });
 }
 
-/** Collect anything the page complains about, so a hidden failure surfaces. */
 function watchConsole(page: Page): ConsoleMessage[] {
   const errors: ConsoleMessage[] = [];
   page.on("console", (m) => {
@@ -201,12 +156,11 @@ function watchConsole(page: Page): ConsoleMessage[] {
   return errors;
 }
 
-// ── Database views, read through the owner connection ───────────────────────
-
 type OnboardingRow = {
   status: string;
   step_index: number;
   tour_key: string | null;
+  tour_version: number;
   completed_at: Date | null;
 };
 
@@ -214,7 +168,7 @@ async function onboardingRow(f: Fixture): Promise<OnboardingRow | null> {
   const sql = postgres(DIRECT_URL, { max: 1, onnotice: () => {} });
   try {
     const rows = (await sql`
-      select status, step_index, tour_key, completed_at from public.onboarding_state
+      select status, step_index, tour_key, tour_version, completed_at from public.onboarding_state
       where org_id = ${f.orgId} and user_id = ${f.userId}
     `) as unknown as OnboardingRow[];
     return rows[0] ?? null;
@@ -223,7 +177,6 @@ async function onboardingRow(f: Fixture): Promise<OnboardingRow | null> {
   }
 }
 
-/** The business numbers for one organisation. The tour must never move them. */
 async function businessCounts(f: Fixture): Promise<Record<string, number>> {
   const sql = postgres(DIRECT_URL, { max: 1, onnotice: () => {} });
   try {
@@ -242,35 +195,46 @@ async function businessCounts(f: Fixture): Promise<Record<string, number>> {
   }
 }
 
-/** Wait for a fire-and-forget progress write to land, then return the row. */
-async function expectDbStep(f: Fixture, stepIndex: number, status = "in_progress") {
+async function expectDb(f: Fixture, status: string, stepIndex?: number) {
   await expect
     .poll(
       async () => {
         const row = await onboardingRow(f);
-        return row ? `${row.status}/${row.step_index}` : "none";
+        if (!row) return "none";
+        return stepIndex === undefined ? row.status : `${row.status}/${row.step_index}`;
       },
-      { timeout: 15_000, message: `database should say ${status}/${stepIndex}` },
+      {
+        timeout: 15_000,
+        message: `database should say ${status}${stepIndex === undefined ? "" : `/${stepIndex}`}`,
+      },
     )
-    .toBe(`${status}/${stepIndex}`);
+    .toBe(stepIndex === undefined ? status : `${status}/${stepIndex}`);
 }
 
-// ── The card itself ─────────────────────────────────────────────────────────
-
-/**
- * The card must be where a person can see it. Title and progress can be
- * perfectly correct on a card positioned below the bottom of the screen.
- */
-async function expectCardVisible(page: Page, cat: Catalogue, stepNo: number) {
-  const card = page.getByRole("dialog");
-  // The first card follows a restart: two dev-server round-trips. Generous.
+/** The card for a step, and the law that it is inside the viewport. */
+async function expectCard(page: Page, key: string, cat: Catalogue, stepNo: number) {
+  const card = page.locator(`[data-tour-card="${key}"]`);
   await expect(card).toBeVisible({ timeout: 45_000 });
-  await expect(page.locator("#iw-tour-title")).toHaveText(title(cat, OWNER_STEPS[stepNo - 1]!));
-  await expect(page.getByText(progress(cat, stepNo), { exact: true })).toBeVisible();
-
+  // The title carries the organisation's own nouns ({job}, {jobs}); match the
+  // catalogue string with those slots free.
+  const titleRe = new RegExp(
+    "^" +
+      cat[`tour.owner.${key}.title`]!.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(
+        /\\\{jobs?\\\}/g,
+        ".+",
+      ) +
+      "$",
+  );
+  await expect(page.locator("#iw-tour-title")).toHaveText(titleRe);
+  await expect(
+    page.getByText(
+      cat["tour.progress"]!.replace("{current}", String(stepNo)).replace("{total}", String(TOTAL)),
+      { exact: true },
+    ),
+  ).toBeVisible();
   const box = await card.boundingBox();
   const viewport = page.viewportSize()!;
-  expect(box, `step ${stepNo}: card has a box`).not.toBeNull();
+  expect(box, `step ${key}: card has a box`).not.toBeNull();
   const inside =
     box!.x >= 0 &&
     box!.y >= 0 &&
@@ -278,143 +242,170 @@ async function expectCardVisible(page: Page, cat: Catalogue, stepNo: number) {
     box!.y + box!.height <= viewport.height + 1;
   expect(
     inside,
-    `step ${stepNo}: card at (${Math.round(box!.x)},${Math.round(box!.y)}) ` +
-      `${Math.round(box!.width)}×${Math.round(box!.height)} is outside the ${viewport.width}×${viewport.height} viewport`,
+    `step ${key}: card ${JSON.stringify(box)} outside ${viewport.width}×${viewport.height}`,
   ).toBe(true);
 }
 
-/** Every anchored step's target exists in the DOM — visible or not. */
-async function expectTargetsExist(page: Page) {
-  const targets = [
-    "brand",
-    "create",
-    "nav:customers",
-    "nav:jobs",
-    "nav:invoices",
-    "nav:members",
-    "account",
-  ];
-  for (const t of targets) {
-    await expect(
-      page.locator(`[data-tour="${t}"]`).first(),
-      `target ${t} should be in the DOM`,
-    ).toBeAttached();
-  }
-}
+/** The owner tour for a full-permission owner is six steps (More is skipped
+ * silently on a laptop and answered on a phone; both count). */
+const TOTAL = 6;
 
-async function walkTheWholeTour(page: Page, f: Fixture, cat: Catalogue) {
+async function walk(page: Page, f: Fixture, cat: Catalogue, mobile: boolean) {
   const errors = watchConsole(page);
   const before = await businessCounts(f);
 
   await signIn(page, f);
-  // Pre-cutoff: nothing opened by itself.
-  await expect(page.locator("#iw-tour-welcome-title")).toHaveCount(0);
-  await expect(page.getByRole("dialog")).toHaveCount(0);
-  await expectTargetsExist(page);
+  await expect(page.locator("[data-tour-card]")).toHaveCount(0);
 
-  // Start it by hand.
   await page.getByRole("button", { name: cat["auth.account.title"]! }).click();
   await page.getByRole("menuitem", { name: cat["tour.restart"]! }).click();
 
-  const next = page.getByRole("button", { name: cat["tour.next"]!, exact: true });
-  const back = page.getByRole("button", { name: cat["tour.back"]!, exact: true });
-  const done = page.getByRole("button", { name: cat["tour.finish"]!, exact: true });
+  // 1 — Tap Work: ends on the route, never on Next.
+  await expectCard(page, "work", cat, 1);
+  await expect(page.getByRole("button", { name: cat["tour.next"]!, exact: true })).toHaveCount(0);
+  await expect(page.locator('[data-tour-spotlight="nav:jobs"]')).toHaveCount(1);
+  await expectDb(f, "in_progress", 0);
+  if (mobile) {
+    // The card sits above the bottom bar; the Work tab under it is tappable.
+    const hit = await page.evaluate(() => {
+      const link = document.querySelector(
+        'nav.fixed.bottom-0 [data-tour="nav:jobs"] a',
+      ) as HTMLElement;
+      const r = link.getBoundingClientRect();
+      const el = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+      return el ? link.contains(el) : false;
+    });
+    expect(hit, "the Work tab is not intercepted by the tour").toBe(true);
+  }
+  await page.locator('[data-tour="nav:jobs"]:visible').first().click();
+  await expect(page).toHaveURL(new RegExp(`/o/${f.orgId}/jobs$`));
 
-  // Step 1.
-  await expectCardVisible(page, cat, 1);
-  await expectDbStep(f, 0);
+  // 2 — a look step: Next.
+  await expectCard(page, "new_job", cat, 2);
+  await expectDb(f, "in_progress", 1);
+  await page.getByRole("button", { name: cat["tour.next"]!, exact: true }).click();
 
-  // Forward through every step, checking the screen AND the database each time.
-  for (let stepNo = 2; stepNo <= OWNER_STEPS.length; stepNo++) {
-    await next.click();
-    await expectCardVisible(page, cat, stepNo);
-    await expectDbStep(f, stepNo - 1);
-
-    // Back once, from step 3 — and the database must NOT move backwards, because
-    // a stale tab one step behind must never undo real progress.
-    if (stepNo === 3) {
-      await back.click();
-      await expectCardVisible(page, cat, 2);
-      await expectDbStep(f, 2);
-      await next.click();
-      await expectCardVisible(page, cat, 3);
-    }
+  // 3 — More: a real tap on a phone, silent on a laptop.
+  if (mobile) {
+    await expectCard(page, "more", cat, 3);
+    await page.locator('[data-tour="nav:more"]:visible').first().click();
   }
 
-  // The last step offers Done, not Next.
-  await expect(next).toHaveCount(0);
-  await done.click();
-  await expect(page.getByRole("dialog")).toHaveCount(0);
-  await expectDbStep(f, OWNER_STEPS.length, "completed");
-  expect((await onboardingRow(f))?.completed_at, "completed_at is stamped").not.toBeNull();
+  // 4 — Customers, from the drawer on a phone, from the sidebar on a laptop.
+  await expectCard(page, "customers", cat, 4);
+  await expectDb(f, "in_progress", 3);
+  await page.locator('[data-tour="nav:customers"]:visible').first().click();
+  await expect(page).toHaveURL(new RegExp(`/o/${f.orgId}/customers$`));
+
+  // 5 — the + button: a real click that opens the real menu.
+  await expectCard(page, "create", cat, 5);
+  await page.locator('[data-tour="create"] button').first().click();
+  await expect(page.getByRole("menu")).toBeVisible();
+
+  // 6 — Done.
+  await expectCard(page, "help", cat, 6);
+  await expectDb(f, "in_progress", 5);
+  await page.getByRole("button", { name: cat["tour.finish"]!, exact: true }).click();
+  await expect(page.locator("[data-tour-card]")).toHaveCount(0);
+  await expectDb(f, "completed", TOTAL);
+  const done = await onboardingRow(f);
+  expect(done?.completed_at, "completed_at is stamped").not.toBeNull();
+  expect(Number(done?.tour_version)).toBe(2);
 
   // Finished means not asked again.
   await page.reload();
   await expect(page.getByRole("button", { name: cat["auth.account.title"]! })).toBeVisible();
-  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.locator("[data-tour-card]")).toHaveCount(0);
 
-  // Restart from the menu: step 1, from the beginning, in the database too.
+  // Restart → step 1 → Skip this step is always available → Exit records skipped.
   await page.getByRole("button", { name: cat["auth.account.title"]! }).click();
   await page.getByRole("menuitem", { name: cat["tour.restart"]! }).click();
-  await expectCardVisible(page, cat, 1);
-  await expectDbStep(f, 0);
+  await expectCard(page, "work", cat, 1);
+  await expectDb(f, "in_progress", 0);
   expect((await onboardingRow(f))?.completed_at, "restart clears completion").toBeNull();
+  await page.getByRole("button", { name: cat["tour.skip_step"]!, exact: true }).click();
+  await expectCard(page, "new_job", cat, 2);
   await page.keyboard.press("Escape");
-  await expect(page.getByRole("dialog")).toHaveCount(0);
-  await expectDbStep(f, 0, "skipped");
+  await expect(page.locator("[data-tour-card]")).toHaveCount(0);
+  await expectDb(f, "skipped");
 
-  // Nothing in the business moved.
   expect(await businessCounts(f)).toEqual(before);
   expect(errors.map((e) => e.text())).toEqual([]);
 }
 
-test.describe("H32 — the whole owner tour", () => {
+test.describe("the action-driven owner tour", () => {
   test.skip(!RUN, "needs the isolated test project (or a local stack) and a service-role key");
-  // Serial, and generous: a single restart is two server round-trips, each of
-  // which the dev server serves in 6–11 seconds while it compiles, and the walk
-  // does that twice plus eight progress writes. The base 30-second budget is
-  // for a smoke, not a walk.
   test.describe.configure({ mode: "serial", timeout: 300_000 });
 
   let existing: Fixture;
   let existingAr: Fixture;
   let newcomer: Fixture;
+  let upgraded: Fixture;
 
   test.beforeAll(async () => {
     existing = await makeFixture({ preCutoff: true, label: "owner-en" });
     existingAr = await makeFixture({ preCutoff: true, label: "owner-ar" });
     newcomer = await makeFixture({ preCutoff: false, label: "newcomer" });
+    upgraded = await makeFixture({ preCutoff: true, label: "v1" });
   });
 
   test.afterAll(async () => {
-    for (const f of [existing, existingAr, newcomer]) if (f) await removeFixture(f);
+    for (const f of [existing, existingAr, newcomer, upgraded]) if (f) await removeFixture(f);
   });
 
-  test("a pre-cutoff owner starts it by hand and walks all seven steps (English)", async ({
+  test("a pre-cutoff owner starts it by hand and taps through every step", async ({
     page,
-  }) => {
-    await walkTheWholeTour(page, existing, EN as Catalogue);
+  }, info) => {
+    await walk(page, existing, EN as Catalogue, info.project.name.startsWith("mobile"));
   });
 
-  test("…and in Arabic, right to left", async ({ page, context, baseURL }) => {
-    // The same cookie the language menu sets; set directly so the walk is about
-    // the tour, not about the language switcher.
+  test("…and in Arabic, right to left", async ({ page, context, baseURL }, info) => {
     await context.addCookies([
       { name: "locale", value: "ar", url: baseURL ?? "http://localhost:3000" },
     ]);
-    await walkTheWholeTour(page, existingAr, AR as Catalogue);
+    await walk(page, existingAr, AR as Catalogue, info.project.name.startsWith("mobile"));
     await expect(page.locator("html")).toHaveAttribute("dir", "rtl");
   });
 
-  test("a newcomer IS greeted automatically, and Not now sticks", async ({ page }) => {
+  test("a newcomer is greeted without the bottom bar being covered, and Not now sticks", async ({
+    page,
+  }) => {
     const errors = watchConsole(page);
     await signIn(page, newcomer);
-    await expect(page.locator("#iw-tour-welcome-title")).toBeVisible({ timeout: 15_000 });
-    await page.getByRole("button", { name: EN["tour.not_now"] }).click();
-    await expect(page.locator("#iw-tour-welcome-title")).toHaveCount(0);
+    await expect(page.locator('[data-tour-card="welcome"]')).toBeVisible({ timeout: 15_000 });
+    // No full-screen click-catching backdrop anywhere.
+    await expect(page.locator(".fixed.inset-0.z-\\[100\\]")).toHaveCount(0);
+    // Scoped to the card: the install card on a phone has its own "Not now".
+    await page
+      .locator('[data-tour-card="welcome"]')
+      .getByRole("button", { name: EN["tour.not_now"] })
+      .click();
+    await expect(page.locator('[data-tour-card="welcome"]')).toHaveCount(0);
+    await expectDb(newcomer, "skipped");
     await page.reload();
     await expect(page.getByRole("button", { name: EN["auth.account.title"] })).toBeVisible();
-    await expect(page.locator("#iw-tour-welcome-title")).toHaveCount(0);
+    await expect(page.locator("[data-tour-card]")).toHaveCount(0);
     expect(errors.map((e) => e.text())).toEqual([]);
+  });
+
+  test("a version-1 position resumes at step 1 of version 2", async ({ page }) => {
+    const sql = postgres(DIRECT_URL, { max: 1, onnotice: () => {} });
+    try {
+      await sql`
+        insert into public.onboarding_state (org_id, user_id, status, step_index, tour_key, tour_version)
+        values (${upgraded.orgId}, ${upgraded.userId}, 'in_progress', 5, 'owner', 1)`;
+    } finally {
+      await sql.end();
+    }
+    await signIn(page, upgraded);
+    await expect(page.locator('[data-tour-card="work"]')).toBeVisible({ timeout: 15_000 });
+    await expect(
+      page.getByText(
+        EN["tour.progress"]!.replace("{current}", "1").replace("{total}", String(TOTAL)),
+      ),
+    ).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expectDb(upgraded, "skipped");
+    expect(Number((await onboardingRow(upgraded))?.tour_version)).toBe(2);
   });
 });

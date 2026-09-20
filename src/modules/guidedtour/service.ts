@@ -18,6 +18,7 @@ import type { RoleArchetype } from "@/platform/registries";
 import {
   MAX_STEPS,
   TOUR_VERSION,
+  resumeIndex,
   shouldAutoStart,
   stepsFor,
   tourKeyForRole,
@@ -31,9 +32,12 @@ export {
   TOUR_KEYS,
   AUTO_START_FROM,
   allTours,
+  resumeIndex,
+  routeSatisfied,
   shouldAutoStart,
   stepsFor,
   tourKeyForRole,
+  type Advance,
   type TourKey,
   type TourStep,
 } from "./tours";
@@ -54,6 +58,8 @@ export type OnboardingState = {
   tourKey: string | null;
   tourVersion: number;
   checklistDismissed: boolean;
+  /** When the row last changed (ISO), or null for the blank state. */
+  updatedAt: string | null;
 };
 
 const BLANK: OnboardingState = {
@@ -62,6 +68,7 @@ const BLANK: OnboardingState = {
   tourKey: null,
   tourVersion: TOUR_VERSION,
   checklistDismissed: false,
+  updatedAt: null,
 };
 
 type Row = {
@@ -70,6 +77,7 @@ type Row = {
   tour_key: string | null;
   tour_version: number;
   checklist_dismissed_at: Date | null;
+  updated_at?: Date | string | null;
 };
 
 function toState(row: Row | undefined): OnboardingState {
@@ -83,6 +91,7 @@ function toState(row: Row | undefined): OnboardingState {
     tourKey: row.tour_key,
     tourVersion: Number(row.tour_version ?? TOUR_VERSION),
     checklistDismissed: row.checklist_dismissed_at !== null,
+    updatedAt: row.updated_at ? new Date(row.updated_at).toISOString() : null,
   };
 }
 
@@ -140,6 +149,11 @@ export type Onboarding = {
   tourKey: TourKey;
   /** Greet them without being asked? See `shouldAutoStart` for the rule. */
   autoStart: boolean;
+  /**
+   * The step to open at. Usually the stored position; zero when the stored
+   * position belongs to another version of the tour (see `resumeIndex`).
+   */
+  resumeAt: number;
   checklist: ChecklistItem[];
   /** True once every visible item is done — the checklist then retires itself. */
   checklistComplete: boolean;
@@ -168,6 +182,7 @@ export async function loadOnboarding(ctx: Ctx, archetype: RoleArchetype): Promis
         os.tour_key,
         os.tour_version,
         os.checklist_dismissed_at,
+        os.updated_at,
         m.created_at as member_since,
         exists (select 1 from public.customer c where c.org_id = ${ctx.orgId}) as has_customer,
         exists (select 1 from public.job j where j.org_id = ${ctx.orgId}) as has_job,
@@ -221,6 +236,7 @@ export async function loadOnboarding(ctx: Ctx, archetype: RoleArchetype): Promis
     steps,
     tourKey,
     autoStart,
+    resumeAt: Math.min(resumeIndex(state), Math.max(0, steps.length - 1)),
     checklist,
     checklistComplete: checklist.length > 0 && checklist.every((i) => i.done),
   };
@@ -278,10 +294,16 @@ export async function saveProgress(
         -- one step behind must not undo real progress. Finishing, skipping and
         -- an explicit restart are the exceptions, because each of those is
         -- somebody deciding where they are rather than reporting it late.
+        -- A position recorded against another VERSION of the tour is not
+        -- progress in this one: the steps differ, so the new position wins.
         step_index = ${
           rewindAllowed
             ? sql`excluded.step_index`
-            : sql`greatest(public.onboarding_state.step_index, excluded.step_index)`
+            : sql`case
+                when public.onboarding_state.tour_version is distinct from excluded.tour_version
+                  then excluded.step_index
+                else greatest(public.onboarding_state.step_index, excluded.step_index)
+              end`
         },
         tour_key = excluded.tour_key,
         tour_version = excluded.tour_version,

@@ -49,7 +49,7 @@ export default async function InvoicesPage({
       <div className="flex items-center justify-between gap-2">
         <h1 className="text-lg font-semibold text-ink">{t("invoices.title")}</h1>
         {can(resolved.archetype, "invoices.manage") ? (
-          <Link href={`/o/${orgId}/invoices/new`}>
+          <Link href={`/o/${orgId}/invoices/new`} data-tour="invoices:new">
             <Button>{t("invoices.new")}</Button>
           </Link>
         ) : null}
