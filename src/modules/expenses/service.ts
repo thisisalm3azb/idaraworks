@@ -49,6 +49,9 @@ export const CreateExpenseInput = z.object({
   vatAmountMinor: z.number().int().nonnegative().default(0),
   receiptFileId: z.string().uuid().nullable().optional(),
   // NOTE: there is deliberately no poId — the disjoint-channel invariant (F-2).
+  // Security review 2026-09-20 (F-27): a client-generated key collapses a
+  // double-submit to ONE expense (0143 partial unique); the form always sends one.
+  idempotencyKey: z.string().trim().min(8).max(200).optional(),
 });
 export type CreateExpenseInput = z.infer<typeof CreateExpenseInput>;
 
@@ -78,6 +81,36 @@ export async function resolveCategoryMapping(
 }
 
 export async function createExpense(
+  ctx: Ctx,
+  archetype: RoleArchetype,
+  raw: unknown,
+): Promise<{ id: string; reference: string }> {
+  try {
+    return await createExpenseOnce(ctx, archetype, raw);
+  } catch (err) {
+    // Idempotent replay (security review 2026-09-20, F-27): a retry carrying
+    // the same key hits the 0143 partial unique and returns the expense that
+    // was already recorded — one expense, one cost posting — instead of a second.
+    const key = (raw as { idempotencyKey?: unknown })?.idempotencyKey;
+    const cause = (err as { cause?: { code?: string; constraint_name?: string } }).cause;
+    if (
+      typeof key === "string" &&
+      cause?.code === "23505" &&
+      cause.constraint_name === "expense_idempotency_uq"
+    ) {
+      const rows = (await withCtx(ctx, (tx) =>
+        tx.execute(sql`
+          select id::text as id, reference from public.expense
+          where org_id = ${ctx.orgId} and idempotency_key = ${key}
+          limit 1`),
+      )) as unknown as Array<{ id: string; reference: string }>;
+      if (rows[0]) return rows[0];
+    }
+    throw err;
+  }
+}
+
+async function createExpenseOnce(
   ctx: Ctx,
   archetype: RoleArchetype,
   raw: unknown,
@@ -123,11 +156,12 @@ export async function createExpense(
       const rows = (await tx.execute(sql`
         insert into public.expense
           (org_id, reference, job_id, job_name, category_key, costing_mapping, description,
-           expense_date, amount_minor, vat_amount_minor, total_minor, receipt_file_id, created_by)
+           expense_date, amount_minor, vat_amount_minor, total_minor, receipt_file_id, created_by,
+           idempotency_key)
         values (${ctx.orgId}, ${reference}, ${input.jobId ?? null}, ${jobName},
                 ${input.categoryKey}, ${mapping}, ${input.description}, ${input.expenseDate},
                 ${input.amountMinor}, ${input.vatAmountMinor}, ${totalMinor},
-                ${input.receiptFileId ?? null}, ${ctx.userId})
+                ${input.receiptFileId ?? null}, ${ctx.userId}, ${input.idempotencyKey ?? null})
         returning id::text as id
       `)) as unknown as Array<{ id: string }>;
       // H24D: the cost posts once at record time.

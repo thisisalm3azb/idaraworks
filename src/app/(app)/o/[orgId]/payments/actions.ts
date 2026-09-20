@@ -9,11 +9,16 @@ import type { CurrencyCode } from "@/platform/registries";
 import { recordPayment, voidPayment, PaymentStateError } from "@/modules/payments/service";
 
 export async function recordPaymentAction(orgId: string, formData: FormData): Promise<void> {
-  const resolved = await resolveCtxForAction(orgId);
+  const resolved = await resolveCtxForAction(orgId, { module: "cap.payments" });
   if (resolved === "mfa_required") redirect("/mfa");
   if (typeof resolved === "string") redirect("/");
   const currency = resolved.baseCurrency as CurrencyCode;
   const invoiceId = String(formData.get("invoice_id") ?? "").trim();
+  // Security review 2026-09-20 (F-27): the form always mints a key, and a
+  // request without one is refused here rather than recorded unprotected — a
+  // retry of THIS form replays one payment instead of minting a second.
+  const idempotencyKey = String(formData.get("idempotency_key") ?? "").trim();
+  if (idempotencyKey.length < 8) redirect(`/o/${orgId}/payments/new?error=failed`);
   try {
     await recordPayment(resolved.ctx, resolved.archetype, {
       invoiceId: invoiceId || undefined,
@@ -22,7 +27,7 @@ export async function recordPaymentAction(orgId: string, formData: FormData): Pr
       amountMinor: toMinorUnits(String(formData.get("amount") ?? "0"), currency),
       currency,
       externalReference: String(formData.get("external_reference") ?? "") || undefined,
-      idempotencyKey: String(formData.get("idempotency_key") ?? "") || undefined,
+      idempotencyKey,
     });
     revalidatePath(`/o/${orgId}/payments`);
     redirect(`/o/${orgId}/payments?ok=recorded`);
@@ -35,7 +40,7 @@ export async function recordPaymentAction(orgId: string, formData: FormData): Pr
 }
 
 export async function voidPaymentAction(orgId: string, formData: FormData): Promise<void> {
-  const resolved = await resolveCtxForAction(orgId);
+  const resolved = await resolveCtxForAction(orgId, { module: "cap.payments" });
   if (resolved === "mfa_required") redirect("/mfa");
   if (typeof resolved === "string") redirect("/");
   const id = String(formData.get("payment_id") ?? "");

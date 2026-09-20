@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { Badge, Card, EmptyState, SubmitButton } from "@/platform/ui";
@@ -130,6 +131,9 @@ export default async function BankingPage({
         <Card>
           <h2 className="mb-2 text-sm font-semibold text-ink">{t("finance.banking.record")}</h2>
           <form action={record} className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+            {/* Idempotency (review F-27): a fresh key per render — a double-tap of THIS form
+                replays one voucher; a new page load mints a new key = a deliberate second one. */}
+            <input type="hidden" name="idempotency_key" value={`mt-${randomUUID()}`} />
             <label className="text-xs text-ink-muted">
               {t("finance.banking.txn_kind")}
               <select name="kind" className={input} dir="ltr">

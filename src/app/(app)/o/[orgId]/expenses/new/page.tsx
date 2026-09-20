@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { redirect } from "next/navigation";
 import { Badge, Card, CardHeader, SubmitButton } from "@/platform/ui";
 import { lockedFeatureGate } from "@/platform/ui/subscription";
@@ -43,6 +44,9 @@ export default async function NewExpensePage({
       <Card>
         <CardHeader title={t("expenses.form.title")} />
         <form action={createExpenseAction.bind(null, orgId)} className="flex flex-col gap-3">
+          {/* Idempotency (review F-27): a fresh key per render — a double-tap of THIS form
+              records one expense; a new page load mints a new key = a deliberate second one. */}
+          <input type="hidden" name="idempotency_key" value={`exp-${randomUUID()}`} />
           <label className={field}>
             {t("expenses.form.category")}
             <select name="category_key" required className={input}>

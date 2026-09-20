@@ -124,6 +124,37 @@ export async function recordMoneyTransaction(
   archetype: RoleArchetype,
   raw: unknown,
 ): Promise<{ id: string; reference: string }> {
+  try {
+    return await recordMoneyTransactionOnce(ctx, archetype, raw);
+  } catch (err) {
+    // Idempotent replay (security review 2026-09-20, F-27): a retry carrying
+    // the same key hits the 0103 partial unique and returns the voucher that
+    // was already posted — one voucher, one ledger entry — instead of failing
+    // or, without a key, posting twice.
+    const key = (raw as { idempotencyKey?: unknown })?.idempotencyKey;
+    const cause = (err as { cause?: { code?: string; constraint_name?: string } }).cause;
+    if (
+      typeof key === "string" &&
+      cause?.code === "23505" &&
+      cause.constraint_name === "money_transaction_idem_uq"
+    ) {
+      const rows = (await withCtx(ctx, (tx) =>
+        tx.execute(sql`
+          select id::text as id, reference from public.money_transaction
+          where org_id = ${ctx.orgId} and idempotency_key = ${key}
+          limit 1`),
+      )) as unknown as Array<{ id: string; reference: string }>;
+      if (rows[0]) return rows[0];
+    }
+    throw err;
+  }
+}
+
+async function recordMoneyTransactionOnce(
+  ctx: Ctx,
+  archetype: RoleArchetype,
+  raw: unknown,
+): Promise<{ id: string; reference: string }> {
   assertCan(archetype, "finance.post");
   await requireCapability(ctx, "cap.finance");
   const input = MoneyTransactionInput.parse(raw);

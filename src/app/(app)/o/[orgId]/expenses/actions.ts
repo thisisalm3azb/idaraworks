@@ -14,11 +14,15 @@ import {
 } from "@/modules/expenses/service";
 
 export async function createExpenseAction(orgId: string, formData: FormData): Promise<void> {
-  const resolved = await resolveCtxForAction(orgId);
+  const resolved = await resolveCtxForAction(orgId, { module: "cap.expenses" });
   if (resolved === "mfa_required") redirect("/mfa");
   if (typeof resolved === "string") redirect("/");
   const currency = resolved.baseCurrency as CurrencyCode;
   const jobId = String(formData.get("job_id") ?? "").trim();
+  // Security review 2026-09-20 (F-27): the form mints a key per render; a
+  // request without one is refused rather than recorded unprotected.
+  const idempotencyKey = String(formData.get("idempotency_key") ?? "").trim();
+  if (idempotencyKey.length < 8) redirect(`/o/${orgId}/expenses/new?error=invalid`);
   try {
     await createExpense(resolved.ctx, resolved.archetype, {
       jobId: jobId === "" ? null : jobId,
@@ -27,6 +31,7 @@ export async function createExpenseAction(orgId: string, formData: FormData): Pr
       expenseDate: String(formData.get("expense_date") ?? ""),
       amountMinor: toMinorUnits(String(formData.get("amount") ?? "0"), currency),
       vatAmountMinor: toMinorUnits(String(formData.get("vat_amount") ?? "0") || "0", currency),
+      idempotencyKey,
     });
   } catch (err) {
     if ((err as { digest?: string }).digest?.startsWith("NEXT_REDIRECT")) throw err;
@@ -43,7 +48,7 @@ export async function createExpenseAction(orgId: string, formData: FormData): Pr
 }
 
 export async function voidExpenseAction(orgId: string, formData: FormData): Promise<void> {
-  const resolved = await resolveCtxForAction(orgId);
+  const resolved = await resolveCtxForAction(orgId, { module: "cap.expenses" });
   if (resolved === "mfa_required") redirect("/mfa");
   if (typeof resolved === "string") redirect("/");
   const expenseId = String(formData.get("expense_id") ?? "");

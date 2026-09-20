@@ -982,7 +982,16 @@ export async function updateSupplier(
         entityType: "supplier",
         entityId: supplierId,
         summary: `Updated supplier`,
-        after: data as Record<string, unknown>,
+        // The trail records WHAT changed, not a third party's contact details:
+        // a supplier's phone and email live on the supplier row, which the
+        // audit entry points at (security review 2026-09-20, F-28 — the
+        // append-only log is never pruned, so it must not accumulate PII it
+        // does not need).
+        after: {
+          ...(data as Record<string, unknown>),
+          ...(data.phone !== undefined ? { phone: "[changed]" } : {}),
+          ...(data.email !== undefined ? { email: "[changed]" } : {}),
+        },
       },
     },
     async (tx) => {

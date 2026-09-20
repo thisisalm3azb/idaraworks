@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { resolveCtxForAction } from "@/platform/auth/resolve";
+import { safeActionMessage } from "@/platform/http/actionError";
 import {
   installFinanceSetup,
   installUaeVatPack,
@@ -38,7 +39,7 @@ import {
 type Resolved = Exclude<Awaited<ReturnType<typeof resolveCtxForAction>>, string>;
 
 async function resolveOrRedirect(orgId: string): Promise<Resolved> {
-  const resolved = await resolveCtxForAction(orgId);
+  const resolved = await resolveCtxForAction(orgId, { module: "cap.finance" });
   if (resolved === "mfa_required") redirect("/mfa");
   if (typeof resolved === "string") redirect("/");
   return resolved;
@@ -49,8 +50,10 @@ const isRedirect = (err: unknown) =>
 
 function fail(base: string, err: unknown): never {
   if (isRedirect(err)) throw err;
-  const message = err instanceof Error ? err.message : "failed";
-  redirect(`${base}?error=${encodeURIComponent(message.slice(0, 160))}`);
+  // FinanceError and friends author their messages for people; a driver or
+  // runtime error collapses to "failed" and is logged (security review F-26).
+  const message = safeActionMessage(err, { where: "finance" });
+  redirect(`${base}?error=${encodeURIComponent(message)}`);
 }
 
 // ── setup ────────────────────────────────────────────────────────────────────
@@ -201,6 +204,10 @@ export async function recordMoneyTransactionAction(
   const customerId = String(formData.get("customer_id") ?? "") || undefined;
   const supplierId = String(formData.get("supplier_id") ?? "") || undefined;
   const partyKind = customerId ? "customer" : supplierId ? "supplier" : undefined;
+  // Security review 2026-09-20 (F-27): the voucher form mints a key per
+  // render; a request without one is refused rather than posted unprotected.
+  const idempotencyKey = String(formData.get("idempotency_key") ?? "").trim();
+  if (idempotencyKey.length < 8) redirect(`${base}?error=failed`);
   try {
     await recordMoneyTransaction(resolved.ctx, resolved.archetype, {
       kind: String(formData.get("kind") ?? "receipt"),
@@ -213,6 +220,7 @@ export async function recordMoneyTransactionAction(
       txnDate: String(formData.get("txn_date") ?? ""),
       amountMinor: Math.round(Number(formData.get("amount") || 0) * 100),
       memo: String(formData.get("memo") ?? "") || undefined,
+      idempotencyKey,
     });
   } catch (err) {
     fail(base, err);

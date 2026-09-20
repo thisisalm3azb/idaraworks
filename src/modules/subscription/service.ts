@@ -41,6 +41,7 @@ import {
 import { nextForEvent, type BillingState } from "./machine";
 import { computeWindows, monthlyPeriodEnd } from "./windows";
 import { logger } from "@/platform/logger";
+import { isProd } from "@/platform/env";
 
 export { BillingProviderDisabledError };
 // Re-export the pure machine/windows surface the lifecycle worker needs, so it imports the
@@ -819,6 +820,18 @@ export async function applyGovernedAddonChange(
   }
   // Read-only billing states block every ADD/change (FR-9) — a suspended org is view-only.
   await assertTenantWritableGoverned(ctx, correlationId);
+  // Security review 2026-09-20 (F-22): this path grants entitlements with no
+  // charge, which is the intended pre-D1 trial behaviour. The moment a REAL
+  // payment provider is live in production, a no-charge grant would be a free
+  // subscription — so the path closes itself and every change must go through
+  // checkout. Nothing changes for the pilot, where the provider stays disabled.
+  if (isProd() && getBillingProvider().enabled) {
+    throw new SubscriptionChangeError(
+      "provider_unavailable",
+      correlationId,
+      "a live payment provider requires checkout; the no-charge path is closed",
+    );
+  }
   // Stale-price guard: the catalogue must not have moved under the review the owner confirmed.
   if (opts.priceVersion && opts.priceVersion !== currentPriceVersion()) {
     throw new SubscriptionChangeError(
