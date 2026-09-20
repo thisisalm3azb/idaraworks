@@ -25,6 +25,26 @@ import { sql, withCtx, type Ctx, type TenantTx } from "@/platform/tenancy";
 import type { RoleArchetype } from "@/platform/registries";
 import type { Locale } from "@/platform/registries";
 
+export class JobInputError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "JobInputError";
+  }
+}
+
+/**
+ * A customer id from the form must be THIS organisation's. A foreign-org id is
+ * invisible under RLS and the org filter, so it lands on the same "not found"
+ * as a nonexistent one (no cross-tenant signal). Migration 0142 pins the same
+ * rule at the database (composite foreign key on (customer_id, org_id)).
+ */
+async function assertCustomerInOrg(tx: TenantTx, ctx: Ctx, customerId: string): Promise<void> {
+  const rows = (await tx.execute(sql`
+    select 1 as ok from public.customer where id = ${customerId} and org_id = ${ctx.orgId}
+  `)) as unknown as unknown[];
+  if (rows.length === 0) throw new JobInputError("customer not found");
+}
+
 export class JobLimitError extends Error {
   constructor(limit: number) {
     super(`active job limit reached (${limit}) — upgrade the plan or archive jobs`);
@@ -265,6 +285,7 @@ export async function createJobFromPreset(
         data.customValues ?? {},
       );
 
+      if (data.customerId) await assertCustomerInOrg(tx, ctx, data.customerId);
       await tx.execute(sql`
         insert into public.job
           (id, org_id, reference, name, preset_id, customer_id, status_key, status_category,
@@ -651,6 +672,7 @@ export async function updateJobCore(
         job.custom_values ?? {},
         data.customValues ?? {},
       );
+      if (data.customerId) await assertCustomerInOrg(tx, ctx, data.customerId);
       await tx.execute(sql`
         update public.job
         set name = ${data.name},
@@ -1045,7 +1067,7 @@ export async function signJobPhotoUpload(
     accessClass: "job_media",
     attachedToType: "job",
     attachedToId: jobId,
-    originalName: file.name,
+    fileName: file.name,
     mime: file.mime,
     sizeBytes: file.sizeBytes,
   });
