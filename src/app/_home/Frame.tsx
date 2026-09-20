@@ -35,8 +35,10 @@ export function SiteHeader({
   secondary: HomeCta | null;
   languageSlot: ReactNode;
 }) {
+  // No backdrop filter on the header: a filter would make it the containing
+  // block of the mobile menu's fixed sheet and shrink the sheet to a strip.
   return (
-    <header className="sticky top-0 z-30 border-b border-line bg-page/90 backdrop-blur">
+    <header className="sticky top-0 z-30 border-b border-line bg-page/95">
       {/* 3.5rem on phones: the mobile menu sheet opens below that exact height. */}
       <div className="mx-auto flex min-h-14 w-full max-w-[1440px] items-center justify-between gap-3 px-5 sm:px-[4%] md:grid lg:px-[5.5%] md:min-h-[4.25rem] md:grid-cols-[1fr_auto_1fr]">
         <div className="md:justify-self-start">
