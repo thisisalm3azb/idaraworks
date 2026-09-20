@@ -109,7 +109,7 @@ afterAll(async () => {
 
 describe("onboarding logo round-trip (stash → confirm → uploadLogo)", () => {
   it("stashDraftLogo re-encodes to base64 in the draft and writes NO storage object", async () => {
-    await saveDraft(userA, { data: completeDraftData(`R2FIX-LOGO-${run}`), step: "branding" });
+    await saveDraft(userA, { data: completeDraftData(`R2FIX-LOGO-${run}`), step: "ready" });
     await stashDraftLogo(userA, { mime: "image/png", bytes: await realLogoPng() });
 
     const draft = await getDraft(userA);

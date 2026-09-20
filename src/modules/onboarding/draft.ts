@@ -11,7 +11,7 @@
  * next step), so refresh/logout/login resume exactly where the founder stopped.
  * No DELETE anywhere (D-1.7): completion flips status; a later flow re-activates.
  */
-import { sql, withUserCtx, type Ctx } from "@/platform/tenancy";
+import { sql, withUserCtx, type Ctx, withCtx } from "@/platform/tenancy";
 import { command } from "@/platform/audit";
 import type { RoleArchetype } from "@/platform/registries";
 import {
@@ -24,6 +24,9 @@ import {
 import {
   DraftDataSchema,
   TIER_SETTING_KEY,
+  PRIORITY_SETTING_KEY,
+  type PriorityArea,
+  type PrioritySettingValue,
   tierSettingValue,
   firstIncompleteStep,
   isFlowStep,
@@ -198,6 +201,26 @@ export async function recordTierSelection(ctx: Ctx, tier: TierSelection): Promis
       `);
     },
   );
+}
+
+/**
+ * Record the founder's "what matters now" choice on the organisation. A
+ * recorded choice only: it seeds the starting dashboard and nothing else.
+ */
+export async function recordPriorities(ctx: Ctx, areas: PriorityArea[]): Promise<void> {
+  const value: PrioritySettingValue = {
+    areas,
+    source: "onboarding",
+    recorded_at: new Date().toISOString(),
+    recorded_choice_only: true,
+  };
+  await withCtx(ctx, async (tx) => {
+    await tx.execute(sql`
+      insert into public.app_settings (org_id, key, value)
+      values (${ctx.orgId}, ${PRIORITY_SETTING_KEY}, ${JSON.stringify(value)}::jsonb)
+      on conflict (org_id, key) do update set value = excluded.value, updated_at = now()
+    `);
+  });
 }
 
 /**

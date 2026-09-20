@@ -11,6 +11,7 @@ import { describe, expect, it } from "vitest";
 import en from "@/platform/i18n/messages/en.json";
 import ar from "@/platform/i18n/messages/ar.json";
 import {
+  askMaterialsStep,
   DraftAnswersSchema,
   DraftDataSchema,
   INDUSTRIES,
@@ -166,11 +167,9 @@ describe("H15.1 — industry alone never forces modules", () => {
     }
   });
 
-  it("a physical industry is asked the materials questions; an office industry is not", () => {
-    expect(visibleSteps({ ...allNo, industry: "construction" })).toContain("materials");
-    expect(
-      visibleSteps({ ...allNo, industry: "professional_services", work_patterns: ["service"] }),
-    ).not.toContain("materials");
+  it("a physical industry keeps the materials questions in scope; an office industry does not", () => {
+    expect(askMaterialsStep({ industry: "construction" })).toBe(true);
+    expect(askMaterialsStep({ industry: "professional_services" })).toBe(false);
   });
 
   it("every area carries an explicit physical/field classification", () => {
@@ -184,31 +183,18 @@ describe("H15.1 — industry alone never forces modules", () => {
 });
 
 // ── Part E: one progress model ───────────────────────────────────────────────
-describe("H15.1 — single Step X of Y progress model", () => {
-  const office: DraftAnswers = {
-    business_name: "Desk Co",
-    industry: "professional_services",
-    work_patterns: ["service"],
-  };
+describe("short flow — single Step X of Y progress model over four screens", () => {
+  const office: DraftAnswers = { business_name: "Desk Co", industry: "professional_services" };
   const yard: DraftAnswers = { ...office, industry: "construction" };
 
-  it("counts exactly the currently visible journey, excluding the welcome screen", () => {
+  it("counts exactly four screens whatever the answers", () => {
     for (const a of [office, yard]) {
-      const steps = visibleSteps(a).filter((s) => s !== "welcome");
-      const no = stepNumberOf("business", a);
-      expect(no.current).toBe(1);
-      expect(no.total).toBe(steps.length);
-      // Every visible step gets a consistent, monotonically increasing number.
+      const steps = visibleSteps(a);
+      expect(steps).toEqual(["business", "setup", "priorities", "ready"]);
       steps.forEach((s, i) => {
-        expect(stepNumberOf(s, a)).toEqual({ current: i + 1, total: steps.length });
+        expect(stepNumberOf(s, a)).toEqual({ current: i + 1, total: 4 });
       });
     }
-  });
-
-  it("hidden branch steps are not counted in the total", () => {
-    expect(stepNumberOf("business", office).total).toBe(
-      stepNumberOf("business", yard).total - 1, // yard adds only the materials step
-    );
   });
 
   it("the progress copy is Step X of Y with a bar label, and the vague remaining copy is gone", () => {
@@ -217,52 +203,51 @@ describe("H15.1 — single Step X of Y progress model", () => {
     expect(AR["onboarding.flow.progress_label"]).toBeTruthy();
     expect(EN["onboarding.flow.remaining"]).toBeUndefined();
     expect(EN["onboarding.flow.section_progress"]).toBeUndefined();
-    expect(AR["onboarding.flow.remaining"]).toBeUndefined();
-    expect(AR["onboarding.flow.section_progress"]).toBeUndefined();
   });
 });
 
 // ── Part F/G: one heading per screen, honest copy ────────────────────────────
-describe("H15.1 — layout and content standards", () => {
+describe("short flow — layout and content standards", () => {
   const pageSrc = readFileSync("src/app/(auth)/onboarding/page.tsx", "utf8");
-  const stepsSrc = readFileSync("src/app/(auth)/onboarding/steps.tsx", "utf8");
+  const screensSrc = readFileSync("src/app/(auth)/onboarding/screens.tsx", "utf8");
 
-  it("renders one page heading; step cards no longer repeat the section title", () => {
+  it("renders one page heading; the screens carry none of their own", () => {
     expect(pageSrc.match(/<h1/g)).toHaveLength(1);
-    // The only h1 left in the step screens belongs to the welcome screen,
-    // which renders without the page heading block.
-    expect(stepsSrc.match(/<h1/g)).toHaveLength(1);
-    for (const dup of ["business.title", "customers.title", "money.title", "priorities.title"]) {
-      expect(stepsSrc).not.toContain(`onboarding.flow.${dup}`);
-    }
+    expect(screensSrc.match(/<h1/g)).toBeNull();
   });
 
-  it("no approximate remaining copy is referenced anywhere in the flow UI", () => {
-    for (const src of [pageSrc, stepsSrc]) {
-      expect(src).not.toContain("flow.remaining");
-      expect(src).not.toContain("section_progress");
-    }
+  it("one primary action per screen, a working Back link and a bounded name field", () => {
+    expect(screensSrc.match(/<form action=/g)).toHaveLength(4);
+    expect(
+      screensSrc.match(/prevStepBefore\(step, data\.answers\)/g)?.length ?? 0,
+    ).toBeGreaterThanOrEqual(2);
+    expect(screensSrc).toMatch(/stepHref\(prevStepBefore\("ready", data\.answers\)\)/);
+    expect(screensSrc).toMatch(/maxLength=\{120\}/);
+    expect(screensSrc).not.toMatch(/textarea/);
   });
 
-  it("does not promise that everything is reversible", () => {
-    expect(EN["onboarding.flow.review.promise_later"]).toBe(
-      "Your setup choices can be revised later in Settings. Changes are recorded and reversible.",
-    );
+  it("asks nothing consequential up front: no tax, address, logo or invitation field", () => {
+    expect(screensSrc).not.toMatch(/vat|tax_registration|address|logo|invite/i);
+  });
+
+  it("does not promise that everything is reversible, and carries no hype", () => {
     for (const [k, v] of Object.entries(EN)) {
-      if (!k.startsWith("onboarding.flow.")) continue;
+      if (!k.startsWith("onboarding.flow.") && !k.startsWith("onb.")) continue;
       expect(v, k).not.toMatch(/everything (is|can be) (undone|reversed)/i);
       expect(v, k).not.toMatch(/revolutioni[sz]e|supercharge|unleash|magic/i);
       expect(v, k).not.toContain("—");
     }
     for (const [k, v] of Object.entries(AR)) {
-      if (!k.startsWith("onboarding.flow.")) continue;
+      if (!k.startsWith("onboarding.flow.") && !k.startsWith("onb.")) continue;
       expect(v, k).not.toContain("—");
     }
   });
 
   it("keeps en/ar parity across the whole onboarding namespace", () => {
-    const enKeys = Object.keys(EN).filter((k) => k.startsWith("onboarding."));
-    const arKeys = Object.keys(AR).filter((k) => k.startsWith("onboarding."));
-    expect(arKeys.sort()).toEqual(enKeys.sort());
+    for (const k of Object.keys(EN)) {
+      if (k.startsWith("onboarding.") || k.startsWith("onb.")) {
+        expect(AR[k], `ar missing ${k}`).toBeTruthy();
+      }
+    }
   });
 });

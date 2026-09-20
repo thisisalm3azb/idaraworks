@@ -327,7 +327,22 @@ export default async function SubscriptionPage({
             </div>
           ) : null}
           {view.billingState === "trialing" ? (
-            <p className="text-xs text-ink-muted">{t("subscription.trial_note")}</p>
+            <div className="text-xs text-ink-muted" data-trial-summary>
+              <p>
+                {t("trial.promise.headline")} {t("trial.promise.after_short")}
+              </p>
+              <details className="mt-1">
+                <summary className="cursor-pointer text-brand">
+                  {t("trial.promise.details")}
+                </summary>
+                <ul className="mt-1 list-disc space-y-1 ps-4">
+                  <li>{t("trial.promise.included")}</li>
+                  <li>{t("trial.promise.dates")}</li>
+                  <li>{t("trial.promise.after")}</li>
+                  <li>{t("trial.promise.no_restart")}</li>
+                </ul>
+              </details>
+            </div>
           ) : null}
           {view.scheduledPlanKey ? (
             <div className="flex items-center justify-between text-warning">

@@ -105,11 +105,11 @@ describe("draft save/resume round-trip under user ctx", () => {
     const partial = DraftDataSchema.parse({
       answers: { business_name: `Resume ${run}`, industry: "field_services" },
     });
-    await saveDraft(userA, { data: partial, step: "region" });
+    await saveDraft(userA, { data: partial, step: "business" });
     const loaded = await getDraft(userA);
     expect(loaded).not.toBeNull();
     expect(loaded!.status).toBe("active");
-    expect(loaded!.step).toBe("region"); // resume lands here after refresh/login
+    expect(loaded!.step).toBe("business"); // resume lands here after refresh/login
     expect(loaded!.data.answers.business_name).toBe(`Resume ${run}`);
 
     // Autosave on a later step overwrites data + step (no data loss on refresh).
@@ -117,9 +117,9 @@ describe("draft save/resume round-trip under user ctx", () => {
       ...loaded!.data,
       answers: { ...loaded!.data.answers, country: "AE" },
     });
-    await saveDraft(userA, { data: fuller, step: "scale" });
+    await saveDraft(userA, { data: fuller, step: "priorities" });
     const again = await getDraft(userA);
-    expect(again!.step).toBe("scale");
+    expect(again!.step).toBe("priorities");
     expect(again!.data.answers.country).toBe("AE");
   }, 60_000);
 
@@ -136,7 +136,7 @@ describe("draft save/resume round-trip under user ctx", () => {
       tx.execute(sql`update public.onboarding_draft set step = 'welcome' where user_id = ${userA}`),
     );
     const after = await getDraft(userA);
-    expect(after!.step).toBe("scale"); // untouched
+    expect(after!.step).toBe("priorities"); // untouched
     // The row is really there (owner bypasses RLS) — so the empty read was policy.
     const ownerRows = await owner`
       select user_id from public.onboarding_draft where user_id = ${userA}`;
@@ -146,7 +146,7 @@ describe("draft save/resume round-trip under user ctx", () => {
 
 describe("full confirm chain (functions, no HTTP)", () => {
   it("creates the org, applies the template ONLY at confirm, records tier + branding, completes the draft, seeds NOTHING", async () => {
-    await saveDraft(userA, { data: completeDraftData(`U4 Flow ${run}`), step: "review" });
+    await saveDraft(userA, { data: completeDraftData(`U4 Flow ${run}`), step: "ready" });
 
     // BEFORE confirm: no org for the user at all — nothing was created or applied.
     const orgsBefore = await owner`
@@ -306,7 +306,7 @@ describe("full confirm chain (functions, no HTTP)", () => {
       ...data,
       confirm: { org_id: orgId },
     });
-    await saveDraft(userB, { data: withProgress, step: "review" });
+    await saveDraft(userB, { data: withProgress, step: "ready" });
 
     const before = await owner`
       select value from public.app_settings where org_id = ${orgId} and key = 'config.template'`;

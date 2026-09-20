@@ -15,19 +15,7 @@
  *  - Unknown question keys and unknown stored answers fail SAFE: they are
  *    reported as invalidated, never silently kept or crashed on.
  */
-import {
-  askCollectsPayments,
-  askDepartments,
-  askMaterialsStep,
-  askReceivesDeliveries,
-  askTracksCosts,
-  askUsersBand,
-  askWorkflowDescription,
-  visibleSteps,
-  JOURNEY_VERSION,
-  type DraftAnswers,
-  type FlowStep,
-} from "./flow";
+import { visibleSteps, JOURNEY_VERSION, type DraftAnswers, type FlowStep } from "./flow";
 
 export { JOURNEY_VERSION };
 
@@ -61,7 +49,8 @@ export type QuestionKey =
   | "vat_registered_q"
   | "priority_focus"
   | "device"
-  | "main_problem";
+  | "main_problem"
+  | "priorities";
 
 export type QuestionDef = {
   key: QuestionKey;
@@ -92,7 +81,38 @@ export type QuestionDef = {
 
 const always = () => true;
 
-/** The complete H15 question registry — canonical keys, one decision each. */
+/** Answer keys the long journey (versions 1 and 2) stored. They stay valid in
+ * a draft, are read by the blueprint mapper when present, and are never
+ * reported as unknown or retired. */
+export const LEGACY_QUESTION_KEYS: readonly QuestionKey[] = [
+  "legal_name",
+  "business_description",
+  "timezone",
+  "base_currency",
+  "customer_types",
+  "work_intake",
+  "customer_sharing",
+  "work_patterns",
+  "workflow_description",
+  "users_band",
+  "locations_band",
+  "departments",
+  "buys_materials",
+  "holds_stock",
+  "receives_deliveries",
+  "revenue_models",
+  "sends_quotes",
+  "sends_invoices",
+  "collects_payments",
+  "records_expenses",
+  "tracks_costs",
+  "vat_registered_q",
+  "priority_focus",
+  "device",
+  "main_problem",
+];
+
+/** The short journey's question registry (journey 3): one decision each. */
 export const QUESTIONS: readonly QuestionDef[] = [
   {
     key: "business_name",
@@ -103,234 +123,42 @@ export const QUESTIONS: readonly QuestionDef[] = [
     includedBecause: "core",
   },
   {
-    key: "legal_name",
-    step: "business",
-    required: false,
-    shapes: ["branding_only"],
-    visible: always,
-    includedBecause: "core",
-  },
-  {
-    key: "industry",
-    step: "business",
-    required: true,
-    shapes: ["profile", "capabilities", "workflows"],
-    visible: always,
-    includedBecause: "core",
-  },
-  {
-    key: "business_description",
-    step: "business",
-    required: false,
-    shapes: ["profile", "workflows"],
-    visible: always,
-    includedBecause: "core",
-  },
-  {
     key: "country",
-    step: "region",
+    step: "business",
     required: true,
-    shapes: ["international", "organization"],
-    visible: always,
-    includedBecause: "core",
-  },
-  {
-    key: "timezone",
-    step: "region",
-    required: true,
-    shapes: ["international", "organization"],
-    visible: always,
-    includedBecause: "core",
-  },
-  {
-    key: "base_currency",
-    step: "region",
-    required: true,
-    shapes: ["international", "organization"],
+    shapes: ["international", "profile"],
     visible: always,
     includedBecause: "core",
   },
   {
     key: "preferred_language",
-    step: "region",
-    required: true,
-    shapes: ["international", "terminology"],
-    visible: always,
-    includedBecause: "core",
-  },
-  {
-    key: "customer_types",
-    step: "customers",
-    required: true,
-    shapes: ["profile"],
-    visible: always,
-    includedBecause: "core",
-  },
-  {
-    key: "work_intake",
-    step: "customers",
-    required: false,
-    shapes: ["profile"],
-    visible: always,
-    includedBecause: "core",
-  },
-  {
-    key: "customer_sharing",
-    step: "customers",
-    required: true,
-    shapes: ["capabilities"],
-    visible: always,
-    includedBecause: "core",
-  },
-  {
-    key: "work_patterns",
-    step: "work",
-    required: true,
-    shapes: ["profile", "capabilities", "workflows"],
-    visible: always,
-    includedBecause: "core",
-  },
-  {
-    key: "workflow_description",
-    step: "work",
-    required: false,
-    shapes: ["workflows"],
-    visible: askWorkflowDescription,
-    includedBecause: "engagement_flow",
-  },
-  {
-    key: "employees_band",
-    step: "scale",
-    required: true,
-    shapes: ["profile", "roles"],
-    visible: always,
-    includedBecause: "core",
-  },
-  {
-    key: "users_band",
-    step: "scale",
-    required: true,
-    shapes: ["roles"],
-    visible: askUsersBand,
-    includedBecause: "team_size",
-  },
-  {
-    key: "locations_band",
-    step: "scale",
-    required: true,
-    shapes: ["profile"],
-    visible: always,
-    includedBecause: "core",
-  },
-  {
-    key: "departments",
-    step: "scale",
-    required: false,
-    shapes: ["roles"],
-    visible: askDepartments,
-    includedBecause: "team_size",
-  },
-  {
-    key: "buys_materials",
-    step: "materials",
-    required: true,
-    shapes: ["capabilities", "roles"],
-    visible: askMaterialsStep,
-    includedBecause: "physical_work",
-  },
-  {
-    key: "holds_stock",
-    step: "materials",
-    required: true,
-    shapes: ["capabilities"],
-    visible: askMaterialsStep,
-    includedBecause: "physical_work",
-  },
-  {
-    key: "receives_deliveries",
-    step: "materials",
-    required: true,
-    shapes: ["capabilities"],
-    visible: (a) => askMaterialsStep(a) && askReceivesDeliveries(a),
-    includedBecause: "buys_materials",
-  },
-  {
-    key: "revenue_models",
-    step: "money",
-    required: false,
-    shapes: ["profile"],
-    visible: always,
-    includedBecause: "core",
-  },
-  {
-    key: "sends_quotes",
-    step: "money",
-    required: true,
-    shapes: ["capabilities"],
-    visible: always,
-    includedBecause: "core",
-  },
-  {
-    key: "sends_invoices",
-    step: "money",
-    required: true,
-    shapes: ["capabilities", "roles"],
-    visible: always,
-    includedBecause: "core",
-  },
-  {
-    key: "collects_payments",
-    step: "money",
-    required: true,
-    shapes: ["capabilities"],
-    visible: askCollectsPayments,
-    includedBecause: "sends_invoices",
-  },
-  {
-    key: "records_expenses",
-    step: "money",
-    required: true,
-    shapes: ["capabilities"],
-    visible: always,
-    includedBecause: "core",
-  },
-  {
-    key: "tracks_costs",
-    step: "money",
-    required: true,
-    shapes: ["capabilities"],
-    visible: askTracksCosts,
-    includedBecause: "engagement_flow",
-  },
-  {
-    key: "vat_registered_q",
-    step: "money",
+    step: "business",
     required: true,
     shapes: ["international"],
     visible: always,
     includedBecause: "core",
   },
   {
-    key: "priority_focus",
-    step: "priorities",
+    key: "industry",
+    step: "setup",
     required: true,
-    shapes: ["dashboards"],
+    shapes: ["profile", "capabilities", "terminology", "workflows"],
     visible: always,
     includedBecause: "core",
   },
   {
-    key: "device",
-    step: "priorities",
-    required: true,
-    shapes: ["navigation"],
-    visible: always,
-    includedBecause: "core",
-  },
-  {
-    key: "main_problem",
+    key: "priorities",
     step: "priorities",
     required: false,
-    shapes: ["dashboards"],
+    shapes: ["dashboards", "capabilities"],
+    visible: always,
+    includedBecause: "core",
+  },
+  {
+    key: "employees_band",
+    step: "priorities",
+    required: false,
+    shapes: ["roles", "organization"],
     visible: always,
     includedBecause: "core",
   },
@@ -367,6 +195,6 @@ export function invalidatedAnswers(prev: DraftAnswers, next: DraftAnswers): Ques
 /** Fail-safe check for stored answers from an unknown/newer journey: any
  * stored key outside the registry is reported (and ignored by the mappers). */
 export function unknownAnswerKeys(stored: Record<string, unknown>): string[] {
-  const known = new Set<string>(QUESTIONS.map((q) => q.key));
+  const known = new Set<string>([...QUESTIONS.map((q) => q.key), ...LEGACY_QUESTION_KEYS]);
   return Object.keys(stored).filter((k) => !known.has(k) && k !== "capabilities");
 }

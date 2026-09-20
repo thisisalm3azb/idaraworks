@@ -29,6 +29,7 @@ import {
   completeDraft,
   getDraft,
   recordTierSelection,
+  recordPriorities,
   releaseDraftConfirmClaim,
   stashConfirmProgress,
 } from "./draft";
@@ -45,6 +46,7 @@ export {
   removeDraftLogo,
   DraftConflictError,
   type OnboardingDraft,
+  recordPriorities,
 } from "./draft";
 export {
   FLOW_STEPS,
@@ -115,6 +117,16 @@ export {
   type ReviewSummary,
   type WorkspaceEdits,
   type JourneySectionKey,
+  applySetupChoice,
+  impliedAnswersFor,
+  applyPriorities,
+  PRIORITY_AREAS,
+  PRIORITY_AREA_FOCUS,
+  PRIORITY_SETTING_KEY,
+  TEMPLATE_INDUSTRY,
+  TEMPLATE_WORK_PATTERNS,
+  type PriorityArea,
+  type PrioritySettingValue,
 } from "./flow";
 export { selectTemplate, buildGroundedProposal } from "./provider";
 export { validateProposal } from "./validate";
@@ -126,6 +138,7 @@ export {
   unknownAnswerKeys,
   type QuestionDef,
   type QuestionKey,
+  LEGACY_QUESTION_KEYS,
 } from "./journey";
 export {
   buildBlueprintFromDraft,
@@ -497,9 +510,9 @@ export async function runConfirmChain(userId: string): Promise<ConfirmChainResul
     }
     throw new ConfirmChainError("no_draft", "draft already completed without an organization");
   }
-  if (!draft.data.tier) {
-    throw new ConfirmChainError("incomplete", "no subscription choice was made");
-  }
+  // The short flow makes no plan choice: the workspace starts on the standard
+  // trial either way, and the recorded choice defaults to the free plan.
+  const tier = draft.data.tier ?? { mode: "free" as const };
   // Validate the full intake BEFORE claiming — an incomplete draft never claims.
   let intake;
   try {
@@ -618,8 +631,14 @@ export async function runConfirmChain(userId: string): Promise<ConfirmChainResul
 
     // 3 — record the tier selection (app_settings only — never entitlements).
     if (!confirm.tier_recorded) {
-      await recordTierSelection(ctx, draft.data.tier);
+      await recordTierSelection(ctx, tier);
       await stash({ tier_recorded: true });
+    }
+    // The priorities chips, recorded for the dashboard's starting layout
+    // (idempotent upsert; an empty choice records an empty list).
+    if (!confirm.priorities_recorded) {
+      await recordPriorities(ctx, draft.data.answers.priorities ?? []);
+      await stash({ priorities_recorded: true });
     }
 
     // 4 — branding stash through the real service (skippable; may be empty).

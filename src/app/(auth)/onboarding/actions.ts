@@ -1,49 +1,38 @@
 "use server";
 
 /**
- * U4 pre-org onboarding wizard actions. Every step submit AUTOSAVES the draft
+ * The short onboarding's actions. Every screen submit AUTOSAVES the draft
  * (upsert) and advances the saved step, so refresh/logout/login resume exactly
- * where the founder stopped. NOTHING here touches an org — the single
+ * where the founder stopped. NOTHING here touches an organisation — the single
  * confirmFlowAction at the end runs the sequential, idempotent confirm chain
- * (org → template apply → tier recording → branding → complete).
+ * (org → template apply → blueprint → recorded choices → complete).
  */
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getSessionUser } from "@/platform/auth/resolve";
 import { LOCALE_COOKIE } from "@/platform/i18n";
 import { resolveOfferedLocale } from "@/platform/i18n/offered";
-import { currentRequestId } from "@/platform/observability";
-import { requestLogger } from "@/platform/logger";
 import { sql, withUserCtx } from "@/platform/tenancy";
-import { TEMPLATES } from "@/platform/config";
-import { getAddon, isPurchasable } from "@/platform/entitlements";
-import { BrandingError, LOGO_MAX_BYTES } from "@/modules/branding/service";
 import {
+  applySetupChoice,
   applyStepAnswers,
   ConfirmChainError,
   DraftConflictError,
   emptyDraftData,
   FlowValidationError,
   getDraft,
-  invalidatedAnswers,
   isFlowStep,
-  moduleFromSlug,
   nextStepAfter,
-  removeDraftLogo,
   runConfirmChain,
   saveDraft,
-  stashDraftLogo,
-  TierSelectionSchema,
-  WorkspaceEditsSchema,
   type DraftData,
   type FlowStep,
   type OnboardingDraft,
 } from "@/modules/onboarding/service";
-import { configStringIssue } from "@/platform/config";
 
 const LOCALE_COOKIE_OPTS = { path: "/", sameSite: "lax" as const, maxAge: 60 * 60 * 24 * 365 };
 
-/** Session + draft guard shared by every wizard action. */
+/** Session + draft guard shared by every action. */
 async function requireFlowUser(): Promise<{ userId: string }> {
   const user = await getSessionUser();
   if (!user) redirect("/login");
@@ -53,28 +42,20 @@ async function requireFlowUser(): Promise<{ userId: string }> {
 async function loadDraftOrStart(userId: string): Promise<OnboardingDraft> {
   const draft = await getDraft(userId);
   if (draft && draft.status === "active") return draft;
-  return { userId, data: emptyDraftData(), step: "welcome", status: "active", updatedAt: "" };
+  return { userId, data: emptyDraftData(), step: "business", status: "active", updatedAt: "" };
 }
 
-function toStep(step: FlowStep, error?: string, extra?: string): never {
-  redirect(`/onboarding?step=${step}${error ? `&error=${error}` : ""}${extra ? `&${extra}` : ""}`);
+function toStep(step: FlowStep, error?: string): never {
+  redirect(`/onboarding?step=${step}${error ? `&error=${error}` : ""}`);
 }
 
-/** The optimistic two-tab guard value posted with every step form (Part E). */
+/** The optimistic two-tab guard value posted with every step form. */
 function draftRev(formData: FormData): string | undefined {
   const v = String(formData.get("draft_rev") ?? "").trim();
   return v === "" ? undefined : v;
 }
 
-// ── Welcome → questionnaire ───────────────────────────────────────────────────
-export async function startFlowAction(): Promise<void> {
-  const { userId } = await requireFlowUser();
-  const draft = await loadDraftOrStart(userId);
-  await saveDraft(userId, { data: draft.data, step: "business" });
-  toStep("business");
-}
-
-// ── Questionnaire step submits (autosave + advance) ───────────────────────────
+// ── Screens 1 and 3: autosave + advance ─────────────────────────────────────
 export async function saveStepAction(step: string, formData: FormData): Promise<void> {
   const { userId } = await requireFlowUser();
   if (!isFlowStep(step)) redirect("/onboarding");
@@ -95,25 +76,17 @@ export async function saveStepAction(step: string, formData: FormData): Promise<
     throw err;
   }
 
-  // Part D: a changed earlier answer may retire later answers (a hidden
-  // branch). The retired keys are surfaced to the founder, never silent.
-  const retired = invalidatedAnswers(draft.data.answers, data.answers);
-
   const next = nextStepAfter(step, data.answers);
   try {
-    await saveDraft(userId, {
-      data,
-      step: next,
-      expectedUpdatedAt: draftRev(formData) ?? undefined,
-    });
+    await saveDraft(userId, { data, step: next, expectedUpdatedAt: draftRev(formData) });
   } catch (err) {
     if (err instanceof DraftConflictError) toStep(step, "stale_tab");
     throw err;
   }
 
-  // Preferred-language answer flips the ACTIVE flow locale immediately (the
-  // existing locale-cookie mechanism) and persists to the user profile.
-  if (step === "region" && data.answers.preferred_language) {
+  // The language answer flips the ACTIVE locale immediately (the existing
+  // locale-cookie mechanism) and persists to the user profile.
+  if (step === "business" && data.answers.preferred_language) {
     const locale = resolveOfferedLocale(data.answers.preferred_language);
     (await cookies()).set(LOCALE_COOKIE, locale, LOCALE_COOKIE_OPTS);
     await withUserCtx(userId, (tx) =>
@@ -122,246 +95,31 @@ export async function saveStepAction(step: string, formData: FormData): Promise<
       // Cookie already applied; profile persistence must not block the flow.
     });
   }
-  toStep(next, undefined, retired.length > 0 ? `retired=${retired.join(",")}` : undefined);
+  toStep(next);
 }
 
-// ── Review-step workspace edits (Part G: presentation and inclusion only) ─────
-export async function saveWorkspaceEditsAction(formData: FormData): Promise<void> {
-  const { userId } = await requireFlowUser();
-  const draft = await loadDraftOrStart(userId);
-
-  const modulesOff: string[] = [];
-  const modulesOn: string[] = [];
-  for (const key of new Set(formData.keys())) {
-    if (!key.startsWith("module:")) continue;
-    const slug = key.slice("module:".length);
-    if (!moduleFromSlug(slug)) toStep("review", "invalid");
-    if (String(formData.get(key)) === "on") modulesOn.push(slug);
-    else modulesOff.push(slug);
-  }
-  // Unchecked checkboxes are absent from FormData — the form posts a shadow
-  // field per rendered module so absence is distinguishable from off.
-  for (const key of new Set(formData.keys())) {
-    if (!key.startsWith("module_seen:")) continue;
-    const slug = key.slice("module_seen:".length);
-    if (!moduleFromSlug(slug)) toStep("review", "invalid");
-    if (!formData.has(`module:${slug}`) && !modulesOff.includes(slug)) modulesOff.push(slug);
-  }
-
-  const agentsOff: string[] = [];
-  for (const key of new Set(formData.keys())) {
-    if (!key.startsWith("agent_seen:")) continue;
-    const id = key.slice("agent_seen:".length);
-    if (!formData.has(`agent:${id}`)) agentsOff.push(id);
-  }
-
-  const roleNames: Record<string, { en?: string; ar?: string }> = {};
-  for (const key of new Set(formData.keys())) {
-    const m = /^role_(en|ar):([a-z_]{2,30})$/.exec(key);
-    if (!m) continue;
-    const value = String(formData.get(key) ?? "").trim();
-    if (value === "") continue;
-    if (value.length > 60 || configStringIssue(value, 60) !== null) toStep("review", "invalid");
-    roleNames[m[2]!] = { ...roleNames[m[2]!], [m[1]!]: value };
-  }
-
-  const parsed = WorkspaceEditsSchema.safeParse({
-    modules_off: modulesOff,
-    modules_on: modulesOn,
-    agents_off: agentsOff,
-    ...(Object.keys(roleNames).length > 0 ? { role_names: roleNames } : {}),
-  });
-  if (!parsed.success) toStep("review", "invalid");
-
-  const data: DraftData = { ...draft.data, workspace: parsed.data };
-  try {
-    await saveDraft(userId, {
-      data,
-      step: "review",
-      expectedUpdatedAt: draftRev(formData) ?? undefined,
-    });
-  } catch (err) {
-    if (err instanceof DraftConflictError) toStep("review", "stale_tab");
-    throw err;
-  }
-  toStep("review", undefined, "saved=1");
-}
-
-// ── Template selection ────────────────────────────────────────────────────────
-export async function chooseTemplateAction(formData: FormData): Promise<void> {
+// ── Screen 2: how you work (one card = one template) ────────────────────────
+export async function chooseSetupAction(formData: FormData): Promise<void> {
   const { userId } = await requireFlowUser();
   const draft = await loadDraftOrStart(userId);
   const key = String(formData.get("template_key") ?? "").trim();
-  const recommendedKey = String(formData.get("recommended_key") ?? "").trim();
-  const confident = String(formData.get("confident") ?? "") === "1";
-  if (!(key in TEMPLATES)) toStep("template", "invalid");
-  const data: DraftData = {
-    ...draft.data,
-    template: {
-      selected_key: key,
-      recommended_key: recommendedKey || undefined,
-      confident,
-      manual: recommendedKey !== "" && key !== recommendedKey,
-    },
-  };
-  await saveDraft(userId, { data, step: "proposal" });
-  toStep("proposal");
-}
-
-// ── Proposal step (editable job terms; typed-vs-blank law) ────────────────────
-export async function saveProposalTermsAction(formData: FormData): Promise<void> {
-  const { userId } = await requireFlowUser();
-  const draft = await loadDraftOrStart(userId);
-  const en = String(formData.get("job_term_en") ?? "").trim();
-  const ar = String(formData.get("job_term_ar") ?? "").trim();
-  if (en.length > 40 || ar.length > 40) toStep("proposal", "invalid");
-  const data: DraftData = {
-    ...draft.data,
-    terms: {
-      ...(en ? { job_term_en: en } : {}), // blank = template's own term (omitted)
-      ...(ar ? { job_term_ar: ar } : {}),
-    },
-  };
-  await saveDraft(userId, { data, step: "plan" });
-  toStep("plan");
-}
-
-// ── Subscription selection (a RECORDED choice — no payment, no entitlements) ──
-async function saveTier(userId: string, tier: unknown): Promise<void> {
-  const parsed = TierSelectionSchema.safeParse(tier);
-  if (!parsed.success) toStep("plan", "invalid");
-  const draft = await loadDraftOrStart(userId);
-  await saveDraft(userId, { data: { ...draft.data, tier: parsed.data }, step: "branding" });
-  toStep("branding");
-}
-
-export async function selectFreeAction(): Promise<void> {
-  const { userId } = await requireFlowUser();
-  await saveTier(userId, { mode: "free" });
-}
-
-/** TierCards contract: posts { bundle: "bundle.tier_medium" | "bundle.tier_high" }. */
-export async function selectTierFlowAction(formData: FormData): Promise<void> {
-  const { userId } = await requireFlowUser();
-  const bundle = String(formData.get("bundle") ?? "");
-  const mode =
-    bundle === "bundle.tier_medium"
-      ? "tier_medium"
-      : bundle === "bundle.tier_high"
-        ? "tier_high"
-        : null;
-  if (!mode) toStep("plan", "invalid");
-  await saveTier(userId, { mode });
-}
-
-/** CustomBuilder contract: one `addon:<key>` field per selected add-on, value = quantity.
- * Keys are validated against the REAL catalogue (review fix): a well-formed but
- * nonexistent or non-purchasable key is rejected, never recorded. */
-export async function selectCustomAction(formData: FormData): Promise<void> {
-  const { userId } = await requireFlowUser();
-  const quantities: Record<string, number> = {};
-  for (const key of new Set(formData.keys())) {
-    if (!key.startsWith("addon:")) continue;
-    const addonKey = key.slice("addon:".length);
-    const def = getAddon(addonKey);
-    if (!def || !isPurchasable(def)) toStep("plan", "invalid");
-    const qty = Math.trunc(Number(formData.get(key) ?? 0));
-    if (Number.isFinite(qty) && qty >= 1) {
-      quantities[addonKey] = def.stackable ? Math.min(99, qty) : 1;
-    }
-  }
-  if (Object.keys(quantities).length === 0) toStep("plan", "custom_empty");
-  await saveTier(userId, {
-    mode: "custom",
-    customKeys: Object.keys(quantities),
-    quantities,
-  });
-}
-
-// ── Branding step ─────────────────────────────────────────────────────────────
-// The client maps `error` to a specific, safe message; `correlationId` is set
-// ONLY for an unexpected server error (error === "server_error"), so the founder
-// can quote a "Reference: <id>" that ties their report to the server log line.
-export type FlowActionResult = { error: string | null; correlationId?: string };
-
-/** Client-invoked logo stash (validated + re-encoded; only the 512px PNG kept).
- * Failure reasons are DISTINGUISHED: a BrandingError surfaces its own validation
- * code (bad_type / too_large / bad_signature / too_small_dims / too_large_dims /
- * bad_image / quota_exceeded / invalid_input — each a specific client message);
- * anything else (e.g. sharp ERR_DLOPEN_FAILED when the native libs are missing
- * from the function trace) is logged server-side with a correlation id and
- * returned as a generic { error: "server_error", correlationId }. */
-export async function uploadFlowLogoAction(formData: FormData): Promise<FlowActionResult> {
-  const user = await getSessionUser();
-  if (!user) return { error: "session" };
-  const file = formData.get("logo");
-  if (!(file instanceof File) || file.size === 0) return { error: "bad_type" };
-  if (file.size > LOGO_MAX_BYTES) return { error: "too_large" };
+  let data: DraftData;
   try {
-    const bytes = Buffer.from(await file.arrayBuffer());
-    await stashDraftLogo(user.id, { mime: file.type, bytes });
+    data = applySetupChoice(draft.data, key);
   } catch (err) {
-    // Expected, actionable validation failures carry their own code + message.
-    if (err instanceof BrandingError) return { error: err.code };
-    // Unexpected server fault (sharp dlopen, storage, …): never leak the reason
-    // to the client — log it with a correlation id and hand the id back so a
-    // user-reported failure can be traced in the server logs.
-    const correlationId = await currentRequestId();
-    requestLogger({ requestId: correlationId, userId: user.id }).error(
-      { err: (err as Error)?.message ?? String(err), action: "onboarding.logo_upload" },
-      "onboarding logo upload failed unexpectedly",
-    );
-    return { error: "server_error", correlationId };
+    if (err instanceof FlowValidationError) toStep("setup", "invalid");
+    throw err;
   }
-  return { error: null };
-}
-
-export async function removeFlowLogoAction(): Promise<FlowActionResult> {
-  const user = await getSessionUser();
-  if (!user) return { error: "session" };
-  await removeDraftLogo(user.id);
-  return { error: null };
-}
-
-export async function saveBrandingStepAction(formData: FormData): Promise<void> {
-  const { userId } = await requireFlowUser();
-  const draft = await loadDraftOrStart(userId);
-  const swatch = String(formData.get("accent_swatch") ?? "").trim();
-  const hex = String(formData.get("accent_color") ?? "").trim();
-  const accent = hex || swatch;
-  if (accent && !/^#[0-9a-fA-F]{6}$/.test(accent)) toStep("branding", "invalid");
-  const display = String(formData.get("display_name") ?? "").trim();
-  const legal = String(formData.get("legal_name") ?? "").trim();
-  const footer = String(formData.get("footer_details") ?? "").trim();
-  if (display.length > 120 || legal.length > 200 || footer.length > 500) {
-    toStep("branding", "invalid");
+  try {
+    await saveDraft(userId, { data, step: "priorities", expectedUpdatedAt: draftRev(formData) });
+  } catch (err) {
+    if (err instanceof DraftConflictError) toStep("setup", "stale_tab");
+    throw err;
   }
-  const data: DraftData = {
-    ...draft.data,
-    branding: {
-      ...(draft.data.branding.logo_base64 ? { logo_base64: draft.data.branding.logo_base64 } : {}),
-      ...(accent ? { accent_color: accent } : {}),
-      ...(display ? { display_name: display } : {}),
-      ...(legal ? { legal_name: legal } : {}),
-      ...(footer ? { footer_details: footer } : {}),
-    },
-  };
-  await saveDraft(userId, { data, step: "review" });
-  toStep("review");
+  toStep("priorities");
 }
 
-export async function skipBrandingStepAction(): Promise<void> {
-  const { userId } = await requireFlowUser();
-  const draft = await loadDraftOrStart(userId);
-  const data: DraftData = {
-    ...draft.data,
-    branding: { ...draft.data.branding, skipped: true },
-  };
-  await saveDraft(userId, { data, step: "review" });
-  toStep("review");
-}
-
-// ── THE explicit confirm — the only place anything is created/applied ─────────
+// ── THE explicit confirm — the only place anything is created/applied ────────
 export async function confirmFlowAction(): Promise<void> {
   const { userId } = await requireFlowUser();
   try {
@@ -369,7 +127,7 @@ export async function confirmFlowAction(): Promise<void> {
     redirect(`/o/${orgId}?welcome=1`);
   } catch (err) {
     if ((err as { digest?: string }).digest?.startsWith("NEXT_REDIRECT")) throw err;
-    if (err instanceof ConfirmChainError) toStep("review", err.code);
-    toStep("review", "failed");
+    if (err instanceof ConfirmChainError) toStep("ready", err.code);
+    toStep("ready", "failed");
   }
 }

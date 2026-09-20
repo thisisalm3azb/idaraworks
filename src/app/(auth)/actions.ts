@@ -413,9 +413,9 @@ export async function resolveLanding(): Promise<string> {
   const activeDraft = draft && draft.status === "active" ? draft : null;
   const orgs = await listMyOrgs(user.id);
   if (orgs[0]) {
-    return activeDraft?.data.confirm.org_id ? "/onboarding?step=review" : `/o/${orgs[0].orgId}`;
+    return activeDraft?.data.confirm.org_id ? "/onboarding?step=ready" : `/o/${orgs[0].orgId}`;
   }
-  if (activeDraft && activeDraft.step !== "welcome") {
+  if (activeDraft) {
     return `/onboarding?step=${activeDraft.step}`;
   }
   return "/onboarding";
