@@ -149,7 +149,7 @@ describe("the generated mark", () => {
   });
 
   it("an uploaded logo sits on the app background for maskable, and on nothing for any", async () => {
-    // LiwaHarvest, 2026-09-20: a dark-green logo on the brand-green tile was
+    // A customer, 2026-09-20: a dark-green logo on the brand-green tile was
     // invisible. The tile behind an uploaded logo is the app background (white
     // by default); the transparent margin of the `any` icon is untouched.
     const { default: sharp } = await import("sharp");
@@ -166,7 +166,7 @@ describe("the generated mark", () => {
       .toBuffer();
     const { icons, kind } = await generateIconSet({
       source,
-      orgName: "Liwa Harvest",
+      orgName: "Sidra Harvest",
       brandColor: "#1f6f5c",
       backgroundColor: null,
     });

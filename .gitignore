@@ -74,3 +74,6 @@ sim-screenshots/
 # Throwaway lab probes. These get written during investigation and must never
 # reach a commit — one did, and CI failed on formatting because of it.
 tooling/pilot-lab/tmp-*.ts
+
+# Local verification scratch (probe outputs, screenshots, findings register) — never committed.
+.demo-showcase/

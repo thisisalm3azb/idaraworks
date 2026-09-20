@@ -516,11 +516,11 @@ cadence — record the actual cadence).
 | Check | Expected | Observed | Pass |
 | --- | --- | --- | --- |
 | (1) per-org counts org/membership/audit_log/domain_event | match source | _TBD_ | ☐ |
-| (2) `pg_policies` count (public) | = reference (~200+ @ 0064) | _TBD_ | ☐ |
+| (2) `pg_policies` count (public) | = reference read from the TEST project the same day (`select count(*) from pg_policies where schemaname = 'public'`) | _TBD_ | ☐ |
 | (3) RLS enabled on 6 sensitive tables | all true | _TBD_ | ☐ |
 | (4) app_user rolbypassrls / rolsuper | false / false | _TBD_ | ☐ |
 | (5) app_user DELETE grants | only the 4 allowlisted line/calendar tables | _TBD_ | ☐ |
-| (6) `app.migrations` count / last | 65 / `0064_s10_retention_pruning.sql` | _TBD_ | ☐ |
+| (6) `app.migrations` count / last | = the count of files in `supabase/migrations/` (142 / `0142_job_customer_org_fk.sql` at the time of writing; re-read before the drill) | _TBD_ | ☐ |
 
 **Storage verification (§2d):**
 

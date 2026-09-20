@@ -94,7 +94,7 @@ account** button · "Already have an account? **Sign in**". *(Live-verified, des
 ## 3–4. Step-by-step journey + what to choose
 
 ### Step 1 — Sign up (`/signup`)
-- Full name · Email **abdullaalojan@gmail.com** · Password **≥ 10 chars** → **Create account**.
+- Full name · Email **<owner contact, kept outside the repository>** · Password **≥ 10 chars** → **Create account**.
 - Then either: **session issued** → straight to org creation (Step 3); or **"Check your inbox to
   confirm"** → open the Supabase confirmation email, click it, then log in (Finding 4).
 

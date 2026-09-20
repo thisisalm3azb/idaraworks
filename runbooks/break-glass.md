@@ -94,7 +94,7 @@ has confirmed it (chat/ticket acknowledgement is fine — capture where).
 1. Operator drafts a break-glass log entry (template in §9) stating **who
    approved, who accesses, timestamp (UTC), reason, and scope** (which orgs /
    tables / rows, read-only vs write).
-2. Approver — the **owner** (`abdullaalojan@gmail.com`) or another explicitly
+2. Approver — the **owner** (`<owner contact, kept outside the repository>`) or another explicitly
    authorised principal — reviews and approves. Approver ≠ Operator.
 3. The approved entry is saved to the ops log **before** connecting. Start the
    incident clock here (detection time) if this is tied to an incident
@@ -243,7 +243,7 @@ applies.
 
 ## 8. Owner actions / prerequisites
 
-These are **OWNER ACTIONS** — provisioned by the owner (`abdullaalojan@gmail.com`),
+These are **OWNER ACTIONS** — provisioned by the owner (`<owner contact, kept outside the repository>`),
 not by an operator or an agent, and required for this runbook to be executable:
 
 - **OWNER ACTION — `DIRECT_URL` credential.** Issued from Supabase Dashboard →

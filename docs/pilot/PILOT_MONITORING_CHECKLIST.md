@@ -70,7 +70,7 @@ Full detail: [`runbooks/incident-response.md`](../../runbooks/incident-response.
 
 | Sev | Trigger (pilot-relevant) | First move | Owner |
 | --- | --- | --- | --- |
-| **SEV-1** | Cross-org data visible/writable (tenancy), data loss/corruption, sustained `/api/health` 503 | **Contain first** — pause prod traffic, preserve evidence, **page the owner** | `abdullaalojan@gmail.com` |
+| **SEV-1** | Cross-org data visible/writable (tenancy), data loss/corruption, sustained `/api/health` 503 | **Contain first** — pause prod traffic, preserve evidence, **page the owner** | `<owner contact, kept outside the repository>` |
 | **SEV-2** | A core flow broken for all orgs (login/org-load/upload/approval), **dead-letters accumulating**, **rollup/storage drift alarm firing** | Same-day; roll back if deploy-linked ([`deployment-and-rollback.md`](../../runbooks/deployment-and-rollback.md)) | notify owner |
 | **SEV-3** | Degraded with a workaround; single-org, non-isolation | Ticket; next working day | — |
 

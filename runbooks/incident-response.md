@@ -28,7 +28,7 @@ established from evidence before anyone is told anything.
 | Role | Who | Owns |
 | --- | --- | --- |
 | **Incident Commander (IC)** | On-call engineer (owner is IC by default pre-team) | Declares severity, drives the flow, holds the timeline |
-| **Owner / Legal decision-maker** | Product owner (`abdullaalojan@gmail.com`) | Notification decision + exact regulatory window, break-glass approval, any tenant-facing message |
+| **Owner / Legal decision-maker** | Product owner (`<owner contact, kept outside the repository>`) | Notification decision + exact regulatory window, break-glass approval, any tenant-facing message |
 | **Scribe** | IC if solo | The UTC timeline + evidence log (§10 template) |
 
 Solo operator is the expected pilot-stage reality: the IC wears all hats but still

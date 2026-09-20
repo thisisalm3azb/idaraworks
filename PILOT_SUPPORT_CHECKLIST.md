@@ -24,7 +24,7 @@ payment** pilot on `https://idaraworks.vercel.app`: DB + storage are the only
 always-on dependencies; Inngest, Sentry, Upstash, Resend, OAuth, malware scan, AI
 narration, billing, and e-invoice are all **disabled seams by design**
 (`credential-disabled-operations.md`). A solo operator (the owner,
-`abdullaalojan@gmail.com`) wears every role below until a support team exists.
+`<owner contact, kept outside the repository>`) wears every role below until a support team exists.
 
 ---
 
@@ -34,7 +34,7 @@ narration, billing, and e-invoice are all **disabled seams by design**
 | --- | --- | --- |
 | **First-line support / operator** | The founder / on-call operator | Intake, capture the correlation id, triage against `/api/health` + logs, resolve or classify severity, drive impersonation |
 | **Incident Commander (IC)** | Owner by default (pre-team) | Any case that reaches Severity 1/2: declares severity, drives `incident-response.md`, holds the UTC timeline |
-| **Owner / Legal decision-maker** | Product owner (`abdullaalojan@gmail.com`) | Break-glass approval, tenant notification decision + exact regulatory window, any tenant-facing message, `platform_staff` roster |
+| **Owner / Legal decision-maker** | Product owner (`<owner contact, kept outside the repository>`) | Break-glass approval, tenant notification decision + exact regulatory window, any tenant-facing message, `platform_staff` roster |
 
 Solo operation is expected: one person holds all three hats but still **writes the
 timeline as they go** for anything Severity 1/2 (§4) — it is the post-mortem spine
