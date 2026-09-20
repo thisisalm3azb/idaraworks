@@ -11,12 +11,16 @@ test("unauthenticated root renders the public homepage", async ({ page }) => {
   // The headline is read from the copy catalogue rather than repeated here: a
   // hardcoded copy went stale in H13 when the hero was rewritten, and this
   // smoke has been failing on main ever since.
-  await expect(page.getByRole("heading", { level: 1 })).toContainText(EN["home.hero.title"]);
-  await expect(page.getByRole("link", { name: "Get Started" }).first()).toHaveAttribute(
-    "href",
-    "/signup",
-  );
-  await expect(page.getByRole("link", { name: "Log in" }).first()).toHaveAttribute(
+  // The catalogue marks the headline's line break with "|"; the page renders
+  // the two halves on their own lines.
+  const heading = page.getByRole("heading", { level: 1 });
+  for (const part of EN["home.hero.title"].split("|")) {
+    await expect(heading).toContainText(part);
+  }
+  await expect(
+    page.getByRole("link", { name: EN["home.nav.get_started"] }).first(),
+  ).toHaveAttribute("href", "/signup");
+  await expect(page.getByRole("link", { name: EN["home.nav.login"] }).first()).toHaveAttribute(
     "href",
     "/login",
   );
