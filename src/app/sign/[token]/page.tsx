@@ -4,6 +4,7 @@
  * the SECURITY DEFINER resolver; unknown, expired, revoked and used tokens
  * all render the same "not available" page. No app shell, no sign-in.
  */
+import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { clientIpFromHeaders } from "@/platform/http/clientIp";
@@ -26,6 +27,11 @@ import { ShadowHtml } from "./ShadowHtml";
 import { SignForm } from "./SignForm";
 import { declineAction, signAction } from "./actions";
 import type { Locale } from "@/platform/registries";
+
+// A bearer-token URL must never be crawled or cached by a search engine.
+export const metadata: Metadata = {
+  robots: { index: false, follow: false, nocache: true },
+};
 
 export const dynamic = "force-dynamic";
 

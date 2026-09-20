@@ -52,6 +52,11 @@ export async function GET(
   if (typeof resolved === "string") {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
+  // Org-enforced MFA: the layout redirect does not cover a direct GET, so an
+  // aal1 session must be refused here as well (same rule as server actions).
+  if (!resolved.mfaSatisfied) {
+    return NextResponse.json({ error: "mfa_required" }, { status: 403 });
+  }
   const url = new URL(request.url);
   const wantsPdf = url.searchParams.get("format") === "pdf";
   const autoPrint = url.searchParams.get("print") === "1";

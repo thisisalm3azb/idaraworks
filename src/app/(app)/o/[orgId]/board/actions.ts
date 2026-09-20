@@ -5,6 +5,7 @@ import { resolveCtxForAction } from "@/platform/auth/resolve";
 import { resolveEntitlements } from "@/platform/entitlements";
 import { hrSurfacesEnabled, stockSurfacesEnabled } from "@/platform/flags";
 import { captureRequestError } from "@/platform/observability/sentry";
+import { logger } from "@/platform/logger";
 import {
   availableWidgets,
   resetDashboardPref,
@@ -53,7 +54,7 @@ export async function saveDashboardLayoutAction(
     revalidatePath(`/o/${orgId}`);
     return { ok: true };
   } catch (err) {
-    console.error(`[dashboard] save layout failed for org ${orgId}:`, err);
+    logger.error({ err, orgId }, "dashboard: save layout failed");
     captureRequestError(err, { path: `/o/${orgId}`, method: "action:saveDashboardLayout" });
     return { ok: false, error: "failed" };
   }
@@ -67,7 +68,7 @@ export async function resetDashboardLayoutAction(orgId: string): Promise<BoardRe
     revalidatePath(`/o/${orgId}`);
     return { ok: true };
   } catch (err) {
-    console.error(`[dashboard] reset layout failed for org ${orgId}:`, err);
+    logger.error({ err, orgId }, "dashboard: reset layout failed");
     captureRequestError(err, { path: `/o/${orgId}`, method: "action:resetDashboardLayout" });
     return { ok: false, error: "failed" };
   }

@@ -10,7 +10,7 @@
  */
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { resolveCtx } from "@/platform/auth/resolve";
+import { resolveCtxForAction } from "@/platform/auth/resolve";
 import { stockSurfacesEnabled } from "@/platform/flags";
 import {
   createLocation,
@@ -36,7 +36,8 @@ function back(orgId: string, params: Record<string, string>): never {
 
 async function guard(orgId: string) {
   if (!stockSurfacesEnabled()) redirect(`/o/${orgId}`);
-  const resolved = await resolveCtx(orgId);
+  const resolved = await resolveCtxForAction(orgId);
+  if (resolved === "mfa_required") redirect("/mfa");
   if (typeof resolved === "string") redirect("/");
   return resolved;
 }

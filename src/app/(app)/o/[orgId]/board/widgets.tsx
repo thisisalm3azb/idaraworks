@@ -9,6 +9,7 @@ import {
   type ListRow,
 } from "@/platform/ui/dashboard";
 import { can } from "@/platform/authz";
+import { logger } from "@/platform/logger";
 import { formatDate, formatMoney } from "@/platform/format";
 import type { Translator } from "@/platform/i18n/server";
 import type { CurrencyCode, Locale, RoleArchetype } from "@/platform/registries";
@@ -101,7 +102,7 @@ export async function renderWidgets(
       try {
         out[key] = await renderOne(key, inp);
       } catch (err) {
-        console.error(`[dashboard] widget ${key} failed:`, err);
+        logger.error({ err, widget: key, orgId: inp.orgId }, "dashboard: widget failed");
         out[key] = (
           <SectionCard title={inp.t(`dash.widget.${key}`, inp.vars)}>
             <p role="status" className="text-sm text-ink-muted">

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { resolveCtxForAction } from "@/platform/auth/resolve";
 import { captureRequestError } from "@/platform/observability/sentry";
+import { logger } from "@/platform/logger";
 import {
   dismissChecklist,
   restartTour,
@@ -42,7 +43,7 @@ function isStatus(v: string): v is OnboardingStatus {
 
 /** Report, never throw: the page must survive; the operator must still know. */
 function reportSwallowed(err: unknown, orgId: string, what: string): void {
-  console.error(`[onboarding] ${what} failed for org ${orgId}:`, err);
+  logger.error({ err, orgId, what }, "onboarding: write failed");
   captureRequestError(err, { path: `/o/${orgId}`, method: `action:${what}` });
 }
 

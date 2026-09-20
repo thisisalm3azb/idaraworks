@@ -36,6 +36,8 @@ export async function GET(req: Request, ctx: { params: Promise<{ orgId: string }
   const { orgId } = await ctx.params;
   const resolved = await resolveCtx(orgId);
   if (typeof resolved === "string") return new NextResponse("Unauthorized", { status: 401 });
+  // Org-enforced MFA applies to a direct GET exactly as to a server action.
+  if (!resolved.mfaSatisfied) return new NextResponse("Forbidden", { status: 403 });
   if (!can(resolved.archetype, "crm.forecast.view"))
     return new NextResponse("Forbidden", { status: 403 });
   const url = new URL(req.url);

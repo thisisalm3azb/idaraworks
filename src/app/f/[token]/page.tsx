@@ -4,6 +4,7 @@
  * else of the organisation is readable from here; unknown, expired, revoked
  * and exhausted links all render the same page.
  */
+import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { clientIpFromHeaders } from "@/platform/http/clientIp";
@@ -13,6 +14,11 @@ import { loadFormSnapshot, resolveFormToken } from "@/modules/docstudio/service"
 import { FormRenderer, type FormField } from "./FormRenderer";
 import { submitFormAction } from "./actions";
 import type { Locale } from "@/platform/registries";
+
+// A bearer-token URL must never be crawled or cached by a search engine.
+export const metadata: Metadata = {
+  robots: { index: false, follow: false, nocache: true },
+};
 
 export const dynamic = "force-dynamic";
 

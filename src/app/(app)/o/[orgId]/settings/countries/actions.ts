@@ -14,7 +14,7 @@
  */
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { resolveCtx } from "@/platform/auth/resolve";
+import { resolveCtxForAction } from "@/platform/auth/resolve";
 import { countryPacksEnabled } from "@/platform/flags";
 import {
   adoptPack,
@@ -30,7 +30,8 @@ import type { RoleArchetype } from "@/platform/registries";
 
 async function resolve(orgId: string): Promise<{ ctx: Ctx; archetype: RoleArchetype }> {
   if (!countryPacksEnabled()) redirect(`/o/${orgId}`);
-  const resolved = await resolveCtx(orgId);
+  const resolved = await resolveCtxForAction(orgId);
+  if (resolved === "mfa_required") redirect("/mfa");
   if (typeof resolved === "string") redirect("/");
   return { ctx: resolved.ctx, archetype: resolved.archetype };
 }

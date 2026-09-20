@@ -8,11 +8,13 @@
  * a request this can express.
  */
 import { revalidatePath } from "next/cache";
-import { resolveCtx } from "@/platform/auth/resolve";
+import { redirect } from "next/navigation";
+import { resolveCtxForAction } from "@/platform/auth/resolve";
 import { markNotificationRead } from "@/platform/notifications";
 
 export async function markReadAction(orgId: string, formData: FormData): Promise<void> {
-  const resolved = await resolveCtx(orgId);
+  const resolved = await resolveCtxForAction(orgId);
+  if (resolved === "mfa_required") redirect("/mfa");
   if (typeof resolved === "string") return;
   const id = String(formData.get("id") ?? "");
   if (!id) return;

@@ -4,7 +4,7 @@ import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { oauthEnabled } from "@/platform/auth/oauth";
 import { requestOrigin, sanitizeNext } from "@/platform/auth/callback";
-import { validateNewPassword } from "@/platform/auth/password";
+import { PASSWORD_MIN_LENGTH, validateNewPassword } from "@/platform/auth/password";
 import { sql, withUserCtx } from "@/platform/tenancy";
 import { supabaseServer } from "@/platform/tenancy/supabase";
 import { getSessionUser, listMyOrgs } from "@/platform/auth/resolve";
@@ -153,6 +153,10 @@ export async function signupAction(formData: FormData): Promise<void> {
   const password = String(formData.get("password") ?? "");
   const fullName = String(formData.get("full_name") ?? "").trim();
   const meta = await requestMeta();
+  // The form's minLength is advice to the browser; the rule is enforced here.
+  if (!email.includes("@") || password.length < PASSWORD_MIN_LENGTH) {
+    redirect("/signup?error=failed");
+  }
 
   const rl = await rateLimit("signup", meta.ip ?? email);
   if (!rl.allowed) {

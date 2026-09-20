@@ -20,8 +20,12 @@ function authorised(req: Request): boolean {
   const bearer = header.startsWith("Bearer ")
     ? header.slice(7)
     : (req.headers.get("x-cron-secret") ?? "");
-  if (bearer.length !== secret.length) return false;
-  return timingSafeEqual(Buffer.from(bearer), Buffer.from(secret));
+  const a = Buffer.from(bearer);
+  const b = Buffer.from(secret);
+  // Byte lengths, not string lengths: a multi-byte header of equal string
+  // length would otherwise make timingSafeEqual throw (a 500, not a 401).
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(a, b);
 }
 
 export async function GET(req: Request): Promise<Response> {
