@@ -56,13 +56,32 @@ address at all.
 
 ## When the shared store is unavailable
 
-The call **fails open to the memory store and logs at error level**
-(`shared rate limit store unavailable — falling back to the per-process store`),
-because a store outage must not lock every person out of login. During such an
-outage each instance still bounds its own traffic, and the log line is the
-signal to look at the database. The database call is bounded to two seconds so
-a slow store cannot stall sign-in. This is a deliberate availability choice; it
-is not equivalent protection, and the log makes the degraded state visible.
+Decided per rule (`onStoreFailure` in `RATE_RULES`), because the two kinds of
+budget fail differently:
+
+- **Public and authentication budgets refuse** (`login`, `signup`,
+  `password_reset`, `otp_send`, `confirm`, `invite_*`, `share`, `share_pdf`,
+  `webhook`, `identity`, `csp_report`): a store that is down or answers too
+  slowly (5 s) refuses the request with `retry-after: 5`, logging
+  `shared rate limit store unavailable — refusing until it answers`. Failing
+  open here would let the very flood that slows the store switch the guard
+  off; the cost is one retry a moment later. A database outage already makes
+  the application unusable, so this refuses nothing that would otherwise work.
+- **Per-member cost budgets fall back to the per-process memory store**
+  (`pdf`, `export`, `health`), logging
+  `shared rate limit store unavailable — falling back to the per-process store`.
+  Availability matters more than a precise count there, and the memory store
+  still bounds the calling process.
+
+Either way the log line at error level is the signal to look at the database,
+and a degraded store is never mistaken for protection. The limiter uses its
+own small pool (`RATE_LIMIT_POOL_MAX`, default 10) and one statement per call,
+so a burst of public requests does not queue behind tenant transactions: a
+burst of 70 concurrent manifest requests through a multi-worker `next start`
+against the remote TEST project counted 60 allowed / 10 refused with no
+store timeouts (an earlier build with a two-connection pool and a two-second
+timeout timed out on most of that burst — which is how this section was
+written).
 
 ## How a person recovers from a limit
 

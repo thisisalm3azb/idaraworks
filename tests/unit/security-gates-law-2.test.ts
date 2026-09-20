@@ -252,6 +252,34 @@ describe("the shared rate-limit store", () => {
     expect(src).toContain('return isDeployed() ? "db" : "memory"');
     expect(src).toContain("app.rate_limit_hit(");
     expect(src).toContain("falling back to the per-process store");
+    expect(src).toContain("refusing until it answers");
+  });
+
+  it("every public or authentication budget refuses on a store outage; only member cost budgets fall back", () => {
+    const src = read("src/platform/http/rateLimit.ts");
+    const rules = src.slice(
+      src.indexOf("export const RATE_RULES"),
+      src.indexOf("} as const satisfies"),
+    );
+    const failureOf = (rule: string) =>
+      new RegExp(`\\b${rule}: \\{[^}]*onStoreFailure: "(refuse|memory)"`).exec(rules)?.[1];
+    for (const r of [
+      "login",
+      "signup",
+      "password_reset",
+      "otp_send",
+      "invite_send",
+      "invite_accept",
+      "confirm",
+      "share",
+      "share_pdf",
+      "webhook",
+      "identity",
+      "csp_report",
+    ]) {
+      expect(failureOf(r), r).toBe("refuse");
+    }
+    for (const r of ["pdf", "export", "health"]) expect(failureOf(r), r).toBe("memory");
   });
 
   it("on Vercel only platform-set client address headers are trusted", () => {

@@ -17,10 +17,21 @@
  *               instances, each with its own map — so it is a development and
  *               unit-test store, never protection for a deployed app.
  *
- * Failure behaviour is deliberate and loud: when the shared store cannot answer
- * (network error, timeout, missing migration) the call FAILS OPEN to the memory
- * store and logs at error level, because a store outage must not lock every
- * user out of login. The memory fallback still bounds the calling process.
+ * What happens when the shared store cannot answer (network error, timeout,
+ * missing migration) is decided PER RULE, because the two kinds of budget
+ * fail differently:
+ *
+ *  - `onStoreFailure: "refuse"` — the public and authentication surfaces
+ *    (login, signup, reset, confirm, invites, share links, identity, webhook).
+ *    A store that is down or too slow refuses the request with a short
+ *    retry-after. Failing open here would let the very flood that slows the
+ *    store switch the guard off; a refusal costs one retry a moment later.
+ *  - `onStoreFailure: "memory"` — the per-member cost budgets (PDF, export)
+ *    and the health probe. Availability matters more than a precise count,
+ *    and the memory store still bounds the calling process.
+ *
+ * Either way the outage is logged at error level, so a degraded store is
+ * visible and never mistaken for protection.
  *
  * `retryAfterSeconds` is the time until the fixed window rolls over, for a
  * `retry-after` header and for copy that tells a person when to try again.
@@ -32,51 +43,51 @@ import { createAppDb, sql, type AppDb } from "@/platform/tenancy";
 
 export type RateLimitResult = { allowed: boolean; remaining: number; retryAfterSeconds: number };
 
-type Rule = { limit: number; windowSeconds: number };
+type Rule = { limit: number; windowSeconds: number; onStoreFailure: "refuse" | "memory" };
 
 export const RATE_RULES = {
-  login: { limit: 10, windowSeconds: 300 },
-  signup: { limit: 5, windowSeconds: 3600 },
+  login: { limit: 10, windowSeconds: 300, onStoreFailure: "refuse" },
+  signup: { limit: 5, windowSeconds: 3600, onStoreFailure: "refuse" },
   // U1 follow-up: the forgot-password action — same budget as signup (it also
   // sends an email per call and must not become an enumeration/spam vector).
-  password_reset: { limit: 5, windowSeconds: 3600 },
-  otp_send: { limit: 5, windowSeconds: 600 },
-  invite_send: { limit: 20, windowSeconds: 3600 },
-  invite_accept: { limit: 10, windowSeconds: 600 },
+  password_reset: { limit: 5, windowSeconds: 3600, onStoreFailure: "refuse" },
+  otp_send: { limit: 5, windowSeconds: 600, onStoreFailure: "refuse" },
+  invite_send: { limit: 20, windowSeconds: 3600, onStoreFailure: "refuse" },
+  invite_accept: { limit: 10, windowSeconds: 600, onStoreFailure: "refuse" },
   // Security review 2026-09-20 (F-30): the token-hash confirmation route and
   // the OAuth/PKCE callback verify against the auth provider on every call and
   // were unbounded. A person confirms once or twice; thirty per address per ten
   // minutes leaves room for a mail scanner and a retry, and caps guessing at a
   // few thousand attempts a day per address against a token that expires.
-  confirm: { limit: 30, windowSeconds: 600 },
+  confirm: { limit: 30, windowSeconds: 600, onStoreFailure: "refuse" },
   // Phase I review fix: /api/health fans out to DB + storage per call and is
   // unauthenticated — bound it. Generous enough for smoke suites + monitors.
-  health: { limit: 30, windowSeconds: 60 },
+  health: { limit: 30, windowSeconds: 60, onStoreFailure: "memory" },
   // S7: the PUBLIC customer-share page (doc 10 item 14). Unauthenticated + token-bearer;
   // bound per-IP to blunt token enumeration / scraping.
-  share: { limit: 30, windowSeconds: 60 },
+  share: { limit: 30, windowSeconds: 60, onStoreFailure: "refuse" },
   // H22.0: the PDF a public share link can download. Far tighter than viewing
   // the page, because every call starts a headless browser. Six a minute is
   // more than a recipient ever needs and bounds what a leaked token can cost.
-  share_pdf: { limit: 6, windowSeconds: 60 },
+  share_pdf: { limit: 6, windowSeconds: 60, onStoreFailure: "refuse" },
   // Security review 2026-09-20 (F-24): the AUTHENTICATED PDF routes start the
   // same headless browser. Per member, not per address: twenty a minute is
   // more than anybody prints by hand and bounds what one account can cost.
-  pdf: { limit: 20, windowSeconds: 60 },
+  pdf: { limit: 20, windowSeconds: 60, onStoreFailure: "memory" },
   // Security review 2026-09-20 (F-23): a CSV export reads every row of an
   // entity. Ten per member per ten minutes covers exporting every entity once.
-  export: { limit: 10, windowSeconds: 600 },
+  export: { limit: 10, windowSeconds: 600, onStoreFailure: "memory" },
   // S10: the unauthenticated billing webhook — bound per-IP so an attacker can't hammer the
   // signature-verify + org-resolve path. Generous for a real provider's legitimate burst.
-  webhook: { limit: 120, windowSeconds: 60 },
+  webhook: { limit: 120, windowSeconds: 60, onStoreFailure: "refuse" },
   // Security review 2026-09-20: the unauthenticated per-company manifest and
   // icon endpoints each open a database connection (and the icon may render).
   // An install fetches one manifest and up to four icons; sixty a minute per
   // address is generous for people and a ceiling for a script.
-  identity: { limit: 60, windowSeconds: 60 },
+  identity: { limit: 60, windowSeconds: 60, onStoreFailure: "refuse" },
   // The CSP violation report sink is unauthenticated and writes a log line per
   // call; a browser sends a handful per page at most.
-  csp_report: { limit: 20, windowSeconds: 60 },
+  csp_report: { limit: 20, windowSeconds: 60, onStoreFailure: "refuse" },
 } as const satisfies Record<string, Rule>;
 
 export type RateScope = keyof typeof RATE_RULES;
@@ -147,24 +158,38 @@ export type HitRunner = (
 
 let limiterDb: { db: AppDb; end: () => Promise<void> } | undefined;
 
-/** A dedicated, tiny pool — the shared app pool is for tenant transactions only. */
+/**
+ * A dedicated pool: the shared app pool is for tenant transactions only, and a
+ * burst of public requests must not queue behind them. Sized for bursts —
+ * every request on an instance that hits a budget takes one connection for
+ * one statement.
+ */
 function limiterPool(): AppDb {
-  limiterDb ??= createAppDb({ max: 2 });
+  limiterDb ??= createAppDb({ max: Number(process.env.RATE_LIMIT_POOL_MAX ?? 10) });
   return limiterDb.db;
 }
 
-const DB_TIMEOUT_MS = 2_000;
+/** A slow store must not stall sign-in; past this the rule's failure mode applies. */
+const DB_TIMEOUT_MS = Number(process.env.RATE_LIMIT_DB_TIMEOUT_MS ?? 5_000);
 
 const dbHit: HitRunner = async (key, limit, windowSeconds) => {
-  const query = limiterPool().transaction(async (tx) => {
-    const rows = (await tx.execute(sql`
-      select allowed, remaining, retry_after
-      from app.rate_limit_hit(${key}, ${limit}, ${windowSeconds})
-    `)) as unknown as Array<{ allowed: boolean; remaining: number; retry_after: number }>;
-    const r = rows[0];
-    if (!r) throw new Error("rate_limit_hit returned no row");
-    return r;
-  });
+  // One statement, no transaction: this pool runs nothing else, so the
+  // dispatch-stall hazard that bans bare execute on the shared pool (db.ts)
+  // does not apply, and skipping BEGIN/COMMIT is two fewer round trips.
+  const query = limiterPool()
+    .execute(
+      sql`
+        select allowed, remaining, retry_after
+        from app.rate_limit_hit(${key}, ${limit}, ${windowSeconds})
+      `,
+    )
+    .then((rows) => {
+      const r = (
+        rows as unknown as Array<{ allowed: boolean; remaining: number; retry_after: number }>
+      )[0];
+      if (!r) throw new Error("rate_limit_hit returned no row");
+      return r;
+    });
   let timer: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<never>((_, reject) => {
     timer = setTimeout(() => reject(new Error("rate_limit_hit timed out")), DB_TIMEOUT_MS);
@@ -185,6 +210,23 @@ async function dbLimit(key: string, rule: Rule, run: HitRunner): Promise<RateLim
   };
 }
 
+/** The answer when the shared store could not be asked (see the header). */
+function onStoreFailure(scope: RateScope, key: string, rule: Rule, err: unknown): RateLimitResult {
+  const message = err instanceof Error ? err.message : String(err);
+  if (rule.onStoreFailure === "refuse") {
+    logger.error(
+      { scope, err: message },
+      "shared rate limit store unavailable — refusing until it answers",
+    );
+    return { allowed: false, remaining: 0, retryAfterSeconds: 5 };
+  }
+  logger.error(
+    { scope, err: message },
+    "shared rate limit store unavailable — falling back to the per-process store",
+  );
+  return memoryLimit(key, rule);
+}
+
 /**
  * Count one hit for `identifier` under `scope` and say whether it is within
  * budget. `options.run` exists for unit tests of the shared-store path; the
@@ -195,25 +237,21 @@ export async function rateLimit(
   identifier: string,
   options: { run?: HitRunner; store?: RateLimitStore } = {},
 ): Promise<RateLimitResult> {
-  const rule = RATE_RULES[scope];
+  const rule: Rule = RATE_RULES[scope];
   const key = `${scope}:${identifier}`;
   const store = options.store ?? selectRateLimitStore();
   if (store === "upstash") {
     try {
       return await upstashLimit(key, rule);
     } catch (err) {
-      // Fail-open to the memory store, loudly — availability over lockout.
-      logger.error({ scope, err: (err as Error).message }, "upstash rate limit unavailable");
+      return onStoreFailure(scope, key, rule, err);
     }
-  } else if (store === "db") {
+  }
+  if (store === "db") {
     try {
       return await dbLimit(key, rule, options.run ?? dbHit);
     } catch (err) {
-      // Same rule: a store outage bounds the calling process only, and says so.
-      logger.error(
-        { scope, err: (err as Error).message },
-        "shared rate limit store unavailable — falling back to the per-process store",
-      );
+      return onStoreFailure(scope, key, rule, err);
     }
   }
   return memoryLimit(key, rule);

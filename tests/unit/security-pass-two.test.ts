@@ -80,17 +80,37 @@ describe("the shared store through rateLimit()", () => {
     expect(calls).toEqual([["confirm:203.0.113.9", 30, 600]]);
   });
 
-  it("falls back to the per-process store, loudly, when the shared store fails", async () => {
+  it("a public or authentication budget REFUSES, loudly, when the shared store fails", async () => {
     const { logger } = await import("@/platform/logger");
     const spy = vi.spyOn(logger, "error").mockImplementation(() => undefined);
     const run: HitRunner = async () => {
       throw new Error("connection refused");
     };
-    const r = await rateLimit("identity", `fallback-${Date.now()}`, { store: "db", run });
-    expect(r.allowed).toBe(true);
+    for (const scope of ["identity", "login", "signup", "confirm", "share", "webhook"] as const) {
+      const r = await rateLimit(scope, `outage-${Date.now()}`, { store: "db", run });
+      expect(r.allowed, scope).toBe(false);
+      expect(r.retryAfterSeconds, scope).toBeGreaterThan(0);
+    }
     expect(spy).toHaveBeenCalledWith(
       expect.objectContaining({ scope: "identity" }),
-      expect.stringContaining("shared rate limit store unavailable"),
+      expect.stringContaining("refusing until it answers"),
+    );
+    spy.mockRestore();
+  });
+
+  it("a per-member cost budget falls back to the per-process store, loudly, when the shared store fails", async () => {
+    const { logger } = await import("@/platform/logger");
+    const spy = vi.spyOn(logger, "error").mockImplementation(() => undefined);
+    const run: HitRunner = async () => {
+      throw new Error("connection refused");
+    };
+    for (const scope of ["pdf", "export", "health"] as const) {
+      const r = await rateLimit(scope, `fallback-${Date.now()}`, { store: "db", run });
+      expect(r.allowed, scope).toBe(true);
+    }
+    expect(spy).toHaveBeenCalledWith(
+      expect.objectContaining({ scope: "pdf" }),
+      expect.stringContaining("falling back to the per-process store"),
     );
     spy.mockRestore();
   });
