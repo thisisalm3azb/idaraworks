@@ -6,6 +6,7 @@
  * document from a template) explicitly, under their own permissions and the
  * target module's validation.
  */
+import { testPattern } from "./patterns";
 import { createHash, randomBytes } from "node:crypto";
 import { z } from "zod";
 import { command } from "@/platform/audit";
@@ -316,12 +317,10 @@ export function validateAnswers(
       if (f.min !== undefined && v < f.min) problems[f.key] = "min";
       if (f.max !== undefined && v > f.max) problems[f.key] = "max";
     }
-    if (typeof v === "string" && f.pattern) {
-      try {
-        if (!new RegExp(f.pattern).test(v)) problems[f.key] = "pattern";
-      } catch {
-        /* an invalid author pattern never blocks a submission */
-      }
+    // An author pattern is only ever run after the catastrophic-backtracking
+    // check and against a bounded slice of input (patterns.ts, review F-25).
+    if (typeof v === "string" && f.pattern && !testPattern(f.pattern, v)) {
+      problems[f.key] = "pattern";
     }
   }
   return Object.keys(problems).length > 0 ? { ok: false, problems } : { ok: true, answers };

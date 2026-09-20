@@ -21,7 +21,7 @@ const list = (fd: FormData, k: string) =>
     .map((s) => s.trim())
     .filter(Boolean);
 async function ctxOrRedirect(orgId: string) {
-  const resolved = await resolveCtxForAction(orgId);
+  const resolved = await resolveCtxForAction(orgId, { module: "cap.revenue_studio" });
   if (resolved === "mfa_required") redirect("/mfa");
   if (typeof resolved === "string") redirect("/");
   return resolved;

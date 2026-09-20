@@ -15,6 +15,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 type FakePage = {
+  setDefaultTimeout: (ms: number) => void;
   setContent: () => Promise<void>;
   evaluate: () => Promise<void>;
   pdf: () => Promise<Uint8Array>;
@@ -59,6 +60,7 @@ vi.mock("playwright-core", () => ({
           }
           browser.pages++;
           return {
+            setDefaultTimeout: () => {},
             setContent: async () => {},
             evaluate: async () => {},
             pdf: async () => {

@@ -9,6 +9,11 @@ import { cookies } from "next/headers";
 import { sql, supabaseServer, withCtx, withUserCtx, type Ctx } from "@/platform/tenancy";
 import { currentRequestId } from "@/platform/observability/requestId";
 import type { RoleArchetype } from "@/platform/registries";
+import {
+  getAppliedWorkspaceShape,
+  moduleStateOf,
+  type WorkspaceModuleKey,
+} from "@/platform/workspace";
 
 export type SessionUser = { id: string; email: string | null; aal: "aal1" | "aal2" };
 
@@ -58,6 +63,8 @@ export async function listMyOrgs(userId: string): Promise<MyOrg[]> {
 }
 
 export type ResolveFailure = "no_session" | "no_membership" | "mfa_required";
+/** What a MUTATING action may additionally be refused for (see resolveCtxForAction). */
+export type ActionResolveFailure = ResolveFailure | "module_disabled";
 
 const ORG_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -141,10 +148,40 @@ export const resolveCtx = cache(async (orgId: string): Promise<ResolvedCtx | Res
  * (material security finding: the layout redirect does NOT protect Server
  * Actions; every privileged mutation must re-check aal2 on the server path).
  * Returns the resolved ctx or a failure reason the caller redirects on.
+ *
+ * `module` (security review 2026-09-20, F-21): the organisation's APPROVED
+ * configuration can switch a module off. The segment layout renders an
+ * unavailable state for its pages (ModuleGate), but a server action is a
+ * direct request that never passes through a layout — so an action that
+ * belongs to a module must name it here, and a module the configuration
+ * switched off refuses the mutation. This is the blueprint's `enabled`
+ * switch only: navigation hiding stays presentation, entitlements stay in
+ * requireCapability, and reads are never blocked (FR-9). Legacy
+ * organisations (no applied blueprint) pass through unchanged, and a shape
+ * that cannot be read fails safe — exactly as the layout gate does.
  */
-export async function resolveCtxForAction(orgId: string): Promise<ResolvedCtx | ResolveFailure> {
+export async function resolveCtxForAction(
+  orgId: string,
+  options: { module?: WorkspaceModuleKey } = {},
+): Promise<ResolvedCtx | ActionResolveFailure> {
   const resolved = await resolveCtx(orgId);
   if (typeof resolved === "string") return resolved;
   if (!resolved.mfaSatisfied) return "mfa_required";
+  if (options.module && (await moduleDisabledFor(resolved.ctx, options.module))) {
+    return "module_disabled";
+  }
   return resolved;
+}
+
+const appliedShape = cache(async (ctx: Ctx) => {
+  try {
+    return await getAppliedWorkspaceShape(ctx);
+  } catch {
+    return null; // fail safe, like the shell resolver: a broken shape never locks a workspace
+  }
+});
+
+/** True only when the applied blueprint switched this module OFF. */
+async function moduleDisabledFor(ctx: Ctx, module: WorkspaceModuleKey): Promise<boolean> {
+  return moduleStateOf(await appliedShape(ctx), module) === "disabled";
 }

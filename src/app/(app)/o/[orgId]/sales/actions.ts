@@ -7,7 +7,7 @@ import { completeFollowUp } from "@/modules/crm/service";
 
 /** Complete an overdue follow-up from the overview and stay on it. */
 export async function salesFollowUpDoneAction(orgId: string, formData: FormData): Promise<void> {
-  const resolved = await resolveCtxForAction(orgId);
+  const resolved = await resolveCtxForAction(orgId, { module: "cap.customers" });
   if (resolved === "mfa_required") redirect("/mfa");
   if (typeof resolved === "string") redirect("/");
   const back = `/o/${orgId}/sales`;

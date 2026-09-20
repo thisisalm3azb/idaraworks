@@ -26,6 +26,8 @@ import {
 import { getT } from "@/platform/i18n/server";
 import { formatDate } from "@/platform/format";
 import { logger } from "@/platform/logger";
+import { rateLimit } from "@/platform/http/rateLimit";
+import { limitReached } from "@/platform/http/limitResponse";
 import { getDocumentProfile } from "@/modules/branding/service";
 import {
   DocError,
@@ -61,6 +63,21 @@ export async function GET(
   const wantsPdf = url.searchParams.get("format") === "pdf";
   const autoPrint = url.searchParams.get("print") === "1";
   const revParam = url.searchParams.get("rev");
+  // Security review 2026-09-20 (F-24): the PDF format starts a headless
+  // browser and is budgeted per member; the printable HTML is not.
+  if (wantsPdf) {
+    const gate = await rateLimit("pdf", `user:${resolved.ctx.userId}`);
+    if (!gate.allowed) {
+      return limitReached(
+        {
+          kind: "rate_limited",
+          retryAfterSeconds: gate.retryAfterSeconds,
+          backUrl: `${url.pathname}?print=1`,
+        },
+        request.headers.get("accept"),
+      );
+    }
+  }
   const t = await getT();
 
   try {

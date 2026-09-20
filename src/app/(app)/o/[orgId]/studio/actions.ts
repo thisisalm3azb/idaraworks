@@ -5,6 +5,7 @@ import { ZodError } from "zod";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { resolveCtxForAction } from "@/platform/auth/resolve";
+import { safeActionMessage } from "@/platform/http/actionError";
 import { createComment, listComments, type Comment } from "@/platform/comments";
 import {
   createStudioPlan,
@@ -54,7 +55,7 @@ export type ActionResult<T = undefined> =
 type Resolved = Exclude<Awaited<ReturnType<typeof resolveCtxForAction>>, string>;
 
 async function resolveOrNull(orgId: string): Promise<Resolved | null> {
-  const resolved = await resolveCtxForAction(orgId);
+  const resolved = await resolveCtxForAction(orgId, { module: "cap.studio" });
   if (typeof resolved === "string") return null;
   return resolved;
 }
@@ -67,18 +68,19 @@ async function run<T>(orgId: string, fn: (r: Resolved) => Promise<T>): Promise<A
     return { ok: true, data };
   } catch (err) {
     const code = (err as { code?: string }).code;
+    // Validation issues are written for people and name the field; anything
+    // else passes through the safe-message rule (app errors verbatim, driver
+    // and runtime errors collapsed and logged — security review F-26).
     const message =
       err instanceof ZodError
         ? err.issues.map((i) => `${i.path.join(".") || "input"}: ${i.message}`).join("; ")
-        : err instanceof Error
-          ? err.message
-          : "failed";
+        : safeActionMessage(err, { where: "studio.action" });
     return { ok: false, error: message.slice(0, 200), code };
   }
 }
 
 export async function createPlanAction(orgId: string, formData: FormData): Promise<void> {
-  const resolved = await resolveCtxForAction(orgId);
+  const resolved = await resolveCtxForAction(orgId, { module: "cap.studio" });
   if (resolved === "mfa_required") redirect("/mfa");
   if (typeof resolved === "string") redirect("/");
   let id = "";
@@ -90,8 +92,8 @@ export async function createPlanAction(orgId: string, formData: FormData): Promi
     id = r.id;
   } catch (err) {
     if ((err as { digest?: string }).digest?.startsWith("NEXT_REDIRECT")) throw err;
-    const message = err instanceof Error ? err.message : "failed";
-    redirect(`/o/${orgId}/studio?error=${encodeURIComponent(message.slice(0, 160))}`);
+    const message = safeActionMessage(err, { where: "studio.create" });
+    redirect(`/o/${orgId}/studio?error=${encodeURIComponent(message)}`);
   }
   revalidatePath(`/o/${orgId}/studio`);
   redirect(`/o/${orgId}/studio/${id}`);
@@ -314,7 +316,7 @@ export async function reviewNarrativeAction(
 // ── H25N — templates ─────────────────────────────────────────────────────────
 
 export async function createFromTemplateAction(orgId: string, formData: FormData): Promise<void> {
-  const resolved = await resolveCtxForAction(orgId);
+  const resolved = await resolveCtxForAction(orgId, { module: "cap.studio" });
   if (resolved === "mfa_required") redirect("/mfa");
   if (typeof resolved === "string") redirect("/");
   let id = "";
@@ -326,8 +328,9 @@ export async function createFromTemplateAction(orgId: string, formData: FormData
     });
     id = r.id;
   } catch (err) {
-    const message = err instanceof Error ? err.message : "failed";
-    redirect(`/o/${orgId}/studio?error=${encodeURIComponent(message.slice(0, 200))}`);
+    if ((err as { digest?: string }).digest?.startsWith("NEXT_REDIRECT")) throw err;
+    const message = safeActionMessage(err, { where: "studio.template" });
+    redirect(`/o/${orgId}/studio?error=${encodeURIComponent(message)}`);
   }
   revalidatePath(`/o/${orgId}/studio`);
   redirect(`/o/${orgId}/studio/${id}`);

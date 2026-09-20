@@ -17,7 +17,7 @@ import {
 type Resolved = Exclude<Awaited<ReturnType<typeof resolveCtxForAction>>, string>;
 
 async function resolveOr(orgId: string): Promise<Resolved> {
-  const resolved = await resolveCtxForAction(orgId);
+  const resolved = await resolveCtxForAction(orgId, { module: "cap.customers" });
   if (resolved === "mfa_required") redirect("/mfa");
   if (typeof resolved === "string") redirect("/");
   return resolved as Resolved;

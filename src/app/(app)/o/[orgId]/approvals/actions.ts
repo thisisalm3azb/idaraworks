@@ -8,7 +8,7 @@ import { decideApproval, ApprovalStateError, SelfApprovalError } from "@/modules
 import { applyLeaveApproval } from "@/modules/hr/service";
 
 export async function decideApprovalAction(orgId: string, formData: FormData): Promise<void> {
-  const resolved = await resolveCtxForAction(orgId);
+  const resolved = await resolveCtxForAction(orgId, { module: "cap.approvals" });
   if (resolved === "mfa_required") redirect("/mfa");
   if (typeof resolved === "string") redirect("/");
   const base = `/o/${orgId}/approvals`;

@@ -18,6 +18,8 @@ import {
 } from "@/platform/documents";
 import { DOCUMENT_KINDS, documentModel, type DocumentKind } from "@/modules/documents/service";
 import { logger } from "@/platform/logger";
+import { rateLimit } from "@/platform/http/rateLimit";
+import { limitReached } from "@/platform/http/limitResponse";
 
 export const dynamic = "force-dynamic";
 /** Chromium needs room to start on a cold serverless container. */
@@ -46,6 +48,23 @@ export async function GET(
   const wantsPdf = url.searchParams.get("format") === "pdf";
   const autoPrint = url.searchParams.get("print") === "1";
   const language = url.searchParams.get("lang") === "ar" ? "ar" : "en";
+
+  // Security review 2026-09-20 (F-24): a PDF starts a headless browser, so
+  // the PDF format is budgeted per member; the HTML the browser prints itself
+  // is not.
+  if (wantsPdf) {
+    const gate = await rateLimit("pdf", `user:${resolved.ctx.userId}`);
+    if (!gate.allowed) {
+      return limitReached(
+        {
+          kind: "rate_limited",
+          retryAfterSeconds: gate.retryAfterSeconds,
+          backUrl: `${url.pathname}?print=1&lang=${language}`,
+        },
+        request.headers.get("accept"),
+      );
+    }
+  }
 
   try {
     const model = await documentModel(resolved.ctx, resolved.archetype, {

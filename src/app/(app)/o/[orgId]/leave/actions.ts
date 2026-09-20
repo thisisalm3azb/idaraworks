@@ -21,7 +21,7 @@ import {
  * explicit policy — this form only names the kind of leave.
  */
 export async function createLeaveTypeAction(orgId: string, formData: FormData): Promise<void> {
-  const resolved = await resolveCtxForAction(orgId);
+  const resolved = await resolveCtxForAction(orgId, { module: "cap.people" });
   if (resolved === "mfa_required") redirect("/mfa");
   if (typeof resolved === "string") redirect("/");
   const base = `/o/${orgId}/leave`;
@@ -51,7 +51,7 @@ export async function createLeaveTypeAction(orgId: string, formData: FormData): 
 /** Self-service: the employee id always resolves from the LOGIN, never a form
  *  field — a crafted request cannot file leave for someone else this way. */
 export async function requestLeaveAction(orgId: string, formData: FormData): Promise<void> {
-  const resolved = await resolveCtxForAction(orgId);
+  const resolved = await resolveCtxForAction(orgId, { module: "cap.people" });
   if (resolved === "mfa_required") redirect("/mfa");
   if (typeof resolved === "string") redirect("/");
   const base = `/o/${orgId}/leave`;
@@ -74,7 +74,7 @@ export async function requestLeaveAction(orgId: string, formData: FormData): Pro
 }
 
 export async function cancelLeaveAction(orgId: string, formData: FormData): Promise<void> {
-  const resolved = await resolveCtxForAction(orgId);
+  const resolved = await resolveCtxForAction(orgId, { module: "cap.people" });
   if (resolved === "mfa_required") redirect("/mfa");
   if (typeof resolved === "string") redirect("/");
   const base = `/o/${orgId}/leave`;
@@ -94,7 +94,7 @@ export async function cancelLeaveAction(orgId: string, formData: FormData): Prom
 }
 
 export async function requestOvertimeAction(orgId: string, formData: FormData): Promise<void> {
-  const resolved = await resolveCtxForAction(orgId);
+  const resolved = await resolveCtxForAction(orgId, { module: "cap.people" });
   if (resolved === "mfa_required") redirect("/mfa");
   if (typeof resolved === "string") redirect("/");
   const base = `/o/${orgId}/leave`;

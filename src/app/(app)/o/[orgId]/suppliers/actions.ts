@@ -7,7 +7,7 @@ import { createSupplier } from "@/modules/masters/service";
 import { failMasterDataAction } from "@/platform/http/actionError";
 
 export async function createSupplierAction(orgId: string, formData: FormData): Promise<void> {
-  const resolved = await resolveCtxForAction(orgId);
+  const resolved = await resolveCtxForAction(orgId, { module: "cap.purchase_orders" });
   if (resolved === "mfa_required") redirect("/mfa");
   if (typeof resolved === "string") redirect("/");
   const base = `/o/${orgId}/suppliers`;

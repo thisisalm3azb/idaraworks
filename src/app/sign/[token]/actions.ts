@@ -2,15 +2,16 @@
 
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { ZodError } from "zod";
 import { clientIpFromHeaders } from "@/platform/http/clientIp";
 import { rateLimit } from "@/platform/http/rateLimit";
 import { declineWithToken, resolveSignerToken, signWithToken } from "@/modules/docstudio/service";
+import { signErrorCode } from "./errors";
 
 /**
  * Public signing actions. The token is the only authority: it is resolved
  * through the SECURITY DEFINER resolver on every call, never trusted from a
  * cookie or a hidden field beyond the URL it arrived in. Rate limited per IP.
+ * A failure travels back as one of a closed set of codes, never as text.
  */
 async function guard(): Promise<{ ip: string | null; userAgent: string | null } | null> {
   const h = await headers();
@@ -41,13 +42,7 @@ export async function signAction(token: string, lang: string, formData: FormData
     redirect(`/sign/${token}?lang=${lang}&outcome=${result.completed ? "completed" : "signed"}`);
   } catch (err) {
     if ((err as { digest?: string }).digest?.startsWith("NEXT_REDIRECT")) throw err;
-    const message =
-      err instanceof ZodError
-        ? err.issues.map((i) => `${i.path.join(".") || "input"}: ${i.message}`).join("; ")
-        : err instanceof Error
-          ? err.message
-          : "failed";
-    redirect(`/sign/${token}?lang=${lang}&error=${encodeURIComponent(message.slice(0, 160))}`);
+    redirect(`/sign/${token}?lang=${lang}&error=${signErrorCode(err)}`);
   }
 }
 
@@ -64,7 +59,6 @@ export async function declineAction(
     redirect(`/sign/${token}?lang=${lang}&outcome=declined`);
   } catch (err) {
     if ((err as { digest?: string }).digest?.startsWith("NEXT_REDIRECT")) throw err;
-    const message = err instanceof Error ? err.message : "failed";
-    redirect(`/sign/${token}?lang=${lang}&error=${encodeURIComponent(message.slice(0, 160))}`);
+    redirect(`/sign/${token}?lang=${lang}&error=${signErrorCode(err)}`);
   }
 }

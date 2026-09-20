@@ -9,6 +9,7 @@
  * the vocabulary.
  */
 import { z } from "zod";
+import { checkPattern } from "./patterns";
 
 export const DOC_CATEGORIES = [
   "contract",
@@ -290,7 +291,9 @@ export const FieldBlock = z
       .optional(),
     min: z.number().optional(),
     max: z.number().optional(),
-    pattern: bounded(200).optional(),
+    pattern: bounded(200)
+      .refine((p) => checkPattern(p).ok, { message: "pattern is not allowed" })
+      .optional(),
     /** A calculated field: a safe arithmetic expression over other keys. */
     computed: bounded(500).optional(),
     /** Who fills it: the author while drafting, or a named signing party. */

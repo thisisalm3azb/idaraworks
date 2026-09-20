@@ -12,7 +12,7 @@ import {
 } from "@/modules/crm/service";
 
 async function ctxOrRedirect(orgId: string) {
-  const resolved = await resolveCtxForAction(orgId);
+  const resolved = await resolveCtxForAction(orgId, { module: "cap.revenue_studio" });
   if (resolved === "mfa_required") redirect("/mfa");
   if (typeof resolved === "string") redirect("/");
   return resolved;
@@ -45,7 +45,7 @@ export async function saveScenarioAction(
   orgId: string,
   payload: { id?: string; name: string; overlay: Overlay; assumptions?: string | null },
 ): Promise<SaveScenarioResult> {
-  const resolved = await resolveCtxForAction(orgId);
+  const resolved = await resolveCtxForAction(orgId, { module: "cap.revenue_studio" });
   if (typeof resolved === "string") return { ok: false, code: "forbidden" };
   try {
     const r = await saveScenario(resolved.ctx, resolved.archetype, payload);

@@ -7,8 +7,16 @@ import { NextResponse } from "next/server";
 import { resolveCtx } from "@/platform/auth/resolve";
 import { ForbiddenError } from "@/platform/authz";
 import { hasFeature } from "@/platform/entitlements";
-import { exportEntityCsv, isExportEntity, EXPORT_ENTITY_KEYS } from "@/platform/export/service";
+import {
+  exportEntityCsv,
+  isExportEntity,
+  EXPORT_ENTITY_KEYS,
+  ExportTooLargeError,
+  MAX_EXPORT_ROWS,
+} from "@/platform/export/service";
 import { toCsv } from "@/platform/export/csv";
+import { rateLimit } from "@/platform/http/rateLimit";
+import { limitReached } from "@/platform/http/limitResponse";
 import {
   buildExportContext,
   exportFilename,
@@ -21,6 +29,8 @@ import { getServerLocale } from "@/platform/i18n/server";
 import type { Ctx } from "@/platform/tenancy";
 
 export const dynamic = "force-dynamic";
+/** A large entity is read in pages; give the function room, but a bound. */
+export const maxDuration = 60;
 
 /**
  * The establishment's effective configuration, turned into the facts a
@@ -54,6 +64,20 @@ export async function GET(
   // aal1 session must be refused here as well (same rule as server actions).
   if (!resolved.mfaSatisfied) {
     return NextResponse.json({ error: "mfa_required" }, { status: 403 });
+  }
+  const accept = request.headers.get("accept");
+  // Security review 2026-09-20 (F-23): an export reads every row of an
+  // entity; budget it per member, and say when it will work again.
+  const gate = await rateLimit("export", `user:${resolved.ctx.userId}`);
+  if (!gate.allowed) {
+    return limitReached(
+      {
+        kind: "rate_limited",
+        retryAfterSeconds: gate.retryAfterSeconds,
+        backUrl: `/o/${orgId}/settings/export`,
+      },
+      accept,
+    );
   }
   const entity = new URL(request.url).searchParams.get("entity") ?? "";
 
@@ -112,6 +136,18 @@ export async function GET(
   } catch (err) {
     if (err instanceof ForbiddenError) {
       return NextResponse.json({ error: "forbidden" }, { status: 403 });
+    }
+    // Too many rows for one file: an explicit refusal, never a truncated CSV
+    // handed over as if it were complete.
+    if (err instanceof ExportTooLargeError) {
+      return limitReached(
+        {
+          kind: "export_too_large",
+          limit: MAX_EXPORT_ROWS,
+          backUrl: `/o/${orgId}/settings/export`,
+        },
+        accept,
+      );
     }
     throw err;
   }

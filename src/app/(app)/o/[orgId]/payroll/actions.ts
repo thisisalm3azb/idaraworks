@@ -14,7 +14,7 @@ import {
 } from "@/modules/payroll/service";
 
 export async function createPayGroupAction(orgId: string, formData: FormData): Promise<void> {
-  const resolved = await resolveCtxForAction(orgId);
+  const resolved = await resolveCtxForAction(orgId, { module: "cap.people" });
   if (resolved === "mfa_required") redirect("/mfa");
   if (typeof resolved === "string") redirect("/");
   const base = `/o/${orgId}/payroll`;
@@ -32,7 +32,7 @@ export async function createPayGroupAction(orgId: string, formData: FormData): P
 }
 
 export async function createPayRunAction(orgId: string, formData: FormData): Promise<void> {
-  const resolved = await resolveCtxForAction(orgId);
+  const resolved = await resolveCtxForAction(orgId, { module: "cap.people" });
   if (resolved === "mfa_required") redirect("/mfa");
   if (typeof resolved === "string") redirect("/");
   const base = `/o/${orgId}/payroll`;
@@ -56,7 +56,7 @@ export async function createPayRunAction(orgId: string, formData: FormData): Pro
 /** One action for the run lifecycle buttons — the service refuses any illegal
  *  transition, so a stale button cannot corrupt a run. */
 export async function payRunStepAction(orgId: string, formData: FormData): Promise<void> {
-  const resolved = await resolveCtxForAction(orgId);
+  const resolved = await resolveCtxForAction(orgId, { module: "cap.people" });
   if (resolved === "mfa_required") redirect("/mfa");
   if (typeof resolved === "string") redirect("/");
   const runId = String(formData.get("run_id") ?? "");

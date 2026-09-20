@@ -27,7 +27,7 @@ export async function createQuoteAction(
   orgId: string,
   formData: FormData,
 ): Promise<CreateQuoteResult> {
-  const resolved = await resolveCtxForAction(orgId);
+  const resolved = await resolveCtxForAction(orgId, { module: "cap.quoting" });
   if (resolved === "mfa_required") redirect("/mfa");
   if (typeof resolved === "string") return { ok: false, error: "unauthorized" };
   const currency = resolved.baseCurrency as CurrencyCode;
@@ -72,7 +72,7 @@ async function quoteTransition(
   fn: (ctx: never, arch: never, id: string) => Promise<unknown>,
   ok: string,
 ): Promise<void> {
-  const resolved = await resolveCtxForAction(orgId);
+  const resolved = await resolveCtxForAction(orgId, { module: "cap.quoting" });
   if (resolved === "mfa_required") redirect("/mfa");
   if (typeof resolved === "string") redirect("/");
   const id = String(formData.get("quote_id") ?? "");
@@ -96,7 +96,7 @@ export async function sendQuoteAction(orgId: string, formData: FormData): Promis
   await quoteTransition(orgId, formData, (c, a, id) => markQuoteSent(c, a, id), "sent");
 }
 export async function acceptQuoteAction(orgId: string, formData: FormData): Promise<void> {
-  const resolved = await resolveCtxForAction(orgId);
+  const resolved = await resolveCtxForAction(orgId, { module: "cap.quoting" });
   if (resolved === "mfa_required") redirect("/mfa");
   if (typeof resolved === "string") redirect("/");
   const id = String(formData.get("quote_id") ?? "");
@@ -119,7 +119,7 @@ export async function acceptQuoteAction(orgId: string, formData: FormData): Prom
 
 /** Start the project from an accepted quotation with the template chosen now (D4). */
 export async function convertQuoteAction(orgId: string, formData: FormData): Promise<void> {
-  const resolved = await resolveCtxForAction(orgId);
+  const resolved = await resolveCtxForAction(orgId, { module: "cap.quoting" });
   if (resolved === "mfa_required") redirect("/mfa");
   if (typeof resolved === "string") redirect("/");
   const id = String(formData.get("quote_id") ?? "");
@@ -142,7 +142,7 @@ export async function convertQuoteAction(orgId: string, formData: FormData): Pro
 
 /** Release a quotation stuck in `converting` (see recoverStaleConversion). */
 export async function recoverQuoteAction(orgId: string, formData: FormData): Promise<void> {
-  const resolved = await resolveCtxForAction(orgId);
+  const resolved = await resolveCtxForAction(orgId, { module: "cap.quoting" });
   if (resolved === "mfa_required") redirect("/mfa");
   if (typeof resolved === "string") redirect("/");
   const id = String(formData.get("quote_id") ?? "");
@@ -157,7 +157,7 @@ export async function recoverQuoteAction(orgId: string, formData: FormData): Pro
   }
 }
 export async function rejectQuoteAction(orgId: string, formData: FormData): Promise<void> {
-  const resolved = await resolveCtxForAction(orgId);
+  const resolved = await resolveCtxForAction(orgId, { module: "cap.quoting" });
   if (resolved === "mfa_required") redirect("/mfa");
   if (typeof resolved === "string") redirect("/");
   const id = String(formData.get("quote_id") ?? "");

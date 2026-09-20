@@ -17,7 +17,7 @@ export async function addContactAction(
   customerId: string,
   formData: FormData,
 ): Promise<void> {
-  const resolved = await resolveCtxForAction(orgId);
+  const resolved = await resolveCtxForAction(orgId, { module: "cap.customers" });
   if (typeof resolved === "string") {
     redirect(resolved === "mfa_required" ? "/mfa" : "/");
   }
@@ -42,7 +42,7 @@ export async function removeContactAction(
   customerId: string,
   formData: FormData,
 ): Promise<void> {
-  const resolved = await resolveCtxForAction(orgId);
+  const resolved = await resolveCtxForAction(orgId, { module: "cap.customers" });
   if (typeof resolved === "string") {
     redirect(resolved === "mfa_required" ? "/mfa" : "/");
   }

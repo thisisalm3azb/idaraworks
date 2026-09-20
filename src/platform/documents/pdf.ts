@@ -271,7 +271,27 @@ function releaseSlot(): void {
   else activeRenders--;
 }
 
+/**
+ * The largest document the renderer accepts (security review 2026-09-20,
+ * F-24). Every real document — an invoice with five hundred lines, a studio
+ * document at every body cap with two embedded fonts — is well under it; the
+ * bound exists so that no caller can hand Chromium something unbounded.
+ */
+export const MAX_RENDER_HTML_BYTES = 8 * 1024 * 1024;
+/** How long one page may take to load and to print, each. */
+const LOAD_TIMEOUT_MS = 20_000;
+const PRINT_TIMEOUT_MS = 30_000;
+
+export class PdfInputTooLargeError extends Error {
+  constructor(bytes: number) {
+    super(`document HTML of ${bytes} bytes exceeds the render bound`);
+    this.name = "PdfInputTooLargeError";
+  }
+}
+
 export async function renderPdf(html: string, options: PdfOptions = {}): Promise<Uint8Array> {
+  const bytes = Buffer.byteLength(html, "utf8");
+  if (bytes > MAX_RENDER_HTML_BYTES) throw new PdfInputTooLargeError(bytes);
   await acquireSlot();
   try {
     return await renderPdfInner(html, options);
@@ -322,8 +342,10 @@ const FONT_WAIT_MS = 8_000;
 async function renderOnce(html: string, options: PdfOptions): Promise<Uint8Array> {
   const browser = await launch();
   const page = await browser.newPage();
+  // Every Playwright call on this page — including page.pdf — is bounded.
+  page.setDefaultTimeout(PRINT_TIMEOUT_MS);
   try {
-    await page.setContent(html, { waitUntil: "load" });
+    await page.setContent(html, { waitUntil: "load", timeout: LOAD_TIMEOUT_MS });
     // Fonts must be ready or the first page can print in a fallback face —
     // but a font that never arrives must not hold the render past the route's
     // own deadline: after the bound, print with what is loaded.
@@ -334,6 +356,7 @@ async function renderOnce(html: string, options: PdfOptions): Promise<Uint8Array
     const numbered = options.pageNumbers ?? false;
     const bytes = await page.pdf({
       format: "a4",
+
       printBackground: options.printBackground ?? true,
       preferCSSPageSize: true,
       displayHeaderFooter: numbered,

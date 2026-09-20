@@ -30,7 +30,7 @@ export async function createMrAction(
   orgId: string,
   payload: MrCreatePayload,
 ): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
-  const resolved = await resolveCtxForAction(orgId);
+  const resolved = await resolveCtxForAction(orgId, { module: "cap.material_requests" });
   if (typeof resolved === "string") return { ok: false, error: "unauthorized" };
   try {
     const { id } = await createMaterialRequest(resolved.ctx, resolved.archetype, payload);
@@ -44,7 +44,7 @@ export async function createMrAction(
 }
 
 export async function submitMrAction(orgId: string, formData: FormData): Promise<void> {
-  const resolved = await resolveCtxForAction(orgId);
+  const resolved = await resolveCtxForAction(orgId, { module: "cap.material_requests" });
   if (resolved === "mfa_required") redirect("/mfa");
   if (typeof resolved === "string") redirect("/");
   const mrId = String(formData.get("mr_id") ?? "");
@@ -60,7 +60,7 @@ export async function submitMrAction(orgId: string, formData: FormData): Promise
 }
 
 export async function convertMrAction(orgId: string, formData: FormData): Promise<void> {
-  const resolved = await resolveCtxForAction(orgId);
+  const resolved = await resolveCtxForAction(orgId, { module: "cap.material_requests" });
   if (resolved === "mfa_required") redirect("/mfa");
   if (typeof resolved === "string") redirect("/");
   const mrId = String(formData.get("mr_id") ?? "");

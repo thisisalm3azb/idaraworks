@@ -6,7 +6,7 @@ import { resolveCtxForAction } from "@/platform/auth/resolve";
 import { markAttendance, InvalidAttendanceError } from "@/modules/attendance/service";
 
 export async function markAttendanceAction(orgId: string, formData: FormData): Promise<void> {
-  const resolved = await resolveCtxForAction(orgId);
+  const resolved = await resolveCtxForAction(orgId, { module: "cap.attendance" });
   if (resolved === "mfa_required") redirect("/mfa");
   if (typeof resolved === "string") redirect("/");
   const date = String(formData.get("date") ?? "");

@@ -4,6 +4,7 @@
  * the SECURITY DEFINER resolver; unknown, expired, revoked and used tokens
  * all render the same "not available" page. No app shell, no sign-in.
  */
+import { isSignErrorCode } from "./errors";
 import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
@@ -62,6 +63,14 @@ const COPY = {
     cancel: "Cancel",
     disclaimer:
       "Electronic signature with an evidence record: your name as signed, the time from the server clock, your network address and the document's content hash are recorded. No digital certificate or qualified time stamp is applied.",
+    errors: {
+      invalid: "Please check your entries: a name and your consent are required.",
+      closed: "This signature request is no longer open.",
+      conflict:
+        "The document changed or this invitation was already used. Please reload and try again.",
+      forbidden: "This link cannot sign for that party.",
+      failed: "Your signature could not be recorded just now. Please try again.",
+    },
   },
   ar: {
     title: "مطلوب توقيعك",
@@ -89,6 +98,13 @@ const COPY = {
     cancel: "إلغاء",
     disclaimer:
       "توقيع إلكتروني مع سجل إثبات: يُسجَّل اسمك كما وقّعته ووقت الخادم وعنوان شبكتك وبصمة محتوى المستند. لا تُطبَّق شهادة رقمية ولا ختم زمني معتمد.",
+    errors: {
+      invalid: "يرجى مراجعة المدخلات: الاسم والموافقة مطلوبان.",
+      closed: "طلب التوقيع هذا لم يعد مفتوحاً.",
+      conflict: "تغيّر المستند أو استُخدمت هذه الدعوة بالفعل. يرجى إعادة التحميل والمحاولة مجدداً.",
+      forbidden: "لا يمكن لهذا الرابط التوقيع عن ذلك الطرف.",
+      failed: "تعذّر تسجيل توقيعك الآن. يرجى المحاولة مجدداً.",
+    },
   },
 } as const;
 
@@ -193,8 +209,9 @@ export default async function SignPage({
         {" · "}
         {c.expires} {formatDate(resolved.requestExpiresAt, { locale: lang })}
       </p>
-      {sp.error ? (
+      {isSignErrorCode(sp.error) ? (
         <p
+          role="alert"
           style={{
             background: "#fde8e6",
             color: "#8a1c14",
@@ -203,7 +220,7 @@ export default async function SignPage({
             fontSize: 14,
           }}
         >
-          {sp.error}
+          {c.errors[sp.error]}
         </p>
       ) : null}
       <ShadowHtml html={html} />

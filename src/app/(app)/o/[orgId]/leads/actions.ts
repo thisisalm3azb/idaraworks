@@ -7,7 +7,7 @@ import { resolveCtxForAction } from "@/platform/auth/resolve";
 import { createLead } from "@/modules/crm/service";
 
 export async function createLeadAction(orgId: string, formData: FormData): Promise<void> {
-  const resolved = await resolveCtxForAction(orgId);
+  const resolved = await resolveCtxForAction(orgId, { module: "cap.customers" });
   if (resolved === "mfa_required") redirect("/mfa");
   if (typeof resolved === "string") redirect("/");
   const base = `/o/${orgId}/leads`;

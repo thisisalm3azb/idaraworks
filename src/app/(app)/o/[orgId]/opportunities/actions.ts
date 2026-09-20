@@ -6,7 +6,7 @@ import { resolveCtxForAction } from "@/platform/auth/resolve";
 import { createOpportunity, moveOpportunityStage } from "@/modules/crm/service";
 
 export async function createOpportunityAction(orgId: string, formData: FormData): Promise<void> {
-  const resolved = await resolveCtxForAction(orgId);
+  const resolved = await resolveCtxForAction(orgId, { module: "cap.customers" });
   if (resolved === "mfa_required") redirect("/mfa");
   if (typeof resolved === "string") redirect("/");
   const base = `/o/${orgId}/opportunities`;
@@ -31,7 +31,7 @@ export async function createOpportunityAction(orgId: string, formData: FormData)
 
 /** Keyboard-accessible stage move (board card select — no drag required). */
 export async function moveStageAction(orgId: string, formData: FormData): Promise<void> {
-  const resolved = await resolveCtxForAction(orgId);
+  const resolved = await resolveCtxForAction(orgId, { module: "cap.customers" });
   if (resolved === "mfa_required") redirect("/mfa");
   if (typeof resolved === "string") redirect("/");
   const base = `/o/${orgId}/opportunities`;

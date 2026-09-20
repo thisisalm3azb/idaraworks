@@ -40,7 +40,7 @@ const minor = (fd: FormData, k: string) => {
 };
 
 async function ctxOrRedirect(orgId: string) {
-  const resolved = await resolveCtxForAction(orgId);
+  const resolved = await resolveCtxForAction(orgId, { module: "cap.revenue_studio" });
   if (resolved === "mfa_required") redirect("/mfa");
   if (typeof resolved === "string") redirect("/");
   return resolved;
@@ -301,7 +301,7 @@ export async function saveCanvasAction(
   orgId: string,
   payload: { opportunityId: string; doc: CanvasDoc; rowVersion: number },
 ): Promise<SaveCanvasResult> {
-  const resolved = await resolveCtxForAction(orgId);
+  const resolved = await resolveCtxForAction(orgId, { module: "cap.revenue_studio" });
   if (typeof resolved === "string") return { ok: false, code: "forbidden" };
   try {
     const r = await saveDealCanvas(resolved.ctx, resolved.archetype, payload);
@@ -330,7 +330,7 @@ export async function crmAssistAction(
     question?: string;
   },
 ): Promise<AssistResult> {
-  const resolved = await resolveCtxForAction(orgId);
+  const resolved = await resolveCtxForAction(orgId, { module: "cap.revenue_studio" });
   if (typeof resolved === "string") return { ok: false, code: "forbidden", ownerAction: null };
   try {
     const r = await crmAssist(resolved.ctx, resolved.archetype, payload);

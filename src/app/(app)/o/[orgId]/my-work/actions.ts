@@ -7,7 +7,7 @@ import { resolveCtxForAction } from "@/platform/auth/resolve";
 import { updateTaskStatus } from "@/modules/jobs/service";
 
 export async function myWorkStatusAction(orgId: string, formData: FormData): Promise<void> {
-  const resolved = await resolveCtxForAction(orgId);
+  const resolved = await resolveCtxForAction(orgId, { module: "cap.jobs" });
   if (resolved === "mfa_required") redirect("/mfa");
   if (typeof resolved === "string") redirect("/");
   const back = `/o/${orgId}/my-work`;

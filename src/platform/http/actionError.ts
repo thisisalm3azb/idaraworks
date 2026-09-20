@@ -22,7 +22,7 @@
  */
 import { redirect } from "next/navigation";
 import { ZodError } from "zod";
-import { requestLogger } from "@/platform/logger";
+import { logger, requestLogger } from "@/platform/logger";
 import { ForbiddenError } from "@/platform/authz";
 import { BillingReadOnlyError, CapabilityRequiredError } from "@/platform/entitlements";
 
@@ -147,6 +147,67 @@ export type FailContext = {
   /** Submitted form values to echo back so the form is NOT wiped (progressive enhancement). */
   values: Record<string, string>;
 };
+
+/**
+ * Library and runtime error classes whose messages describe internals (SQL
+ * text, constraint names, driver state, a JSON issue dump) rather than
+ * something a person did. Their messages never travel to a URL or a page.
+ */
+const LIBRARY_ERROR_NAMES = new Set([
+  "Error",
+  "PostgresError",
+  "DrizzleQueryError",
+  "ZodError",
+  "TypeError",
+  "RangeError",
+  "SyntaxError",
+  "ReferenceError",
+  "EvalError",
+  "URIError",
+  "AbortError",
+  "AggregateError",
+  "TimeoutError",
+  "DOMException",
+  "FetchError",
+  "ConnectTimeoutError",
+]);
+
+/**
+ * A message that is safe to put in a redirect query and render as text
+ * (security review 2026-09-20, F-26). Application error classes set a
+ * distinct `name` and author their messages for people, so those pass through
+ * (capped). A validation failure becomes a fixed phrase. Anything else — the
+ * database driver, the runtime, an unknown library — collapses to the generic
+ * phrase, and the real error is logged against the request id.
+ *
+ * Rendering `?error=` as JSX text is already injection-safe; this closes the
+ * disclosure half: no constraint name, SQL fragment or stack ever reaches a
+ * browser, its history or an access log.
+ */
+export function safeActionMessage(
+  err: unknown,
+  log: { where: string; requestId?: string; orgId?: string; userId?: string },
+): string {
+  if (err instanceof ZodError) return "invalid input";
+  if (err instanceof Error && !LIBRARY_ERROR_NAMES.has(err.name)) {
+    return err.message.replace(/\s+/g, " ").slice(0, 160) || "failed";
+  }
+  const detail = {
+    where: log.where,
+    err_name: err instanceof Error ? err.name : typeof err,
+    err_message: safeLogMessage(err),
+    ...(pgError(err).code ? { pg_code: pgError(err).code } : {}),
+  };
+  if (log.requestId) {
+    requestLogger({ requestId: log.requestId, orgId: log.orgId, userId: log.userId }).error(
+      detail,
+      "action failed",
+    );
+  } else {
+    logger.error(detail, "action failed");
+  }
+  return "failed";
+}
 
 /**
  * The shared failure path: classify + log + redirect. Returns `never` — it always

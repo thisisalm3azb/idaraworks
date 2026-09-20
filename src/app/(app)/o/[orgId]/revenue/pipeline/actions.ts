@@ -22,7 +22,7 @@ export async function moveStageAction(
   orgId: string,
   payload: { id: string; stageKey: string; rowVersion: number; reason?: string | null },
 ): Promise<MoveResult> {
-  const resolved = await resolveCtxForAction(orgId);
+  const resolved = await resolveCtxForAction(orgId, { module: "cap.revenue_studio" });
   if (typeof resolved === "string") return { ok: false, code: "forbidden" };
   try {
     const r = await moveStage(resolved.ctx, resolved.archetype, payload);

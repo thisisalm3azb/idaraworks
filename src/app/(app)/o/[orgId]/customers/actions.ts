@@ -54,7 +54,7 @@ function customerInput(formData: FormData) {
  * the server-rendered form; success now lands on the NEW CUSTOMER's detail
  * page (workflow continuity) instead of the generic list. */
 export async function createCustomerAction(orgId: string, formData: FormData): Promise<void> {
-  const resolved = await resolveCtxForAction(orgId);
+  const resolved = await resolveCtxForAction(orgId, { module: "cap.customers" });
   if (resolved === "mfa_required") redirect("/mfa");
   if (typeof resolved === "string") redirect("/");
   const base = `/o/${orgId}/customers`;
@@ -111,7 +111,7 @@ export async function createCustomerInlineAction(
   orgId: string,
   formData: FormData,
 ): Promise<RelationshipCreateResult> {
-  const resolved = await resolveCtxForAction(orgId);
+  const resolved = await resolveCtxForAction(orgId, { module: "cap.customers" });
   if (resolved === "mfa_required") redirect("/mfa");
   if (typeof resolved === "string") return { ok: false, error: "unauthorized" };
   const input = customerInput(formData);
@@ -133,7 +133,7 @@ export async function updateCustomerAction(
   currentActive: boolean,
   formData: FormData,
 ): Promise<CustomerActionResult> {
-  const resolved = await resolveCtxForAction(orgId);
+  const resolved = await resolveCtxForAction(orgId, { module: "cap.customers" });
   if (resolved === "mfa_required") redirect("/mfa");
   if (typeof resolved === "string") return { ok: false, error: "unauthorized" };
   try {
@@ -155,7 +155,7 @@ export async function setCustomerActiveAction(
   customerId: string,
   active: boolean,
 ): Promise<CustomerActionResult> {
-  const resolved = await resolveCtxForAction(orgId);
+  const resolved = await resolveCtxForAction(orgId, { module: "cap.customers" });
   if (resolved === "mfa_required") redirect("/mfa");
   if (typeof resolved === "string") return { ok: false, error: "unauthorized" };
   try {

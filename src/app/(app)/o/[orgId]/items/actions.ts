@@ -7,7 +7,7 @@ import { createItem } from "@/modules/masters/service";
 import { failMasterDataAction } from "@/platform/http/actionError";
 
 export async function createItemAction(orgId: string, formData: FormData): Promise<void> {
-  const resolved = await resolveCtxForAction(orgId);
+  const resolved = await resolveCtxForAction(orgId, { module: "cap.items" });
   if (resolved === "mfa_required") redirect("/mfa");
   if (typeof resolved === "string") redirect("/");
   const base = `/o/${orgId}/items`;

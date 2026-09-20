@@ -13,7 +13,7 @@ import {
 } from "@/modules/customer-updates/service";
 
 export async function createDraftAction(orgId: string, formData: FormData): Promise<void> {
-  const resolved = await resolveCtxForAction(orgId);
+  const resolved = await resolveCtxForAction(orgId, { module: "cap.customer_updates" });
   if (resolved === "mfa_required") redirect("/mfa");
   if (typeof resolved === "string") redirect("/");
   const jobId = String(formData.get("job_id") ?? "").trim();
@@ -37,7 +37,7 @@ export async function createDraftAction(orgId: string, formData: FormData): Prom
 }
 
 export async function updateDraftAction(orgId: string, formData: FormData): Promise<void> {
-  const resolved = await resolveCtxForAction(orgId);
+  const resolved = await resolveCtxForAction(orgId, { module: "cap.customer_updates" });
   if (resolved === "mfa_required") redirect("/mfa");
   if (typeof resolved === "string") redirect("/");
   const id = String(formData.get("update_id") ?? "");
@@ -55,7 +55,7 @@ export async function updateDraftAction(orgId: string, formData: FormData): Prom
 }
 
 export async function sendUpdateAction(orgId: string, formData: FormData): Promise<void> {
-  const resolved = await resolveCtxForAction(orgId);
+  const resolved = await resolveCtxForAction(orgId, { module: "cap.customer_updates" });
   if (resolved === "mfa_required") redirect("/mfa");
   if (typeof resolved === "string") redirect("/");
   const id = String(formData.get("update_id") ?? "");
@@ -79,7 +79,7 @@ export async function sendAndRevealAction(
   orgId: string,
   updateId: string,
 ): Promise<{ link: string } | { error: string }> {
-  const resolved = await resolveCtxForAction(orgId);
+  const resolved = await resolveCtxForAction(orgId, { module: "cap.customer_updates" });
   if (resolved === "mfa_required") return { error: "mfa" };
   if (typeof resolved === "string") return { error: "auth" };
   try {
@@ -94,7 +94,7 @@ export async function sendAndRevealAction(
 }
 
 export async function revokeShareAction(orgId: string, formData: FormData): Promise<void> {
-  const resolved = await resolveCtxForAction(orgId);
+  const resolved = await resolveCtxForAction(orgId, { module: "cap.customer_updates" });
   if (resolved === "mfa_required") redirect("/mfa");
   if (typeof resolved === "string") redirect("/");
   const id = String(formData.get("update_id") ?? "");

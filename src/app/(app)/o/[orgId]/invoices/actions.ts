@@ -17,7 +17,7 @@ import {
 } from "@/modules/invoices/service";
 
 export async function createInvoiceAction(orgId: string, formData: FormData): Promise<void> {
-  const resolved = await resolveCtxForAction(orgId);
+  const resolved = await resolveCtxForAction(orgId, { module: "cap.invoicing" });
   if (resolved === "mfa_required") redirect("/mfa");
   if (typeof resolved === "string") redirect("/");
   const currency = resolved.baseCurrency as CurrencyCode;
@@ -55,7 +55,7 @@ export async function createInvoiceAction(orgId: string, formData: FormData): Pr
 }
 
 export async function issueInvoiceAction(orgId: string, formData: FormData): Promise<void> {
-  const resolved = await resolveCtxForAction(orgId);
+  const resolved = await resolveCtxForAction(orgId, { module: "cap.invoicing" });
   if (resolved === "mfa_required") redirect("/mfa");
   if (typeof resolved === "string") redirect("/");
   const id = String(formData.get("invoice_id") ?? "");
@@ -71,7 +71,7 @@ export async function issueInvoiceAction(orgId: string, formData: FormData): Pro
 }
 
 export async function voidInvoiceAction(orgId: string, formData: FormData): Promise<void> {
-  const resolved = await resolveCtxForAction(orgId);
+  const resolved = await resolveCtxForAction(orgId, { module: "cap.invoicing" });
   if (resolved === "mfa_required") redirect("/mfa");
   if (typeof resolved === "string") redirect("/");
   const id = String(formData.get("invoice_id") ?? "");
@@ -87,7 +87,7 @@ export async function voidInvoiceAction(orgId: string, formData: FormData): Prom
 }
 
 export async function creditNoteAction(orgId: string, formData: FormData): Promise<void> {
-  const resolved = await resolveCtxForAction(orgId);
+  const resolved = await resolveCtxForAction(orgId, { module: "cap.invoicing" });
   if (resolved === "mfa_required") redirect("/mfa");
   if (typeof resolved === "string") redirect("/");
   const id = String(formData.get("invoice_id") ?? "");
@@ -109,7 +109,7 @@ export async function creditNoteAction(orgId: string, formData: FormData): Promi
 }
 
 export async function submitEInvoiceAction(orgId: string, formData: FormData): Promise<void> {
-  const resolved = await resolveCtxForAction(orgId);
+  const resolved = await resolveCtxForAction(orgId, { module: "cap.invoicing" });
   if (resolved === "mfa_required") redirect("/mfa");
   if (typeof resolved === "string") redirect("/");
   const id = String(formData.get("invoice_id") ?? "");

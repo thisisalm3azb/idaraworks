@@ -35,7 +35,7 @@ export async function createPoAction(
   orgId: string,
   payload: PoCreatePayload,
 ): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
-  const resolved = await resolveCtxForAction(orgId);
+  const resolved = await resolveCtxForAction(orgId, { module: "cap.purchase_orders" });
   if (typeof resolved === "string") return { ok: false, error: "unauthorized" };
   try {
     const { id } = await createPurchaseOrder(resolved.ctx, resolved.archetype, payload);
@@ -49,7 +49,7 @@ export async function createPoAction(
 }
 
 export async function submitPoAction(orgId: string, formData: FormData): Promise<void> {
-  const resolved = await resolveCtxForAction(orgId);
+  const resolved = await resolveCtxForAction(orgId, { module: "cap.purchase_orders" });
   if (resolved === "mfa_required") redirect("/mfa");
   if (typeof resolved === "string") redirect("/");
   const poId = String(formData.get("po_id") ?? "");
@@ -65,7 +65,7 @@ export async function submitPoAction(orgId: string, formData: FormData): Promise
 }
 
 export async function recordGrnAction(orgId: string, formData: FormData): Promise<void> {
-  const resolved = await resolveCtxForAction(orgId);
+  const resolved = await resolveCtxForAction(orgId, { module: "cap.purchase_orders" });
   if (resolved === "mfa_required") redirect("/mfa");
   if (typeof resolved === "string") redirect("/");
   const poId = String(formData.get("po_id") ?? "");
@@ -156,7 +156,7 @@ export async function postReceiptToStockAction(
   receiptId: string,
 ): Promise<void> {
   const base = `/o/${orgId}/purchase-orders/${poId}`;
-  const resolved = await resolveCtxForAction(orgId);
+  const resolved = await resolveCtxForAction(orgId, { module: "cap.purchase_orders" });
   if (typeof resolved === "string") redirect("/");
   if (!stockSurfacesEnabled()) redirect(base);
   if (!can(resolved.archetype, "inventory.receive")) throw new ForbiddenError("inventory.receive");

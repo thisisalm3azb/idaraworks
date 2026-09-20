@@ -162,9 +162,13 @@ export async function GET(
        * says nothing about any other, so a holder learning why their own
        * download failed gives away nothing they did not already have.
        */
+      // Security review 2026-09-20 (F-26): the raw renderer message named
+      // binaries, paths and module names. A token holder learns that the PDF
+      // is unavailable and where to print instead — never the internals.
       if (url.searchParams.get("diag") === "1") {
+        logger.warn({ detail: detail.slice(0, 400) }, "public pdf diagnostic requested");
         return Response.json(
-          { error: "pdf_unavailable", detail: detail.slice(0, 400), printUrl: back },
+          { error: "pdf_unavailable", printUrl: back },
           { status: 503, headers: { "cache-control": "no-store" } },
         );
       }

@@ -19,7 +19,7 @@ import {
  * here — the one place a human-typed decimal becomes money.
  */
 export async function createClaimAction(orgId: string, formData: FormData): Promise<void> {
-  const resolved = await resolveCtxForAction(orgId);
+  const resolved = await resolveCtxForAction(orgId, { module: "cap.people" });
   if (resolved === "mfa_required") redirect("/mfa");
   if (typeof resolved === "string") redirect("/");
   const base = `/o/${orgId}/claims`;
@@ -65,7 +65,7 @@ export async function createClaimAction(orgId: string, formData: FormData): Prom
 }
 
 export async function submitClaimAction(orgId: string, formData: FormData): Promise<void> {
-  const resolved = await resolveCtxForAction(orgId);
+  const resolved = await resolveCtxForAction(orgId, { module: "cap.people" });
   if (resolved === "mfa_required") redirect("/mfa");
   if (typeof resolved === "string") redirect("/");
   const claimId = String(formData.get("claim_id") ?? "");
@@ -83,7 +83,7 @@ export async function submitClaimAction(orgId: string, formData: FormData): Prom
 }
 
 export async function cancelClaimAction(orgId: string, formData: FormData): Promise<void> {
-  const resolved = await resolveCtxForAction(orgId);
+  const resolved = await resolveCtxForAction(orgId, { module: "cap.people" });
   if (resolved === "mfa_required") redirect("/mfa");
   if (typeof resolved === "string") redirect("/");
   const claimId = String(formData.get("claim_id") ?? "");
@@ -99,7 +99,7 @@ export async function cancelClaimAction(orgId: string, formData: FormData): Prom
 }
 
 export async function settleClaimAction(orgId: string, formData: FormData): Promise<void> {
-  const resolved = await resolveCtxForAction(orgId);
+  const resolved = await resolveCtxForAction(orgId, { module: "cap.people" });
   if (resolved === "mfa_required") redirect("/mfa");
   if (typeof resolved === "string") redirect("/");
   const claimId = String(formData.get("claim_id") ?? "");

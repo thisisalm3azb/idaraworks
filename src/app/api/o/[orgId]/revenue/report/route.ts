@@ -12,6 +12,8 @@ import { getT, getServerLocale } from "@/platform/i18n/server";
 import { formatDate, formatMoney } from "@/platform/format";
 import type { CurrencyCode } from "@/platform/registries";
 import { logger } from "@/platform/logger";
+import { rateLimit } from "@/platform/http/rateLimit";
+import { limitReached } from "@/platform/http/limitResponse";
 import { renderingPdf } from "@/platform/documents/failure";
 import { getDocumentProfile } from "@/modules/branding/service";
 import {
@@ -23,6 +25,8 @@ import {
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+/** The PDF format starts a headless browser; give it room, and a bound. */
+export const maxDuration = 60;
 
 const esc = (s: unknown) =>
   String(s ?? "")
@@ -45,6 +49,17 @@ export async function GET(req: Request, ctx: { params: Promise<{ orgId: string }
   const from = iso.test(url.searchParams.get("from") ?? "") ? url.searchParams.get("from") : null;
   const to = iso.test(url.searchParams.get("to") ?? "") ? url.searchParams.get("to") : null;
   const wantsPdf = url.searchParams.get("format") === "pdf";
+  // Security review 2026-09-20 (F-24): the PDF format starts a headless
+  // browser and is budgeted per member; the HTML report is not.
+  if (wantsPdf) {
+    const gate = await rateLimit("pdf", `user:${resolved.ctx.userId}`);
+    if (!gate.allowed) {
+      return limitReached(
+        { kind: "rate_limited", retryAfterSeconds: gate.retryAfterSeconds, backUrl: url.pathname },
+        req.headers.get("accept"),
+      );
+    }
+  }
   const t = await getT();
   const locale = await getServerLocale();
   const rtl = locale === "ar";

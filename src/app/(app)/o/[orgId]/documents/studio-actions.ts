@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { resolveCtxForAction } from "@/platform/auth/resolve";
+import { safeActionMessage } from "@/platform/http/actionError";
 import { clientIpFromHeaders } from "@/platform/http/clientIp";
 import {
   archiveDocument,
@@ -79,36 +80,31 @@ export type ActionResult<T = undefined> =
 type Resolved = Exclude<Awaited<ReturnType<typeof resolveCtxForAction>>, string>;
 
 async function run<T>(orgId: string, fn: (r: Resolved) => Promise<T>): Promise<ActionResult<T>> {
-  const resolved = await resolveCtxForAction(orgId);
+  const resolved = await resolveCtxForAction(orgId, { module: "cap.documents" });
   if (typeof resolved === "string") return { ok: false, error: "unauthorized", code: "auth" };
   try {
     const data = await fn(resolved);
     return { ok: true, data };
   } catch (err) {
     const code = (err as { code?: string }).code;
-    const message =
-      err instanceof ZodError
-        ? err.issues.map((i) => `${i.path.join(".") || "input"}: ${i.message}`).join("; ")
-        : err instanceof Error
-          ? err.message
-          : "failed";
-    return { ok: false, error: message.slice(0, 240), code };
+    return { ok: false, error: messageOf(err).slice(0, 240), code };
   }
 }
 
 const docPath = (orgId: string, id: string) => `/o/${orgId}/documents/${id}`;
 
+/** Validation issues name the field; every other error passes through the
+ * safe-message rule (DocError verbatim, driver/runtime errors collapsed and
+ * logged — security review F-26). */
 function messageOf(err: unknown): string {
   return err instanceof ZodError
     ? err.issues.map((i) => `${i.path.join(".") || "input"}: ${i.message}`).join("; ")
-    : err instanceof Error
-      ? err.message
-      : "failed";
+    : safeActionMessage(err, { where: "documents.action" });
 }
 
 // ── create (form → redirect) ─────────────────────────────────────────────────
 export async function createDocumentAction(orgId: string, formData: FormData): Promise<void> {
-  const resolved = await resolveCtxForAction(orgId);
+  const resolved = await resolveCtxForAction(orgId, { module: "cap.documents" });
   if (resolved === "mfa_required") redirect("/mfa");
   if (typeof resolved === "string") redirect("/");
   let id = "";
@@ -329,7 +325,7 @@ export async function setDocSettingsAction(
 
 // ── templates ────────────────────────────────────────────────────────────────
 export async function createTemplateAction(orgId: string, formData: FormData): Promise<void> {
-  const resolved = await resolveCtxForAction(orgId);
+  const resolved = await resolveCtxForAction(orgId, { module: "cap.documents" });
   if (resolved === "mfa_required") redirect("/mfa");
   if (typeof resolved === "string") redirect("/");
   let id = "";
@@ -392,7 +388,7 @@ export async function retireTemplateAction(
 
 // ── workflows (H26D) ─────────────────────────────────────────────────────────
 export async function createWorkflowAction(orgId: string, formData: FormData): Promise<void> {
-  const resolved = await resolveCtxForAction(orgId);
+  const resolved = await resolveCtxForAction(orgId, { module: "cap.documents" });
   if (resolved === "mfa_required") redirect("/mfa");
   if (typeof resolved === "string") redirect("/");
   let id = "";

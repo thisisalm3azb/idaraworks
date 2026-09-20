@@ -39,7 +39,7 @@ export async function submitReportAction(
   orgId: string,
   payload: ReportSubmitPayload,
 ): Promise<{ ok: true; id: string; deduped: boolean } | { ok: false; error: string }> {
-  const resolved = await resolveCtxForAction(orgId);
+  const resolved = await resolveCtxForAction(orgId, { module: "cap.daily_reports" });
   if (resolved === "mfa_required") return { ok: false, error: "mfa_required" };
   if (typeof resolved === "string") return { ok: false, error: "unauthorized" };
   try {
@@ -56,7 +56,7 @@ export async function submitReportAction(
 }
 
 export async function reviewReportAction(orgId: string, formData: FormData): Promise<void> {
-  const resolved = await resolveCtxForAction(orgId);
+  const resolved = await resolveCtxForAction(orgId, { module: "cap.daily_reports" });
   if (resolved === "mfa_required") redirect("/mfa");
   if (typeof resolved === "string") redirect("/");
   const reportId = String(formData.get("report_id") ?? "");
@@ -108,7 +108,7 @@ export async function reviewReportAction(orgId: string, formData: FormData): Pro
 }
 
 export async function returnReportAction(orgId: string, formData: FormData): Promise<void> {
-  const resolved = await resolveCtxForAction(orgId);
+  const resolved = await resolveCtxForAction(orgId, { module: "cap.daily_reports" });
   if (resolved === "mfa_required") redirect("/mfa");
   if (typeof resolved === "string") redirect("/");
   const reportId = String(formData.get("report_id") ?? "");

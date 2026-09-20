@@ -63,7 +63,7 @@ export async function createDocumentShareAction(
   id: string,
   days: number,
 ): Promise<CreateShareResult> {
-  const resolved = await resolveCtxForAction(orgId);
+  const resolved = await resolveCtxForAction(orgId, { module: "cap.documents" });
   if (resolved === "mfa_required") return { ok: false, error: "mfa" };
   if (typeof resolved === "string") return { ok: false, error: "auth" };
   const requested = Number.isFinite(days) ? days : 7;
@@ -83,7 +83,7 @@ export async function createDocumentShareAction(
 }
 
 export async function revokeDocumentShareAction(orgId: string, formData: FormData): Promise<void> {
-  const resolved = await resolveCtxForAction(orgId);
+  const resolved = await resolveCtxForAction(orgId, { module: "cap.documents" });
   if (resolved === "mfa_required") redirect("/mfa");
   if (typeof resolved === "string") redirect("/");
   const kind = String(formData.get("kind") ?? "") as DocumentKind;

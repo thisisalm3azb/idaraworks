@@ -557,6 +557,24 @@ export function isExportEntity(x: string): x is ExportEntity {
   return x in EXPORT_ENTITIES;
 }
 
+/**
+ * The most rows one export answers (security review 2026-09-20, F-23). The
+ * whole file is built in memory, so the bound is what keeps one request from
+ * exhausting the function; beyond it the export REFUSES — it never returns a
+ * silently truncated file as if it were complete.
+ */
+export const MAX_EXPORT_ROWS = 100_000;
+
+export class ExportTooLargeError extends Error {
+  constructor(
+    public readonly entity: string,
+    public readonly limit: number,
+  ) {
+    super(`export of ${entity} exceeds ${limit} rows`);
+    this.name = "ExportTooLargeError";
+  }
+}
+
 /** Export ONE entity as a guarded CSV string. Paged read — never the 1,000-row silent cap. */
 export async function exportEntityCsv(
   ctx: Ctx,
@@ -570,6 +588,7 @@ export async function exportEntityCsv(
     for (let offset = 0; ; offset += PAGE) {
       const batch = await def.page(tx, ctx, PAGE, offset);
       all.push(...batch);
+      if (all.length > MAX_EXPORT_ROWS) throw new ExportTooLargeError(entity, MAX_EXPORT_ROWS);
       if (batch.length < PAGE) break; // last page
     }
     // Redact money columns the caller isn't privileged to see (export IS a serialization boundary).
