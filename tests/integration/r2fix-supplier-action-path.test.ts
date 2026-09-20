@@ -107,7 +107,8 @@ describe("createSupplierAction — deployed code path", () => {
     fd.set("email", "ok@action.example");
 
     const url = await runAction(fd);
-    expect(url).toBe(`/o/${orgId}/suppliers`); // no ?error — success
+    // Success answers with a result code the shared notice renders (2026-09-20).
+    expect(url).toBe(`/o/${orgId}/suppliers?ok=created`);
     const list = (await listSuppliers(ctx(), "owner", { includeInactive: true })).rows;
     expect(list.some((s) => s.name === `Action Sub ${run}`)).toBe(true);
   });

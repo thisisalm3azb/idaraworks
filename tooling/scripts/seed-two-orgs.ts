@@ -240,6 +240,13 @@ export const SEEDERS: Record<string, Seeder> = {
             values (${org}, 'Bleed Brand', '#1a2b3c')
             on conflict (org_id) do nothing`;
   },
+  org_app_icon: async (o, org) => {
+    // The rendered app icon set (0140): one 1×1 PNG row is enough for the sweep.
+    await o`insert into public.org_app_icon (org_id, size, maskable, png, bytes)
+            values (${org}, 192, false,
+                    decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64'), 68)
+            on conflict (org_id, size, maskable) do nothing`;
+  },
   org_entitlement_override: async (o, org) => {
     await o`insert into public.org_entitlement_override (org_id, entitlement_key, reason)
             values (${org}, 'limit.full_users', 'bleed') on conflict (org_id, entitlement_key) do nothing`;
