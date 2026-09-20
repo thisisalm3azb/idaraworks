@@ -212,8 +212,11 @@ describe("the staged nonce policy is observation, not enforcement (F-04)", () =>
     );
     expect(src).toContain("'strict-dynamic'");
     expect(src).toContain("report-uri /api/csp-report");
-    // Never enforced from middleware: that would bypass the tested policy in next.config.
-    expect(src).not.toMatch(/headers\.set\("content-security-policy",/i);
+    // Never enforced from middleware on the RESPONSE: that would bypass the
+    // tested policy in next.config. The request-side enforced header exists
+    // only so Next stamps the nonce on its own scripts; browsers never see it.
+    expect(src).not.toMatch(/response\.headers\.set\("content-security-policy",/i);
+    expect(src).toContain('request.headers.set("content-security-policy", cspReportOnly)');
   });
 
   it("the enforced policy in next.config is unchanged (no nonce, 'unsafe-inline' still allowed)", () => {

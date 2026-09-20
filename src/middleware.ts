@@ -32,6 +32,13 @@ export async function middleware(request: NextRequest) {
   const cspReportOnly = reportOnlyPolicy(nonce);
   request.headers.set("x-nonce", nonce);
   request.headers.set("content-security-policy-report-only", cspReportOnly);
+  // Next.js only reads the nonce it stamps on its own scripts from the
+  // ENFORCED header name on the REQUEST. This request-side header never
+  // reaches the browser: the response's enforced policy still comes from
+  // next.config.ts unchanged, and the browser only sees the report-only
+  // policy from middleware. Without this, every page reported Next's own
+  // scripts as violations (production, 2026-09-21: 46 reports per walk).
+  request.headers.set("content-security-policy", cspReportOnly);
   // Auth-code resilience (docs/ux/AUTH_CALLBACK_FIX.md): if the Supabase Site URL
   // is the only thing the owner fixes, confirmation links land on "/?code=…".
   // Forward that code to /auth/callback (preserving all params) so the exchange
